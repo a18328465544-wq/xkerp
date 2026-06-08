@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   CalendarClock,
   ClipboardList,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { CrmFollowUpRecord, CrmRequirement, CustomerCard } from "../types";
 import { useStoreStateReturn } from "../utils/state";
+import { getLockedHandlerFieldState } from "../utils/sessionUser";
 
 interface CrmManagerProps {
   storeState: useStoreStateReturn;
@@ -32,7 +33,10 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
     createCrmFollowUp,
     createCrmRequirement,
     getCrmSummary,
+    currentUser,
   } = storeState;
+  const lockedHandlerState = getLockedHandlerFieldState(currentUser, currentRole);
+  const defaultHandlerName = lockedHandlerState.value;
 
   const [search, setSearch] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
@@ -43,7 +47,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
     name: "",
     contact: "",
     firstChannel: "微信私域",
-    owner: currentRole === "老板" ? "销售小王" : currentRole,
+    owner: defaultHandlerName,
     level: "潜在客户" as CustomerCard["level"],
     crmStatus: "线索" as CustomerCard["crmStatus"],
     intent: "中" as CustomerCard["intent"],
@@ -56,7 +60,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
     contactMethod: "微信" as CrmFollowUpRecord["contactMethod"],
     content: "",
     result: "继续跟进" as CrmFollowUpRecord["result"],
-    handler: currentRole === "老板" ? "销售小王" : currentRole,
+    handler: defaultHandlerName,
     followTime: nowText(),
     nextFollowTime: "",
     remarks: "",
@@ -69,7 +73,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
     intent: "中" as CrmRequirement["intent"],
     stage: "需求确认" as CrmRequirement["stage"],
     source: "CRM",
-    handler: currentRole === "老板" ? "销售小王" : currentRole,
+    handler: defaultHandlerName,
     expectedDealTime: "",
     remarks: "",
   });
@@ -78,6 +82,12 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
     const list = customers.map(item => item.owner).filter(Boolean) as string[];
     return Array.from(new Set(list));
   }, [customers]);
+
+  useEffect(() => {
+    setCustomerForm(prev => ({ ...prev, owner: defaultHandlerName }));
+    setFollowForm(prev => ({ ...prev, handler: defaultHandlerName }));
+    setRequirementForm(prev => ({ ...prev, handler: defaultHandlerName }));
+  }, [defaultHandlerName]);
 
   const summary = useMemo(
     () => getCrmSummary({ owner: ownerFilter, status: statusFilter, intent: intentFilter, customerName: search }),
@@ -199,7 +209,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
             <select value={customerForm.firstChannel} onChange={event => setCustomerForm(prev => ({ ...prev, firstChannel: event.target.value }))} className={fieldClass}>
               {["微信私域", "闲鱼", "淘宝", "到店", "抖音", "同行介绍", "其他"].map(item => <option key={item} value={item}>{item}</option>)}
             </select>
-            <input value={customerForm.owner} onChange={event => setCustomerForm(prev => ({ ...prev, owner: event.target.value }))} placeholder="负责人" className={fieldClass} />
+            <input value={customerForm.owner} readOnly={lockedHandlerState.readOnly} disabled={lockedHandlerState.disabled} placeholder="负责人" className={`${fieldClass} cursor-not-allowed opacity-80`} />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <select value={customerForm.level} onChange={event => setCustomerForm(prev => ({ ...prev, level: event.target.value as CustomerCard["level"] }))} className={fieldClass}>
@@ -233,7 +243,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
           </div>
           <textarea value={followForm.content} onChange={event => setFollowForm(prev => ({ ...prev, content: event.target.value }))} placeholder="本次沟通内容" className={`${fieldClass} min-h-20`} />
           <div className="grid grid-cols-2 gap-2">
-            <input value={followForm.handler} onChange={event => setFollowForm(prev => ({ ...prev, handler: event.target.value }))} placeholder="经办人" className={fieldClass} />
+            <input value={followForm.handler} readOnly={lockedHandlerState.readOnly} disabled={lockedHandlerState.disabled} placeholder="经办人" className={`${fieldClass} cursor-not-allowed opacity-80`} />
             <input value={followForm.nextFollowTime} onChange={event => setFollowForm(prev => ({ ...prev, nextFollowTime: event.target.value }))} placeholder="下次跟进时间" className={fieldClass} />
           </div>
           <button className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg py-2.5 text-xs font-black">保存跟进</button>
@@ -258,7 +268,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
               {["需求确认", "报价中", "已成交", "已关闭"].map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </div>
-          <input value={requirementForm.handler} onChange={event => setRequirementForm(prev => ({ ...prev, handler: event.target.value }))} placeholder="经办人" className={fieldClass} />
+          <input value={requirementForm.handler} readOnly={lockedHandlerState.readOnly} disabled={lockedHandlerState.disabled} placeholder="经办人" className={`${fieldClass} cursor-not-allowed opacity-80`} />
           <button className="w-full bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg py-2.5 text-xs font-black">保存需求</button>
         </form>
       </div>
@@ -292,7 +302,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
                         {customer.intent || "中"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-300">¥{customer.budget || 0}</td>
+                    <td className="px-4 py-3 text-slate-300">{customer.budget || 0}元</td>
                     <td className="px-4 py-3 text-slate-300">{customer.crmStage || "新线索"}</td>
                     <td className="px-4 py-3 text-slate-400">{customer.nextFollowTime || "未设置"}</td>
                   </tr>
@@ -359,7 +369,7 @@ export default function CrmManager({ storeState }: CrmManagerProps) {
               <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs">
                 <div className="flex justify-between gap-3">
                   <span className="font-black text-slate-100">{item.customerName}</span>
-                  <span className="text-amber-300">¥{item.budget}</span>
+                  <span className="text-amber-300">{item.budget}元</span>
                 </div>
                 <p className="text-slate-300 mt-2">{item.productDemand}</p>
                 <div className="text-[10px] text-slate-500 mt-2">{item.handler} / {item.intent}意向 / {item.stage}</div>

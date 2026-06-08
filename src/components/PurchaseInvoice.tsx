@@ -3,26 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Layers,
   Search,
   Plus,
   Trash2,
   Copy,
-  Scan,
-  AlertTriangle,
-  HelpCircle,
-  TrendingUp,
   FileSpreadsheet,
   CheckCircle,
   X,
-  CreditCard,
-  User,
   Hash
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
-import { PurchaseInvoice as IInvoice, PurchaseItem, ProductTemplate, SourceType, Vendor } from "../types";
+import { getLockedHandlerFieldState } from "../utils/sessionUser";
+import { CustomerCard, PurchaseItem, ProductTemplate, SourceType, Vendor } from "../types";
 
 interface PurchaseInvoiceProps {
   storeState: useStoreStateReturn;
@@ -35,72 +30,75 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
     createPurchaseInvoice,
     currentRole,
     inventory,
+    customers,
     vendors,
-    settlementAccounts
+    settlementAccounts,
+    currentUser
   } = storeState;
+  const lockedHandlerState = getLockedHandlerFieldState(currentUser, currentRole);
+  const defaultHandlerName = lockedHandlerState.value;
 
   // Invoice generic fields
   const [sourceType, setSourceType] = useState<SourceType>("个人回收");
   const [supplierName, setSupplierName] = useState("张建国");
   const [contact, setContact] = useState("13799018821");
-  const [selectedVendorId, setSelectedVendorId] = useState(vendors[0]?.id || "");
-  const [paymentMethod, setPaymentMethod] = useState<"微信" | "支付宝" | "现金" | "银行卡" | "欠款">("支付宝");
+  const [selectedSourceId, setSelectedSourceId] = useState(customers.find(customer => customer.type === "个人卖家客户" || customer.type === "回收客户")?.id || vendors[0]?.id || "");
   const [isPaid, setIsPaid] = useState(true);
   const [paidAmount, setPaidAmount] = useState<number>(18000);
   const [unpaidAmount, setUnpaidAmount] = useState<number>(0);
+  const [expressNo, setExpressNo] = useState("SF13800138000");
   const [remarks, setRemarks] = useState("");
   const [settlementAccountId, setSettlementAccountId] = useState(settlementAccounts.find(account => account.type === "支付宝")?.id || settlementAccounts[0]?.id || "");
-  const [paymentHandler, setPaymentHandler] = useState("财务小李");
+  const [paymentHandler, setPaymentHandler] = useState(defaultHandlerName);
 
   // Grid editing sheets
   const [items, setItems] = useState<PurchaseItem[]>([
     {
       tempId: "init-1",
-      productId: "SP-001",
-      productName: "RTX 4090 华硕 ROG 猛禽 24G",
+      productId: "",
+      productName: "",
       category: "显卡",
-      model: "RTX 4090",
-      brand: "华硕",
-      version: "ROG 猛禽",
-      vram: "24G",
-      sn: "SN4090ROG9912U",
+      model: "",
+      brand: "",
+      version: "",
+      vram: "",
+      sn: "",
       condition: "充新99新",
       inWarranty: true,
-      warrantyDate: "2028-12-10",
+      warrantyDate: "",
       repaired: false,
       gpuRisk: false,
       fullBox: true,
-      buyPrice: 18000,
-      estSellPrice: 19500,
-      warehouseLocation: "A区防潮柜-01",
-      remarks: "包装箱完好"
+      buyPrice: 0,
+      estSellPrice: 0,
+      warehouseLocation: "待检测区",
+      remarks: ""
     }
   ]);
 
   // Autocomplete UI logic per active row
   const [activeRowSearchId, setActiveRowSearchId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchDropdownRect, setSearchDropdownRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const activeSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Excel Paste box state
   const [isPasteDrawerOpen, setIsPasteDrawerOpen] = useState(false);
   const [pasteContent, setPasteContent] = useState("");
 
-  const conditionOptions = [
-    "全新官换",
-    "充新99新",
-    "靓机95新",
-    "良品90新",
-    "微划伤85新",
-    "瑕疵实用",
-    "矿卡高阻值"
-  ];
+  const topControlClass = "w-full h-12 bg-white border border-slate-800 text-sm text-slate-200 px-3 rounded-lg focus:outline-none focus:border-cyan-500";
+  const rowControlClass = "w-full h-9 bg-white border border-slate-800 text-[11px] text-slate-300 px-2 rounded-md focus:outline-none focus:border-cyan-500";
 
   // Temp mock billing sheet code
   const tempInvoiceNo = useMemo(() => {
     const dStr = new Date().toISOString().split("T")[0].replace(/-/g, "");
     return `JH-${dStr}-MOCK`;
   }, []);
+
+  useEffect(() => {
+    setPaymentHandler(defaultHandlerName);
+  }, [defaultHandlerName]);
 
   // Filter templates list
   const filteredTemplates = useMemo(() => {
@@ -113,15 +111,45 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
     );
   }, [products, searchQuery]);
 
-  const sourcePartnerCategory: NonNullable<Vendor["partnerCategory"]> = sourceType === "个人回收" ? "个人" : "同行";
+  const isPersonalSource = sourceType === "个人回收" || sourceType === "客户置换";
+  const normalizeCustomerType = (type?: CustomerCard["type"]) => {
+    if (type === "个人卖家客户" || type === "回收客户") return "个人卖家客户";
+    return "个人买家客户";
+  };
+  const normalizePeerType = (type?: Vendor["type"]) => {
+    if (type === "卖货同行" || type === "大黄牛" || type === "数码渠道大厂" || type === "批发客户") return "卖货同行";
+    return "收货同行";
+  };
 
-  const filteredVendors = useMemo(() => {
-    return vendors.filter(vendor => (vendor.partnerCategory || "同行") === sourcePartnerCategory);
-  }, [sourcePartnerCategory, vendors]);
+  const sourceOptions = useMemo(() => {
+    if (isPersonalSource) {
+      return customers
+        .filter(customer => normalizeCustomerType(customer.type) === "个人卖家客户")
+        .map(customer => ({
+          id: customer.id,
+          name: customer.name,
+          contact: customer.contact || customer.phone || customer.wechat || "",
+          kind: "customer" as const
+        }));
+    }
 
-  const selectedVendor = useMemo(() => {
-    return filteredVendors.find(vendor => vendor.id === selectedVendorId) || null;
-  }, [filteredVendors, selectedVendorId]);
+    return vendors
+      .filter(vendor => (vendor.partnerCategory || "同行") === "同行" && normalizePeerType(vendor.type) === "收货同行")
+      .map(vendor => ({
+        id: vendor.id,
+        name: vendor.name,
+        contact: vendor.contact || vendor.phone || vendor.contactPerson || "",
+        kind: "vendor" as const
+      }));
+  }, [customers, isPersonalSource, vendors]);
+
+  const selectedSource = useMemo(() => {
+    return sourceOptions.find(source => source.id === selectedSourceId) || null;
+  }, [selectedSourceId, sourceOptions]);
+
+  const selectedSettlementAccount = useMemo(() => {
+    return settlementAccounts.find(account => account.id === settlementAccountId) || null;
+  }, [settlementAccountId, settlementAccounts]);
 
   // Sum calculations
   const summary = useMemo(() => {
@@ -149,27 +177,65 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
   }, [isPaid, summary.totalCost]);
 
   useEffect(() => {
-    if (!filteredVendors.some(vendor => vendor.id === selectedVendorId)) {
-      setSelectedVendorId(filteredVendors[0]?.id || "");
+    if (!sourceOptions.some(source => source.id === selectedSourceId)) {
+      setSelectedSourceId(sourceOptions[0]?.id || "");
     }
-  }, [filteredVendors, selectedVendorId]);
+  }, [selectedSourceId, sourceOptions]);
 
   useEffect(() => {
-    if (!selectedVendor) return;
-    setSupplierName(selectedVendor.name);
-    setContact(selectedVendor.contact || selectedVendor.phone || selectedVendor.contactPerson || "");
-  }, [selectedVendor]);
+    if (!selectedSource) return;
+    setSupplierName(selectedSource.name);
+    setContact(selectedSource.contact);
+  }, [selectedSource]);
 
-  // Closes search container on blur
+  const positionSearchDropdown = (input: HTMLInputElement) => {
+    const rect = input.getBoundingClientRect();
+    setSearchDropdownRect({
+      left: rect.left,
+      top: rect.bottom + 6,
+      width: Math.max(rect.width, 360),
+    });
+  };
+
+  const openRowSearch = (rowId: string, productName: string, input: HTMLInputElement) => {
+    activeSearchInputRef.current = input;
+    setActiveRowSearchId(rowId);
+    setSearchQuery(productName);
+    positionSearchDropdown(input);
+  };
+
+  // Closes search container on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target) &&
+        activeSearchInputRef.current &&
+        !activeSearchInputRef.current.contains(target)
+      ) {
         setActiveRowSearchId(null);
+        setSearchDropdownRect(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!activeRowSearchId) return;
+    const syncPosition = () => {
+      if (activeSearchInputRef.current) {
+        positionSearchDropdown(activeSearchInputRef.current);
+      }
+    };
+    window.addEventListener("resize", syncPosition);
+    window.addEventListener("scroll", syncPosition, true);
+    return () => {
+      window.removeEventListener("resize", syncPosition);
+      window.removeEventListener("scroll", syncPosition, true);
+    };
+  }, [activeRowSearchId]);
 
   // Spreading spreadsheet commands
   const addRow = () => {
@@ -206,7 +272,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
         fullBox: true,
         buyPrice: defaultTemplate.refBuyPrice,
         estSellPrice: defaultTemplate.refSellPrice,
-        warehouseLocation: "A区货架-04",
+        warehouseLocation: "待检测区",
         remarks: ""
       }
     ]);
@@ -220,7 +286,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
       copy.splice(index + 1, 0, {
         ...source,
         tempId: nextRowId,
-        sn: source.sn ? `${source.sn}_复制` : ""
+        sn: ""
       });
       return copy;
     });
@@ -228,7 +294,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
 
   const deleteRow = (index: number) => {
     if (items.length <= 1) {
-      alert("明细单据必须包含至少 1 张显卡明细记录。");
+      alert("明细单据必须包含至少 1 条商品明细记录。");
       return;
     }
     setItems(prev => prev.filter((_, i) => i !== index));
@@ -262,15 +328,6 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
     setActiveRowSearchId(null);
   };
 
-  // Randomized SN simulator
-  const triggerScanSimulator = (index: number) => {
-    const brandsShort = items[index].brand === "华硕" ? "ASUS" : "COLORFUL";
-    const yearCode = "2026";
-    const randomHex = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const mockSN = `SN-${brandsShort}-${yearCode}-${randomHex}`;
-    updateField(index, "sn", mockSN);
-  };
-
   // Save drafts
   const handleSaveDraft = () => {
     alert("草稿已成功序列化并存入浏览器缓存(Draft-Save)。随时可以导入该单据。");
@@ -280,14 +337,11 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
   const checkErrors = () => {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (!item.sn.trim()) {
-        return `明细中的第 ${i + 1} 行未填写 标牌 SN 序列号！一卡一档必须拥有物理SN，如无字标，建议贴标自定义新SN。`;
-      }
       if (item.buyPrice <= 0) {
         return `第 ${i + 1} 行收购价填写错误！需输入合理回收金额。`;
       }
       if (item.buyPrice >= item.estSellPrice) {
-        return `第 ${i + 1} 行：收购成本价 (¥${item.buyPrice}) 高于预估销售参考价 (¥${item.estSellPrice})！预计该卡利润溢损严重偏红，请重新核实。`;
+        return `第 ${i + 1} 行：收购成本价 (${item.buyPrice}元) 高于预估销售参考价 (${item.estSellPrice}元)，该卡可能出现成本倒挂，请重新核实。`;
       }
     }
     return null;
@@ -295,9 +349,9 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
 
   // Submit and construct inventories
   const handlePostInvoice = () => {
-    if (!selectedVendor) {
-      alert("请先在【供应商同行册】里新增供应商或回收客户，再回到进货单选择来源开单。");
-      setTab("vendors");
+    if (!selectedSource) {
+      alert(isPersonalSource ? "请先在【个人客户】里新增个人卖家客户，再回到进货单选择来源开单。" : "请先在【同行列表】里新增收货同行，再回到进货单选择来源开单。");
+      setTab(isPersonalSource ? "customers" : "vendors");
       return;
     }
 
@@ -312,20 +366,21 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
       sourceType,
       supplierName,
       contact,
-      paymentMethod,
+      paymentMethod: selectedSettlementAccount?.name || "付款账户",
       isPaid,
       paidAmount,
       unpaidAmount,
       settlementAccountId: paidAmount > 0 ? settlementAccountId : undefined,
-      settlementAccountName: settlementAccounts.find(account => account.id === settlementAccountId)?.name,
+      settlementAccountName: selectedSettlementAccount?.name,
       paymentHandler,
       paymentStatus: unpaidAmount <= 0 ? "已付款" : paidAmount > 0 ? "部分付款" : "未付款",
       handleBy: paymentHandler,
+      expressNo: expressNo.trim() || undefined,
       remarks,
       items
     });
 
-    alert("🎉 进货回收单据入账成功！\n显卡已安全分配到库存系统，默认状态进入 [待检测] 分流池，请引导检测员去完成 FurMark/3DMark 跑分测试。");
+    alert("🎉 进货回收单据入账成功！\n显卡会进入【检测录入】绑定 SN 和最终库位；其他配件会直接进入配件库存，可在【单卡库存】扫码确认库位。");
     setTab("purchase_list");
   };
 
@@ -337,7 +392,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
     }
     
     // Simulate parsing columns separated by space/comma/tab
-    // Expected format: Name SN BuyPrice SellPrice Condition Loc
+    // Expected format: Name BuyPrice SellPrice Remarks
     const lines = pasteContent.split("\n").filter(l => l.trim().length > 0);
     const parsedItems: PurchaseItem[] = [];
 
@@ -345,11 +400,9 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
       const parts = line.split(/[,\t]/);
       let matchTemplate = products[idx % products.length];
       
-      const snVal = parts[1] ? parts[1].trim() : `SN-PASTE-${idx}-${Math.random().toString(36).substring(3,7).toUpperCase()}`;
-      const buyPriceVal = parts[2] ? Number(parts[2].trim()) : matchTemplate.refBuyPrice;
-      const estSellVal = parts[3] ? Number(parts[3].trim()) : matchTemplate.refSellPrice;
-      const condVal = (parts[4] ? parts[4].trim() : "靓机95新") as any;
-      const locVal = parts[5] ? parts[5].trim() : "B区暂存架";
+      const buyPriceVal = parts[1] ? Number(parts[1].trim()) : matchTemplate.refBuyPrice;
+      const estSellVal = parts[2] ? Number(parts[2].trim()) : matchTemplate.refSellPrice;
+      const remarksVal = parts[3] ? parts[3].trim() : "批量粘贴导入，按品类分流入库";
 
       parsedItems.push({
         tempId: `paste-${idx}-${Date.now()}`,
@@ -360,8 +413,8 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
         brand: matchTemplate.brand,
         version: matchTemplate.version,
         vram: matchTemplate.vram,
-        sn: snVal,
-        condition: condVal,
+        sn: "",
+        condition: "靓机95新",
         inWarranty: true,
         warrantyDate: "2028-10-18",
         repaired: false,
@@ -369,15 +422,15 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
         fullBox: true,
         buyPrice: buyPriceVal,
         estSellPrice: estSellVal,
-        warehouseLocation: locVal,
-        remarks: "Excel表格无纸化流转导入"
+        warehouseLocation: "待检测区",
+        remarks: remarksVal
       });
     });
 
     setItems(prev => [...prev, ...parsedItems]);
     setIsPasteDrawerOpen(false);
     setPasteContent("");
-    alert(`解析成功！已批量追加 ${parsedItems.length} 张单卡入库明细！`);
+    alert(`解析成功！已批量追加 ${parsedItems.length} 条商品入库明细！`);
   };
 
   return (
@@ -387,10 +440,10 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Layers className="w-5 h-5 text-cyan-400" />
-            <span>智能进货与个人显卡回收 (一卡一档 Excel 级录入)</span>
+            <span>进货与回收</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            录入成功后，系统在底层会按 SN 自动生成多份独立的数字身份档案。每张显卡拥有单独状态，而非按常规SKU堆叠。
+            进货先记录来源、成本、付款账户和快递单号。显卡走检测入库，其他配件直接进入配件库存。
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -399,7 +452,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             className="p-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            Excel 数据批量粘贴
+            批量粘贴
           </button>
           <button
             onClick={handleSaveDraft}
@@ -418,7 +471,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
           {/* Bill ID */}
           <div>
             <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">单据编号 (系统自动生成)</label>
-            <div className="w-full bg-slate-950 border border-slate-850 p-2.5 text-xs font-bold text-slate-400 rounded font-mono flex items-center justify-between">
+            <div className="w-full h-12 bg-white border border-slate-850 px-3 text-xs font-bold text-slate-400 rounded-lg font-mono flex items-center justify-between">
               <span>{tempInvoiceNo}</span>
               <span className="text-[9px] text-amber-400 font-semibold bg-amber-400/10 px-1.5 rounded">未入库草卷</span>
             </div>
@@ -430,7 +483,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             <select
               value={sourceType}
               onChange={e => setSourceType(e.target.value as SourceType)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none focus:border-cyan-500 font-semibold"
+              className={`${topControlClass} font-semibold`}
             >
               <option value="个人回收">个人</option>
               <option value="同行拿货">同行</option>
@@ -440,18 +493,18 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
           {/* Supplier Name */}
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-              {sourceType === "个人回收" ? "个人卖家档案" : "同行供应商档案"}
+              {isPersonalSource ? "个人卖家客户" : "收货同行"}
             </label>
             <select
               required
-              value={selectedVendorId}
-              onChange={e => setSelectedVendorId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none focus:border-cyan-500"
+              value={selectedSourceId}
+              onChange={e => setSelectedSourceId(e.target.value)}
+              className={topControlClass}
             >
-              {filteredVendors.length === 0 && <option value="">请先新增{sourcePartnerCategory}档案</option>}
-              {filteredVendors.map(vendor => (
-                <option key={vendor.id} value={vendor.id}>
-                  {vendor.name} / {vendor.phone || vendor.contact || vendor.contactPerson}
+              {sourceOptions.length === 0 && <option value="">请先新增{isPersonalSource ? "个人卖家客户" : "收货同行"}</option>}
+              {sourceOptions.map(source => (
+                <option key={source.id} value={source.id}>
+                  {source.name} / {source.contact || "未记录联系方式"}
                 </option>
               ))}
             </select>
@@ -465,7 +518,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
               required
               value={contact}
               readOnly
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-400 p-2.5 rounded focus:outline-none"
+              className={`${topControlClass} text-slate-400`}
             />
           </div>
         </div>
@@ -475,27 +528,24 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">来源档案</label>
             <button
               type="button"
-              onClick={() => setTab("vendors")}
-              className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-black p-2.5 rounded"
+              onClick={() => setTab(isPersonalSource ? "customers" : "vendors")}
+              className="w-full h-12 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-black px-3 rounded-lg"
             >
-              去供应商档案新增
+              {isPersonalSource ? "去个人客户新增" : "去同行列表新增"}
             </button>
           </div>
 
-          {/* Payment Method */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">付款方式</label>
-            <select
-              value={paymentMethod}
-              onChange={e => setPaymentMethod(e.target.value as any)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none"
-            >
-              <option value="微信">微信支付</option>
-              <option value="支付宝">支付宝</option>
-              <option value="银行卡">对公账银行卡</option>
-              <option value="现金">现金交易</option>
-              <option value="欠款">欠款结算 (走账期)</option>
-            </select>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">快递单号</label>
+            <div className="relative">
+              <input
+                value={expressNo}
+                onChange={e => setExpressNo(e.target.value)}
+                className={`${topControlClass} pl-9 font-mono`}
+                placeholder="如 SF123 / YT123 / JD123"
+              />
+              <Hash className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
+            </div>
           </div>
 
           <div>
@@ -503,27 +553,28 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             <select
               value={settlementAccountId}
               onChange={e => setSettlementAccountId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none"
+              className={topControlClass}
             >
               {settlementAccounts.map(account => (
-                <option key={account.id} value={account.id}>{account.name} / ¥{account.balance}</option>
+                <option key={account.id} value={account.id}>{account.name} / {account.balance}元</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">付款人 / 经办人</label>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">经办人</label>
             <input
               value={paymentHandler}
-              onChange={e => setPaymentHandler(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none"
+              readOnly={lockedHandlerState.readOnly}
+              disabled={lockedHandlerState.disabled}
+              className={`${topControlClass} cursor-not-allowed opacity-80`}
             />
           </div>
 
           {/* Is Paid */}
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">付款状态</label>
-            <div className="flex bg-slate-950 p-1 rounded border border-slate-800 gap-1 h-[37px]">
+            <div className="flex bg-white p-1 rounded-lg border border-slate-800 gap-1 h-12">
               <button
                 type="button"
                 onClick={() => setIsPaid(true)}
@@ -548,7 +599,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
           {/* Paid amounts dynamic */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-slate-500 font-bold tracking-wider block mb-1">已付金额(¥)</label>
+              <label className="text-[10px] text-slate-500 font-bold tracking-wider block mb-1">已付金额(元)</label>
               <input
                 type="number"
                 disabled={isPaid}
@@ -558,13 +609,13 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
                   setPaidAmount(val);
                   setUnpaidAmount(Math.max(0, summary.totalCost - val));
                 }}
-                className="w-full bg-slate-950 border border-slate-850 text-xs text-slate-200 p-2.5 rounded disabled:text-slate-500 font-mono"
+                className="w-full h-12 bg-white border border-slate-850 text-sm text-slate-200 px-3 rounded-lg disabled:text-slate-500 font-mono"
               />
             </div>
             <div>
               <label className="text-[10px] text-slate-500 font-bold tracking-wider block mb-1">应付未付款</label>
-              <div className="w-full bg-slate-950 border border-slate-850 p-2.5 text-xs font-mono font-bold text-amber-400 rounded">
-                ¥{unpaidAmount}
+              <div className="w-full h-12 bg-white border border-slate-850 px-3 text-sm font-mono font-bold text-amber-400 rounded-lg flex items-center">
+                {unpaidAmount}元
               </div>
             </div>
           </div>
@@ -573,18 +624,13 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
 
       {/* SPREADSHEET TABLE (可编辑明细) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto shadow-lg">
-        <table className="w-full text-left border-collapse table-fixed min-w-[1200px]">
+        <table className="w-full text-left border-collapse table-fixed min-w-[680px]">
           <thead>
             <tr className="border-b border-slate-800 bg-slate-950 text-[11px] text-slate-400 font-bold font-mono">
               <th className="p-2.5 pl-3 w-[280px]">商品型号搜索 (关键核心)</th>
-              <th className="p-2.5 w-[160px]">SN 标记 (扫码/手工)</th>
-              <th className="p-2.5 w-[110px]">成色级别</th>
-              <th className="p-2.5 w-[90px] text-center">保修期</th>
-              <th className="p-2.5 w-[90px] text-center">拆修/带盒</th>
-              <th className="p-2.5 w-[95px] text-right">进货价 (¥)</th>
-              <th className="p-2.5 w-[95px] text-right">预估售价 (¥)</th>
+              <th className="p-2.5 w-[95px] text-right">进货价 (元)</th>
+              <th className="p-2.5 w-[95px] text-right">预估售价 (元)</th>
               <th className="p-2.5 w-[85px] text-right">预计利润</th>
-              <th className="p-2.5 w-[110px]">存放位置</th>
               <th className="p-2.5 w-[100px]">备注</th>
               <th className="p-2.5 pr-3 text-right w-[100px]">操作</th>
             </tr>
@@ -592,7 +638,6 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
           <tbody className="divide-y divide-slate-800/80 text-xs">
             {items.map((item, index) => {
               const expectedProfit = item.estSellPrice - item.buyPrice;
-              const isProfitRed = expectedProfit < 0;
               const isRiskHighCost = pPriceBelow(index);
 
               function pPriceBelow(idx: number) {
@@ -611,133 +656,21 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
                         type="text"
                         value={activeRowSearchId === item.tempId ? searchQuery : item.productName}
                         placeholder="输入 4090/猛禽/七彩虹 查找..."
-                        onClick={() => {
-                          setActiveRowSearchId(item.tempId);
-                          setSearchQuery(item.productName);
+                        onClick={e => {
+                          openRowSearch(item.tempId, item.productName, e.currentTarget);
+                        }}
+                        onFocus={e => {
+                          openRowSearch(item.tempId, item.productName, e.currentTarget);
                         }}
                         onChange={e => {
+                          activeSearchInputRef.current = e.currentTarget;
                           setSearchQuery(e.target.value);
                           setActiveRowSearchId(item.tempId);
+                          positionSearchDropdown(e.currentTarget);
                         }}
-                        className="w-full bg-slate-950 border border-slate-800 text-[11px] text-slate-200 px-2 py-1.5 rounded focus:outline-none focus:border-cyan-500 font-bold text-ellipsis overflow-hidden whitespace-nowrap"
+                        className="w-full h-9 bg-white border border-slate-800 text-[11px] text-slate-200 px-2 pr-7 rounded-md focus:outline-none focus:border-cyan-500 font-bold text-ellipsis overflow-hidden whitespace-nowrap"
                       />
-                      <Search className="w-3.5 h-3.5 absolute right-2 top-2 text-slate-500 pointer-events-none" />
-                    </div>
-
-                    {/* Autocomplete Dropdown List */}
-                    {activeRowSearchId === item.tempId && (
-                      <div
-                        ref={dropdownRef}
-                        className="absolute left-3 right-3 top-10 bg-slate-950 border border-slate-800 rounded-lg shadow-2xl z-55 max-h-[180px] overflow-y-auto p-1 custom-scrollbar"
-                      >
-                        <div className="p-1 px-2 border-b border-slate-850 text-[10px] text-slate-500 font-mono tracking-wide leading-none">
-                          点击套用商品库标准模板
-                        </div>
-                        {filteredTemplates.map(t => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => selectTemplate(index, t)}
-                            className="w-full text-left p-2 hover:bg-slate-800 rounded text-[11px] flex items-center justify-between transition-colors mt-0.5"
-                          >
-                            <div className="truncate">
-                              <span className="font-bold text-slate-200 block">{t.name}</span>
-                              <span className="text-[9px] text-slate-500 font-mono">
-                                指导收: ¥{t.refBuyPrice} | 售价: ¥{t.refSellPrice}
-                              </span>
-                            </div>
-                            <span className="text-[10px] text-cyan-400 bg-cyan-950/40 px-1.5 rounded font-mono">
-                              库: {inventory.filter(c => c.productId === t.id && c.status !== "已售出").length}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* SN SERIAL WITH SIMULATION SCANNER */}
-                  <td className="p-2">
-                    <div className="flex gap-1">
-                      <input
-                        type="text"
-                        placeholder="外盒/金手指SN"
-                        value={item.sn}
-                        required
-                        onChange={e => updateField(index, "sn", e.target.value)}
-                        className={`w-full bg-slate-950 border text-[11px] font-mono p-1.5 rounded focus:outline-none ${
-                          !item.sn ? "border-amber-500/40 focus:border-amber-500" : "border-slate-800 focus:border-cyan-500"
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => triggerScanSimulator(index)}
-                        title="仿真扫码枪扫入 SN"
-                        className="p-1.5 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded shrink-0 duration-150 cursor-pointer"
-                      >
-                        <Scan className="w-3.5 h-3.5 text-cyan-400" />
-                      </button>
-                    </div>
-                  </td>
-
-                  {/* CONDITION DROPDOWN */}
-                  <td className="p-2">
-                    <select
-                      value={item.condition}
-                      onChange={e => updateField(index, "condition", e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-[11px] text-slate-300 p-1.5 rounded"
-                    >
-                      {conditionOptions.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </td>
-
-                  {/* WARRANTY TOGGLE AND DEADLINE */}
-                  <td className="p-2">
-                    <div className="flex flex-col gap-1 items-center">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          id={`warr-${item.tempId}`}
-                          checked={item.inWarranty}
-                          onChange={e => updateField(index, "inWarranty", e.target.checked)}
-                          className="rounded text-cyan-500 focus:ring-0 bg-slate-950 border-slate-800"
-                        />
-                        <label htmlFor={`warr-${item.tempId}`} className="text-[10px] text-slate-400 font-semibold cursor-pointer">在保</label>
-                      </div>
-                      
-                      {item.inWarranty && (
-                        <input
-                          type="date"
-                          value={item.warrantyDate || ""}
-                          onChange={e => updateField(index, "warrantyDate", e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 text-[10px] p-1 rounded font-mono text-slate-300 transform scale-95"
-                        />
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Repair status and box/package flag */}
-                  <td className="p-2">
-                    <div className="flex flex-col gap-1 items-start pl-2">
-                      <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-semibold text-slate-400">
-                        <input
-                          type="checkbox"
-                          checked={item.repaired}
-                          onChange={e => updateField(index, "repaired", e.target.checked)}
-                          className="rounded text-red-500 bg-slate-950 border-slate-800"
-                        />
-                        <span>曾拆修</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-semibold text-slate-400">
-                        <input
-                          type="checkbox"
-                          checked={item.gpuRisk}
-                          onChange={e => updateField(index, "gpuRisk", e.target.checked)}
-                          className="rounded text-red-500 bg-slate-950 border-slate-800"
-                        />
-                        <span className={item.gpuRisk ? "text-cyan-300 font-bold" : ""}>带盒</span>
-                      </label>
+                      <Search className="w-3.5 h-3.5 absolute right-2 top-2.5 text-slate-500 pointer-events-none" />
                     </div>
                   </td>
 
@@ -748,7 +681,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
                       required
                       value={item.buyPrice}
                       onChange={e => updateField(index, "buyPrice", Number(e.target.value))}
-                      className={`w-full text-right bg-slate-950 border text-[11px] p-1.5 rounded focus:outline-none font-mono font-bold ${
+                      className={`w-full h-9 text-right bg-white border text-[11px] px-2 rounded-md focus:outline-none font-mono font-bold ${
                         isRiskHighCost ? "border-rose-400 text-rose-400 focus:border-rose-500 bg-rose-500/5 animate-pulse" : "border-slate-800 text-cyan-400 focus:border-cyan-500"
                       }`}
                     />
@@ -761,31 +694,20 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
                       required
                       value={item.estSellPrice}
                       onChange={e => updateField(index, "estSellPrice", Number(e.target.value))}
-                      className="w-full text-right bg-slate-950 border border-slate-800 text-[11px] text-emerald-400 font-mono font-bold p-1.5 rounded focus:outline-none focus:border-cyan-500"
+                      className="w-full h-9 text-right bg-white border border-slate-800 text-[11px] text-emerald-400 font-mono font-bold px-2 rounded-md focus:outline-none focus:border-cyan-500"
                     />
                   </td>
 
                   {/* ESTIMATED GAINS / LOSS */}
                   <td className="p-2 text-right font-mono font-black text-[11px]">
                     <span className={expectedProfit >= 0 ? "text-emerald-400" : "text-rose-500"}>
-                      ¥{expectedProfit}
+                      {expectedProfit}元
                     </span>
                     {isRiskHighCost && (
                       <span className="block text-[8px] text-rose-300 font-sans border border-rose-500/30 rounded text-center mt-1 bg-rose-500/10 leading-none py-0.5" title="高价入货风险">
                         倒挂!
                       </span>
                     )}
-                  </td>
-
-                  {/* LOCATION */}
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={item.warehouseLocation}
-                      placeholder="e.g. A2架"
-                      onChange={e => updateField(index, "warehouseLocation", e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-[11px] text-slate-300 p-1.5 rounded focus:outline-none"
-                    />
                   </td>
 
                   {/* REMARK IN ROW */}
@@ -795,7 +717,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
                       value={item.remarks}
                       placeholder="品相附件"
                       onChange={e => updateField(index, "remarks", e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-[11px] text-slate-300 p-1.5 rounded focus:outline-none"
+                      className={rowControlClass}
                     />
                   </td>
 
@@ -827,6 +749,52 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
         </table>
       </div>
 
+      {activeRowSearchId && searchDropdownRect && (
+        <div
+          ref={dropdownRef}
+          className="fixed bg-white border border-slate-800 rounded-xl shadow-[0_24px_60px_rgba(15,23,42,0.24)] z-[9999] max-h-[280px] overflow-y-auto p-1 custom-scrollbar"
+          style={{
+            left: `${searchDropdownRect.left}px`,
+            top: `${searchDropdownRect.top}px`,
+            width: `${searchDropdownRect.width}px`,
+          }}
+        >
+          <div className="p-2 px-3 border-b border-slate-800 text-[11px] text-slate-500 font-bold tracking-wide leading-none bg-slate-950/5 rounded-t-lg">
+            点击套用商品库标准模板
+          </div>
+          {filteredTemplates.length === 0 ? (
+            <div className="px-3 py-4 text-xs text-slate-500">没有匹配的商品模板</div>
+          ) : (
+            filteredTemplates.map(t => {
+              const activeRowIndex = items.findIndex(row => row.tempId === activeRowSearchId);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    if (activeRowIndex >= 0) {
+                      selectTemplate(activeRowIndex, t);
+                    }
+                    setSearchDropdownRect(null);
+                  }}
+                  className="w-full text-left p-2.5 hover:bg-blue-50 rounded-lg text-xs flex items-center justify-between gap-3 transition-colors mt-0.5"
+                >
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-200 block truncate">{t.name}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      指导收: {t.refBuyPrice}元 | 售价: {t.refSellPrice}元
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-[10px] text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded font-mono">
+                    库: {inventory.filter(c => c.productId === t.id && c.status !== "已售出").length}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
       {/* QUICK TABLE BOTTOM ACTIONS */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
         <button
@@ -835,12 +803,12 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
           className="w-full sm:w-auto p-2 px-5 bg-slate-800 border border-slate-700 text-slate-100 hover:text-slate-50 hover:bg-slate-750 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4 text-cyan-400" />
-          继续增加一行显卡 (可通过 TaB 切换)
+          继续增加一行商品 (可通过 TaB 切换)
         </button>
 
         {/* Dynamic inline tips */}
         <div className="text-[11px] text-slate-400 font-mono text-center sm:text-right">
-          小提示: 双击“商品全称”可以随时通过关键字重新绑定。使用“双卡”功能可快速创建同型号不同SN序列。
+          小提示: 显卡进货后进入“检测录入”绑定 SN 和最终库位；CPU、主板、内存、硬盘、电源等配件会直接进入配件库。
         </div>
       </div>
 
@@ -875,18 +843,18 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>采购总投入 (成本):</span>
-              <span className="font-black text-cyan-400 font-mono text-sm">¥{summary.totalCost.toLocaleString()}</span>
+              <span className="font-black text-cyan-400 font-mono text-sm">{summary.totalCost.toLocaleString()}元</span>
             </div>
 
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>预估销售总额:</span>
-              <span className="font-bold text-slate-200 font-mono">¥{summary.estTotalSell.toLocaleString()}</span>
+              <span className="font-bold text-slate-200 font-mono">{summary.estTotalSell.toLocaleString()}元</span>
             </div>
 
             <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80 pt-1.5">
               <span>预计差价总毛利润:</span>
               <span className={`font-black font-mono text-base ${summary.estTotalProfit >= 0 ? "text-emerald-400 font-black shadow-glow" : "text-rose-500"}`}>
-                ¥{summary.estTotalProfit.toLocaleString()}
+                {summary.estTotalProfit.toLocaleString()}元
               </span>
             </div>
           </div>
@@ -897,7 +865,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             className="w-full mt-4 p-3 bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-slate-950 font-black text-xs rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.35)] hover:scale-[1.01] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <CheckCircle className="w-4 h-4 text-slate-950" />
-            确认提交 · 自动建档入库
+            确认提交 · 等待检测入库
           </button>
         </div>
       </div>
@@ -911,7 +879,7 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
             <div className="p-5 border-b border-slate-800 flex items-center justify-between">
               <h3 className="font-bold text-slate-100 flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                <span>从 Excel / 微信消息批量粘贴显卡数据</span>
+                <span>从 Excel / 微信消息批量粘贴商品数据</span>
               </h3>
               <button onClick={() => setIsPasteDrawerOpen(false)} className="text-slate-400 hover:text-slate-250">
                 <X className="w-5 h-5" />
@@ -920,12 +888,12 @@ export default function PurchaseInvoice({ storeState, setTab }: PurchaseInvoiceP
 
             <div className="p-5 space-y-4">
               <div className="p-3 bg-slate-950 rounded border border-slate-850 text-[10px] text-slate-400 font-mono space-y-1 leading-normal">
-                <span className="text-cyan-400 font-bold block mb-1">💡 粘贴格式示范：每一行代表一张显卡，字段用 逗号 或 TAB（制表符）分隔。如果为空将套用默认值：</span>
-                <div>名称 (e.g. 随便填), SN码, 采购价, 预计售价, 成色, 货架号</div>
+                <span className="text-cyan-400 font-bold block mb-1">💡 粘贴格式示范：每一行代表一件商品，字段用 逗号 或 TAB（制表符）分隔。进货阶段不录 SN：</span>
+                <div>商品名称, 采购价, 预计售价, 备注</div>
                 <div className="text-slate-500 block">
-                  ASUS ROG 4090, <b>SN4090ROG881K</b>, 18000, 19500, 充新99新, 货架A1
+                  ASUS ROG 4090, 18000, 19500, 包装箱完好
                   <br />
-                  Vulcan 4080S, <b>SN4080VLC2026P</b>, 8200, 8900, 靓机95新, 货架A2
+                  Vulcan 4080S, 8200, 8900, 到货后检测定库位
                 </div>
               </div>
 

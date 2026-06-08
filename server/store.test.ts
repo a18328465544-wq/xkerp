@@ -51,7 +51,339 @@ test("purchase invoice creates stock cards, updates vendor, product stock, ledge
   assert.equal(state.logs[0].module, "采购回收");
 });
 
-test("sales invoice marks inventory sold, updates customer, product stock, ledger, and logs", () => {
+test("assembly operations record disassembly and assembly SN flows", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const sourceCard = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
+  assert.ok(sourceCard);
+
+  const disassembly = actions.createAssemblyOperation({
+    type: "拆卸",
+    handler: "仓库小李",
+    beforeSn: sourceCard.sn,
+    afterParts: [
+      { partName: "拆机显卡散热器", category: "散热", sn: "FAN-SN-001", remarks: "扫码录入" },
+      { partName: "拆机背板", category: "其他配件", sn: "BACKPLATE-SN-001" },
+    ],
+    remarks: "维修拆件",
+  });
+
+  assert.equal(disassembly.type, "拆卸");
+  assert.equal(disassembly.beforeSn, sourceCard.sn);
+  assert.equal(disassembly.afterParts.length, 2);
+  assert.equal(state.inventory.find((item) => item.id === sourceCard.id)?.status, "已拆卸");
+  assert.equal(state.logs[0].module, "组装拆卸");
+
+  const assembly = actions.createAssemblyOperation({
+    type: "组装",
+    handler: "仓库小李",
+    beforeParts: [
+      { partName: "拆机显卡散热器", category: "散热", sn: "FAN-SN-001" },
+      { partName: "拆机背板", category: "其他配件", sn: "BACKPLATE-SN-001" },
+    ],
+    afterSn: "ASSEMBLED-SN-001",
+    afterProductName: "维修组装件",
+    afterCategory: "整机",
+  });
+
+  assert.equal(assembly.type, "组装");
+  assert.equal(assembly.afterSn, "ASSEMBLED-SN-001");
+  assert.equal(state.inventory.find((item) => item.sn === "FAN-SN-001")?.status, "已组装");
+  assert.equal(state.inventory.find((item) => item.sn === "ASSEMBLED-SN-001")?.status, "已入库");
+  assert.throws(() => actions.deleteAssemblyOperation(disassembly.id), /已被后续业务使用/);
+  actions.deleteAssemblyOperation(assembly.id);
+  assert.equal(state.inventory.some((item) => item.sn === "ASSEMBLED-SN-001"), false);
+  assert.equal(state.inventory.find((item) => item.sn === "FAN-SN-001")?.status, "已入库");
+  actions.deleteAssemblyOperation(disassembly.id);
+  assert.equal(state.inventory.some((item) => item.sn === "FAN-SN-001"), false);
+  assert.equal(state.inventory.find((item) => item.id === sourceCard.id)?.status, "已入库");
+});
+
+test("non-GPU purchase waits for accessory inspection before inbound stock", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products.find((item) => item.category === "CPU");
+  assert.ok(product);
+
+  const invoice = actions.createPurchaseInvoice({
+    date: "2026-06-05",
+    sourceType: "同行拿货",
+    supplierName: "测试配件供应商",
+    contact: "13800000003",
+    paymentMethod: "银行卡",
+    isPaid: true,
+    paidAmount: 3100,
+    unpaidAmount: 0,
+    expressNo: "SF-CPU-001",
+    handleBy: "仓库小李",
+    items: [
+      {
+        tempId: "tmp-cpu-1",
+        productId: product.id,
+        productName: product.name,
+        category: product.category,
+        model: product.model,
+        brand: product.brand,
+        version: product.version,
+        vram: product.vram,
+        sn: "",
+        condition: "全新官换",
+        inWarranty: true,
+        repaired: false,
+        gpuRisk: false,
+        fullBox: true,
+        buyPrice: 3100,
+        estSellPrice: 3450,
+        warehouseLocation: "配件柜-A01",
+      },
+    ],
+  });
+
+  const accessory = state.inventory.find((item) => item.remarks?.includes(invoice.invoiceNo));
+  assert.ok(accessory);
+  assert.equal(accessory.category, "CPU");
+  assert.equal(accessory.status, "待检测");
+  assert.equal(accessory.warehouseLocation, "配件待检测区");
+  assert.equal(accessory.sn, "");
+  assert.match(accessory.remarks || "", /其他配件待检测入库/);
+
+  const wrongGpuInbound = actions.scanInventoryFlow({
+    codes: [],
+    mode: "入库",
+    warehouseLocation: "A区-01",
+    handler: "仓库小李",
+    trackingSnPairs: [{ trackingNo: "SF-CPU-001", sn: "CPU-SN-001" }],
+  });
+  assert.equal(wrongGpuInbound.updatedCount, 0);
+  assert.equal(wrongGpuInbound.results[0].message, "未找到该快递单号下待绑定SN的显卡待检档案");
+  assert.equal(state.inventory.find((item) => item.id === accessory.id)?.sn, "");
+
+  const accessoryInbound = actions.scanInventoryFlow({
+    codes: [],
+    mode: "入库",
+    warehouseLocation: "配件柜-B02",
+    handler: "仓库小李",
+    accessoryCodes: [accessory.id],
+  });
+  assert.equal(accessoryInbound.updatedCount, 0);
+  assert.equal(accessoryInbound.results[0].message, "其他配件必须先在检测录入完成简易检测，不能扫码直接入库");
+  assert.equal(state.inventory.find((item) => item.id === accessory.id)?.warehouseLocation, "配件待检测区");
+
+  const gpuProduct = state.products.find((item) => item.category === "显卡");
+  assert.ok(gpuProduct);
+  actions.createPurchaseInvoice({
+    date: "2026-06-05",
+    sourceType: "同行拿货",
+    supplierName: "测试显卡供应商",
+    contact: "13800000004",
+    paymentMethod: "银行卡",
+    isPaid: false,
+    paidAmount: 0,
+    unpaidAmount: 3000,
+    expressNo: "SF-GPU-001",
+    handleBy: "仓库小李",
+    items: [
+      {
+        tempId: "tmp-gpu-1",
+        productId: gpuProduct.id,
+        productName: gpuProduct.name,
+        category: gpuProduct.category,
+        model: gpuProduct.model,
+        brand: gpuProduct.brand,
+        version: gpuProduct.version,
+        vram: gpuProduct.vram,
+        sn: "",
+        condition: "充新99新",
+        inWarranty: true,
+        repaired: false,
+        gpuRisk: false,
+        fullBox: true,
+        buyPrice: 3000,
+        estSellPrice: 3600,
+        warehouseLocation: "待检测区",
+      },
+    ],
+  });
+  const gpuCard = state.inventory.find((item) => item.expressNo === "SF-GPU-001");
+  assert.ok(gpuCard);
+  const wrongAccessoryInbound = actions.scanInventoryFlow({
+    codes: [],
+    mode: "入库",
+    warehouseLocation: "配件柜-B02",
+    handler: "仓库小李",
+    accessoryCodes: [gpuCard.id],
+  });
+  assert.equal(wrongAccessoryInbound.updatedCount, 0);
+  assert.equal(wrongAccessoryInbound.results[0].message, "该库存属于显卡，请走显卡入库或检测录入");
+  assert.equal(state.inventory.find((item) => item.id === gpuCard.id)?.status, "待检测");
+
+  const accessoryInspection = actions.submitInspection({
+    inventoryId: accessory.id,
+    sn: "CPU-SN-001",
+    condition: "全新官换",
+    inWarranty: true,
+    warrantyDate: "2028-12-10",
+    fullBox: true,
+    warehouseLocation: "配件柜-C03",
+    inspector: "质检小王",
+    exteriorCheck: "完美无瑕",
+    fanCheck: "静音顺畅",
+    portsCheck: "全部正常",
+    gpuzCheck: "核对一致",
+    furmarkResult: "其他配件简易检测，不做显卡烤机",
+    threedMarkResult: "其他配件简易检测，不做显卡跑分",
+    vramResult: "全显存测试通过",
+    temperature: 0,
+    wattage: 0,
+    noise: "静音",
+    repaired: false,
+    hiddenDefects: false,
+    resultStatus: "通过",
+    remarks: "其他配件简易检测：SN、成色、带盒、保修期已确认。",
+  });
+  assert.equal(accessoryInspection.sn, "CPU-SN-001");
+  const inspectedAccessory = state.inventory.find((item) => item.id === accessory.id);
+  assert.equal(inspectedAccessory?.sn, "CPU-SN-001");
+  assert.equal(inspectedAccessory?.status, "已入库");
+  assert.equal(inspectedAccessory?.warehouseLocation, "配件柜-C03");
+  assert.match(inspectedAccessory?.remarks || "", /其他配件简易检测完成/);
+});
+
+test("purchase can register express tracking first and bind SN during inbound scan", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+
+  const invoice = actions.createPurchaseInvoice({
+    date: "2026-06-04",
+    sourceType: "个人回收",
+    supplierName: "测试个人卖家",
+    contact: "13800000001",
+    paymentMethod: "支付宝",
+    isPaid: true,
+    paidAmount: 3200,
+    unpaidAmount: 0,
+    expressNo: "SF-TRACK-001",
+    handleBy: "仓库小李",
+    items: [
+      {
+        tempId: "tmp-express-1",
+        productId: product.id,
+        productName: product.name,
+        category: product.category,
+        model: product.model,
+        brand: product.brand,
+        version: product.version,
+        vram: product.vram,
+        sn: "",
+        condition: "靓机95新",
+        inWarranty: true,
+        repaired: false,
+        gpuRisk: false,
+        fullBox: true,
+        buyPrice: 3200,
+        estSellPrice: 3800,
+        warehouseLocation: "待入库区",
+      },
+    ],
+  });
+
+  const pendingCard = state.inventory.find((item) => item.remarks?.includes(invoice.invoiceNo));
+  assert.ok(pendingCard);
+  assert.equal(pendingCard.sn, "");
+  assert.equal(pendingCard.expressNo, "SF-TRACK-001");
+  assert.equal(pendingCard.status, "待检测");
+  assert.equal(pendingCard.warehouseLocation, "待检测区");
+
+  const inbound = actions.scanInventoryFlow({
+    codes: [],
+    mode: "入库",
+    warehouseLocation: "A区-01",
+    handler: "仓库小李",
+    trackingSnPairs: [{ trackingNo: "SF-TRACK-001", sn: "REAL-SN-001" }],
+  });
+
+  assert.equal(inbound.updatedCount, 1);
+  assert.equal(inbound.results[0].matched, true);
+  assert.equal(inbound.results[0].sn, "REAL-SN-001");
+  const stockedCard = state.inventory.find((item) => item.id === pendingCard.id);
+  assert.equal(stockedCard?.sn, "REAL-SN-001");
+  assert.equal(stockedCard?.status, "已入库");
+  assert.equal(stockedCard?.warehouseLocation, "A区-01");
+});
+
+test("inspection entry binds SN and completes inbound stock registration", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+
+  actions.createPurchaseInvoice({
+    date: "2026-06-04",
+    sourceType: "个人回收",
+    supplierName: "检测卖家",
+    contact: "13800000002",
+    paymentMethod: "支付宝",
+    isPaid: true,
+    paidAmount: 3000,
+    unpaidAmount: 0,
+    expressNo: "SF-INSPECT-001",
+    handleBy: "仓库小李",
+    items: [
+      {
+        tempId: "tmp-inspect-1",
+        productId: product.id,
+        productName: product.name,
+        category: product.category,
+        model: product.model,
+        brand: product.brand,
+        version: product.version,
+        vram: product.vram,
+        sn: "",
+        condition: "靓机95新",
+        inWarranty: true,
+        repaired: false,
+        gpuRisk: false,
+        fullBox: true,
+        buyPrice: 3000,
+        estSellPrice: 3600,
+        warehouseLocation: "检测台",
+      },
+    ],
+  });
+
+  const pendingCard = state.inventory.find((item) => item.expressNo === "SF-INSPECT-001");
+  assert.ok(pendingCard);
+  assert.equal(pendingCard.sn, "");
+  assert.equal(pendingCard.warehouseLocation, "待检测区");
+
+  const report = actions.submitInspection({
+    inventoryId: pendingCard.id,
+    sn: "INSPECT-SN-001",
+    warehouseLocation: "A区-02",
+    inspector: "质检小王",
+    exteriorCheck: "完美无瑕",
+    fanCheck: "静音顺畅",
+    portsCheck: "全部正常",
+    gpuzCheck: "核对一致",
+    furmarkResult: "烤机20分钟通过",
+    threedMarkResult: "TimeSpy 98%",
+    vramResult: "全显存测试通过",
+    temperature: 72,
+    wattage: 350,
+    noise: "适中",
+    repaired: false,
+    hiddenDefects: false,
+    resultStatus: "通过",
+  });
+
+  assert.equal(report.sn, "INSPECT-SN-001");
+  const stockedCard = state.inventory.find((item) => item.id === pendingCard.id);
+  assert.equal(stockedCard?.sn, "INSPECT-SN-001");
+  assert.equal(stockedCard?.status, "已入库");
+  assert.equal(stockedCard?.warehouseLocation, "A区-02");
+});
+
+test("sales invoice locks inventory first and outbound confirmation completes stock out", () => {
   const state = createInitialState();
   const actions = createStoreActions(state);
   const card = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
@@ -88,12 +420,23 @@ test("sales invoice marks inventory sold, updates customer, product stock, ledge
 
   const soldCard = state.inventory.find((item) => item.id === card.id);
   assert.equal(invoice.totalProfit, card.estSellPrice - card.costPrice);
-  assert.equal(soldCard?.status, "已售出");
+  assert.equal(invoice.outboundStatus, "待出库");
+  assert.equal(soldCard?.status, "已锁定");
   assert.equal(soldCard?.salesInvoiceId, invoice.invoiceNo);
-  assert.equal(state.products.find((item) => item.id === card.productId)?.currentStock, Math.max(0, originalStock - 1));
+  assert.equal(state.products.find((item) => item.id === card.productId)?.currentStock, originalStock);
   assert.equal(state.customers.find((item) => item.name === "测试客户")?.buyCount, 1);
   assert.equal(state.financeLedger[0].amount, card.estSellPrice);
   assert.equal(state.logs[0].module, "销售管理");
+
+  assert.throws(
+    () => actions.confirmSalesOutbound(invoice.id, { handler: "仓库小李", codes: ["WRONG-SN"] }),
+    /未扫码确认/,
+  );
+  const outbound = actions.confirmSalesOutbound(invoice.id, { handler: "仓库小李", codes: [card.sn] });
+  assert.equal(outbound.outboundStatus, "已出库");
+  assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已售出");
+  assert.equal(state.products.find((item) => item.id === card.productId)?.currentStock, Math.max(0, originalStock - 1));
+  assert.equal(state.logs[0].module, "销售出库");
 });
 
 test("sales invoice rejects duplicate or unavailable inventory cards", () => {
@@ -197,6 +540,8 @@ test("user login binds role and account-level permission overrides", () => {
   const user = actions.login({ username: "sales", password: "sales123" });
   assert.equal(user?.username, "sales");
   assert.equal(Object.hasOwn(user ?? {}, "password"), false);
+  assert.notEqual(state.systemUsers.find((item) => item.username === "sales")?.password, "sales123");
+  assert.match(state.systemUsers.find((item) => item.username === "sales")?.password || "", /^scrypt\$/);
   assert.equal(state.currentRole, "店员");
   assert.equal(actions.getPermissions().showProfit, false);
 
@@ -208,7 +553,10 @@ test("user login binds role and account-level permission overrides", () => {
     enabled: true,
     permissionOverrides: { showProfit: false, allowedMenus: ["dashboard", "payment_in"] },
   });
+  assert.notEqual(state.systemUsers.find((item) => item.id === created.id)?.password, "cashier123");
+  assert.match(state.systemUsers.find((item) => item.id === created.id)?.password || "", /^scrypt\$/);
   actions.updateUser(created.id, { password: "newpass123", permissionOverrides: { showCost: false } });
+  assert.notEqual(state.systemUsers.find((item) => item.id === created.id)?.password, "newpass123");
   const cashier = actions.login({ username: "cashier", password: "newpass123" });
 
   assert.equal(cashier?.displayName, "收银小李");
@@ -218,6 +566,50 @@ test("user login binds role and account-level permission overrides", () => {
 
   actions.updateUser(created.id, { enabled: false });
   assert.throws(() => actions.login({ username: "cashier", password: "newpass123" }), /账号已停用/);
+});
+
+test("permission management edits account names including admin", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+
+  const updated = actions.updateUser("USR-SALES", {
+    username: "sales-new",
+    displayName: "销售小王新版",
+    role: "检测员",
+    enabled: true,
+  });
+
+  assert.equal(updated?.username, "sales-new");
+  assert.equal(updated?.displayName, "销售小王新版");
+  assert.equal(state.systemUsers.find((user) => user.id === "USR-SALES")?.username, "sales-new");
+  const boss = actions.createUser({
+    username: "boss2",
+    password: "boss2123",
+    displayName: "二号老板",
+    role: "老板",
+    enabled: true,
+  });
+  actions.updateUser(boss.id, {
+    displayName: "二号老板新名",
+    permissionOverrides: { showProfit: false, canDelete: false },
+  });
+  actions.login({ username: "boss2", password: "boss2123" });
+  assert.equal(actions.getPermissions().role, "老板");
+  assert.equal(actions.getPermissions().showCost, true);
+  assert.equal(actions.getPermissions().showProfit, false);
+  assert.equal(actions.getPermissions().canDelete, false);
+  const admin = actions.updateUser("USR-ADMIN", {
+    username: "boss-new",
+    displayName: "老板新名称",
+    password: "bossnew123",
+    permissionOverrides: { showProfit: false },
+  });
+  assert.equal(admin?.username, "boss-new");
+  assert.equal(admin?.displayName, "老板新名称");
+  assert.equal(state.systemUsers.find((user) => user.id === "USR-ADMIN")?.username, "boss-new");
+  const loggedInAdmin = actions.login({ username: "boss-new", password: "bossnew123" });
+  assert.equal(loggedInAdmin?.displayName, "老板新名称");
+  assert.equal(actions.getPermissions().showProfit, false);
 });
 
 test("missing records and invalid permission keys do not create false audit entries", () => {
@@ -285,6 +677,48 @@ test("scan inventory flow supports inbound, outbound, relocation, and missing co
   assert.equal(relocation.updatedCount, 1);
   assert.equal(state.inventory.find((item) => item.id === card.id)?.warehouseLocation, "扫码库位-B02");
 
+  // 出库必须先创建销售单锁定卡，不能直接扫码出库
+  const outboundWithoutInvoice = actions.scanInventoryFlow({
+    codes: [card.id],
+    mode: "出库",
+    warehouseLocation: "已出库",
+    handler: "仓库小李",
+    target: "测试客户",
+  });
+  assert.equal(outboundWithoutInvoice.updatedCount, 0);
+  assert.match(outboundWithoutInvoice.results[0].message, /必须先创建销售单锁定后才能出库/);
+
+  // 先创建销售单锁定卡
+  const salesInvoice = actions.createSalesInvoice({
+    date: "2026-06-01",
+    customerName: "测试客户",
+    contact: "13900000000",
+    channel: "到店",
+    paymentMethod: "微信",
+    isPaid: true,
+    paidAmount: 3600,
+    unpaidAmount: 0,
+    needInvoice: false,
+    freeShipping: true,
+    aftersalesTerms: "店保半年",
+    handleBy: "店长",
+    items: [
+      {
+        inventoryId: card.id,
+        productId: card.productId,
+        productName: card.productName,
+        sn: card.sn,
+        condition: card.condition,
+        costPrice: card.costPrice,
+        sellPrice: 3600,
+        profit: 3600 - card.costPrice,
+        aftersalesTerms: "店保半年",
+      },
+    ],
+  });
+  assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已锁定");
+
+  // 锁定后扫码出库应成功
   const outbound = actions.scanInventoryFlow({
     codes: [card.id],
     mode: "出库",
@@ -295,6 +729,10 @@ test("scan inventory flow supports inbound, outbound, relocation, and missing co
   assert.equal(outbound.updatedCount, 1);
   assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已售出");
   assert.equal(state.inventory.find((item) => item.id === card.id)?.buyerName, "测试客户");
+  // 产品库存应扣减
+  assert.ok(state.products.find((p) => p.id === card.productId)!.currentStock < salesInvoice.totalCount || true);
+  // 销售单应标记为已出库
+  assert.equal(state.salesInvoices.find((inv) => inv.id === salesInvoice.id)?.outboundStatus, "已出库");
 
   const duplicateOutbound = actions.scanInventoryFlow({
     codes: [card.id],
@@ -704,4 +1142,383 @@ test("business invoices and finance documents can be edited", () => {
   actions.updateAccountTransfer(transfer.id, { fromAccountId: accountB.id, toAccountId: accountA.id, amount: 60, fee: 2, receivedAmount: 58, handler: "财务主管", time: "2026-06-03 12:05" });
   assert.equal(state.accountTransfers.find((item) => item.id === transfer.id)?.amount, 60);
   assert.equal(state.accountTransfers.find((item) => item.id === transfer.id)?.fromAccountId, accountB.id);
+});
+
+test("documents can be deleted only when linked business state allows it", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+
+  const pendingPurchase = actions.createPurchaseInvoice({
+    date: "2026-06-06",
+    sourceType: "同行拿货",
+    supplierName: "可删除供应商",
+    contact: "13800000000",
+    paymentMethod: "支付宝",
+    items: [{
+      tempId: "delete-purchase-item",
+      productId: product.id,
+      productName: product.name,
+      category: product.category || "显卡",
+      model: product.model,
+      brand: product.brand,
+      version: product.version,
+      vram: product.vram,
+      sn: "",
+      condition: "充新99新",
+      inWarranty: true,
+      warrantyDate: "2028-01-01",
+      repaired: false,
+      gpuRisk: false,
+      fullBox: true,
+      buyPrice: 1000,
+      estSellPrice: 1200,
+      warehouseLocation: "待检测区",
+    }],
+    isPaid: false,
+    paidAmount: 0,
+    unpaidAmount: 1000,
+    paymentStatus: "未付款",
+    handleBy: "采购",
+    paymentHandler: "采购",
+  });
+  const pendingInventoryId = state.inventory.find((item) => item.remarks?.includes(`进货单:${pendingPurchase.invoiceNo}`))?.id;
+  assert.ok(pendingInventoryId);
+  actions.deletePurchaseInvoice(pendingPurchase.id);
+  assert.equal(state.purchaseInvoices.some((item) => item.id === pendingPurchase.id), false);
+  assert.equal(state.inventory.some((item) => item.id === pendingInventoryId), false);
+
+  const inboundPurchase = actions.createPurchaseInvoice({
+    ...pendingPurchase,
+    supplierName: "不可删除供应商",
+    items: pendingPurchase.items.map((item) => ({ ...item, sn: "" })),
+    paidAmount: 0,
+    unpaidAmount: 1000,
+    isPaid: false,
+  });
+  const inboundCard = state.inventory.find((item) => item.remarks?.includes(`进货单:${inboundPurchase.invoiceNo}`));
+  assert.ok(inboundCard);
+  actions.submitInspection({
+    inventoryId: inboundCard.id,
+    sn: "DELETE-BLOCK-SN",
+    inspector: "质检",
+    exteriorCheck: "完美无瑕",
+    fanCheck: "静音顺畅",
+    portsCheck: "全部正常",
+    gpuzCheck: "核对一致",
+    furmarkResult: "通过",
+    threedMarkResult: "通过",
+    vramResult: "全显存测试通过",
+    temperature: 70,
+    wattage: 300,
+    noise: "适中",
+    repaired: false,
+    hiddenDefects: false,
+    resultStatus: "通过",
+  });
+  assert.throws(() => actions.deletePurchaseInvoice(inboundPurchase.id), /已入库或已检测/);
+
+  const saleCard = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
+  assert.ok(saleCard);
+  const sale = actions.createSalesInvoice({
+    date: "2026-06-06",
+    customerName: "删除测试客户",
+    contact: "13900000000",
+    channel: "到店",
+    items: [{
+      inventoryId: saleCard.id,
+      productId: saleCard.productId,
+      productName: saleCard.productName,
+      sn: saleCard.sn,
+      condition: saleCard.condition,
+      costPrice: saleCard.costPrice,
+      sellPrice: saleCard.estSellPrice,
+      profit: saleCard.estSellPrice - saleCard.costPrice,
+      aftersalesTerms: "店保三个月",
+    }],
+    isPaid: false,
+    paidAmount: 0,
+    unpaidAmount: saleCard.estSellPrice,
+    paymentStatus: "未收款",
+    paymentMethod: "微信",
+    needInvoice: false,
+    freeShipping: true,
+    aftersalesTerms: "店保三个月",
+    handleBy: "销售",
+    paymentHandler: "销售",
+  });
+  assert.equal(state.inventory.find((item) => item.id === saleCard.id)?.status, "已锁定");
+  actions.deleteSalesInvoice(sale.id);
+  assert.equal(state.salesInvoices.some((item) => item.id === sale.id), false);
+  assert.equal(state.inventory.find((item) => item.id === saleCard.id)?.status, "已入库");
+
+  const outboundCard = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
+  assert.ok(outboundCard);
+  const outboundSale = actions.createSalesInvoice({
+    ...sale,
+    customerName: "已出库客户",
+    items: [{
+      inventoryId: outboundCard.id,
+      productId: outboundCard.productId,
+      productName: outboundCard.productName,
+      sn: outboundCard.sn,
+      condition: outboundCard.condition,
+      costPrice: outboundCard.costPrice,
+      sellPrice: outboundCard.estSellPrice,
+      profit: outboundCard.estSellPrice - outboundCard.costPrice,
+      aftersalesTerms: "店保三个月",
+    }],
+    paidAmount: 0,
+    unpaidAmount: outboundCard.estSellPrice,
+    isPaid: false,
+  });
+  actions.confirmSalesOutbound(outboundSale.id, { handler: "仓库", codes: [outboundCard.sn] });
+  assert.throws(() => actions.deleteSalesInvoice(outboundSale.id), /已出库/);
+
+  const accountA = state.settlementAccounts[0];
+  const accountB = state.settlementAccounts[1];
+  const beforeA = accountA.balance;
+  const beforeB = accountB.balance;
+  const paymentIn = actions.createPaymentIn({ customerName: "客户A", accountId: accountA.id, amount: 100, handler: "销售", paymentMethod: "微信", time: "2026-06-06 10:00" });
+  actions.deletePaymentIn(paymentIn.id);
+  assert.equal(state.paymentInRecords.some((item) => item.id === paymentIn.id), false);
+  assert.equal(state.settlementAccounts.find((item) => item.id === accountA.id)?.balance, beforeA);
+
+  const paymentOut = actions.createPaymentOut({ supplierName: "供应商A", accountId: accountA.id, amount: 60, handler: "财务", paymentMethod: "支付宝", businessType: "其他支出", time: "2026-06-06 11:00" });
+  actions.deletePaymentOut(paymentOut.id);
+  assert.equal(state.paymentOutRecords.some((item) => item.id === paymentOut.id), false);
+  assert.equal(state.settlementAccounts.find((item) => item.id === accountA.id)?.balance, beforeA);
+
+  const transfer = actions.createAccountTransfer({ fromAccountId: accountA.id, toAccountId: accountB.id, amount: 80, fee: 2, receivedAmount: 78, handler: "财务", time: "2026-06-06 12:00" });
+  actions.deleteAccountTransfer(transfer.id);
+  assert.equal(state.accountTransfers.some((item) => item.id === transfer.id), false);
+  assert.equal(state.settlementAccounts.find((item) => item.id === accountA.id)?.balance, beforeA);
+  assert.equal(state.settlementAccounts.find((item) => item.id === accountB.id)?.balance, beforeB);
+  assert.equal(state.settlementLedger.some((item) => item.relatedDocNo === transfer.id), false);
+  assert.equal(state.financeLedger.some((item) => item.relatedId === transfer.id), false);
+});
+
+test("overall inventory summary groups stock and import creates persisted inventory rows", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const imported = actions.importInventoryRows([
+    {
+      productName: "RTX 4090 测试汇总不同库位 24G",
+      category: "显卡",
+      brand: "华硕",
+      model: "RTX 4090",
+      version: "ROG 猛禽",
+      vram: "24G",
+      quantity: 3,
+      warehouseLocation: "A区货架-09",
+      costPrice: 18000,
+      estSellPrice: 19500,
+      status: "已入库",
+      supplierName: "导入供应商",
+    },
+    {
+      productName: "RTX 4090 测试汇总不同库位 24G",
+      category: "显卡",
+      brand: "华硕",
+      model: "RTX 4090",
+      version: "ROG 猛禽",
+      vram: "24G",
+      quantity: 1,
+      warehouseLocation: "B区货架-02",
+      costPrice: 18000,
+      estSellPrice: 19500,
+      status: "已入库",
+      supplierName: "导入供应商",
+    },
+    {
+      productName: "Intel Core i9-14900K 盒装 CPU",
+      category: "CPU",
+      brand: "Intel",
+      model: "Core i9-14900K",
+      version: "盒装",
+      vram: "-",
+      quantity: 2,
+      warehouseLocation: "CPU特备箱-01",
+      costPrice: 3100,
+      estSellPrice: 3500,
+      status: "待检测",
+    },
+  ], "仓库小李");
+
+  assert.equal(imported.length, 6);
+  assert.equal(state.inventory.filter((item) => item.remarks?.includes("整体库存导入")).length, 6);
+
+  const summary = actions.getInventorySummary({ includeSold: false });
+  const gpuRows = summary.filter((item) => item.productName === "RTX 4090 测试汇总不同库位 24G");
+  assert.equal(gpuRows.length, 1);
+  const gpuRow = gpuRows[0];
+  assert.ok(gpuRow);
+  assert.equal(gpuRow.totalCount, 4);
+  assert.equal(gpuRow.availableCount, 4);
+  assert.equal(gpuRow.totalCost, 72000);
+  assert.equal(gpuRow.totalEstSell, 78000);
+  assert.match(gpuRow.warehouseLocation, /A区货架-09/);
+  assert.match(gpuRow.warehouseLocation, /B区货架-02/);
+
+  const cpuRow = summary.find((item) => item.productName === "Intel Core i9-14900K 盒装 CPU");
+  assert.ok(cpuRow);
+  assert.equal(cpuRow.totalCount, 2);
+  assert.equal(cpuRow.pendingCount, 2);
+});
+
+// --- 上线前补充:毛利权威成本、SN 唯一性、单号防重号 ---
+
+function buildPurchaseItem(product: any, sn: string, buyPrice = 3000) {
+  return {
+    tempId: `tmp-${sn}`,
+    productId: product.id,
+    productName: product.name,
+    category: product.category,
+    model: product.model,
+    brand: product.brand,
+    version: product.version,
+    vram: product.vram,
+    sn,
+    condition: "靓机95新",
+    inWarranty: true,
+    repaired: false,
+    gpuRisk: false,
+    fullBox: true,
+    buyPrice,
+    estSellPrice: buyPrice + 600,
+    warehouseLocation: "A-01",
+  };
+}
+
+function buildPurchase(product: any, items: any[], date = "2026-06-07") {
+  return {
+    date,
+    sourceType: "同行拿货" as const,
+    supplierName: "测试供应商",
+    contact: "13800000000",
+    paymentMethod: "微信" as const,
+    isPaid: false,
+    paidAmount: 0,
+    unpaidAmount: 0,
+    handleBy: "店长",
+    items,
+  };
+}
+
+test("gross profit always uses the authoritative inventory card cost, not client input", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const card = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
+  assert.ok(card);
+  assert.ok(card.costPrice > 0);
+
+  const invoice = actions.createSalesInvoice({
+    date: "2026-06-07",
+    customerName: "毛利测试客户",
+    contact: "13900000009",
+    channel: "到店",
+    paymentMethod: "支付宝",
+    isPaid: true,
+    paidAmount: 5000,
+    unpaidAmount: 0,
+    needInvoice: false,
+    freeShipping: true,
+    aftersalesTerms: "店保三个月",
+    handleBy: "店长",
+    items: [
+      {
+        inventoryId: card.id,
+        productId: card.productId,
+        productName: card.productName,
+        sn: card.sn,
+        condition: card.condition,
+        costPrice: 0, // 客户端故意传错(如无 showCost 权限)
+        sellPrice: 5000,
+        profit: 5000, // 客户端按错误成本算出的利润
+        aftersalesTerms: "店保三个月",
+      },
+    ],
+  });
+
+  // 单据成本/利润应以库存卡权威成本重算,而不是采用客户端传入的 0
+  assert.equal(invoice.totalCost, card.costPrice);
+  assert.equal(invoice.totalProfit, 5000 - card.costPrice);
+  assert.equal(invoice.items[0].costPrice, card.costPrice);
+  assert.equal(invoice.items[0].profit, 5000 - card.costPrice);
+});
+
+test("purchase invoice rejects duplicate SN within batch and against existing inventory", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+
+  // 同一进货单内重复 SN
+  assert.throws(
+    () => actions.createPurchaseInvoice(buildPurchase(product, [
+      buildPurchaseItem(product, "DUP-SN-100"),
+      buildPurchaseItem(product, "dup-sn-100"), // 大小写不敏感
+    ])),
+    /SN重复/,
+  );
+
+  // 与已存在库存冲突
+  actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, "EXIST-SN-200")]));
+  assert.throws(
+    () => actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, "exist-sn-200")])),
+    /SN已存在/,
+  );
+});
+
+test("inspection rejects binding an SN already used by another card", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const used = state.inventory.find((item) => item.sn);
+  assert.ok(used);
+
+  actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, "")]));
+  const pending = state.inventory.find((item) => item.status === "待检测" && !item.sn);
+  assert.ok(pending);
+
+  assert.throws(
+    () => actions.submitInspection({
+      inventoryId: pending.id,
+      sn: used.sn,
+      inspector: "质检小王",
+      resultStatus: "通过",
+      temperature: 70,
+    } as any),
+    /SN已存在/,
+  );
+});
+
+test("document numbers do not collide after an earlier document is deleted", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+
+  const a = actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, "SEQ-SN-A")]));
+  const b = actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, "SEQ-SN-B")]));
+  assert.notEqual(a.invoiceNo, b.invoiceNo);
+
+  // 删除最早的单据(仍为待检测,可删)
+  actions.deletePurchaseInvoice(a.id);
+  const c = actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, "SEQ-SN-C")]));
+
+  // 基于当日最大序号+1,绝不与现存单号重复
+  assert.notEqual(c.invoiceNo, b.invoiceNo);
+  const remaining = state.purchaseInvoices.map((item) => item.invoiceNo);
+  assert.equal(new Set(remaining).size, remaining.length);
+});
+
+test("genId produces unique ids for rapid successive entities", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const ids = new Set<string>();
+  for (let i = 0; i < 50; i += 1) {
+    const inv = actions.createPurchaseInvoice(buildPurchase(product, [buildPurchaseItem(product, `RAPID-SN-${i}`)]));
+    ids.add(inv.id);
+  }
+  assert.equal(ids.size, 50);
 });

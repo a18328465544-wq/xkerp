@@ -8,19 +8,11 @@ import {
   ShieldAlert,
   Search,
   CheckCircle,
-  AlertTriangle,
   History,
-  CornerDownLeft,
-  DollarSign,
-  HelpCircle,
-  FileText,
   BadgeAlert,
-  ArrowRight,
   Info,
   X,
-  UserCheck,
   Zap,
-  Hammer
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
 import { AftersalesRecord, AftersalesStatus } from "../types";
@@ -33,9 +25,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
   const {
     aftersales,
     updateAftersalesStatus,
-    logs,
     addLog,
-    currentRole
   } = storeState;
 
   // Search filter
@@ -89,7 +79,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
       "纠纷解决",
       activeRecord.id,
       undefined,
-      `对SN: ${activeRecord.sn} 的卡牌售后案进行完结，处理决议: [${dealAction}]，预计损计: ¥${lossSum}`
+      `对SN: ${activeRecord.sn} 的卡牌售后案进行完结，处理决议: [${dealAction}]，预计损计: ${lossSum}元`
     );
 
     alert(`🎉 售后争议案处理决议已就绪！\n服务状态已更新。如果是“退款”，对应资金已从财务流出日记中扣除，并同步在库存档案中记录。`);
@@ -257,7 +247,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
                         <span className="text-slate-300 block truncate max-w-[120px]" title={item.desc}>
                           {item.desc}
                         </span>
-                        <span className="text-[10px] text-red-400 font-bold">¥{item.refundAmount}</span>
+                        <span className="text-[10px] text-red-400 font-bold">{item.refundAmount}元</span>
                       </td>
                       <td className="p-3 text-center">
                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -294,7 +284,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
               <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                 <h4 className="font-bold text-rose-300 flex items-center gap-1 font-mono">
                   <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  <span>售后风控审核工作台</span>
+                  <span>售后审核</span>
                 </h4>
                 <button onClick={() => setFocusedId(null)} className="text-slate-500 hover:text-slate-300">
                   <X className="w-4 h-4" />
@@ -321,7 +311,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
                 </div>
                 <div className="flex justify-between border-t border-slate-900 pt-1.5 text-xs text-rose-400 font-bold">
                   <span>用户索赔金额:</span>
-                  <span>¥{activeRecord.refundAmount}</span>
+                  <span>{activeRecord.refundAmount}元</span>
                 </div>
               </div>
 
@@ -341,7 +331,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
                   </span>
                   <div className="space-y-1 text-slate-450 text-[11px] font-mono leading-normal">
                     <div>处理手段: <span className="text-slate-200 font-bold">{activeRecord.actionTaken || "原厂保修退回"}</span></div>
-                    <div>造成的财务损耗支出: <span className="text-rose-400 font-bold">¥{activeRecord.loss || 0}</span></div>
+                    <div>造成的财务损耗支出: <span className="text-rose-400 font-bold">{activeRecord.loss || 0}元</span></div>
                     <div>处理总备注: <span className="text-slate-300">{activeRecord.note || "五防验证通过。已将尾款原路打给买家。"}</span></div>
                     <div>经办审核组长: <span className="text-slate-250 font-semibold">{activeRecord.handler}</span></div>
                   </div>
@@ -358,7 +348,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
                     >
                       <option value="全额退款">全额退款 (同意原件返还并对买家转账)</option>
                       <option value="原件返厂">原件返厂 (驳回退款并代办原代工保修返厂)</option>
-                      <option value="折损换新">折损换新 (协商拆解换货、补缴 ¥300 差额)</option>
+                      <option value="折损换新">折损换新 (协商拆解换货、补缴 300元 差额)</option>
                       <option value="原路退回">拒绝售后 (阻值损烧严重、条码不符一律拒签原路退还)</option>
                     </select>
                   </div>
@@ -372,7 +362,7 @@ export default function AftersalesManager({ storeState }: AftersalesManagerProps
                         value={lossSum}
                         onChange={e => setLossSum(Number(e.target.value))}
                         className="w-full bg-slate-950 border border-slate-800 p-2 rounded font-mono font-bold text-rose-400"
-                        placeholder="¥损耗金额"
+                        placeholder="损耗金额(元)"
                       />
                     </div>
                     <div>

@@ -5,21 +5,14 @@
 
 import React, { useState, useMemo } from "react";
 import {
-  TrendingUp,
-  TrendingDown,
   LineChart,
   Search,
   Plus,
   ArrowUpRight,
   ArrowDownRight,
-  HelpCircle,
   Sparkles,
-  RefreshCw,
   Bell,
   X,
-  AlertTriangle,
-  Flame,
-  Info
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
 import { MarketQuote } from "../types";
@@ -41,14 +34,13 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
 
   // Modal form states for adding a new market standard pricing record
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [model, setModel] = useState("RTX 4070 Ti Super");
+  const [model, setModel] = useState("");
   const [brand, setBrand] = useState("NVIDIA");
   const [refBuyPrice, setRefBuyPrice] = useState<number>(5100);
   const [refSellPrice, setRefSellPrice] = useState<number>(5650);
   const [trend, setTrend] = useState<"up" | "down" | "stable">("down");
-  const [fluctuation, setFluctuation] = useState<string>("每周阴跌 ¥50-100");
+  const [fluctuation, setFluctuation] = useState<string>("本周回收参考价下调 50-100元");
 
-  const [activeModelHistory, setActiveModelHistory] = useState<string | null>("RTX 4095");
 
   // Big gainers and losers simulations
   const marketDynamics = useMemo(() => {
@@ -70,6 +62,15 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
     });
   }, [marketQuotes, search, selectedBrand]);
 
+  const getBuyPrice = (quote: MarketQuote) => quote.refBuyPrice ?? quote.todayBuyPrice ?? quote.yestBuyPrice ?? 0;
+  const getSellPrice = (quote: MarketQuote) => quote.refSellPrice ?? quote.todaySellPrice ?? quote.maxPrice ?? 0;
+  const getTrend = (quote: MarketQuote): "up" | "down" | "stable" => {
+    if (quote.trend) return quote.trend;
+    if ((quote.changeAmount || 0) > 0) return "up";
+    if ((quote.changeAmount || 0) < 0) return "down";
+    return "stable";
+  };
+
   const handleCreateQuote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!model.trim()) return;
@@ -90,7 +91,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
     });
 
     setIsModalOpen(false);
-    alert(`💡 行情指引：已录入 [${model}] 的主板交易指导价格大纲。门店在进行个人回收估损时，会自动提取对应的参考均线进行风控防卫。`);
+    alert(`行情参考已录入：[${model}]。门店在个人回收和同行拿货时，会使用该参考价辅助报价。`);
   };
 
   // Render mock stock fluctuation line graphs
@@ -137,10 +138,10 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <LineChart className="w-5 h-5 text-cyan-400" />
-            <span>显卡每周公募均价大黄页 (显卡行情指引)</span>
+            <span>显卡回收与销售参考价</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            本页指数数据来源：汇总自闲鱼近期10,000张显卡真实成交均值、贴吧二手群均值、以及同行批量拿货出厂价。每周一自动重构行情线，防范由于显卡价格暴跌导致的店内存货大面积贬值。
+            汇总闲鱼成交、同行批量拿货和门店近期成交记录，作为回收报价、销售定价和库存价格提醒的参考。
           </p>
         </div>
         <button
@@ -155,7 +156,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
           className="p-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          新增指导行情卡
+          新增参考价
         </button>
       </div>
 
@@ -165,14 +166,14 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
         <div className="bg-slate-905 border border-slate-850 p-4 rounded-xl flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" /> 本周行情坚挺/溢价型号 (涨)
+              <Sparkles className="w-3.5 h-3.5" /> 本周价格偏高型号
             </span>
             <div className="text-sm font-bold text-slate-100 mt-2.5 space-y-1">
               {marketDynamics.bigGainers.map((q, i) => (
                 <div key={i} className="flex justify-between items-center gap-6">
                   <span>{q.model} ({q.brand})</span>
                   <span className="text-emerald-400 font-mono text-xs flex items-center gap-1">
-                    <ArrowUpRight className="w-3 h-3" /> ¥{q.refBuyPrice} <span className="text-slate-500">|</span> 涨 {q.fluctuation}
+                    <ArrowUpRight className="w-3 h-3" /> {getBuyPrice(q)}元 <span className="text-slate-500">|</span> {q.fluctuation || q.remarks || "近期成交价偏高"}
                   </span>
                 </div>
               ))}
@@ -187,14 +188,14 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
         <div className="bg-slate-905 border border-slate-850 p-4 rounded-xl flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[10px] text-rose-400 font-extrabold uppercase tracking-wider flex items-center gap-1">
-              <Bell className="w-3.5 h-3.5" /> 存在暴跌暴损高危型号 (跌)
+              <Bell className="w-3.5 h-3.5" /> 本周价格下调型号
             </span>
             <div className="text-sm font-bold text-slate-100 mt-2.5 space-y-1">
               {marketDynamics.bigDroppers.map((q, i) => (
                 <div key={i} className="flex justify-between items-center gap-6">
                   <span>{q.model} ({q.brand})</span>
                   <span className="text-rose-400 font-mono text-xs flex items-center gap-1">
-                    <ArrowDownRight className="w-3 h-3" /> ¥{q.refBuyPrice} <span className="text-slate-500">|</span> 跌 {q.fluctuation}
+                    <ArrowDownRight className="w-3 h-3" /> {getBuyPrice(q)}元 <span className="text-slate-500">|</span> {q.fluctuation || q.remarks || "近期成交价回落"}
                   </span>
                 </div>
               ))}
@@ -233,7 +234,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
         </div>
 
         <div className="flex items-center text-[11px] text-slate-400 font-mono justify-end bg-slate-950/20 px-3.5 rounded">
-          根据此表：库存高过参考回收价20%的将自动触发 Dashboard “倒挂提醒”
+          库存成本高于回收参考价时，首页会自动显示倒挂提醒。
         </div>
       </div>
 
@@ -241,12 +242,17 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {filteredQuotes.map(q => {
           const matchingInventoryCount = inventory.filter(c => c.productName.toLowerCase().includes(q.model.toLowerCase()) && c.status !== "已售出").length;
+          const quoteTrend = getTrend(q);
+          const quoteBuyPrice = getBuyPrice(q);
+          const quoteSellPrice = getSellPrice(q);
+          const quoteUpdateTime = q.updateTime || q.date || "今日";
+          const quoteFluctuation = q.fluctuation || q.remarks || "暂无补充说明";
 
           return (
             <div
               key={q.model}
               className={`bg-slate-900 border rounded-2xl p-4.5 space-y-4 shadow-md hover:border-slate-700 transition-all ${
-                q.trend === "down" ? "border-slate-850" : "border-slate-800"
+                quoteTrend === "down" ? "border-slate-850" : "border-slate-800"
               }`}
             >
               <div className="flex justify-between items-start">
@@ -258,19 +264,19 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
                 </div>
 
                 <span className={`inline-flex items-center gap-0.5 text-[10px] font-black px-1.5 rounded-sm ${
-                  q.trend === "up" ? "bg-emerald-950 text-emerald-400" :
-                  q.trend === "down" ? "bg-rose-955 text-rose-455" : "bg-slate-800 text-slate-400"
+                  quoteTrend === "up" ? "bg-emerald-950 text-emerald-400" :
+                  quoteTrend === "down" ? "bg-rose-955 text-rose-455" : "bg-slate-800 text-slate-400"
                 }`}>
-                  {q.trend === "up" ? "本周看涨" :
-                   q.trend === "down" ? "行情阴跌" : "价格维稳"}
+                  {quoteTrend === "up" ? "参考价偏高" :
+                   quoteTrend === "down" ? "参考价下调" : "价格平稳"}
                 </span>
               </div>
 
               {/* Sparkline visualization */}
               <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-850/60 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-slate-500 font-bold block leading-none">五月均价波点</span>
-                  <span className="text-[9px] text-slate-450 font-mono block mt-1.5 leading-none">波动：{q.fluctuation}</span>
+                  <span className="text-[10px] text-slate-500 font-bold block leading-none">近期价格记录</span>
+                  <span className="text-[9px] text-slate-450 font-mono block mt-1.5 leading-none">说明：{quoteFluctuation}</span>
                 </div>
                 {q.history && drawModelSparkline(q.history)}
               </div>
@@ -279,16 +285,16 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
               <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                 <div className="bg-slate-955 p-2 rounded">
                   <span className="text-[10px] text-slate-500 block font-sans">指导回收底价</span>
-                  <span className="text-cyan-400 font-bold text-sm block mt-1">¥{q.refBuyPrice}</span>
+                  <span className="text-cyan-400 font-bold text-sm block mt-1">{quoteBuyPrice.toLocaleString()}元</span>
                 </div>
                 <div className="bg-slate-955 p-2 rounded">
                   <span className="text-[10px] text-slate-500 block font-sans">指导零售均价</span>
-                  <span className="text-emerald-400 font-bold text-sm block mt-1">¥{q.refSellPrice}</span>
+                  <span className="text-emerald-400 font-bold text-sm block mt-1">{quoteSellPrice.toLocaleString()}元</span>
                 </div>
               </div>
 
               <div className="text-[10px] text-slate-500 flex items-center justify-between border-t border-slate-800/80 pt-2.5 font-mono">
-                <span>更新：{q.updateTime}</span>
+                <span>更新：{quoteUpdateTime}</span>
                 <span>本店存量: <span className="text-slate-300 font-bold">{matchingInventoryCount} 张在架</span></span>
               </div>
             </div>
@@ -306,7 +312,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 flex items-center gap-2">
                 <LineChart className="w-5 h-5 text-cyan-400" />
-                <span>录入行情波动指导卡</span>
+                <span>录入价格参考卡</span>
               </h3>
               <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-200">
                 <X className="w-5 h-5" />
@@ -341,7 +347,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-slate-400 font-bold block mb-1">建议回收均价 (¥)</label>
+                  <label className="text-slate-400 font-bold block mb-1">建议回收价 (元)</label>
                   <input
                     type="number"
                     required
@@ -351,7 +357,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-bold block mb-1">建议销售均价 (¥)</label>
+                  <label className="text-slate-400 font-bold block mb-1">建议销售价 (元)</label>
                   <input
                     type="number"
                     required
@@ -369,9 +375,9 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
                   onChange={e => setTrend(e.target.value as any)}
                   className="w-full bg-slate-950 border border-slate-850 p-2.5 rounded font-semibold text-slate-205"
                 >
-                  <option value="stable">稳（供需均衡、价格滞留在横盘期）</option>
-                  <option value="up">升（供应短缺、高溢价抢购）</option>
-                  <option value="down">跌（新品过敏、抛重矿砸市、渠道积积压跌）</option>
+                  <option value="stable">平稳（供需均衡，成交价变化不大）</option>
+                  <option value="up">偏高（货源偏少，近期成交价偏高）</option>
+                  <option value="down">下调（新品影响或库存压力，近期成交价回落）</option>
                 </select>
               </div>
 
@@ -379,7 +385,7 @@ export default function MarketQuotes({ storeState }: MarketQuotesProps) {
                 <label className="text-slate-400 font-bold block mb-1">波动幅度批注</label>
                 <input
                   type="text"
-                  placeholder="e.g. 每周阴跌 ¥50"
+                  placeholder="例如：本周回收参考价下调 50元"
                   value={fluctuation}
                   onChange={e => setFluctuation(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-850 p-2.5 rounded text-slate-205"

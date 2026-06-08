@@ -5,7 +5,6 @@
 
 import React, { useState, useMemo } from "react";
 import {
-  Cpu,
   Search,
   Plus,
   Download,
@@ -13,8 +12,6 @@ import {
   BookmarkCheck,
   Hash,
   X,
-  Layers,
-  Sparkles,
   Database
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
@@ -34,6 +31,7 @@ const CATEGORIES: ProductCategory[] = [
   "散热",
   "机箱",
   "整机",
+  "组装拆卸",
   "其他配件"
 ];
 
@@ -57,6 +55,8 @@ const getCategoryBadgeClass = (category: string) => {
       return "bg-sky-500/10 text-sky-400 border border-sky-850/30";
     case "整机":
       return "bg-yellow-500/10 text-yellow-400 border border-yellow-800/30";
+    case "组装拆卸":
+      return "bg-blue-500/10 text-blue-500 border border-blue-200";
     default:
       return "bg-slate-500/10 text-slate-400 border border-slate-800/30";
   }
@@ -84,12 +84,12 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
   // Form Fields
   const [formCategory, setFormCategory] = useState<ProductCategory>("显卡");
   const [formName, setFormName] = useState("");
-  const [formModel, setFormModel] = useState("RTX 4090");
-  const [formBrand, setFormBrand] = useState("华硕");
-  const [formVersion, setFormVersion] = useState("ROG 猛禽");
-  const [formVram, setFormVram] = useState("24G");
-  const [formBuy, setFormBuy] = useState(18000);
-  const [formSell, setFormSell] = useState(19500);
+  const [formModel, setFormModel] = useState("");
+  const [formBrand, setFormBrand] = useState("");
+  const [formVersion, setFormVersion] = useState("");
+  const [formVram, setFormVram] = useState("");
+  const [formBuy, setFormBuy] = useState(0);
+  const [formSell, setFormSell] = useState(0);
   const [formRemarks, setFormRemarks] = useState("");
 
   // Dynamically compute brands found in products to avoid hardcoding dropdown options
@@ -103,7 +103,6 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
     return ["all", ...Array.from(brandsSet)];
   }, [products]);
 
-  const vramList = ["all", "32G", "24G", "16G", "12G", "10G", "8G", "6G", "8核16线程", "24核32线程", "2TB M.2", "1TB M.2", "1000W", "850W"];
 
   // Match inventory stock count and history on the fly
   const dynamicProducts = useMemo(() => {
@@ -154,12 +153,12 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
     setEditingProduct(null);
     setFormCategory("显卡");
     setFormName("");
-    setFormModel("RTX 4095");
-    setFormBrand("华硕");
-    setFormVersion("ROG 猛禽");
-    setFormVram("24G");
-    setFormBuy(18000);
-    setFormSell(19500);
+    setFormModel("");
+    setFormBrand("");
+    setFormVersion("");
+    setFormVram("");
+    setFormBuy(0);
+    setFormSell(0);
     setFormRemarks("");
     setIsFormOpen(true);
   };
@@ -324,7 +323,7 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
             <span>全品类通用商品配件库</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            包含显卡、CPU、主板、硬盘、内存、电源等关键装机配件的标准模板库。创建进货回收采购单时，可智能查找及套用，规范账目并防止拼写错误。
+            包含显卡、CPU、主板、硬盘、内存、电源等常用配件模板。创建进货回收单时，可快速查找并套用标准信息。
           </p>
         </div>
         <div className="flex gap-2">
@@ -459,10 +458,10 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
 
                   {/* Prices */}
                   <td className="p-3.5 text-right text-cyan-400 font-bold font-mono">
-                    ¥{p.refBuyPrice.toLocaleString()}
+                    {p.refBuyPrice.toLocaleString()}元
                   </td>
                   <td className="p-3.5 text-right text-emerald-400 font-bold font-mono">
-                    ¥{p.refSellPrice.toLocaleString()}
+                    {p.refSellPrice.toLocaleString()}元
                   </td>
 
                   {/* Stock count */}
@@ -477,11 +476,11 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
                   {/* Dynamic Last Transactions */}
                   <td className="p-3.5 text-right font-mono text-[11px] space-y-0.5">
                     {permissions.showCost ? (
-                      <div className="text-slate-300">收: ¥{(p.lastBuyPrice || p.refBuyPrice).toLocaleString()}</div>
+                      <div className="text-slate-300">收: {(p.lastBuyPrice || p.refBuyPrice).toLocaleString()}元</div>
                     ) : (
                       <div className="text-slate-600">收: 隐藏</div>
                     )}
-                    <div className="text-emerald-400 font-semibold">售: ¥{(p.lastSellPrice || p.refSellPrice).toLocaleString()}</div>
+                    <div className="text-emerald-400 font-semibold">售: {(p.lastSellPrice || p.refSellPrice).toLocaleString()}元</div>
                   </td>
 
                   {/* Last Deal Date */}
@@ -622,7 +621,7 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
               {/* Guides buy and sell */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">参考建议回收买入价 (¥)</label>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">参考建议回收买入价 (元)</label>
                   <input
                     type="number"
                     required
@@ -632,7 +631,7 @@ export default function ProductLibrary({ storeState }: ProductLibraryProps) {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">参考建议销售卖出价 (¥)</label>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">参考建议销售卖出价 (元)</label>
                   <input
                     type="number"
                     required

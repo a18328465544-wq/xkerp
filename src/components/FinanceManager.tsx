@@ -3,21 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   BadgeCent,
   TrendingUp,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Calendar,
-  DollarSign,
-  Briefcase,
-  AlertTriangle,
   History,
-  FileSpreadsheet,
-  CheckCircle,
-  Clock,
-  Filter,
   Users
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
@@ -34,7 +24,6 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
     financeLedger,
     reconcileLedgerItem,
     permissions,
-    inventory,
     settlementAccounts
   } = storeState;
 
@@ -128,7 +117,7 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <BadgeCent className="w-5 h-5 text-emerald-400" />
-            <span>店铺资金与月度损益对账</span>
+            <span>店铺资金与月度毛利对账</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             汇总销售收入、采购支出、应收款和应付款，辅助门店日常对账。
@@ -149,11 +138,11 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
             <div className="bg-slate-905 border border-slate-850 p-4 rounded-xl flex items-center justify-between shadow-sm">
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block">累计经营收入</span>
-                <span className="text-xl font-black font-mono text-emerald-400">¥{ledgerCalculations.totalIncome.toLocaleString()}</span>
+                <span className="text-xl font-black font-mono text-emerald-400">{ledgerCalculations.totalIncome.toLocaleString()}元</span>
                 <span className="text-[9px] text-slate-500 block">微信/支付宝/网银累计</span>
               </div>
               <div className="w-10 h-10 bg-emerald-950 text-emerald-400 rounded-lg flex items-center justify-center font-mono font-black text-sm">
-                +¥
+                +
               </div>
             </div>
 
@@ -161,11 +150,11 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
             <div className="bg-slate-905 border border-slate-850 p-4 rounded-xl flex items-center justify-between shadow-sm">
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block">累计经营支出</span>
-                <span className="text-xl font-black font-mono text-red-400">¥{ledgerCalculations.totalExpense.toLocaleString()}</span>
+                <span className="text-xl font-black font-mono text-red-400">{ledgerCalculations.totalExpense.toLocaleString()}元</span>
                 <span className="text-[9px] text-slate-500 block">采购货款、退款及门店费用</span>
               </div>
               <div className="w-10 h-10 bg-red-950 text-red-400 rounded-lg flex items-center justify-center font-mono font-black text-sm">
-                -¥
+                -
               </div>
             </div>
 
@@ -174,7 +163,7 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block">已复核经营毛利</span>
                 <span className={`text-xl font-black font-mono ${ledgerCalculations.netProfitSum >= 0 ? "text-cyan-400" : "text-rose-400"}`}>
-                  ¥{ledgerCalculations.netProfitSum.toLocaleString()}
+                  {ledgerCalculations.netProfitSum.toLocaleString()}元
                 </span>
                 <span className="text-[9px] text-emerald-400 block font-semibold">综合毛盈利率: 16.5%</span>
               </div>
@@ -188,8 +177,8 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-400 font-bold block">应收余款 / 应付账款</span>
                 <div className="text-sm font-black font-mono text-slate-200 mt-1 flex gap-2">
-                  <span className="text-emerald-400">收: ¥{accountsReceivable.reduce((a, b) => a + b.amount, 0)}</span>
-                  <span className="text-amber-500">付: ¥{accountsPayable.reduce((a, b) => a + b.amount, 0)}</span>
+                  <span className="text-emerald-400">收: {accountsReceivable.reduce((a, b) => a + b.amount, 0)}元</span>
+                  <span className="text-amber-500">付: {accountsPayable.reduce((a, b) => a + b.amount, 0)}元</span>
                 </div>
                 <span className="text-[9px] text-slate-500 block">客户应收与供应商应付合计</span>
               </div>
@@ -217,7 +206,7 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
                     <div key={item.month} className="space-y-1 font-mono text-xs">
                       <div className="flex justify-between text-[11px] text-slate-400 font-semibold">
                         <span>{item.month}</span>
-                        <span>销: ¥{item.revenue.toLocaleString()} | 利: <span className="text-emerald-400">¥{item.profit.toLocaleString()}</span></span>
+                        <span>销: {item.revenue.toLocaleString()}元 | 利: <span className="text-emerald-400">{item.profit.toLocaleString()}元</span></span>
                       </div>
                       
                       {/* Stacked bar simulation */}
@@ -271,7 +260,7 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
                             <span className="text-[10px] text-slate-450 block font-mono">单号: {item.id}</span>
                           </div>
                           <div className="text-right">
-                            <span className="font-extrabold text-emerald-400 font-mono block">+¥{item.amount}</span>
+                            <span className="font-extrabold text-emerald-400 font-mono block">+{item.amount}元</span>
                             <button
                               onClick={() => {
                                 alert(`已通过短信向买家【${item.partner}】一键触发微信余额催收指令。并且重发了电子对账单凭条。`);
@@ -307,10 +296,10 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
                             <span className="text-[10px] text-slate-450 block font-mono">单号: {item.id}</span>
                           </div>
                           <div className="text-right">
-                            <span className="font-extrabold text-amber-400 font-mono block">¥{item.amount}</span>
+                            <span className="font-extrabold text-amber-400 font-mono block">{item.amount}元</span>
                             <button
                               onClick={() => {
-                                alert(`已安排通过支付宝/微信对【${item.partner}】的对公账户进行了 ¥${item.amount} 的尾款打款核销，该流水已记账。`);
+                                alert(`已安排通过支付宝/微信对【${item.partner}】的对公账户进行了 ${item.amount}元 的尾款打款核销，该流水已记账。`);
                               }}
                               className="text-[9px] text-amber-400 hover:underline font-bold font-sans mt-1 bg-amber-400/5 px-1.5 rounded border border-amber-500/20 inline-block"
                             >
@@ -388,7 +377,7 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
                   <th className="p-3">事件编号 / 清单关联</th>
                   <th className="p-3">类型</th>
                   <th className="p-3">收款核销方式</th>
-                  <th className="p-3 text-right">变动金额 (¥)</th>
+                  <th className="p-3 text-right">变动金额 (元)</th>
                   <th className="p-3">结算账户</th>
                   <th className="p-3">财务经手经办人</th>
                   <th className="p-3 text-center">复审状态</th>
@@ -464,7 +453,7 @@ export default function FinanceManager({ storeState }: FinanceManagerProps) {
           <div className="max-w-md mx-auto space-y-2">
             <h3 className="text-base font-extrabold text-slate-200">资金对账权限受限</h3>
             <p className="text-xs text-slate-400 leading-relaxed font-sans">
-              您当前以【<b>{storeState.currentRole}</b>】名义登录，未被授予敏感性经营收入、毛利指数、回款扣款条目查看等专权。
+              您当前以【<b>{storeState.currentRole}</b>】名义登录，未被授予完整经营收入、毛利和回款扣款明细查看权限。
               如需查看完整财务数据，请切换到老板角色或联系管理员授权。
             </p>
           </div>

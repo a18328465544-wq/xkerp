@@ -825,7 +825,7 @@ export const initialCustomers: CustomerCard[] = [
     phone: "13522198842",
     wechat: "xxl_geek_99",
     source: "闲鱼",
-    type: "老主顾",
+    type: "个人买家客户",
     lastDealTime: "2026-05-29",
     totalAmount: 38200,
     totalProfit: 3200,
@@ -841,7 +841,7 @@ export const initialCustomers: CustomerCard[] = [
     phone: "15988203112",
     wechat: "zcy_pc_play",
     source: "到店",
-    type: "回收客户",
+    type: "个人卖家客户",
     lastDealTime: "2026-05-01",
     totalAmount: 18100,
     totalProfit: 1400,
@@ -853,19 +853,19 @@ export const initialCustomers: CustomerCard[] = [
   },
   {
     id: "KH-003",
-    name: "周维(拼客同行)",
+    name: "王维（装机玩家）",
     phone: "18922031120",
-    wechat: "zhou_gpus_trade",
+    wechat: "wangwei_pc",
     source: "闲鱼",
-    type: "优质同行",
+    type: "个人买家客户",
     lastDealTime: "2026-05-18",
     totalAmount: 48900,
     totalProfit: 1800,
     buyCount: 5,
     recycleCount: 4,
     aftersalesCount: 1,
-    remarks: "同行拿卡，由于价格压得比较极限，所以一般不提供全保，售后有部分争议需要拉锯",
-    tags: ["同行", "压价高频", "有售后维护"]
+    remarks: "个人高频买家，经常帮朋友装机，对显卡型号和成色要求明确。",
+    tags: ["个人买家", "装机玩家", "复购"]
   },
   {
     id: "KH-004",
@@ -873,7 +873,7 @@ export const initialCustomers: CustomerCard[] = [
     phone: "17200392812",
     wechat: "mengchao_lim",
     source: "微信私域",
-    type: "售后敏感户",
+    type: "个人买家客户",
     lastDealTime: "2026-04-12",
     totalAmount: 12500,
     totalProfit: 350,
@@ -892,7 +892,7 @@ export const initialVendors: Vendor[] = [
     partnerCategory: "同行",
     contactPerson: "飞哥",
     phone: "13800293110",
-    type: "数码渠道大厂",
+    type: "收货同行",
     totalBuyAmount: 320000,
     totalCount: 24,
     avgProfit: 850,
@@ -909,7 +909,7 @@ export const initialVendors: Vendor[] = [
     partnerCategory: "同行",
     contactPerson: "周老板",
     phone: "13911048821",
-    type: "工作室矿老板",
+    type: "收货同行",
     totalBuyAmount: 145000,
     totalCount: 18,
     avgProfit: 450,
@@ -926,7 +926,7 @@ export const initialVendors: Vendor[] = [
     partnerCategory: "同行",
     contactPerson: "江小胖",
     phone: "15549022312",
-    type: "大黄牛",
+    type: "卖货同行",
     totalBuyAmount: 68000,
     totalCount: 4,
     avgProfit: 1200,
@@ -997,7 +997,7 @@ export const defaultPermissions: PermissionSettings[] = [
     showProfit: false,
     canDelete: false,
     canEditHistory: false,
-    allowedMenus: ["dashboard", "products", "purchase_add", "purchase_list", "inventory", "sales_add", "sales_list", "crm", "customers", "quotes", "payment_in"]
+    allowedMenus: ["dashboard", "products", "purchase_add", "purchase_list", "inspections", "inventory", "assembly", "sales_add", "sales_outbound", "sales_list", "crm", "customers", "quotes", "payment_in"]
   },
   {
     role: "检测员",
@@ -1005,7 +1005,7 @@ export const defaultPermissions: PermissionSettings[] = [
     showProfit: false,
     canDelete: false,
     canEditHistory: false,
-    allowedMenus: ["dashboard", "inventory", "inspections"]
+    allowedMenus: ["dashboard", "inventory", "inspections", "assembly"]
   },
   {
     role: "财务",
@@ -1013,7 +1013,7 @@ export const defaultPermissions: PermissionSettings[] = [
     showProfit: true,
     canDelete: false,
     canEditHistory: false,
-    allowedMenus: ["dashboard", "purchase_list", "inventory", "sales_list", "settlement_accounts", "settlement_ledger", "payment_in", "payment_out", "account_transfer", "finance_reports", "finance", "vendors"]
+    allowedMenus: ["dashboard", "purchase_list", "inventory", "sales_outbound", "sales_list", "settlement_accounts", "settlement_ledger", "payment_in", "payment_out", "account_transfer", "finance_reports", "finance", "vendors"]
   }
 ];
 

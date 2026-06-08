@@ -62,7 +62,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
                 核芯数据库或渲染网关冲突
               </h1>
               <p className="text-xs text-slate-400 leading-relaxed">
-                发现缓存数据架构（LocalStorage Schema）与新版主控程序之间存在冲突，或者页面在执行渲染流时发生崩陷。
+                发现本地缓存数据与新版程序存在冲突，或者页面渲染时遇到异常。
               </p>
             </div>
 

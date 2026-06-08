@@ -3,18 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Clock,
-  User,
-  Shield,
-  HelpCircle,
   Bell,
   Sparkles,
   Info,
-  Terminal,
   Activity,
-  Layers
 } from "lucide-react";
 import { useStoreState } from "./utils/state";
 import { CardInventory } from "./types";
@@ -27,6 +22,8 @@ import PurchaseInvoice from "./components/PurchaseInvoice";
 import InventoryManager from "./components/InventoryManager";
 import InspectionManager from "./components/InspectionManager";
 import SalesManager from "./components/SalesManager";
+import SalesOutboundManager from "./components/SalesOutboundManager";
+import AssemblyManager from "./components/AssemblyManager";
 import FinanceManager from "./components/FinanceManager";
 import SettlementFinance from "./components/SettlementFinance";
 import MarketQuotes from "./components/MarketQuotes";
@@ -109,26 +106,30 @@ export default function App() {
   const getPageTitleInfo = () => {
     switch (currentTab) {
       case "dashboard":
-        return { title: "系统控制台", desc: "综合监控中心，展示今日回收成果及滞销贬值风险。" };
+        return { title: "经营概览", desc: "查看今日进货、销售、库存和资金表现。" };
       case "products":
-        return { title: "全品类硬件与显卡商品库", desc: "统一管理显卡、CPU、主板、固态、内存、电源等核心配件模板及参考买入/卖出价格。" };
+        return { title: "商品库", desc: "管理显卡与配件模板、参考价格和常用型号。" };
       case "purchase_add":
-        return { title: "新增进货/回收单", desc: "Excel级输入体验，支持扫码枪录入，为显卡建立数字物理ID。" };
+        return { title: "进货与回收", desc: "建立单卡档案，记录来源、成本、付款账户与库存状态。" };
       case "purchase_list":
-        return { title: "已入账采购单据", desc: "往期采购汇总、单据查看与打印。" };
+        return { title: "进货单据", desc: "查看、编辑和核对进货回收记录。" };
       case "inspections":
-        return { title: "GPU-Z 与 FurMark 烤机质检", desc: "通过烤机、外观和接口检查评估设备状态。" };
+        return { title: "检测录入", desc: "记录烤机、外观、接口和质检结论。" };
       case "inventory":
-        return { title: "一卡一档库存管理", desc: "追踪每张显卡的来源、状态、库位和标签打印。" };
+        return { title: "单卡库存", desc: "追踪每张显卡的来源、状态、库位和标签。" };
+      case "assembly":
+        return { title: "组装拆卸", desc: "记录拆前 SN、拆后配件 SN 和组装成品 SN。" };
       case "sales_add":
-        return { title: "新增客户销售出库单", desc: "绑定库存卡序列号、发货方式和售后质保条款。" };
+        return { title: "销售开单", desc: "选择库存卡，登记客户、收款账户和发货信息。" };
+      case "sales_outbound":
+        return { title: "销售出库", desc: "核验销售单商品，扫码或手动确认后完成出库。" };
       case "sales_list":
-        return { title: "客户出货与零售单据", desc: "销售往来单、发货单及退款记录核对。" };
+        return { title: "销售单据", desc: "查看、编辑和核对销售出库记录。" };
       case "customers":
       case "vendors":
-        return { title: "经营网络档案", desc: "客户与供应商档案、交易记录和信用信息管理。" };
+        return { title: "往来档案", desc: "管理个人客户和同行列表，区分买卖身份与交易表现。" };
       case "crm":
-        return { title: "CRM 客户管理", desc: "客户线索、跟进记录、需求预算和成交阶段统一管理。" };
+        return { title: "CRM 客户", desc: "管理客户线索、跟进记录、需求预算和成交阶段。" };
       case "finance":
         return { title: "财务流水", desc: "累计经营收入与成本支出，跟踪未结清尾款和账期对账。" };
       case "settlement_accounts":
@@ -136,22 +137,22 @@ export default function App() {
       case "settlement_ledger":
         return { title: "账户流水", desc: "逐笔追踪账户收入、支出、调拨和关联单据。" };
       case "payment_in":
-        return { title: "收款单", desc: "登记客户收款、收款账户、收款人及关联销售单。" };
+        return { title: "收款单", desc: "登记客户收款、收款账户、经办人及关联销售单。" };
       case "payment_out":
-        return { title: "付款单", desc: "登记供应商付款、付款账户、付款人及关联采购单。" };
+        return { title: "付款单", desc: "登记供应商付款、付款账户、经办人及关联采购单。" };
       case "account_transfer":
         return { title: "资金调拨", desc: "支持微信、支付宝、银行卡等结算账户之间转账。" };
       case "finance_reports":
         return { title: "结算报表", desc: "按账户、经办人、客户、供应商筛选收入支出并导出。" };
       case "quotes":
-        return { title: "显卡行情变动表", desc: "汇总平台行情与成交价格，辅助库存定价和风险判断。" };
+        return { title: "行情参考", desc: "汇总平台行情与成交价格，辅助库存定价。" };
       case "aftersales":
-        return { title: "售后风险处理台", desc: "记录外观、维修痕迹、阻值检测和售后处理结果。" };
+        return { title: "售后维护", desc: "记录外观、维修痕迹、检测结果和售后处理。" };
       case "permissions":
       case "logs":
-        return { title: "操作日志与权限审计", desc: "管理权限开关、敏感数据显示和操作日志检索。" };
+        return { title: "权限与日志", desc: "管理账号权限、敏感数据显示和操作记录。" };
       default:
-        return { title: "精诚电脑配件及显卡进销存ERP中枢", desc: "支持多零配件品类统合、一卡一档的高精度追溯和进销存对账管理系统。" };
+        return { title: "成都显卡一号店", desc: "显卡进销存与财务结算管理。" };
     }
   };
 
@@ -162,8 +163,8 @@ export default function App() {
   }
 
   return (
-    <div className="flex bg-slate-950 text-slate-100 min-h-screen font-sans">
-      {/* PERSISTENT LIGHTWEIGHT NEON SIDEBAR */}
+    <div className="flex flex-col md:flex-row bg-slate-950 text-slate-100 min-h-screen font-sans">
+      {/* PERSISTENT SIDEBAR */}
       <Sidebar
         currentTab={currentTab}
         setTab={setCurrentTab}
@@ -175,42 +176,42 @@ export default function App() {
       />
 
       {isVersionNoticeOpen && (
-        <div className="fixed inset-0 z-80 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-cyan-500/25 rounded-2xl shadow-2xl shadow-cyan-950/40 overflow-hidden">
-            <div className="p-5 border-b border-slate-800 flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
-                <Bell className="w-5 h-5 text-cyan-300" />
+        <div className="fixed inset-0 z-80 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[calc(100dvh-24px)] sm:max-h-[calc(100vh-48px)] bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-900/15 overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-start gap-3 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                <Bell className="w-5 h-5 text-blue-600" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-300 font-bold">
+                <div className="flex items-center gap-2 text-[10px] font-mono text-blue-600 font-bold">
                   <Sparkles className="w-3 h-3" />
                   <span>系统版本更新</span>
                 </div>
-                <h2 className="text-lg font-black text-slate-100 mt-1">
+                <h2 className="text-lg font-black text-slate-950 mt-1">
                   已升级到 {DISPLAY_APP_VERSION}
                 </h2>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  本次更新会改变部分业务字段和库存操作方式，建议上线前让店员、仓库和财务都刷新一次页面。
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  本次更新锁定经办人、清理收付款字段文案，并继续优化单据责任追踪。
                 </p>
               </div>
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="p-4 sm:p-5 space-y-3 overflow-y-auto custom-scrollbar">
               {VERSION_UPDATE_NOTES.map(note => (
-                <div key={note} className="flex gap-2 text-xs text-slate-300 leading-relaxed">
-                  <Info className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
+                <div key={note} className="flex gap-2 text-xs text-slate-600 leading-relaxed">
+                  <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
                   <span>{note}</span>
                 </div>
               ))}
-              <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-[11px] text-slate-500 font-mono">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-500 font-mono">
                 当前版本号：{DISPLAY_APP_VERSION}
               </div>
             </div>
 
-            <div className="p-4 bg-slate-950/60 border-t border-slate-800 flex justify-end">
+            <div className="p-3 sm:p-4 bg-white/95 border-t border-slate-200 flex justify-end shrink-0">
               <button
                 onClick={closeVersionNotice}
-                className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-black transition-colors"
+                className="w-full sm:w-auto px-5 py-3 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm sm:text-xs font-black transition-colors"
               >
                 知道了，进入系统
               </button>
@@ -220,21 +221,21 @@ export default function App() {
       )}
 
       {/* CORE VIEWPORT SCROLL AREA */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto custom-scrollbar relative">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 md:h-screen overflow-y-auto custom-scrollbar relative">
         
         {/* TOP BAR BRAND HEADER */}
-        <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-md border-b border-slate-900 px-6 py-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="text-xs text-slate-500 font-mono font-bold flex items-center gap-1.5">
+        <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-md border-b border-slate-900 px-4 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="text-[11px] md:text-xs text-slate-500 font-mono font-bold flex items-start md:items-center gap-1.5 leading-relaxed">
               <Activity className="w-3.5 h-3.5 text-cyan-400 rotate-90" />
-              <span>{activePageInfo.desc}</span>
+              <span className="min-w-0">{activePageInfo.desc}</span>
             </div>
-            <h1 className="text-base font-black text-slate-150 tracking-wide">
+            <h1 className="text-base md:text-lg font-black text-slate-150 tracking-wide">
               {activePageInfo.title}
             </h1>
           </div>
 
-          <div className="flex items-center gap-4 text-xs">
+          <div className="hidden sm:flex items-center gap-4 text-xs">
             {/* Clocks live */}
             <div className="hidden lg:flex items-center gap-1.5 p-2 px-3 bg-slate-900/60 border border-slate-855 rounded-xl text-slate-400 font-mono">
               <Clock className="w-3.5 h-3.5 text-cyan-400" />
@@ -257,7 +258,7 @@ export default function App() {
         </header>
 
         {/* ACTIVE CORE SUBSYSTEM LAYOUT PANEL */}
-        <main className="flex-1 p-6 space-y-6">
+        <main className="flex-1 p-3 md:p-6 space-y-4 md:space-y-6">
           {currentTab === "dashboard" && (
             <Dashboard
               storeState={storeState}
@@ -290,8 +291,16 @@ export default function App() {
             />
           )}
 
+          {currentTab === "assembly" && (
+            <AssemblyManager storeState={storeState} />
+          )}
+
           {currentTab === "sales_add" && (
             <SalesManager storeState={storeState} setTab={setCurrentTab} />
+          )}
+
+          {currentTab === "sales_outbound" && (
+            <SalesOutboundManager storeState={storeState} />
           )}
 
           {currentTab === "sales_list" && (

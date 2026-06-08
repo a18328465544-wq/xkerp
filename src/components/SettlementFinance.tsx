@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowRightLeft,
@@ -14,9 +14,11 @@ import {
   ReceiptText,
   Search,
   Save,
+  Trash2,
   WalletCards
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
+import { getLockedHandlerFieldState } from "../utils/sessionUser";
 import { AccountTransferRecord, PaymentInRecord, PaymentOutRecord, SettlementAccountType, SettlementBusinessType, SettlementDirection } from "../types";
 
 interface SettlementFinanceProps {
@@ -27,7 +29,7 @@ interface SettlementFinanceProps {
 const accountTypes: SettlementAccountType[] = ["现金", "微信", "支付宝", "银行卡", "闲鱼", "淘宝待结算", "对公账户", "老板个人账户", "员工备用金", "其他"];
 const businessTypes: SettlementBusinessType[] = ["销售收款", "采购付款", "回收付款", "客户退款", "采购退款", "其他收入", "其他支出", "账户调拨", "员工提成", "运费", "维修费", "平台手续费"];
 
-const money = (value: number) => `¥${Number(value || 0).toLocaleString()}`;
+const money = (value: number) => `${Number(value || 0).toLocaleString()}元`;
 
 function exportCsv(filename: string, rows: object[]) {
   if (!rows.length) return;
@@ -60,15 +62,21 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
     createSettlementAccount,
     createPaymentIn,
     updatePaymentIn,
+    deletePaymentIn,
     createPaymentOut,
     updatePaymentOut,
+    deletePaymentOut,
     createAccountTransfer,
     updateAccountTransfer,
+    deleteAccountTransfer,
     getAccountSummary,
-    currentRole
+    currentRole,
+    currentUser
   } = storeState;
+  const lockedHandlerState = getLockedHandlerFieldState(currentUser, currentRole);
+  const defaultHandlerName = lockedHandlerState.value;
 
-  const [accountName, setAccountName] = useState("老板微信收款号");
+  const [accountName, setAccountName] = useState("");
   const [accountType, setAccountType] = useState<SettlementAccountType>("微信");
   const [accountOwner, setAccountOwner] = useState("老板");
   const [platform, setPlatform] = useState("微信支付");
@@ -77,10 +85,10 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
   const [accountRemarks, setAccountRemarks] = useState("");
 
   const [selectedAccountId, setSelectedAccountId] = useState(settlementAccounts[0]?.id || "");
-  const [handler, setHandler] = useState(currentRole === "老板" ? "老板" : currentRole);
-  const [customerName, setCustomerName] = useState("散客玩家");
-  const [supplierName, setSupplierName] = useState("同行供应商");
-  const [paymentAmount, setPaymentAmount] = useState(1000);
+  const [handler, setHandler] = useState(defaultHandlerName);
+  const [customerName, setCustomerName] = useState("");
+  const [supplierName, setSupplierName] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("微信");
   const [relatedSale, setRelatedSale] = useState("");
   const [relatedPurchase, setRelatedPurchase] = useState("");
@@ -98,11 +106,18 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
   const [filterDirection, setFilterDirection] = useState("all");
   const [filterDoc, setFilterDoc] = useState("");
   const [filterKeyword, setFilterKeyword] = useState("");
+  const [transferAccountFilter, setTransferAccountFilter] = useState("all");
+  const [transferHandlerFilter, setTransferHandlerFilter] = useState("");
+  const [transferKeyword, setTransferKeyword] = useState("");
 
   const summary = getAccountSummary({
     accountId: filterAccount === "all" ? undefined : filterAccount,
     handler: filterHandler || undefined
   });
+
+  useEffect(() => {
+    setHandler(defaultHandlerName);
+  }, [defaultHandlerName]);
 
   const filteredLedger = useMemo(() => {
     return settlementLedger.filter(item => {
@@ -121,6 +136,26 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
   }, [settlementLedger, filterAccount, filterHandler, filterBusiness, filterDirection, filterDoc, filterKeyword]);
 
   const selectedAccount = settlementAccounts.find(item => item.id === selectedAccountId) || settlementAccounts[0];
+
+  const filteredTransfers = useMemo(() => {
+    const keyword = transferKeyword.trim();
+    const handlerKeyword = transferHandlerFilter.trim();
+    return accountTransfers.filter(record => {
+      const matchAccount =
+        transferAccountFilter === "all" ||
+        record.fromAccountId === transferAccountFilter ||
+        record.toAccountId === transferAccountFilter;
+      const matchHandler = !handlerKeyword || record.handler.includes(handlerKeyword);
+      const matchKeyword =
+        !keyword ||
+        record.id.includes(keyword) ||
+        record.time.includes(keyword) ||
+        record.fromAccountName.includes(keyword) ||
+        record.toAccountName.includes(keyword) ||
+        record.remarks?.includes(keyword);
+      return matchAccount && matchHandler && matchKeyword;
+    });
+  }, [accountTransfers, transferAccountFilter, transferHandlerFilter, transferKeyword]);
 
   const handleCreateAccount = () => {
     createSettlementAccount({
@@ -187,6 +222,7 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
 
   const handleTransfer = () => {
     if (!selectedAccount || !toAccountId) return alert("请选择转出和转入账户。");
+    if (selectedAccount.id === toAccountId) return alert("转出账户和转入账户不能相同。");
     const payload = {
       fromAccountId: selectedAccount.id,
       toAccountId,
@@ -212,7 +248,7 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
     setSelectedAccountId(record.accountId);
     setCustomerName(record.customerName);
     setPaymentAmount(record.amount);
-    setHandler(record.handler);
+    setHandler(defaultHandlerName);
     setPaymentMethod(record.paymentMethod);
     setRelatedSale(record.relatedDocNo || "");
     setPaymentRemarks(record.remarks || "");
@@ -223,7 +259,7 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
     setSelectedAccountId(record.accountId);
     setSupplierName(record.supplierName || record.customerName || "");
     setPaymentAmount(record.amount);
-    setHandler(record.handler);
+    setHandler(defaultHandlerName);
     setPaymentMethod(record.paymentMethod);
     setRelatedPurchase(record.relatedDocNo || "");
     setPaymentOutBusinessType(record.businessType);
@@ -236,8 +272,22 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
     setToAccountId(record.toAccountId);
     setTransferAmount(record.amount);
     setTransferFee(record.fee);
-    setHandler(record.handler);
+    setHandler(defaultHandlerName);
     setPaymentRemarks(record.remarks || "");
+  };
+
+  const confirmDeleteFinance = (kind: "payment_in" | "payment_out" | "transfer", id: string) => {
+    const label = kind === "payment_in" ? "收款单" : kind === "payment_out" ? "付款单" : "资金调拨单";
+    if (!window.confirm(`确认删除${label} ${id}？系统会同步反向修正账户余额和流水。`)) return;
+    try {
+      if (kind === "payment_in") deletePaymentIn(id);
+      if (kind === "payment_out") deletePaymentOut(id);
+      if (kind === "transfer") deleteAccountTransfer(id);
+      if (editingFinance?.id === id) setEditingFinance(null);
+      alert(`${label}已删除。`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "删除失败，请稍后再试。");
+    }
   };
 
   const renderFilters = () => (
@@ -360,7 +410,7 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
             {view === "payment_out" && <input value={supplierName} onChange={e => setSupplierName(e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="供应商 / 客户" />}
             <input type="number" value={view === "transfer" ? transferAmount : paymentAmount} onChange={e => view === "transfer" ? setTransferAmount(Number(e.target.value)) : setPaymentAmount(Number(e.target.value))} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="金额" />
             {view === "transfer" && <input type="number" value={transferFee} onChange={e => setTransferFee(Number(e.target.value))} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="手续费" />}
-            <input value={handler} onChange={e => setHandler(e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="经办人" />
+            <input value={handler} readOnly={lockedHandlerState.readOnly} disabled={lockedHandlerState.disabled} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded cursor-not-allowed opacity-80" placeholder="经办人" />
             {view !== "transfer" && <input value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="收付款方式" />}
             {view === "payment_in" && <select value={relatedSale} onChange={e => setRelatedSale(e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded"><option value="">不关联销售单</option>{salesInvoices.map(invoice => <option key={invoice.id} value={invoice.invoiceNo}>{invoice.invoiceNo} / {invoice.customerName}</option>)}</select>}
             {view === "payment_out" && <select value={relatedPurchase} onChange={e => setRelatedPurchase(e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded"><option value="">不关联采购单</option>{purchaseInvoices.map(invoice => <option key={invoice.id} value={invoice.invoiceNo}>{invoice.invoiceNo} / {invoice.supplierName}</option>)}</select>}
@@ -387,7 +437,12 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
                     <div className="text-slate-100 font-black">{record.customerName} / {money(record.amount)}</div>
                     <div className="text-slate-500 mt-1">{record.accountName} · {record.handler} · {record.relatedDocNo || "未关联单据"}</div>
                   </div>
-                  <button onClick={() => editPaymentIn(record)} className="text-amber-300 hover:underline font-bold shrink-0">编辑</button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => editPaymentIn(record)} className="text-amber-300 hover:underline font-bold">编辑</button>
+                    <button onClick={() => confirmDeleteFinance("payment_in", record.id)} className="text-rose-300 hover:underline font-bold inline-flex items-center gap-1">
+                      <Trash2 className="w-3.5 h-3.5" /> 删除
+                    </button>
+                  </div>
                 </div>
               ))}
               {view === "payment_out" && paymentOutRecords.map(record => (
@@ -396,18 +451,91 @@ export default function SettlementFinance({ storeState, view }: SettlementFinanc
                     <div className="text-slate-100 font-black">{record.supplierName || record.customerName || "付款对象"} / {money(record.amount)}</div>
                     <div className="text-slate-500 mt-1">{record.accountName} · {record.handler} · {record.relatedDocNo || "未关联单据"}</div>
                   </div>
-                  <button onClick={() => editPaymentOut(record)} className="text-amber-300 hover:underline font-bold shrink-0">编辑</button>
-                </div>
-              ))}
-              {view === "transfer" && accountTransfers.map(record => (
-                <div key={record.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-slate-100 font-black">{record.fromAccountName} 转至 {record.toAccountName} / {money(record.amount)}</div>
-                    <div className="text-slate-500 mt-1">手续费 {money(record.fee)} · 到账 {money(record.receivedAmount)} · {record.handler}</div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => editPaymentOut(record)} className="text-amber-300 hover:underline font-bold">编辑</button>
+                    <button onClick={() => confirmDeleteFinance("payment_out", record.id)} className="text-rose-300 hover:underline font-bold inline-flex items-center gap-1">
+                      <Trash2 className="w-3.5 h-3.5" /> 删除
+                    </button>
                   </div>
-                  <button onClick={() => editTransfer(record)} className="text-amber-300 hover:underline font-bold shrink-0">编辑</button>
                 </div>
               ))}
+              {view === "transfer" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <select
+                      value={transferAccountFilter}
+                      onChange={e => setTransferAccountFilter(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2 rounded"
+                    >
+                      <option value="all">全部调拨账户</option>
+                      {settlementAccounts.map(account => (
+                        <option key={account.id} value={account.id}>{account.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={transferHandlerFilter}
+                      onChange={e => setTransferHandlerFilter(e.target.value)}
+                      placeholder="经办人筛选"
+                      className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2 rounded"
+                    />
+                    <div className="relative">
+                      <input
+                        value={transferKeyword}
+                        onChange={e => setTransferKeyword(e.target.value)}
+                        placeholder="调拨单号 / 时间 / 备注"
+                        className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2 pl-8 rounded"
+                      />
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto border border-slate-800 rounded-lg">
+                    <table className="w-full min-w-[980px] text-left text-xs">
+                      <thead className="bg-slate-950 text-slate-400 font-mono">
+                        <tr>
+                          <th className="p-3">调拨单号</th>
+                          <th className="p-3">调拨时间</th>
+                          <th className="p-3">转出账户</th>
+                          <th className="p-3">转入账户</th>
+                          <th className="p-3 text-right">调拨金额</th>
+                          <th className="p-3 text-right">手续费</th>
+                          <th className="p-3 text-right">实际到账</th>
+                          <th className="p-3">经办人</th>
+                          <th className="p-3">备注</th>
+                          <th className="p-3 text-right">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {filteredTransfers.map(record => (
+                          <tr key={record.id} className="hover:bg-slate-800/30">
+                            <td className="p-3 text-cyan-300 font-mono font-bold">{record.id}</td>
+                            <td className="p-3 text-slate-400">{record.time}</td>
+                            <td className="p-3 text-slate-200 font-bold">{record.fromAccountName}</td>
+                            <td className="p-3 text-slate-200 font-bold">{record.toAccountName}</td>
+                            <td className="p-3 text-right text-slate-100 font-mono">{money(record.amount)}</td>
+                            <td className="p-3 text-right text-rose-300 font-mono">{money(record.fee)}</td>
+                            <td className="p-3 text-right text-emerald-300 font-mono">{money(record.receivedAmount)}</td>
+                            <td className="p-3 text-slate-300">{record.handler}</td>
+                            <td className="p-3 text-slate-500">{record.remarks || "-"}</td>
+                            <td className="p-3 text-right">
+                              <div className="inline-flex items-center justify-end gap-2">
+                                <button onClick={() => editTransfer(record)} className="text-amber-300 hover:underline font-bold">编辑</button>
+                                <button onClick={() => confirmDeleteFinance("transfer", record.id)} className="text-rose-300 hover:underline font-bold inline-flex items-center gap-1">
+                                  <Trash2 className="w-3.5 h-3.5" /> 删除
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredTransfers.length === 0 && (
+                          <tr>
+                            <td className="p-5 text-center text-slate-500" colSpan={10}>暂无符合条件的资金调拨单据</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

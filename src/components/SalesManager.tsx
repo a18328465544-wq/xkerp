@@ -3,23 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   BadgeDollarSign,
   Search,
   Plus,
-  Trash2,
   CheckCircle,
-  HelpCircle,
-  TrendingUp,
-  X,
-  Layers,
-  Store,
-  Truck,
-  FileSpreadsheet
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
-import { CardInventory, CustomerCard, SalesItem } from "../types";
+import { getLockedHandlerFieldState } from "../utils/sessionUser";
+import { CardInventory, CustomerCard } from "../types";
 
 interface SalesManagerProps {
   storeState: useStoreStateReturn;
@@ -32,18 +26,21 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
     customers,
     createSalesInvoice,
     permissions,
-    settlementAccounts
+    settlementAccounts,
+    currentRole,
+    currentUser
   } = storeState;
+  const lockedHandlerState = getLockedHandlerFieldState(currentUser, currentRole);
+  const defaultHandlerName = lockedHandlerState.value;
 
   // General billing sheets state
-  const [customerName, setCustomerName] = useState("徐小龙（极客发烧友）");
-  const [contact, setContact] = useState("13522198842");
+  const [customerName, setCustomerName] = useState("");
+  const [contact, setContact] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || "");
   const [channel, setChannel] = useState<"到店" | "闲鱼" | "抖音" | "小红书" | "B站" | "微信私域" | "同行网店">("到店");
-  const [paymentMethod, setPaymentMethod] = useState<"微信" | "支付宝" | "现金" | "银行卡" | "账期欠款">("微信");
   
   const [isPaid, setIsPaid] = useState(true);
-  const [paidAmount, setPaidAmount] = useState<number>(19500);
+  const [paidAmount, setPaidAmount] = useState<number>(0);
   const [unpaidAmount, setUnpaidAmount] = useState<number>(0);
   
   const [needInvoice, setNeedInvoice] = useState(false);
@@ -51,21 +48,21 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
   const [expressCompany, setExpressCompany] = useState("顺丰速运");
   const [expressNo, setExpressNo] = useState("");
   const [aftersalesTerms, setAftersalesTerms] = useState("店保三个月（非采矿导致坏点）");
-  const [employee, setEmployee] = useState("王小明 (店员)");
+  const [employee, setEmployee] = useState(defaultHandlerName);
   const [settlementAccountId, setSettlementAccountId] = useState(settlementAccounts[0]?.id || "");
-  const [paymentHandler, setPaymentHandler] = useState("王小明 (店员)");
+  const [paymentHandler, setPaymentHandler] = useState(defaultHandlerName);
   const [remarks, setRemarks] = useState("");
 
   // Items to sell array
   const [salesItems, setSalesItems] = useState([
     {
-      inventoryId: "KC-20260501-001",
-      productName: "RTX 4090 华硕 ROG 猛禽 24G",
-      productId: "SP-001",
-      sn: "SN4090STRX8829A",
+      inventoryId: "",
+      productName: "",
+      productId: "",
+      sn: "",
       condition: "充新99新",
-      costPrice: 18100,
-      sellPrice: 19500,
+      costPrice: 0,
+      sellPrice: 0,
       aftersalesTerms: "店保三个月（非采矿导致坏点）"
     }
   ]);
@@ -73,6 +70,7 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
   // Autocomplete targeting available stocks
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [lookupMenuRect, setLookupMenuRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const lookupDropdownRef = useRef<HTMLDivElement>(null);
 
   // Available stocks are cards not sold and in a sellable state: "已入库" / "已上架" / "待检测" (just warning)
@@ -80,9 +78,27 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
     return inventory.filter(c => ["已入库", "已上架"].includes(c.status));
   }, [inventory]);
 
+  const normalizeCustomerType = (type?: CustomerCard["type"]) => {
+    if (type === "个人卖家客户" || type === "回收客户") return "个人卖家客户";
+    return "个人买家客户";
+  };
+
+  useEffect(() => {
+    setEmployee(defaultHandlerName);
+    setPaymentHandler(defaultHandlerName);
+  }, [defaultHandlerName]);
+
+  const personalBuyerCustomers = useMemo(() => {
+    return customers.filter(customer => normalizeCustomerType(customer.type) === "个人买家客户");
+  }, [customers]);
+
   const selectedCustomer = useMemo(() => {
-    return customers.find(customer => customer.id === selectedCustomerId) || null;
-  }, [customers, selectedCustomerId]);
+    return personalBuyerCustomers.find(customer => customer.id === selectedCustomerId) || null;
+  }, [personalBuyerCustomers, selectedCustomerId]);
+
+  const selectedSettlementAccount = useMemo(() => {
+    return settlementAccounts.find(account => account.id === settlementAccountId) || settlementAccounts[0];
+  }, [settlementAccountId, settlementAccounts]);
 
   const normalizeSalesChannel = (customer: CustomerCard) => {
     const channelValue = customer.firstChannel || customer.source;
@@ -98,6 +114,28 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
       c.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [availableGpus, searchQuery]);
+
+  const activeLookupIndex = activeRowId?.startsWith("srow-") ? Number(activeRowId.replace("srow-", "")) : -1;
+
+  const openInventoryLookup = (rowIdx: number, value: string, input: HTMLInputElement) => {
+    const rect = input.getBoundingClientRect();
+    setActiveRowId(`srow-${rowIdx}`);
+    setSearchQuery(value);
+    setLookupMenuRect({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: Math.max(rect.width, 360),
+      maxHeight: Math.max(180, Math.min(280, window.innerHeight - rect.bottom - 16))
+    });
+  };
+
+  const resolvePaymentMethod = (): "微信" | "支付宝" | "现金" | "银行卡" | "账期欠款" => {
+    if (!isPaid && paidAmount <= 0) return "账期欠款";
+    if (selectedSettlementAccount?.type === "微信") return "微信";
+    if (selectedSettlementAccount?.type === "支付宝") return "支付宝";
+    if (selectedSettlementAccount?.type === "现金") return "现金";
+    return "银行卡";
+  };
 
   // Calculations
   const calculatedStats = useMemo(() => {
@@ -123,10 +161,10 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
   }, [isPaid, calculatedStats.totalAmount]);
 
   useEffect(() => {
-    if (!selectedCustomerId && customers[0]) {
-      setSelectedCustomerId(customers[0].id);
+    if (!personalBuyerCustomers.some(customer => customer.id === selectedCustomerId)) {
+      setSelectedCustomerId(personalBuyerCustomers[0]?.id || "");
     }
-  }, [customers, selectedCustomerId]);
+  }, [personalBuyerCustomers, selectedCustomerId]);
 
   useEffect(() => {
     if (!selectedCustomer) return;
@@ -145,8 +183,18 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const closeFloatingLookup = () => {
+      setActiveRowId(null);
+      setLookupMenuRect(null);
+    };
+    window.addEventListener("resize", closeFloatingLookup);
+    return () => {
+      window.removeEventListener("resize", closeFloatingLookup);
+    };
+  }, []);
+
   const addCheckoutRow = () => {
-    const nextCheckoutId = `co-${Date.now()}`;
     const defaultAvailableCard = availableGpus[0];
     
     if (defaultAvailableCard) {
@@ -206,11 +254,12 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
     updateItemForm(rowIdx, "costPrice", card.costPrice);
     updateItemForm(rowIdx, "sellPrice", card.estSellPrice);
     setActiveRowId(null);
+    setLookupMenuRect(null);
   };
 
   const handlePostSales = () => {
     if (!selectedCustomer) {
-      alert("请先在【客户关系档案】里新增客户，再回到销售单选择客户开单。");
+      alert("请先在【个人客户】里新增个人买家客户，再回到销售单选择客户开单。");
       setTab("customers");
       return;
     }
@@ -233,12 +282,12 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
       customerName,
       contact,
       channel,
-      paymentMethod,
+      paymentMethod: resolvePaymentMethod(),
       isPaid,
       paidAmount,
       unpaidAmount,
       settlementAccountId: paidAmount > 0 ? settlementAccountId : undefined,
-      settlementAccountName: settlementAccounts.find(account => account.id === settlementAccountId)?.name,
+      settlementAccountName: selectedSettlementAccount?.name,
       paymentHandler,
       paymentStatus: unpaidAmount <= 0 ? "已收款" : paidAmount > 0 ? "部分收款" : "未收款",
       needInvoice,
@@ -261,44 +310,48 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
       }))
     });
 
-    alert("销售单已提交并完成出库。\n对应库存状态已更新为 [已售出]，财务流水和客户统计已同步更新。");
-    setTab("sales_list");
+    alert("销售单已提交，商品已进入【销售出库池】。\n请由仓库扫码或手动确认出库后，库存才会变为已售出。");
+    setTab("sales_outbound");
   };
+
+  const labelClass = "text-[12px] text-slate-500 font-semibold block mb-2";
+  const fieldClass = "w-full h-12 bg-white border border-slate-800 text-sm text-slate-100 px-3 rounded-xl shadow-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition";
+  const readOnlyFieldClass = "w-full h-12 bg-slate-950 border border-slate-800 text-sm text-slate-500 px-3 rounded-xl shadow-sm";
+  const compactFieldClass = "w-full h-11 bg-white border border-slate-800 text-sm text-slate-100 px-3 rounded-lg shadow-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition";
 
   return (
     <div className="space-y-4">
       {/* Visual top */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-5 rounded-2xl border border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-800 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <BadgeDollarSign className="w-5 h-5 text-emerald-400" />
-            <span>新增标准销售单 (绑定 SN / 一卡一档锁定)</span>
+          <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+            <BadgeDollarSign className="w-5 h-5 text-blue-600" />
+            <span>销售开单</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            录入销售单时必须明确关联到库内实机物理卡的 SN 编号。销售出库后，绑定的库存卡会自动变更为“已售出”并进入质保追踪。
+          <p className="text-sm text-slate-500 mt-1">
+            选择客户、收款账户和可售库存，提交后自动出库并生成财务记录。
           </p>
         </div>
-        <div className="bg-slate-950 p-2 border border-slate-850 text-[11px] text-slate-400 rounded-lg">
-          在架可售卡池: <span className="text-emerald-400 font-bold font-mono">{availableGpus.length} 张候售</span>
+        <div className="bg-blue-50 px-3 py-2 border border-blue-100 text-xs text-blue-700 rounded-xl">
+          可售库存 <span className="font-semibold font-mono">{availableGpus.length}</span> 张
         </div>
       </div>
 
       {/* BILLING CLIENT HEADERS */}
-      <div className="bg-slate-900 p-5 rounded-xl border border-slate-850 space-y-4 shadow-sm relative">
-        <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/[0.01] rounded-full blur-xl"></div>
+      <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-800 space-y-5 shadow-sm relative">
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           {/* Customer */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">买方客户档案</label>
+            <label className={labelClass}>个人买家客户</label>
             <select
               required
               value={selectedCustomerId}
               onChange={e => setSelectedCustomerId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none focus:border-cyan-500 font-bold"
+              className={`${fieldClass} font-medium truncate`}
             >
-              {customers.length === 0 && <option value="">请先新增客户档案</option>}
-              {customers.map(customer => (
+              {personalBuyerCustomers.length === 0 && <option value="">请先新增个人买家客户</option>}
+              {personalBuyerCustomers.map(customer => (
                 <option key={customer.id} value={customer.id}>
                   {customer.name} / {customer.phone || customer.wechat || customer.source}
                 </option>
@@ -308,30 +361,31 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
 
           {/* Contact */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">买方联系电话 / 微信</label>
+            <label className={labelClass}>买方联系电话 / 微信</label>
             <input
               type="text"
               required
               value={contact}
               readOnly
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-400 p-2.5 rounded focus:outline-none"
+              className={readOnlyFieldClass}
             />
           </div>
 
           {/* Platform channels */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">销售渠道来源平台</label>
+            <label className={labelClass}>销售渠道</label>
             <select
               value={channel}
               onChange={e => setChannel(e.target.value as any)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none font-semibold"
+              className={`${fieldClass} font-medium`}
             >
-              <option value="到店">到店现购 (同城客)</option>
-              <option value="闲鱼">闲鱼买手 (二手大盘)</option>
-              <option value="微信私域">微信私域 (朋友圈直款)</option>
-              <option value="同行网店">同行调货 (拼客铺)</option>
-              <option value="小红书">小红书推广 (个人升级)</option>
-              <option value="抖音">抖音电竞门店 (粉丝拿货)</option>
+              <option value="到店">到店现购</option>
+              <option value="闲鱼">闲鱼买手</option>
+              <option value="微信私域">微信私域</option>
+              <option value="同行网店">同行调货</option>
+              <option value="小红书">小红书</option>
+              <option value="抖音">抖音</option>
+              <option value="B站">B站</option>
             </select>
           </div>
 
@@ -339,129 +393,112 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
             <button
               type="button"
               onClick={() => setTab("customers")}
-              className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-black p-2.5 rounded"
+              className="w-full h-12 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-100 text-sm font-semibold rounded-xl transition"
             >
-              去客户档案新增
+              去个人客户新增
             </button>
-          </div>
-
-          {/* Settle method */}
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">收款方式</label>
-            <select
-              value={paymentMethod}
-              onChange={e => setPaymentMethod(e.target.value as any)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none"
-            >
-              <option value="微信">微信支付 (秒过款)</option>
-              <option value="支付宝">支付宝打款</option>
-              <option value="银行卡">对公账网银</option>
-              <option value="现金">门市现金</option>
-              <option value="账期欠款">账期欠款 (同行月结)</option>
-            </select>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-slate-800/80 pt-3">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 border-t border-slate-800 pt-5 items-end">
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">收款账户</label>
+            <label className={labelClass}>收款账户</label>
             <select
               value={settlementAccountId}
               onChange={e => setSettlementAccountId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none"
+              className={`${fieldClass} font-medium`}
             >
               {settlementAccounts.map(account => (
-                <option key={account.id} value={account.id}>{account.name} / ¥{account.balance}</option>
+                <option key={account.id} value={account.id}>{account.name} / {account.balance}元</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">收款人 / 经办人</label>
+            <label className={labelClass}>经办人</label>
             <input
               value={paymentHandler}
-              onChange={e => setPaymentHandler(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded focus:outline-none"
+              readOnly={lockedHandlerState.readOnly}
+              disabled={lockedHandlerState.disabled}
+              className={`${fieldClass} cursor-not-allowed opacity-80`}
             />
           </div>
 
           {/* Settle status toggle */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">已收讫货款</label>
-            <div className="flex bg-slate-950 p-1 rounded border border-slate-800 gap-1 h-[37px]">
+            <label className={labelClass}>收款状态</label>
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1 h-12">
               <button
                 type="button"
                 onClick={() => setIsPaid(true)}
-                className={`flex-1 text-[11px] font-bold rounded ${
-                  isPaid ? "bg-emerald-500 text-slate-950" : "text-slate-400 hover:text-slate-205"
+                className={`flex-1 text-sm font-semibold rounded-lg transition ${
+                  isPaid ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-100"
                 }`}
               >
-                已全额结清
+                全款
               </button>
               <button
                 type="button"
                 onClick={() => setIsPaid(false)}
-                className={`flex-1 text-[11px] font-bold rounded ${
-                  !isPaid ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-205"
+                className={`flex-1 text-sm font-semibold rounded-lg transition ${
+                  !isPaid ? "bg-amber-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-100"
                 }`}
               >
-                部分收款/挂账
+                挂账
               </button>
             </div>
           </div>
 
           {/* Debt balances */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-slate-500 font-bold block mb-1">已收款(¥)</label>
-              <input
-                type="number"
-                disabled={isPaid}
-                value={paidAmount}
-                onChange={e => {
-                  const val = Number(e.target.value);
-                  setPaidAmount(val);
-                  setUnpaidAmount(Math.max(0, calculatedStats.totalAmount - val));
-                }}
-                className="w-full bg-slate-950 border border-slate-850 p-2.5 text-xs text-emerald-400 font-mono font-bold rounded disabled:text-slate-500"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-slate-500 font-bold block mb-1">未收款(欠款)</label>
-              <div className="w-full bg-slate-950 border border-slate-855 p-2.5 text-xs font-mono font-bold text-amber-500 rounded">
-                ¥{unpaidAmount}
-              </div>
+          <div>
+            <label className={labelClass}>已收款(元)</label>
+            <input
+              type="number"
+              disabled={isPaid}
+              value={paidAmount}
+              onChange={e => {
+                const val = Number(e.target.value);
+                setPaidAmount(val);
+                setUnpaidAmount(Math.max(0, calculatedStats.totalAmount - val));
+              }}
+              className={`${compactFieldClass} font-mono font-semibold disabled:bg-slate-950 disabled:text-slate-400`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>未收款(欠款)</label>
+            <div className="w-full h-11 bg-slate-950 border border-slate-800 px-3 text-sm font-mono font-semibold text-amber-500 rounded-lg flex items-center">
+              {unpaidAmount}元
             </div>
           </div>
 
           {/* Invoices requirements and logistics */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 md:col-span-2">
             <div>
-              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-400 font-bold uppercase block mb-1">
+              <label className="flex items-center gap-2 cursor-pointer text-[12px] text-slate-500 font-semibold mb-2">
                 <input
                   type="checkbox"
                   checked={needInvoice}
                   onChange={e => setNeedInvoice(e.target.checked)}
-                  className="rounded text-emerald-500 bg-slate-950 border-slate-800"
+                  className="rounded text-blue-600 border-slate-800"
                 />
-                <span>需要发票（2% 税）</span>
+                <span>需要发票</span>
               </label>
-              <div className="w-full bg-slate-950 text-slate-400 border border-slate-850 p-2 rounded text-[10px] font-mono leading-none">
+              <div className="w-full h-11 bg-slate-950 text-slate-500 border border-slate-800 px-3 rounded-lg text-sm flex items-center">
                 {needInvoice ? "普通发票" : "收据/不开票"}
               </div>
             </div>
 
             <div>
-              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-400 font-bold uppercase block mb-1">
+              <label className="flex items-center gap-2 cursor-pointer text-[12px] text-slate-500 font-semibold mb-2">
                 <input
                   type="checkbox"
                   checked={freeShipping}
                   onChange={e => setFreeShipping(e.target.checked)}
-                  className="rounded text-emerald-500 bg-slate-950 border-slate-800"
+                  className="rounded text-blue-600 border-slate-800"
                 />
-                <span>是否包邮包递</span>
+                <span>包邮</span>
               </label>
-              <div className="w-full bg-slate-950 text-slate-100 border border-slate-855 p-2 rounded text-[11px] font-bold">
+              <div className="w-full h-11 bg-slate-950 text-slate-300 border border-slate-800 px-3 rounded-lg text-sm font-medium flex items-center">
                 {freeShipping ? "顺丰包邮" : "到付自理"}
               </div>
             </div>
@@ -469,41 +506,39 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
 
           {/* Express lines */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">物流公司与快递单号</label>
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                placeholder="e.g. 快递单号 SF148..."
-                value={expressNo}
-                onChange={e => setExpressNo(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded font-mono"
-              />
-            </div>
+            <label className={labelClass}>物流公司与快递单号</label>
+            <input
+              type="text"
+              placeholder="例如：顺丰 SF148..."
+              value={expressNo}
+              onChange={e => setExpressNo(e.target.value)}
+              className={`${fieldClass} font-mono`}
+            />
           </div>
         </div>
       </div>
 
       {/* CORE CHECKOUT GRID SPREADSHEEET */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto shadow-md">
+      <div className="bg-white border border-slate-800 rounded-2xl overflow-x-auto shadow-sm">
         <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
           <thead>
-            <tr className="border-b border-slate-800 bg-slate-950 font-mono text-[11px] text-slate-400 font-bold uppercase">
-              <th className="p-3 pl-4 w-[280px]">点击绑定物理库存卡 (搜SN/库存ID/名称)</th>
+            <tr className="border-b border-slate-800 bg-slate-950 text-[12px] text-slate-500 font-semibold">
+              <th className="p-3 pl-4 w-[280px]">绑定库存卡</th>
               <th className="p-3 w-[120px]">SN</th>
-              <th className="p-3 w-[110px]">成色级别</th>
-              <th className="p-3 text-right">入库成本价(参考)</th>
-              <th className="p-3 text-right w-[110px]">实际销售成交价(¥)</th>
-              <th className="p-3 text-right">差价净毛利润</th>
-              <th className="p-3">售后质保承诺配置</th>
+              <th className="p-3 w-[110px]">成色</th>
+              <th className="p-3 text-right">成本</th>
+              <th className="p-3 text-right w-[120px]">成交价(元)</th>
+              <th className="p-3 text-right">利润</th>
+              <th className="p-3">质保承诺</th>
               <th className="p-3 pr-4 text-right w-[90px]">操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/80 text-xs">
+          <tbody className="divide-y divide-slate-800 text-sm">
             {salesItems.map((item, idx) => {
               const rowProfit = item.sellPrice - item.costPrice;
 
               return (
-                <tr key={idx} className="hover:bg-slate-850/20 transition-colors">
+                <tr key={idx} className="hover:bg-blue-50/40 transition-colors">
                   {/* LOOKUP INPUT COLUMN */}
                   <td className="p-2 pl-4 relative">
                     <div className="relative">
@@ -511,71 +546,33 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
                         type="text"
                         value={activeRowId === `srow-${idx}` ? searchQuery : item.productName}
                         placeholder="输入关键字 / SN / 库存 ID 搜索可售库存..."
-                        onClick={() => {
-                          setActiveRowId(`srow-${idx}`);
-                          setSearchQuery(item.productName);
-                        }}
+                        onClick={e => openInventoryLookup(idx, item.productName, e.currentTarget)}
+                        onFocus={e => openInventoryLookup(idx, item.productName, e.currentTarget)}
                         onChange={e => {
-                          setSearchQuery(e.target.value);
-                          setActiveRowId(`srow-${idx}`);
+                          openInventoryLookup(idx, e.target.value, e.currentTarget);
                         }}
-                        className="w-full bg-slate-950 border border-slate-800 text-[11px] text-slate-200 px-2.5 py-2 rounded focus:outline-none focus:border-cyan-400 font-bold truncate pr-6"
+                        className="w-full h-10 bg-white border border-slate-800 text-sm text-slate-100 px-3 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 font-medium truncate pr-8"
                       />
-                      <Search className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-slate-500 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 absolute right-2.5 top-3 text-slate-400 pointer-events-none" />
                     </div>
-
-                    {/* Autocomplete cards */}
-                    {activeRowId === `srow-${idx}` && (
-                      <div
-                        ref={lookupDropdownRef}
-                        className="absolute left-4 right-4 top-11 bg-slate-950 border border-slate-800 shadow-2xl rounded-lg z-50 p-1.5 max-h-[190px] overflow-y-auto custom-scrollbar"
-                      >
-                        <div className="p-1 px-2 border-b border-slate-900 text-[10px] text-slate-500 font-mono tracking-wider mb-1">
-                          系统仅显示当前可售（已入库、已上架）的单卡明细：
-                        </div>
-                        {filteredAvailableGpus.length === 0 ? (
-                          <div className="p-3 text-slate-500 text-[11px] italic">找不到空闲销售显卡...</div>
-                        ) : (
-                          filteredAvailableGpus.map(c => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => selectCardForCheckout(idx, c)}
-                              className="w-full text-left p-2 hover:bg-slate-800 rounded flex items-center justify-between transition-colors text-[11px]"
-                            >
-                              <div className="truncate max-w-[210px]">
-                                <span className="font-extrabold text-slate-100 block truncate">{c.productName}</span>
-                                <span className="text-[9px] text-slate-500 font-mono block">
-                                  ID: {c.id} | SN: {c.sn}
-                                </span>
-                              </div>
-                              <div className="text-right whitespace-nowrap shrink-0">
-                                <span className="text-emerald-400 font-bold block">售: ¥{c.estSellPrice}</span>
-                                <span className="text-[8px] text-slate-655 font-mono block">成本: ¥{c.costPrice}</span>
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
                   </td>
 
                   {/* Serial block info */}
-                  <td className="p-2 font-mono text-[11px] text-slate-350">
-                    <span className="font-bold underline text-cyan-400">{item.sn || "等待绑定"}</span>
+                  <td className="p-2 font-mono text-xs text-slate-500">
+                    <span className="font-semibold text-blue-600">{item.sn || "等待绑定"}</span>
                   </td>
 
                   {/* Condition grade */}
                   <td className="p-2">
-                    <span className="font-semibold text-slate-300">{item.condition}</span>
+                    <span className="font-medium text-slate-300">{item.condition}</span>
                   </td>
 
                   {/* Reference Costs */}
-                  <td className="p-2 text-right text-slate-400 font-mono">
+                  <td className="p-2 text-right text-slate-500 font-mono text-xs">
                     {permissions.showCost ? (
-                      <span>¥{item.costPrice}</span>
+                      <span>{item.costPrice}元</span>
                     ) : (
-                      <span className="text-[9px] italic text-slate-600">隐藏</span>
+                      <span className="text-xs text-slate-400">隐藏</span>
                     )}
                   </td>
 
@@ -586,15 +583,15 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
                       required
                       value={item.sellPrice}
                       onChange={e => updateItemForm(idx, "sellPrice", Number(e.target.value))}
-                      className="w-full text-right bg-slate-950 border border-slate-800 text-[11px] text-emerald-400 font-mono font-black p-1.5 rounded focus:outline-none focus:border-cyan-500"
+                      className="w-full h-10 text-right bg-white border border-slate-800 text-sm text-slate-100 font-mono font-semibold px-3 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                     />
                   </td>
 
                   {/* Actual margins profit */}
-                  <td className="p-2 text-right font-mono font-extrabold">
+                  <td className="p-2 text-right font-mono font-semibold">
                     {permissions.showProfit ? (
-                      <span className={rowProfit >= 0 ? "text-emerald-400" : "text-rose-500"}>
-                        ¥{rowProfit}
+                      <span className={rowProfit >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                        {rowProfit}元
                       </span>
                     ) : (
                       <span className="text-slate-600 text-[10px]">保密</span>
@@ -607,7 +604,7 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
                       type="text"
                       value={item.aftersalesTerms}
                       onChange={e => updateItemForm(idx, "aftersalesTerms", e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-[11px] text-slate-300 p-1.5 rounded focus:outline-none"
+                      className="w-full h-10 bg-white border border-slate-800 text-sm text-slate-300 px-3 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                     />
                   </td>
 
@@ -616,7 +613,7 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
                     <button
                       type="button"
                       onClick={() => removeCheckoutRow(idx)}
-                      className="p-1 px-2.5 border border-rose-950 text-rose-450 hover:bg-rose-500/10 rounded font-semibold duration-150 cursor-pointer"
+                      className="h-9 px-3 border border-rose-800 text-rose-400 hover:bg-rose-950 rounded-lg font-semibold duration-150 cursor-pointer"
                     >
                       移除
                     </button>
@@ -628,31 +625,71 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
         </table>
       </div>
 
+      {activeLookupIndex >= 0 && lookupMenuRect && createPortal(
+        <div
+          ref={lookupDropdownRef}
+          className="fixed bg-white border border-slate-200 shadow-2xl rounded-xl z-[9999] p-1.5 overflow-y-auto custom-scrollbar"
+          style={{
+            top: lookupMenuRect.top,
+            left: lookupMenuRect.left,
+            width: lookupMenuRect.width,
+            maxHeight: lookupMenuRect.maxHeight
+          }}
+        >
+          <div className="p-2 border-b border-slate-200 text-xs text-slate-500 mb-1 flex items-center justify-between gap-2">
+            <span>仅显示可售库存</span>
+            <span className="font-mono text-slate-400">{filteredAvailableGpus.length} 条</span>
+          </div>
+          {filteredAvailableGpus.length === 0 ? (
+            <div className="p-3 text-slate-500 text-sm">找不到可售库存</div>
+          ) : (
+            filteredAvailableGpus.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => selectCardForCheckout(activeLookupIndex, c)}
+                className="w-full text-left p-2.5 hover:bg-blue-50 rounded-lg flex items-center justify-between gap-3 transition-colors text-xs"
+              >
+                <div className="min-w-0">
+                  <span className="font-semibold text-slate-100 block truncate">{c.productName}</span>
+                  <span className="text-[10px] text-slate-500 font-mono block truncate">
+                    ID: {c.id} | SN: {c.sn}
+                  </span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0">
+                  <span className="text-blue-600 font-semibold block">售: {c.estSellPrice}元</span>
+                  <span className="text-[10px] text-slate-400 font-mono block">成本: {c.costPrice}元</span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>,
+        document.body
+      )}
+
       {/* QUICK WORK TOOLBAR */}
-      <div className="flex bg-slate-900 border border-slate-800 p-3 rounded-lg items-center justify-between">
+      <div className="flex flex-col md:flex-row gap-3 bg-white border border-slate-800 p-3 rounded-2xl items-start md:items-center justify-between shadow-sm">
         <button
           type="button"
           onClick={addCheckoutRow}
-          className="p-2 px-5 bg-slate-850 hover:bg-slate-800 text-slate-100 rounded text-xs font-bold flex items-center gap-1 cursor-pointer"
+          className="h-10 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 cursor-pointer transition"
         >
-          <Plus className="w-4 h-4 text-emerald-400" />
-          销售整包继续增加一行显卡
+          <Plus className="w-4 h-4" />
+          增加一行商品
         </button>
 
-        <span className="text-[10px] text-slate-500 font-mono font-semibold">
-          销售绑定后，出库商品数量、利润大盘和个人账户业绩将直接与库存SN卡扣挂钩。
+        <span className="text-xs text-slate-500">
+          销售绑定后，出库商品数量、利润统计和个人账户业绩将直接与库存 SN 卡扣挂钩。
         </span>
       </div>
 
       {/* FINAL FINANCIAL CHECKS SUMMARY */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-2xl relative">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/[0.02] rounded-full blur-2xl"></div>
-
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-white border border-slate-800 rounded-2xl p-5 shadow-sm relative">
         {/* Global terms remarks */}
         <div className="lg:col-span-2 space-y-3.5">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">主单级别全局质保协议</label>
+              <label className={labelClass}>整单质保协议</label>
               <input
                 type="text"
                 value={aftersalesTerms}
@@ -661,59 +698,57 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
                   // sync to all row items
                   salesItems.forEach((_, idx) => updateItemForm(idx, "aftersalesTerms", e.target.value));
                 }}
-                className="w-full bg-slate-900 border border-slate-800 text-xs text-slate-300 p-2.5 rounded-lg"
+                className={fieldClass}
               />
             </div>
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">开单销售店员</label>
+              <label className={labelClass}>开单销售</label>
               <select
                 value={employee}
-                onChange={e => setEmployee(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-xs text-slate-200 p-2.5 rounded-lg"
+                disabled={lockedHandlerState.disabled}
+                className={`${fieldClass} cursor-not-allowed opacity-80`}
               >
-                <option value="王小明 (店员)">王小明 (店员)</option>
-                <option value="前台王姑娘">前台王姑娘 (微信私域)</option>
-                <option value="店长小张">店长小张 (主理回收对接)</option>
+                <option value={defaultHandlerName}>{defaultHandlerName}</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">销售备注（可选）</label>
+            <label className={labelClass}>销售备注（可选）</label>
             <textarea
               value={remarks}
               onChange={e => setRemarks(e.target.value)}
               placeholder="记录客户对包装、线材、随纸报告和指定快递的需求。例如：随附3DMark压力测试报告复印件..."
-              className="w-full bg-slate-900 border border-slate-800 text-xs text-slate-200 p-2.5 rounded-lg h-16 resize-none focus:outline-none"
+              className="w-full bg-white border border-slate-800 text-sm text-slate-100 p-3 rounded-xl h-20 resize-none focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition"
             ></textarea>
           </div>
         </div>
 
         {/* PRICE SUMMARY */}
-        <div className="bg-slate-900 p-4 border border-slate-850 rounded-xl flex flex-col justify-between">
+        <div className="bg-slate-950 p-4 border border-slate-800 rounded-2xl flex flex-col justify-between">
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-300 tracking-wider Border-b border-slate-800 pb-1.5 flex justify-between uppercase">
+            <h4 className="text-sm font-semibold text-slate-100 border-b border-slate-800 pb-2 flex justify-between">
               <span>销售结算汇总</span>
-              <span className="font-mono text-[9px] text-slate-500 font-bold">{salesItems.length} 张单卡</span>
+              <span className="font-mono text-xs text-slate-500">{salesItems.length} 张单卡</span>
             </h4>
 
-            <div className="flex justify-between text-xs text-slate-400 font-mono">
-              <span>零售销售总额:</span>
-              <span className="text-slate-100 font-bold text-sm">¥{calculatedStats.totalAmount.toLocaleString()}</span>
+            <div className="flex justify-between text-sm text-slate-500 font-mono">
+              <span>销售总额</span>
+              <span className="text-slate-100 font-semibold">{calculatedStats.totalAmount.toLocaleString()}元</span>
             </div>
 
             {permissions.showCost && (
-              <div className="flex justify-between text-xs text-slate-500 font-mono">
-                <span>总进货成本:</span>
-                <span>¥{calculatedStats.totalCost.toLocaleString()}</span>
+              <div className="flex justify-between text-sm text-slate-500 font-mono">
+                <span>总成本</span>
+                <span>{calculatedStats.totalCost.toLocaleString()}元</span>
               </div>
             )}
 
-            <div className="flex justify-between text-xs text-slate-400 border-t border-slate-850 pt-2 font-mono">
-              <span>预计差价实收净利润:</span>
+            <div className="flex justify-between text-sm text-slate-500 border-t border-slate-800 pt-2 font-mono">
+              <span>预计利润</span>
               {permissions.showProfit ? (
-                <span className={`text-base font-black ${calculatedStats.totalProfit >= 0 ? "text-emerald-400" : "text-rose-500"}`}>
-                  ¥{calculatedStats.totalProfit.toLocaleString()}
+                <span className={`text-lg font-semibold ${calculatedStats.totalProfit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {calculatedStats.totalProfit.toLocaleString()}元
                 </span>
               ) : (
                 <span className="text-slate-500 font-light italic">店员隐藏</span>
@@ -723,10 +758,10 @@ export default function SalesManager({ storeState, setTab }: SalesManagerProps) 
 
           <button
             onClick={handlePostSales}
-            className="w-full mt-4 p-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black text-xs rounded-xl shadow-[0_0_12px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-1 cursor-pointer"
+            className="w-full mt-4 h-12 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
           >
-            <CheckCircle className="w-4 h-4 text-slate-950" />
-            确认销售开单 · 出库扣减
+            <CheckCircle className="w-4 h-4" />
+            确认开单并出库
           </button>
         </div>
       </div>

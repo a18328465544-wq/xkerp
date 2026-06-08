@@ -13,6 +13,7 @@ export type ProductCategory =
   | "散热"
   | "机箱"
   | "整机"
+  | "组装拆卸"
   | "其他配件";
 
 export interface ProductTemplate {
@@ -39,6 +40,8 @@ export type CardStatus =
   | "已上架"
   | "已锁定"
   | "已售出"
+  | "已拆卸"
+  | "已组装"
   | "退货中"
   | "已退货"
   | "售后中"
@@ -63,6 +66,7 @@ export interface CardInventory {
   version: string;
   vram: string;
   sn: string;
+  expressNo?: string;
   sourceType: SourceType;
   supplierName: string;
   costPrice: number;
@@ -87,6 +91,48 @@ export interface CardInventory {
   buyerName?: string;
 }
 
+export interface InventorySummaryRow {
+  key: string;
+  productName: string;
+  category: ProductCategory;
+  brand: string;
+  model: string;
+  version: string;
+  vram: string;
+  warehouseLocation: string;
+  warehouseLocations?: string[];
+  totalCount: number;
+  availableCount: number;
+  pendingCount: number;
+  lockedCount: number;
+  soldCount: number;
+  repairCount: number;
+  totalCost: number;
+  totalEstSell: number;
+  avgCost: number;
+  avgEstSell: number;
+  lastEntryTime?: string;
+}
+
+export interface InventoryImportRow {
+  productName: string;
+  category?: ProductCategory;
+  brand?: string;
+  model?: string;
+  version?: string;
+  vram?: string;
+  quantity?: number;
+  warehouseLocation?: string;
+  costPrice?: number;
+  estSellPrice?: number;
+  marketPrice?: number;
+  status?: CardStatus;
+  supplierName?: string;
+  sourceType?: SourceType;
+  condition?: CardInventory["condition"];
+  remarks?: string;
+}
+
 export type InventoryScanMode = "入库" | "出库" | "移库";
 
 export interface InventoryScanResult {
@@ -106,6 +152,11 @@ export interface InspectionRecord {
   id: string;
   inventoryId: string;
   sn: string;
+  condition?: CardInventory["condition"];
+  inWarranty?: boolean;
+  warrantyDate?: string;
+  fullBox?: boolean;
+  warehouseLocation?: string;
   inspector: string;
   inspectTime: string;
   exteriorCheck: "完美无瑕" | "轻微刮花" | "氧化发黄" | "挡板生锈" | "严重磕碰";
@@ -154,7 +205,8 @@ export interface PurchaseInvoice {
   sourceType: SourceType;
   supplierName: string;
   contact: string;
-  paymentMethod: "微信" | "支付宝" | "现金" | "银行卡" | "欠款";
+  expressNo?: string;
+  paymentMethod: string;
   isPaid: boolean;
   paidAmount: number;
   unpaidAmount: number;
@@ -199,6 +251,10 @@ export interface SalesInvoice {
   settlementAccountName?: string;
   paymentHandler?: string;
   paymentStatus?: "未收款" | "部分收款" | "已收款" | "已退款";
+  outboundStatus?: "待出库" | "已出库";
+  outboundTime?: string;
+  outboundHandler?: string;
+  outboundRemarks?: string;
   needInvoice: boolean;
   freeShipping: boolean;
   expressCompany?: string;
@@ -274,7 +330,16 @@ export interface CustomerCard {
   wechat: string;
   source: string;
   firstChannel?: string; // Aliases source in PartnerManager.tsx
-  type: "回收客户" | "购买客户" | "优质同行" | "散客玩家" | "售后敏感户" | "老主顾";
+  type:
+    | "个人买家客户"
+    | "个人卖家客户"
+    | "回收客户"
+    | "购买客户"
+    | "优质同行"
+    | "批发同行"
+    | "散客玩家"
+    | "售后敏感户"
+    | "老主顾";
   crmStatus?: "线索" | "跟进中" | "已成交" | "沉睡" | "流失";
   crmStage?: "新线索" | "需求确认" | "报价中" | "已成交" | "售后维护";
   level?: "普通客户" | "VIP客户" | "重点客户" | "黑名单" | "潜在客户";
@@ -334,7 +399,17 @@ export interface Vendor {
   partnerCategory?: "个人" | "同行";
   contactPerson: string;
   phone: string;
-  type: "大黄牛" | "工作室矿老板" | "数码渠道大厂" | "闲鱼同行" | "门店老熟客" | "门市散户" | "工作室大宗货源";
+  type:
+    | "收货同行"
+    | "卖货同行"
+    | "大黄牛"
+    | "工作室矿老板"
+    | "数码渠道大厂"
+    | "闲鱼同行"
+    | "门店老熟客"
+    | "门市散户"
+    | "工作室大宗货源"
+    | "批发客户";
   totalBuyAmount: number;
   totalCount: number;
   avgProfit: number;
@@ -488,6 +563,30 @@ export interface AccountTransferRecord {
   remarks?: string;
 }
 
+export type AssemblyOperationType = "拆卸" | "组装";
+
+export interface AssemblyPartRecord {
+  partName: string;
+  category: ProductCategory;
+  sn: string;
+  remarks?: string;
+}
+
+export interface AssemblyOperationRecord {
+  id: string;
+  type: AssemblyOperationType;
+  handler: string;
+  time: string;
+  beforeSn?: string;
+  beforeProductName?: string;
+  beforeParts: AssemblyPartRecord[];
+  afterSn?: string;
+  afterProductName?: string;
+  afterCategory?: ProductCategory;
+  afterParts: AssemblyPartRecord[];
+  remarks?: string;
+}
+
 export type StoreRole = "老板" | "店员" | "检测员" | "财务";
 
 export interface PermissionSettings {
@@ -504,7 +603,7 @@ export type AccountPermissionOverrides = Partial<Omit<PermissionSettings, "role"
 export interface SystemUserAccount {
   id: string;
   username: string;
-  password: string;
+  password?: string;
   displayName: string;
   role: StoreRole;
   enabled: boolean;

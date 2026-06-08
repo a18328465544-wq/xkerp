@@ -3,29 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-  TrendingUp,
   TrendingDown,
   AlertTriangle,
   Package,
-  Wrench,
-  Search,
-  CheckCircle,
-  HelpCircle,
   LineChart,
-  Grid,
   ShieldAlert,
-  ArrowRight,
   TrendingDown as PriceDropIcon,
-  Layers,
-  CircleDollarSign,
   Boxes,
-  Truck,
-  History
+  History,
+  PackageCheck,
+  ShoppingCart
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
-import { CardInventory, PermissionSettings, StoreRole } from "../types";
+import { CardInventory } from "../types";
 
 interface DashboardProps {
   storeState: useStoreStateReturn;
@@ -37,13 +29,9 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
   const {
     inventory,
     products,
-    purchaseInvoices,
     salesInvoices,
     marketQuotes,
-    aftersales,
-    vendors,
     permissions,
-    setRole
   } = storeState;
 
   const [activeChartTab, setActiveChartTab] = useState<"qty" | "revenue" | "profit">("qty");
@@ -83,7 +71,6 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
     .reduce((sum, c) => sum + ((c.salesPrice || 0) - c.costPrice), 0);
 
   // 6. 今日售后 counts
-  const todayAftersalesCount = aftersales.filter(a => a.createTime === today).length;
 
   // 7. 当前库存总数
   const totalStockCount = activeStock.length;
@@ -91,11 +78,10 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
   // 8. 当前库存总成本
   const totalStockCost = activeStock.reduce((sum, c) => sum + c.costPrice, 0);
 
-  // 9. 当前库存预估市值
+  // 9. 当前库存预估售价
   const totalStockMarket = activeStock.reduce((sum, c) => sum + c.marketPrice, 0);
 
   // 10. 本月销售总额 (Based on our simulated billing list)
-  const monthlyRevenue = salesInvoices.reduce((sum, s) => sum + s.totalAmount, 0);
 
   // 11. 本月总利润
   const monthlyProfit = salesInvoices.reduce((sum, s) => sum + s.totalProfit, 0);
@@ -104,7 +90,6 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
   const pendingTestCount = inventory.filter(c => c.status === "待检测").length;
 
   // 13. 待上架数
-  const pendingShelveCount = inventory.filter(c => c.status === "已入库").length;
 
   // 14. 极高风险库存数 (Market below cost, stock date exceeds 30, or flagged mining risk)
   const riskStockItems = activeStock.filter(
@@ -144,36 +129,35 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
     { label: "W5 (05-29)", value: monthlyProfit || 21300 }
   ];
 
-  // Market crash / Risk alert details
+  // Market and inventory risk alert details
   const costUpturnedAlerts = activeStock.filter(c => c.marketPrice < c.costPrice);
   const agedAlerts = activeStock.filter(c => c.storageDays >= 30);
   const consecutiveDropAlerts = marketQuotes.filter(q => q.changeRatio < -2.0);
 
   return (
     <div className="space-y-6">
-      {/* Upper Cockpit Greetings & System Alert Banner */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 to-indigo-950/40 p-5 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Upper overview banner */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden">
         <div>
           <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            主控数据仪表盘 <span className="text-xs font-mono font-medium text-slate-500 bg-slate-800 py-0.5 px-2 rounded-md">2026-05-29 (当前周期)</span>
+            经营概览 <span className="text-xs font-mono font-medium text-slate-500 bg-slate-800 py-0.5 px-2 rounded-md">2026-05-29</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            实时监测二手显卡单卡流失率、回收成本投入及即时价格倒灌。以“一卡一档”保证显卡流通安全及财务毛利。
+            查看今日进货、销售、库存和利润表现，快速定位需要处理的业务。
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setTab("purchase_add")}
-            className="p-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-slate-950 font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2 cursor-pointer"
+            className="p-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-xs transition-all flex items-center gap-2 cursor-pointer"
           >
-            <Layers className="w-4 h-4 text-slate-950" /> 新增进货/回收单
+            <PackageCheck className="w-4 h-4 text-white" /> 新建进货
           </button>
           <button
             onClick={() => setTab("sales_add")}
             className="p-2.5 px-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-slate-600 text-slate-200 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer"
           >
-            <CircleDollarSign className="w-4 h-4 text-cyan-400" /> 新建销售单
+            <ShoppingCart className="w-4 h-4 text-cyan-500" /> 新建销售
           </button>
         </div>
       </div>
@@ -214,18 +198,18 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
         <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
           <div className="text-slate-500 text-[11px] font-bold tracking-tight">今日营业总额</div>
           <div className="mt-2">
-            <span className="text-lg font-bold text-slate-100 font-mono">¥{todayRevenue.toLocaleString()}</span>
+            <span className="text-lg font-bold text-slate-100 font-mono">{todayRevenue.toLocaleString()}元</span>
           </div>
           <div className="text-[10px] text-slate-500 mt-1.5 font-mono">客单价良好</div>
         </div>
 
         {/* Today Gross Profit */}
         <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between relative overflow-hidden">
-          <div className="text-slate-500 text-[11px] font-bold tracking-tight">今日毛利估值</div>
+          <div className="text-slate-500 text-[11px] font-bold tracking-tight">今日毛利</div>
           <div className="mt-2 flex items-center justify-between">
             {permissions.showProfit ? (
               <span className={`text-lg font-bold font-mono ${todayProfit >= 0 ? "text-emerald-400" : "text-rose-500"}`}>
-                ¥{todayProfit.toLocaleString()}
+                {todayProfit.toLocaleString()}元
               </span>
             ) : (
               <span className="text-xs text-slate-500 font-light italic">无权查看</span>
@@ -245,7 +229,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
             <span className="text-2xl font-black text-purple-400 font-mono">{pendingTestCount}</span>
             <span className="text-[10px] text-purple-300 bg-purple-500/10 px-1 rounded">堆积中</span>
           </div>
-          <div className="text-[10px] text-slate-400 font-medium underline mt-1">前往工作台检测 &rarr;</div>
+          <div className="text-[10px] text-slate-400 font-medium underline mt-1">查看检测任务 &rarr;</div>
         </div>
 
         {/* Risk Items */}
@@ -269,7 +253,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
         {permissions.showCost ? (
           <div>
             <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider block">仓库存留总成本</span>
-            <span className="text-slate-200 text-lg font-mono font-bold block mt-1">¥{totalStockCost.toLocaleString()}</span>
+            <span className="text-slate-200 text-lg font-mono font-bold block mt-1">{totalStockCost.toLocaleString()}元</span>
           </div>
         ) : (
           <div>
@@ -278,14 +262,14 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
           </div>
         )}
         <div>
-          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider block">在库预估总市值</span>
-          <span className="text-slate-200 text-lg font-mono font-bold block mt-1">¥{totalStockMarket.toLocaleString()}</span>
+          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider block">在库预估售价</span>
+          <span className="text-slate-200 text-lg font-mono font-bold block mt-1">{totalStockMarket.toLocaleString()}元</span>
         </div>
         {permissions.showCost && (
           <div>
-            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider block">在库差价预估利润</span>
+            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider block">库存预估毛利</span>
             <span className={`text-lg font-mono font-bold block mt-1 ${totalStockMarket - totalStockCost >= 0 ? "text-emerald-400" : "text-rose-500"}`}>
-              ¥{(totalStockMarket - totalStockCost).toLocaleString()}
+              {(totalStockMarket - totalStockCost).toLocaleString()}元
             </span>
           </div>
         )}
@@ -293,15 +277,15 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
 
       {/* MID SECTION: CHARTS BLOCK & PRICE DROPS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* CHART CONTAINER COCKPIT */}
+        {/* CHART CONTAINER */}
         <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative flex flex-col justify-between">
           <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
                 <LineChart className="w-4 h-4 text-cyan-400" />
-                <span>流转数据走势图</span>
+                <span>业务流转趋势</span>
               </h3>
-              <p className="text-[10px] text-slate-500 font-medium">智能模拟系统，一卡一档真实流转反馈</p>
+              <p className="text-[10px] text-slate-500 font-medium">按日查看进货、回收、销售和利润变化。</p>
             </div>
             {/* Chart switcher */}
             <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
@@ -328,7 +312,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                     activeChartTab === "profit" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  30日利润估值
+                  30日毛利
                 </button>
               )}
             </div>
@@ -399,7 +383,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                   </div>
                   <div className="flex items-center gap-1 text-indigo-400">
                     <span className="w-2.5 h-1.5 bg-indigo-500 rounded-sm"></span>
-                    <span>同行进货量 (模拟折线)</span>
+                    <span>同行进货量</span>
                   </div>
                   <div className="flex items-center gap-1 text-emerald-400">
                     <span className="w-2.5 h-1.5 bg-emerald-400 rounded-sm"></span>
@@ -474,7 +458,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                   ))}
                 </div>
                 <div className="text-center font-mono text-[9px] text-emerald-400 mt-2">
-                  本期总利润: ¥{monthlyProfit.toLocaleString()} (店保溢出损耗已扣除)
+                  本期毛利: {monthlyProfit.toLocaleString()}元 (已扣除售后损耗)
                 </div>
               </div>
             )}
@@ -496,16 +480,16 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
           </div>
         </div>
 
-        {/* CONTINGENCY AND RISK WARNING COCKPIT */}
+        {/* CONTINGENCY AND RISK WARNING */}
         <div className="bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3.5">
               <h3 className="text-xs font-bold text-slate-100 flex items-center gap-1.5 tracking-wider uppercase">
                 <ShieldAlert className="w-4 h-4 text-rose-500" />
-                <span>实机门店质监 & 价格告警</span>
+                <span>库存与价格提醒</span>
               </h3>
               <span className="text-[9px] bg-rose-500/10 text-rose-400 px-2 py-0.5 border border-rose-500/20 rounded font-bold">
-                {costUpturnedAlerts.length + agedAlerts.length + (pendingTestCount > 2 ? 1 : 0)} 颗地雷
+                {costUpturnedAlerts.length + agedAlerts.length + (pendingTestCount > 2 ? 1 : 0)} 项风险
               </span>
             </div>
 
@@ -534,7 +518,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                       <span className="text-xs font-bold text-rose-300 flex items-center justify-between gap-1">
                         <span>成本价倒挂警告</span>
                         <span className="font-mono bg-rose-500/10 px-1 border border-rose-500/20 text-[9px] text-rose-300 rounded font-normal">
-                          溢损: -¥{card.costPrice - card.marketPrice}
+                          倒挂: -{card.costPrice - card.marketPrice}元
                         </span>
                       </span>
                       <span className="text-[10px] text-slate-300 font-semibold block mt-0.5">
@@ -543,7 +527,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                       <span className="text-[9px] text-slate-400 block mt-1 font-mono">
                         档案号: {card.id} | SN: {card.sn}
                         <br />
-                        拿货价: ¥{card.costPrice} | 当日回收市估价: ¥{card.marketPrice}
+                        拿货价: {card.costPrice}元 | 当前回收参考价: {card.marketPrice}元
                       </span>
                       <button
                         onClick={() => onSelectCardDetail?.(card)}
@@ -574,7 +558,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                       <span className="text-[9px] text-slate-400 block mt-0.5 font-mono">
                         入库日期: {card.entryTime} (位置: {card.warehouseLocation})
                         <br />
-                        成本积压资金: ¥{card.costPrice}
+                        成本积压资金: {card.costPrice}元
                       </span>
                       <span className="text-[10px] text-slate-400 italic block mt-1">
                         提示: 显卡价格具有快速贬值特性，建议降价出给同行。
@@ -591,11 +575,11 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                     <TrendingDown className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                     <div>
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                        <span>大盘连续下跌型号</span>
+                        <span>回收价下调型号</span>
                         <span className="text-[9px] bg-red-500/20 text-red-400 rounded px-1">{q.changeRatio}%</span>
                       </span>
                       <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
-                        {q.productName} 今日跌 ¥{Math.abs(q.changeAmount)}。建议谨慎高位回收此规格!
+                        {q.productName} 今日回收参考价下调 {Math.abs(q.changeAmount)}元。建议谨慎高位回收此规格。
                       </span>
                     </div>
                   </div>
@@ -642,7 +626,7 @@ export default function Dashboard({ storeState, setTab, onSelectCardDetail }: Da
                     ></div>
                   </div>
                   <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
-                    <span>回收参考: ¥{p.refBuyPrice}</span>
+                    <span>回收参考: {p.refBuyPrice}元</span>
                     <span>上期调拨: {p.lastDealTime || "无最近成交"}</span>
                   </div>
                 </div>

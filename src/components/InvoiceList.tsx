@@ -3,15 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   FileText,
   Search,
   Printer,
   X,
-  Save
+  Save,
+  ArrowUpDown,
+  Eye,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import { useStoreStateReturn } from "../utils/state";
+import { getLockedHandlerFieldState } from "../utils/sessionUser";
 import { PurchaseInvoice, SalesInvoice } from "../types";
 
 interface InvoiceListProps {
@@ -20,27 +25,88 @@ interface InvoiceListProps {
 }
 
 export default function InvoiceList({ storeState, type }: InvoiceListProps) {
-  const { purchaseInvoices, salesInvoices, permissions, updatePurchaseInvoice, updateSalesInvoice } = storeState;
+  const { purchaseInvoices, salesInvoices, inventory, permissions, updatePurchaseInvoice, updateSalesInvoice, deletePurchaseInvoice, deleteSalesInvoice, currentRole, currentUser } = storeState;
+  const lockedHandlerState = getLockedHandlerFieldState(currentUser, currentRole);
+  const defaultHandlerName = lockedHandlerState.value;
 
   // Search local state
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<"date" | "no" | "party" | "amount" | "status">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [focusedInvoice, setFocusedInvoice] = useState<any | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
 
+  const getInvoiceNo = (invoice: PurchaseInvoice | SalesInvoice) => invoice.invoiceNo || invoice.id;
+  const getPartyName = (invoice: PurchaseInvoice | SalesInvoice) =>
+    type === "purchase" ? (invoice as PurchaseInvoice).supplierName : (invoice as SalesInvoice).customerName;
+  const getTotalAmount = (invoice: PurchaseInvoice | SalesInvoice) =>
+    type === "purchase"
+      ? invoice.items.reduce((acc: number, item: any) => acc + (Number(item.buyPrice) || 0), 0)
+      : invoice.items.reduce((acc: number, item: any) => acc + (Number(item.sellPrice) || 0), 0);
+  const getPaymentStatus = (invoice: PurchaseInvoice | SalesInvoice) =>
+    invoice.paymentStatus || (invoice.isPaid ? (type === "purchase" ? "已付款" : "已收款") : "部分未清");
+  const getItemSummary = (invoice: PurchaseInvoice | SalesInvoice) =>
+    invoice.items
+      .map((item: any) => {
+        const price = type === "purchase" ? item.buyPrice : item.sellPrice;
+        return `${item.productName || item.model || "未命名商品"}(1: ${Number(price || 0).toLocaleString()}元)`;
+      })
+      .join("，");
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortDirection(prev => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection("desc");
+  };
+
   // Compute lists
   const dataList = useMemo(() => {
-    if (type === "purchase") {
-      return [...purchaseInvoices].reverse().filter(p =>
-        p.id.toLowerCase().includes(search.toLowerCase()) ||
-        p.supplierName.toLowerCase().includes(search.toLowerCase())
-      );
-    } else {
-      return [...salesInvoices].reverse().filter(s =>
-        s.id.toLowerCase().includes(search.toLowerCase()) ||
-        s.customerName.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-  }, [purchaseInvoices, salesInvoices, type, search]);
+    const keyword = search.trim().toLowerCase();
+    const list = type === "purchase" ? [...purchaseInvoices] : [...salesInvoices];
+    const filtered = list.filter(invoice => {
+      const invoiceNo = getInvoiceNo(invoice).toLowerCase();
+      const partyName = getPartyName(invoice).toLowerCase();
+      const itemText = getItemSummary(invoice).toLowerCase();
+      const status = getPaymentStatus(invoice);
+      const matchKeyword =
+        !keyword ||
+        invoiceNo.includes(keyword) ||
+        invoice.id.toLowerCase().includes(keyword) ||
+        partyName.includes(keyword) ||
+        itemText.includes(keyword);
+      const matchStatus = statusFilter === "all" || status === statusFilter;
+      return matchKeyword && matchStatus;
+    });
+
+    filtered.sort((a, b) => {
+      const direction = sortDirection === "asc" ? 1 : -1;
+      let av: string | number = "";
+      let bv: string | number = "";
+      if (sortKey === "date") {
+        av = a.date || "";
+        bv = b.date || "";
+      } else if (sortKey === "no") {
+        av = getInvoiceNo(a);
+        bv = getInvoiceNo(b);
+      } else if (sortKey === "party") {
+        av = getPartyName(a);
+        bv = getPartyName(b);
+      } else if (sortKey === "amount") {
+        av = getTotalAmount(a);
+        bv = getTotalAmount(b);
+      } else {
+        av = getPaymentStatus(a);
+        bv = getPaymentStatus(b);
+      }
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * direction;
+      return String(av).localeCompare(String(bv), "zh-Hans-CN") * direction;
+    });
+
+    return filtered;
+  }, [purchaseInvoices, salesInvoices, type, search, statusFilter, sortKey, sortDirection]);
 
   const handlePrintSlip = (invoice: any) => {
     alert(`📄 凭单打印指令发送成功！\n---------------\n类型: ${type === "purchase" ? "进货确认单" : "销售出库单"}\n单号: ${invoice.id}\n对手方: ${type === "purchase" ? invoice.supplierName : invoice.customerName}\n总计数量: ${invoice.items.length} 张单卡\n结算状态: ${invoice.isPaid ? "已结清" : "带部分欠款"}`);
@@ -48,6 +114,22 @@ export default function InvoiceList({ storeState, type }: InvoiceListProps) {
 
   const openEdit = (invoice: any) => {
     setEditingInvoice(JSON.parse(JSON.stringify(invoice)));
+  };
+
+  const handleDeleteInvoice = (invoice: PurchaseInvoice | SalesInvoice) => {
+    const invoiceNo = getInvoiceNo(invoice);
+    const label = type === "purchase" ? "进货单" : "销售单";
+    if (!window.confirm(`确认删除${label} ${invoiceNo}？\n已入库进货单、已出库销售单会被系统阻止删除。`)) return;
+    try {
+      if (type === "purchase") {
+        deletePurchaseInvoice(invoice.id);
+      } else {
+        deleteSalesInvoice(invoice.id);
+      }
+      alert(`${label}已删除。`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "删除失败，请稍后再试。");
+    }
   };
 
   const updateEditingField = (key: string, value: any) => {
@@ -77,6 +159,8 @@ export default function InvoiceList({ storeState, type }: InvoiceListProps) {
     });
     const updates = {
       ...editingInvoice,
+      handleBy: defaultHandlerName,
+      paymentHandler: defaultHandlerName,
       paidAmount: Number(editingInvoice.paidAmount) || 0,
       unpaidAmount: Number(editingInvoice.unpaidAmount) || 0,
       items,
@@ -90,106 +174,202 @@ export default function InvoiceList({ storeState, type }: InvoiceListProps) {
     alert("单据已更新。");
   };
 
+  const statusOptions = type === "purchase"
+    ? ["未付款", "部分付款", "已付款", "已退款"]
+    : ["未收款", "部分收款", "已收款", "已退款"];
+
+  const renderSortHeader = (key: typeof sortKey, label: string, className = "") => (
+    <button
+      type="button"
+      onClick={() => toggleSort(key)}
+      className={`w-full flex items-center gap-1.5 font-bold text-slate-600 hover:text-blue-600 ${className}`}
+    >
+      <span>{label}</span>
+      <ArrowUpDown className={`w-3.5 h-3.5 ${sortKey === key ? "text-blue-600" : "text-slate-400"}`} />
+    </button>
+  );
+
   return (
     <div className="space-y-4">
       {/* Top action details */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-xl">
-        <h3 className="text-xs font-bold text-slate-100 uppercase tracking-widest flex items-center gap-1.5 font-mono">
-          <FileText className="w-4 h-4 text-cyan-400" />
-          <span>已入账历史{type === "purchase" ? "货品采购单" : "客户销售明细"}柜 ({dataList.length} 笔)</span>
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-blue-600" />
+          <span>{type === "purchase" ? "进货单据" : "销售单据"} ({dataList.length} 笔)</span>
         </h3>
 
         {/* Local Search bar */}
-        <div className="relative w-full sm:w-80">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-2 w-full xl:w-[620px]">
+        <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-500" />
           <input
             type="text"
-            placeholder={type === "purchase" ? "搜供货商名称、单号..." : "搜销售买家尊称、销售合同号..."}
+            placeholder={type === "purchase" ? "搜供应商、单号、商品..." : "搜客户、单号、商品..."}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 pl-8.5 pr-3 py-2.5 placeholder-slate-550 focus:outline-none focus:border-cyan-500"
+            className="w-full h-10 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 pl-8.5 pr-3 placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />
+        </div>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="h-10 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 px-3 focus:outline-none focus:border-blue-500"
+          >
+            <option value="all">全部状态</option>
+            {statusOptions.map(status => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* MATRIX RECORDS ROWS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dataList.length === 0 ? (
-          <div className="md:col-span-3 p-12 text-center text-slate-550 italic text-xs font-mono">
-            暂无符合条件的历史单据。
-          </div>
-        ) : (
-          dataList.map(invoice => {
-            const itemCount = invoice.items.length;
-            const sumPrice = type === "purchase" 
-              ? invoice.items.reduce((acc: number, item: any) => acc + item.buyPrice, 0)
-              : invoice.items.reduce((acc: number, item: any) => acc + item.sellPrice, 0);
+      {/* TABLE RECORDS */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1180px] border-collapse text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr className="text-left">
+                <th className="px-4 py-3 w-[130px] border-r border-slate-200">{renderSortHeader("date", "单据日期")}</th>
+                <th className="px-4 py-3 w-[180px] border-r border-slate-200">{renderSortHeader("no", "单据编号")}</th>
+                <th className="px-4 py-3 w-[160px] border-r border-slate-200">{renderSortHeader("party", type === "purchase" ? "供应商" : "客户")}</th>
+                <th className="px-4 py-3 min-w-[360px] border-r border-slate-200">
+                  <div className="font-bold text-slate-600">{type === "purchase" ? "进货商品（按明细）" : "销售商品（按明细）"}</div>
+                </th>
+                <th className="px-4 py-3 w-[110px] border-r border-slate-200 text-right">{renderSortHeader("amount", "单据金额", "justify-end")}</th>
+                <th className="px-4 py-3 w-[110px] border-r border-slate-200 text-right">
+                  <div className="font-bold text-slate-600">已{type === "purchase" ? "付" : "收"}</div>
+                </th>
+                <th className="px-4 py-3 w-[110px] border-r border-slate-200 text-right">
+                  <div className="font-bold text-slate-600">未{type === "purchase" ? "付" : "收"}</div>
+                </th>
+                <th className="px-4 py-3 w-[120px] border-r border-slate-200">{renderSortHeader("status", "状态")}</th>
+                <th className="px-4 py-3 w-[130px] border-r border-slate-200">
+                  <div className="font-bold text-slate-600">经办人</div>
+                </th>
+                <th className="px-4 py-3 w-[170px] text-right">
+                  <div className="font-bold text-slate-600">操作</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {dataList.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-14 text-center text-slate-500">
+                    暂无符合条件的历史单据。
+                  </td>
+                </tr>
+              ) : (
+                dataList.map(invoice => {
+                  const invoiceNo = getInvoiceNo(invoice);
+                  const partyName = getPartyName(invoice);
+                  const sumPrice = getTotalAmount(invoice);
+                  const status = getPaymentStatus(invoice);
+                  const itemSummary = getItemSummary(invoice);
+                  const paidAmount = Number(invoice.paidAmount || 0);
+                  const unpaidAmount = Number(invoice.unpaidAmount || 0);
+                  const statusClass = status.includes("已") && !status.includes("未")
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : status.includes("退款")
+                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200";
+                  const outboundStatus = type === "sales"
+                    ? ((invoice as SalesInvoice).outboundStatus || (((invoice as SalesInvoice).items.length > 0 && (invoice as SalesInvoice).items.every(item => inventory.find(card => card.id === item.inventoryId)?.status === "已售出")) ? "已出库" : "待出库"))
+                    : "";
 
-            return (
-              <div
-                key={invoice.id}
-                className="bg-slate-900 border border-slate-800 rounded-xl p-4.5 space-y-3.5 shadow-md hover:border-slate-700 transition-colors"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-mono block">单据编号</span>
-                    <span className="text-xs font-black text-slate-100 font-mono block mt-0.5">{invoice.id}</span>
-                  </div>
-
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                    invoice.isPaid ? "bg-emerald-500/10 text-emerald-405" : "bg-amber-500/10 text-amber-500"
-                  }`}>
-                    {invoice.isPaid ? "资金已讫" : "未清尾账"}
-                  </span>
-                </div>
-
-                <div className="text-xs space-y-1 bg-slate-950 p-2.5 rounded border border-slate-855">
-                  <div className="flex justify-between leading-normal text-slate-400">
-                    <span>对手实体:</span>
-                    <span className="text-slate-200 font-bold max-w-[120px] truncate" title={type === "purchase" ? invoice.supplierName : invoice.customerName}>
-                      {type === "purchase" ? invoice.supplierName : invoice.customerName}
-                    </span>
-                  </div>
-                  <div className="flex justify-between leading-normal text-slate-400">
-                    <span>总计流量:</span>
-                    <span className="text-slate-100 font-bold font-mono">{itemCount} 张单卡</span>
-                  </div>
-                  <div className="flex justify-between leading-normal text-slate-400">
-                    <span>单据总额:</span>
-                    <span className="text-cyan-400 font-black font-mono">
-                      ¥{sumPrice.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                  <span>入账日期: {invoice.date}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => openEdit(invoice)}
-                      className="text-amber-300 hover:underline font-bold font-sans cursor-pointer"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      onClick={() => setFocusedInvoice(invoice)}
-                      className="text-cyan-451 hover:underline font-bold font-sans cursor-pointer"
-                    >
-                      详细
-                    </button>
-                    <button
-                      onClick={() => handlePrintSlip(invoice)}
-                      title="快速打印凭根纸条"
-                      className="text-slate-400 hover:text-cyan-400 cursor-pointer"
-                    >
-                      <Printer className="w-3.5 h-3.5 inline" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
+                  return (
+                    <tr key={invoice.id} className="hover:bg-blue-50/40 transition-colors">
+                      <td className="px-4 py-3 border-r border-slate-100 text-slate-600 font-mono whitespace-nowrap">{invoice.date}</td>
+                      <td className="px-4 py-3 border-r border-slate-100 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setFocusedInvoice(invoice)}
+                          className="text-blue-600 hover:text-blue-700 hover:underline font-mono font-semibold"
+                        >
+                          {invoiceNo}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100 text-slate-700 font-semibold truncate max-w-[160px]" title={partyName}>
+                        {partyName || "未填写"}
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100">
+                        <div className="text-slate-700 truncate" title={itemSummary}>
+                          {itemSummary || "无明细"}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1">{invoice.items.length} 条明细</div>
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                        {sumPrice.toLocaleString()}元
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100 text-right font-mono text-emerald-700 whitespace-nowrap">
+                        {paidAmount.toLocaleString()}元
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100 text-right font-mono text-amber-700 whitespace-nowrap">
+                        {unpaidAmount.toLocaleString()}元
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100 whitespace-nowrap">
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex px-2 py-1 rounded-md border text-xs font-bold ${statusClass}`}>
+                            {status}
+                          </span>
+                          {type === "sales" && (
+                            <span className={`inline-flex px-2 py-1 rounded-md border text-xs font-bold ${
+                              outboundStatus === "已出库" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}>
+                              {outboundStatus}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 border-r border-slate-100 text-slate-600 truncate max-w-[130px]" title={invoice.handleBy || invoice.paymentHandler || ""}>
+                        {invoice.handleBy || invoice.paymentHandler || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setFocusedInvoice(invoice)}
+                            title="查看详情"
+                            className="w-8 h-8 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 inline-flex items-center justify-center"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(invoice)}
+                            title="编辑单据"
+                            className="w-8 h-8 rounded-lg border border-slate-200 hover:border-amber-300 hover:bg-amber-50 text-slate-500 hover:text-amber-600 inline-flex items-center justify-center"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintSlip(invoice)}
+                            title="打印凭单"
+                            className="w-8 h-8 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-500 hover:text-slate-700 inline-flex items-center justify-center"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInvoice(invoice)}
+                            title="删除单据"
+                            className="w-8 h-8 rounded-lg border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-500 hover:text-rose-600 inline-flex items-center justify-center"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs text-slate-500 flex justify-between">
+          <span>共 {dataList.length} 笔单据</span>
+          <span>可横向滚动查看完整明细</span>
+        </div>
       </div>
 
       {/* DETAIL DRAWER / POPUP FOR A SINGLE INVOICE */}
@@ -226,7 +406,7 @@ export default function InvoiceList({ storeState, type }: InvoiceListProps) {
                 <div>
                   <span className="text-slate-500 block">支付通道 / 已付款款项</span>
                   <span className="text-white block mt-1 font-sans">
-                    {focusedInvoice.paymentMethod}支付 | {focusedInvoice.isPaid ? "全额结清" : `欠款 ¥${focusedInvoice.unpaidAmount}`}
+                    {focusedInvoice.paymentMethod}支付 | {focusedInvoice.isPaid ? "全额结清" : `欠款 ${focusedInvoice.unpaidAmount}元`}
                   </span>
                 </div>
                 <div>
@@ -253,11 +433,11 @@ export default function InvoiceList({ storeState, type }: InvoiceListProps) {
                       </div>
                       <div className="text-right">
                         <span className="font-bold text-slate-100 block">
-                          ¥{type === "purchase" ? it.buyPrice : it.sellPrice}
+                          {type === "purchase" ? it.buyPrice : it.sellPrice}元
                         </span>
                         {type === "sales" && permissions.showProfit && (
                           <span className="text-[9px] text-emerald-400 bg-emerald-900/20 px-1 rounded block mt-1 leading-none py-0.5">
-                            盈 ¥{it.sellPrice - it.costPrice}
+                            盈 {it.sellPrice - it.costPrice}元
                           </span>
                         )}
                       </div>
@@ -323,7 +503,7 @@ export default function InvoiceList({ storeState, type }: InvoiceListProps) {
                 <input value={editingInvoice.paymentMethod || ""} onChange={e => updateEditingField("paymentMethod", e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="收付款方式" />
                 <input type="number" value={editingInvoice.paidAmount || 0} onChange={e => updateEditingField("paidAmount", Number(e.target.value))} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="已付/已收" />
                 <input type="number" value={editingInvoice.unpaidAmount || 0} onChange={e => updateEditingField("unpaidAmount", Number(e.target.value))} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="未付/未收" />
-                <input value={editingInvoice.handleBy || ""} onChange={e => updateEditingField("handleBy", e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="经办人" />
+                <input value={defaultHandlerName} readOnly={lockedHandlerState.readOnly} disabled={lockedHandlerState.disabled} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded cursor-not-allowed opacity-80" placeholder="经办人" />
                 <input value={editingInvoice.remarks || ""} onChange={e => updateEditingField("remarks", e.target.value)} className="bg-slate-950 border border-slate-800 text-xs text-slate-200 p-2.5 rounded" placeholder="备注" />
               </div>
 
