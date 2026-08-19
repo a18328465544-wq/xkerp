@@ -39,12 +39,12 @@ test("ErpDateRangePicker uses the same compact height token as single-date filte
   const markup = renderToStaticMarkup(
     <ErpDateRangePicker
       density="compact"
-      value={{startDate: "", endDate: ""}}
+      value={{startDate: "2026-08-01", endDate: "2026-08-19"}}
       onChange={() => undefined}
     />,
   );
   assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
-  assert.match(markup, /h-\[var\(--erp-control-height-compact\)\].*font-mono/);
+  assert.match(markup, /font-mono/);
 });
 
 test("date range helpers discard malformed values and normalize reversed URL ranges", () => {

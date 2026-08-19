@@ -14,6 +14,8 @@ test("compact page headers keep explanatory subtitles out of the first screen", 
 test("default page headers preserve safety and decision context when opted in", () => {
   const markup = renderToStaticMarkup(<ErpPageHeader density="default" title="销售出库" subtitle="扫码核验完成后才会扣减库存。" />);
   assert.match(markup, /data-density="default"/);
+  assert.match(markup, /data-erp-region="page-topbar"/);
+  assert.match(markup, /data-erp-region="page-identity"/);
   assert.match(markup, /扫码核验完成后才会扣减库存/);
   const withoutSubtitle = renderToStaticMarkup(<ErpPageHeader density="default" title="销售出库" />);
   assert.match(withoutSubtitle, /erp-annotation-slot/);

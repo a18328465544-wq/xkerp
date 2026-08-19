@@ -1,5 +1,6 @@
 import type { AppState } from "./store.ts";
 import { storeDate } from "../src/utils/storeTime.ts";
+import { ValidationError } from "./errors.ts";
 
 // Server-side CSV export. Cost/profit columns are gated by the showCost permission so that
 // a seller without cost visibility cannot exfiltrate margins through the export endpoint.
@@ -38,7 +39,7 @@ function exportFilename(name: string) {
 
 export function buildExport(state: AppState, dataset: string, options: ExportOptions): { filename: string; csv: string } {
   if (!isExportDataset(dataset)) {
-    throw new Error(`不支持的导出数据集: ${dataset}`);
+    throw new ValidationError(`不支持的导出数据集: ${dataset}`);
   }
   const stamp = storeDate();
   const { showCost } = options;

@@ -4,7 +4,7 @@ import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-tab
 import {Banknote, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search, ShoppingCart, Truck} from "lucide-react";
 import {useCallback, useMemo, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageError, ErpPageHeader, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {queryKeys, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -93,15 +93,15 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   };
   const updateFilters = (patch: Partial<SalesListFilters>) => commitFilters({...filters, ...patch, page: 1});
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", status: activeFilterCount ? "info" : "neutral"},
-    {icon: <Truck className="h-4 w-4" />, label: "待出库", value: `${selection.summary.pendingOutboundCount} 单`, description: "等待仓库绑定 SN", status: selection.summary.pendingOutboundCount ? "warning" : "success"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "按账号权限裁剪", status: session.permissions.showProfit ? "success" : "neutral"},
+    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", tone: activeFilterCount ? "info" : "neutral"},
+    {icon: <Truck className="h-4 w-4" />, label: "待出库", value: `${selection.summary.pendingOutboundCount} 单`, description: "等待仓库绑定 SN", tone: selection.summary.pendingOutboundCount ? "warning" : "success"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "按账号权限裁剪", tone: session.permissions.showProfit ? "success" : "neutral"},
   ];
 
   return <>
     <ErpListPageFrame>
       <ErpPageHeader title="销售单据" subtitle="查看销售客户、成交金额、收款状态和出库进度。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>{canCreate && <Button type="button" size="sm" variant="primary" onClick={onCreate}><Plus className="h-4 w-4" />新建销售单</Button>}</>} />
-
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <MetricsRegion>
         <MetricCard label="销售单数" value={`${selection.summary.orderCount} 单`} detail="按当前筛选" icon={<FileText className="h-4 w-4" />} />
         <MetricCard label="销售金额" value={formatCurrency(selection.summary.totalAmount)} detail="当前筛选汇总" icon={<ShoppingCart className="h-4 w-4" />} />
@@ -125,6 +125,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
       </div>
 
       <ErpDataTable columns={columns} data={selection.data} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="销售单据加载失败" emptyTitle="暂无销售单据" emptyDescription={activeFilterCount ? "当前筛选条件没有匹配的销售单。" : "服务器当前没有返回销售单据。"} onRetry={() => void query.refetch()} onRowClick={openDetail} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={selection.meta.page} pageSize={selection.meta.pageSize} total={selection.meta.total} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader />
+      </ErpPageContent>
     </ErpListPageFrame>
 
     <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要">

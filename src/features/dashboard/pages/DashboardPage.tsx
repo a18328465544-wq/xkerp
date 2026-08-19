@@ -4,7 +4,7 @@ import {lazy, Suspense, useEffect, useMemo, useState, type ReactNode} from "reac
 import {toast} from "sonner";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, ChartMeta} from "@/src/components/ui";
-import {BottomRegion, DashboardSection, DashboardShell, ErpEmptyState, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {BottomRegion, DashboardSection, DashboardShell, ErpEmptyState, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {aiApi, queryKeys, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -89,19 +89,20 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
   const greeting = currentHour < 11 ? "早上好" : currentHour < 14 ? "中午好" : currentHour < 19 ? "下午好" : "晚上好";
   const pendingTotal = stats.pendingInbound + stats.pendingOutbound + stats.unpaidOrders + stats.pendingReturns;
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ClipboardList className="h-4 w-4" />, label: "今日必须处理", value: `${pendingTotal} 项`, description: "待跟进事项", status: pendingTotal ? "danger" : "success", onClick: () => navigate({to: "/sales"})},
-    {icon: <PackageCheck className="h-4 w-4" />, label: "待扫码入库", value: `${stats.pendingInbound} 张`, description: "检测前库存", status: stats.pendingInbound ? "warning" : "success", onClick: () => navigate({to: "/inventory"})},
-    {icon: <Warehouse className="h-4 w-4" />, label: "待扫码出库", value: `${stats.pendingOutbound} 张`, description: "销售单待出库", status: stats.pendingOutbound ? "warning" : "success", onClick: () => navigate({to: "/sales/outbound"})},
-    {icon: <XCircle className="h-4 w-4" />, label: "异常订单", value: `${stats.unpaidOrders + stats.pendingReturns} 项`, description: "欠款或退货待跟进", status: stats.unpaidOrders + stats.pendingReturns ? "danger" : "success", onClick: () => navigate({to: "/sales"})},
+    {icon: <ClipboardList className="h-4 w-4" />, label: "今日必须处理", value: `${pendingTotal} 项`, description: "待跟进事项", tone: pendingTotal ? "danger" : "success", action: () => navigate({to: "/sales"})},
+    {icon: <PackageCheck className="h-4 w-4" />, label: "待扫码入库", value: `${stats.pendingInbound} 张`, description: "检测前库存", tone: stats.pendingInbound ? "warning" : "success", action: () => navigate({to: "/inventory"})},
+    {icon: <Warehouse className="h-4 w-4" />, label: "待扫码出库", value: `${stats.pendingOutbound} 张`, description: "销售单待出库", tone: stats.pendingOutbound ? "warning" : "success", action: () => navigate({to: "/sales/outbound"})},
+    {icon: <XCircle className="h-4 w-4" />, label: "异常订单", value: `${stats.unpaidOrders + stats.pendingReturns} 项`, description: "欠款或退货待跟进", tone: stats.unpaidOrders + stats.pendingReturns ? "danger" : "success", action: () => navigate({to: "/sales"})},
   ];
   return <DashboardShell>
     <ErpPageHeader title={`${greeting}，${session.user.displayName || "老板"}`} subtitle="专注经营每一天，让数据驱动增长" quickStatus={quickStatus} dateContent={<span className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs text-[var(--erp-color-text-secondary)]"><CalendarDays className="h-4 w-4" />{today}</span>} actions={<Button variant="secondary" size="sm" onClick={onRefresh}><RefreshCw className="h-4 w-4" />刷新</Button>} />
-    <MetricsRegion>
+    <ErpPageContent className="space-y-[var(--erp-page-gap-comfortable)]">
+      <MetricsRegion>
       <MetricCard label="今日营业额" value={formatCurrency(stats.todayRevenue)} compare={stats.revenueChange} icon={<TrendingUp className="h-4 w-4" />} tone="blue" />
       <MetricCard label="今日利润" value={canSeeProfit ? formatCurrency(stats.todayProfit) : "无权查看"} compare={canSeeProfit ? profitChange : null} icon={<ArrowUpRight className="h-4 w-4" />} tone="green" detail={canSeeProfit ? `昨日 ${formatCurrency(stats.yesterdayProfit)}` : "利润权限受限"} />
       <MetricCard label="待处理事项" value={String(pendingTotal)} compare={null} icon={<ClipboardList className="h-4 w-4" />} tone="amber" detail={`入库 ${stats.pendingInbound} · 出库 ${stats.pendingOutbound}`} />
       <MetricCard label="库存总价值" value={canSeeProfit ? formatCurrency(stats.inventoryValue) : "无权查看"} compare={null} icon={<Boxes className="h-4 w-4" />} tone="blue" detail={`${stats.activeInventoryCount} 件在库`} />
-    </MetricsRegion>
+      </MetricsRegion>
     <MainRegion variant="70-30">
       <MainRegion.Primary className="space-y-5">
         <DashboardSection title="经营趋势" description="销售额与销售毛利的近 7 天变化" actions={<Link to="/finance/profit" className="text-xs font-semibold text-[var(--erp-color-primary)]">查看利润分析 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
@@ -122,7 +123,8 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
         </DashboardSection>
       </MainRegion.Secondary>
     </MainRegion>
-    <BottomRegion><DashboardSection title="快捷操作" description="常用业务入口"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><QuickAction to="/sales/new" label="新建销售单" icon={<ClipboardList className="h-4 w-4" />} /><QuickAction to="/purchase/new" label="新建采购单" icon={<PackageCheck className="h-4 w-4" />} /><QuickAction to="/inventory" label="查询库存" icon={<Warehouse className="h-4 w-4" />} /><QuickAction to="/crm" label="客户管理" icon={<Boxes className="h-4 w-4" />} /></div></DashboardSection></BottomRegion>
+      <BottomRegion><DashboardSection title="快捷操作" description="常用业务入口"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><QuickAction to="/sales/new" label="新建销售单" icon={<ClipboardList className="h-4 w-4" />} /><QuickAction to="/purchase/new" label="新建采购单" icon={<PackageCheck className="h-4 w-4" />} /><QuickAction to="/inventory" label="查询库存" icon={<Warehouse className="h-4 w-4" />} /><QuickAction to="/crm" label="客户管理" icon={<Boxes className="h-4 w-4" />} /></div></DashboardSection></BottomRegion>
+    </ErpPageContent>
   </DashboardShell>;
 }
 

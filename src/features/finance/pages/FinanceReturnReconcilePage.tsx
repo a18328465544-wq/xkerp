@@ -273,7 +273,7 @@ function FinanceReturnReconcileContent({
       label: "待对账",
       value: `${filtered.filter((item) => item.status === "待处理").length} 单`,
       description: "销售与进货退货",
-      status: filtered.some((item) => item.status === "待处理")
+      tone: filtered.some((item) => item.status === "待处理")
         ? "warning"
         : "success",
     },
@@ -282,7 +282,7 @@ function FinanceReturnReconcileContent({
       label: "筛选结果",
       value: `${filtered.length} 条`,
       description: "当前条件匹配",
-      status: "info",
+      tone: "info",
     },
   ];
   return (

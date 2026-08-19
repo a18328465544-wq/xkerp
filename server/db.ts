@@ -7,17 +7,17 @@ import { hashPassword, isPasswordHash, type PersistedSession, type SessionStore 
 import type { DailyClosing, SystemUserAccount } from "../src/types.ts";
 import { storeDateAfterDays } from "../src/utils/storeTime.ts";
 import { applyCrmFoundationSchema } from "./crmSchema.ts";
+import { createResilientQueue } from "./resilientQueue.ts";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const LEGACY_DATA_FILE = path.join(DATA_DIR, "app-state.json");
 const BACKUP_DIR = path.join(DATA_DIR, "backups");
 
-const DATABASE_URL = process.env.DATABASE_URL;
 const LEGACY_IMPORT_ENABLED = process.env.POSTGRES_IMPORT_LEGACY_JSON !== "false";
 
 let pool: Pool | null = null;
 let initialized = false;
-let saveQueue = Promise.resolve();
+const enqueueStateSave = createResilientQueue();
 let processWriteLockDepth = 0;
 
 const STATE_WRITE_LOCK_KEY = "gpu_erp_state_write";
@@ -321,11 +321,33 @@ async function applySchemaComments(client: PoolClient) {
   }
 }
 
-function requireDatabaseUrl() {
-  if (!DATABASE_URL) {
-    throw new Error("缺少 DATABASE_URL，系统已切换为 PostgreSQL 存储，请先配置 PostgreSQL 连接字符串。");
+export function resolveDatabaseUrl(env: NodeJS.ProcessEnv = process.env) {
+  const isTest = env.NODE_ENV === "test";
+  const databaseUrl = (isTest ? env.TEST_DATABASE_URL : env.DATABASE_URL)?.trim();
+  if (isTest && databaseUrl && env.DATABASE_URL?.trim() === databaseUrl) {
+    throw new Error("测试环境的 TEST_DATABASE_URL 不能与 DATABASE_URL 相同，已拒绝连接可能的生产数据库。");
   }
-  return DATABASE_URL;
+  return databaseUrl || "";
+}
+
+export function assertTestDatabaseConfigured(env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV !== "test") {
+    throw new Error("后端集成测试必须使用 NODE_ENV=test。");
+  }
+  if (!resolveDatabaseUrl(env)) {
+    throw new Error("后端集成测试必须配置独立的 TEST_DATABASE_URL。");
+  }
+}
+
+function requireDatabaseUrl() {
+  const isTest = process.env.NODE_ENV === "test";
+  const databaseUrl = resolveDatabaseUrl();
+  if (!databaseUrl) {
+    throw new Error(isTest
+      ? "测试数据库未配置，请使用独立的 TEST_DATABASE_URL。"
+      : "缺少 DATABASE_URL，系统已切换为 PostgreSQL 存储，请先配置 PostgreSQL 连接字符串。");
+  }
+  return databaseUrl;
 }
 
 export function assertProductionBootstrapPasswordConfigured(env: NodeJS.ProcessEnv = process.env) {
@@ -338,7 +360,9 @@ function getPool() {
   if (!pool) {
     pool = new Pool({
       connectionString: requireDatabaseUrl(),
-      ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+      ssl: (process.env.NODE_ENV === "test" ? process.env.TEST_DATABASE_SSL : process.env.DATABASE_SSL) === "true"
+        ? { rejectUnauthorized: false }
+        : undefined,
     });
   }
   return pool;
@@ -349,6 +373,15 @@ function getPool() {
  * normalized repositories use this helper so they share the same pool,
  * connection options, and schema initialization as the legacy state layer.
  */
+async function rollbackQuietly(client: PoolClient) {
+  try {
+    await client.query("ROLLBACK");
+  } catch {
+    // Preserve the original database error. The connection is released below;
+    // a rollback failure must not hide the operation that actually failed.
+  }
+}
+
 export async function withDatabaseTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
   await initializePostgres();
   const client = await getPool().connect();
@@ -358,7 +391,7 @@ export async function withDatabaseTransaction<T>(callback: (client: PoolClient) 
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollbackQuietly(client);
     throw error;
   } finally {
     client.release();
@@ -494,7 +527,7 @@ async function initializePostgres() {
     await applySchemaComments(client);
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollbackQuietly(client);
     throw error;
   } finally {
     client.release();
@@ -502,14 +535,60 @@ async function initializePostgres() {
   initialized = true;
 }
 
+function mutationAbortError() {
+  const error = new Error("Mutation request aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function waitForAdvisoryLockRetry(signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(mutationAbortError());
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, 25);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(mutationAbortError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function acquireAdvisoryLock(client: PoolClient, signal?: AbortSignal) {
+  // pg_advisory_lock blocks inside the driver and cannot observe a disconnected HTTP
+  // request. Try-lock polling lets the mutation runner cancel queued work safely.
+  while (true) {
+    if (signal?.aborted) throw mutationAbortError();
+    const result = await client.query<{ acquired: boolean }>(
+      "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired",
+      [STATE_WRITE_LOCK_KEY],
+    );
+    if (result.rows[0]?.acquired) {
+      if (signal?.aborted) {
+        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
+        throw mutationAbortError();
+      }
+      return;
+    }
+    await waitForAdvisoryLockRetry(signal);
+  }
+}
+
 // A session-level advisory lock is acquired before a request reloads its state and remains held
-// until the response has completed. This covers the full read -> mutate -> persist lifecycle
+// for the complete mutation command. This covers the full read -> mutate -> persist lifecycle
 // across PM2/Node instances; transaction-level locks in save helpers alone were too late.
-export async function acquireStateWriteLock(): Promise<() => Promise<void>> {
+export async function acquireStateWriteLock(signal?: AbortSignal): Promise<() => Promise<void>> {
+  if (signal?.aborted) throw mutationAbortError();
   await initializePostgres();
   const client = await getPool().connect();
   try {
-    await client.query("SELECT pg_advisory_lock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
+    await acquireAdvisoryLock(client, signal);
     processWriteLockDepth += 1;
   } catch (error) {
     client.release();
@@ -955,7 +1034,7 @@ export async function loadState(): Promise<AppState> {
     await client.query("COMMIT");
     return state;
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollbackQuietly(client);
     throw error;
   } finally {
     client.release();
@@ -979,7 +1058,7 @@ export async function loadStateCollections(state: AppState, keys: CollectionKey[
     await client.query("COMMIT");
     return nextState;
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollbackQuietly(client);
     throw error;
   } finally {
     client.release();
@@ -987,7 +1066,7 @@ export async function loadStateCollections(state: AppState, keys: CollectionKey[
 }
 
 export async function saveState(state: AppState) {
-  saveQueue = saveQueue.then(async () => {
+  return enqueueStateSave(async () => {
     await initializePostgres();
     const client = await getPool().connect();
     try {
@@ -997,17 +1076,16 @@ export async function saveState(state: AppState) {
       await touchStateRevision(client);
       await client.query("COMMIT");
     } catch (error) {
-      await client.query("ROLLBACK");
+      await rollbackQuietly(client);
       throw error;
     } finally {
       client.release();
     }
   });
-  return saveQueue;
 }
 
 export async function saveStateCollections(state: AppState, keys: CollectionKey[]) {
-  saveQueue = saveQueue.then(async () => {
+  return enqueueStateSave(async () => {
     await initializePostgres();
     const client = await getPool().connect();
     try {
@@ -1017,17 +1095,16 @@ export async function saveStateCollections(state: AppState, keys: CollectionKey[
       await touchStateRevision(client);
       await client.query("COMMIT");
     } catch (error) {
-      await client.query("ROLLBACK");
+      await rollbackQuietly(client);
       throw error;
     } finally {
       client.release();
     }
   });
-  return saveQueue;
 }
 
 export async function saveStateRecords(records: StateRecordSave[], transactionHook?: StateRecordTransactionHook) {
-  saveQueue = saveQueue.then(async () => {
+  return enqueueStateSave(async () => {
     await initializePostgres();
     const client = await getPool().connect();
     try {
@@ -1038,13 +1115,12 @@ export async function saveStateRecords(records: StateRecordSave[], transactionHo
       await touchStateRevision(client);
       await client.query("COMMIT");
     } catch (error) {
-      await client.query("ROLLBACK");
+      await rollbackQuietly(client);
       throw error;
     } finally {
       client.release();
     }
   });
-  return saveQueue;
 }
 
 export async function createManualBackup(): Promise<{ file: string }> {
@@ -1062,7 +1138,7 @@ export async function createManualBackup(): Promise<{ file: string }> {
     await client.query("COMMIT");
     return { file: `postgres:${backupId}` };
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollbackQuietly(client);
     throw error;
   } finally {
     client.release();

@@ -235,14 +235,14 @@ function FinanceCommissionContent({
       label: "记录数",
       value: `${filtered.length} 条`,
       description: "当前筛选范围",
-      status: "info",
+      tone: "info",
     },
     {
       icon: <UserRound className="h-4 w-4" />,
       label: "经办人",
       value: `${new Set(filtered.map((item) => item.handler).filter(Boolean)).size} 人`,
       description: "当前筛选范围",
-      status: "neutral",
+      tone: "neutral",
     },
   ];
   return (

@@ -1,9 +1,13 @@
 import type {HTMLAttributes, ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
+import {ErpPageFrame} from "./ErpPageFrame";
 
-export function DashboardShell({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
-  return <div {...props} className={cn("mx-auto w-full max-w-[var(--erp-page-max-width)] space-y-5 pb-6", className)}>{children}</div>;
+export function ErpDashboardPageFrame({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
+  return <ErpPageFrame {...props} density="comfortable" className={className}>{children}</ErpPageFrame>;
 }
+
+/** @deprecated Use ErpDashboardPageFrame; kept as a compatibility alias. */
+export const DashboardShell = ErpDashboardPageFrame;
 
 export function MetricsRegion({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
   return <section {...props} data-erp-component="metrics-region" className={cn("grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3", className)}>{children}</section>;

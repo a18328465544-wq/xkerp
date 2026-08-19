@@ -59,8 +59,8 @@ function VendorDirectoryContent({session, query, filters, onFiltersChange, onAut
   const credit = vendors.reduce((total, item) => total + item.returnCreditBalance, 0);
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(filters.level !== "all") + Number(filters.balance !== "all");
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Star className="h-4 w-4" />, label: "核心同行", value: `${coreCount} 家`, description: "核心采购方固定 S 级", status: coreCount ? "info" : "neutral"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "档案权限", value: canDelete ? "可维护 / 删除" : "可维护", description: "删除额外受 canDelete 控制", status: "success"},
+    {icon: <Star className="h-4 w-4" />, label: "核心同行", value: `${coreCount} 家`, description: "核心采购方固定 S 级", tone: coreCount ? "info" : "neutral"},
+    {icon: <ShieldAlert className="h-4 w-4" />, label: "档案权限", value: canDelete ? "可维护 / 删除" : "可维护", description: "删除额外受 canDelete 控制", tone: "success"},
   ];
 
   const exportVendors = () => {

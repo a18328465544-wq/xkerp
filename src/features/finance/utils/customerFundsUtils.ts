@@ -1,5 +1,5 @@
-import type { CustomerCard, PaymentInRecord, PaymentOutRecord, PurchaseInvoice, SalesInvoice, Vendor } from "../types";
-import {addDateDays, daysBetweenInclusive} from "../lib/dateRangePickerUtils";
+import type { CustomerCard, PaymentInRecord, PaymentOutRecord, PurchaseInvoice, SalesInvoice, Vendor } from "@/src/types/legacy";
+import {addDateDays, daysBetweenInclusive} from "../../../lib/dateRangePickerUtils";
 
 export type FundsPartnerKind = "customer" | "supplier";
 export type FundsBalanceFilter = "all" | "payable" | "receivable" | "balanced";

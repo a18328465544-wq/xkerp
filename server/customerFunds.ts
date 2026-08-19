@@ -6,7 +6,7 @@ import {
   getFundsBalanceAtDate,
   getFundsCashTotals,
   type CustomerFundsSnapshot,
-} from "../src/components/customerFundsUtils.ts";
+} from "./customerFundsUtils.ts";
 import {endOfMonth, shiftMonth, startOfMonth} from "../src/lib/dateRangePickerUtils.ts";
 import { storeDateTime } from "../src/utils/storeTime.ts";
 

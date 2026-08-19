@@ -1030,6 +1030,22 @@ test("user login binds role and account-level permission overrides", () => {
   assert.throws(() => actions.login({ username: "cashier", password: "newpass123" }), /账号已停用/);
 });
 
+test("credential boundaries reject malformed and oversized input before hashing", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+
+  assert.throws(() => actions.login(null), /账号或密码错误/);
+  assert.throws(() => actions.login({ username: "sales", password: "x".repeat(1025) }), /账号或密码错误/);
+  assert.throws(() => actions.createUser(null), /账号、密码、姓名和角色不能为空/);
+  assert.throws(() => actions.createUser({
+    username: "u".repeat(129),
+    password: "password",
+    displayName: "测试",
+    role: "店员",
+  }), /长度超出限制/);
+  assert.throws(() => actions.updateUser("USR-SALES", { password: "p".repeat(1025) }), /长度超出限制/);
+});
+
 test("request-scoped permissions do not mutate global current role", () => {
   const state = createInitialState();
   state.currentRole = "老板";

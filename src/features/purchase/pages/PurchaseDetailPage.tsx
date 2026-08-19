@@ -102,10 +102,10 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
   const policy = derivePurchaseEditPolicy(detail);
   const stageLabel = purchaseInventoryStageLabel(policy.inventoryStage);
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <UserRound className="h-4 w-4" />, label: "采购来源", value: invoice.supplierName || "未关联", description: invoice.sourceType, status: invoice.sourcePartnerId ? "success" : "warning"},
-    {icon: <CircleDollarSign className="h-4 w-4" />, label: "付款状态", value: invoice.paymentStatus || (invoice.isPaid ? "已付款" : "未付款"), description: canReadPayments ? `${detail.paymentCount ?? 0} 笔关联流水` : "付款流水无查看权限", status: invoice.isPaid ? "success" : "warning"},
-    {icon: <Boxes className="h-4 w-4" />, label: "库存阶段", value: stageLabel, description: `${detail.inventory.length} 件实物 · ${detail.inspectionCount} 条检测`, status: policy.inventoryStage === "pending-inspection" ? "warning" : policy.inventoryStage === "completed" ? "success" : "info"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "编辑策略", value: "当前只读", description: "等待安全编辑契约", status: "warning"},
+    {icon: <UserRound className="h-4 w-4" />, label: "采购来源", value: invoice.supplierName || "未关联", description: invoice.sourceType, tone: invoice.sourcePartnerId ? "success" : "warning"},
+    {icon: <CircleDollarSign className="h-4 w-4" />, label: "付款状态", value: invoice.paymentStatus || (invoice.isPaid ? "已付款" : "未付款"), description: canReadPayments ? `${detail.paymentCount ?? 0} 笔关联流水` : "付款流水无查看权限", tone: invoice.isPaid ? "success" : "warning"},
+    {icon: <Boxes className="h-4 w-4" />, label: "库存阶段", value: stageLabel, description: `${detail.inventory.length} 件实物 · ${detail.inspectionCount} 条检测`, tone: policy.inventoryStage === "pending-inspection" ? "warning" : policy.inventoryStage === "completed" ? "success" : "info"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "编辑策略", value: "当前只读", description: "等待安全编辑契约", tone: "warning"},
   ];
 
   return <ErpDetailPageFrame className="max-w-[1600px] space-y-5 pb-12">

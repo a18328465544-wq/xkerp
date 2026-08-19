@@ -24,7 +24,7 @@
     "lint:design-system": "node scripts/check-design-system.mjs",
     "lint:analytics": "node scripts/check-analytics-frame.mjs",
     "lint:reuse": "node scripts/check-component-reuse.mjs",
-    "lint:architecture": "node scripts/check-architecture.mjs",
+    "lint:architecture": "node scripts/check-architecture.mjs && node scripts/check-backend-architecture.mjs",
     "check:performance": "node scripts/check-frontend-performance.mjs",
     "components:inventory": "node scripts/component-inventory.mjs",
     "lint:components": "node scripts/component-inventory.mjs --check && node scripts/check-component-boundaries.mjs && node scripts/check-frontend-rules.mjs",

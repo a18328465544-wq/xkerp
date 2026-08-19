@@ -66,6 +66,25 @@ if (!quickStatusSource.includes('variant = "compact"')) failures.push("QuickStat
 if (!quickStatusSource.includes('data-variant="compact"')) failures.push("QuickStatus 缺少 Compact 变体标记，无法进行自动验收。");
 if (!quickStatusSource.includes('data-variant="workflow"')) failures.push("QuickStatus 缺少 Workflow 兼容变体标记。");
 if (!quickStatusSource.includes("item.tooltip")) failures.push("QuickStatus 缺少 Tooltip 兼容能力。");
+if (!quickStatusSource.includes("item.tone")) failures.push("QuickStatus 必须使用统一 tone 语义。");
+if (!quickStatusSource.includes("item.action")) failures.push("QuickStatus 必须使用统一 action 语义。");
+if (/status\??\s*:\s*QuickStatusTone|onClick\??\s*:\s*\(\)\s*=>/.test(quickStatusSource)) failures.push("QuickStatus 不得保留 deprecated status/onClick API。");
+if (!quickStatusSource.includes("maxVisible?: 1 | 2 | 3 | 4")) failures.push("QuickStatus maxVisible 必须限制为 1-4，禁止暴露任意数字。");
+
+const pageFrameFile = path.join(root, "src/components/common/ErpPageFrame.tsx");
+const pageFrameSource = fs.existsSync(pageFrameFile) ? fs.readFileSync(pageFrameFile, "utf8") : "";
+for (const marker of [
+  'data-erp-component="page-frame"',
+  'data-erp-region="page-topbar"',
+  'data-erp-region="page-identity"',
+  'data-erp-region="page-context"',
+  'data-erp-region="page-toolbar"',
+  'data-erp-region="page-content"',
+]) {
+  if (!pageFrameSource.includes(marker)) failures.push(`统一 PageFrame 缺少区域标记：${marker}`);
+}
+const pageFramesSource = fs.readFileSync(path.join(root, "src/components/common/ErpPageFrames.tsx"), "utf8");
+if (pageFramesSource.includes("AnalyticsFrame")) failures.push("场景 Frame 不得反向依赖旧 AnalyticsFrame 外壳。");
 
 const routerSource = fs.readFileSync(path.join(root, "src/app/router.tsx"), "utf8");
 if (!routerSource.includes("/__design-system")) failures.push("缺少开发环境组件展示入口：/__design-system");

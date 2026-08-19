@@ -114,7 +114,6 @@ export function WorkspaceTabs() {
     if (!item || !allowedIds.includes(id)) return;
     setPendingClose(null);
     transition((previous) => openWorkspaceTab(previous, id));
-    if (pathname !== item.path) void navigate({to: item.path});
   };
 
   const close = (id: string) => {

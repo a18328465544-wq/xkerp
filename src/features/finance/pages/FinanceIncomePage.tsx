@@ -223,7 +223,7 @@ function FinanceIncomeContent({
       label: "账户权限",
       value: canReadAccounts ? "可登记" : "仅查看",
       description: canReadAccounts ? "真实账户候选可用" : "未请求账户余额",
-      status: canReadAccounts ? "success" : "neutral",
+      tone: canReadAccounts ? "success" : "neutral",
     },
   ];
   const exportRows = () => {

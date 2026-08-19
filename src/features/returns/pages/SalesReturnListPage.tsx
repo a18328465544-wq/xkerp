@@ -129,9 +129,9 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
   const columns = useMemo(() => createSalesReturnColumns({onDetail: openDetail, onComplete: (item) => {completeMutation.reset(); setCompleteTarget(item);}, onEdit: openEdit, onDelete: openDelete, canEdit, canDelete}), [canDelete, canEdit, completeMutation, openDelete, openDetail, openEdit]);
   const updateFilters = (patch: Partial<SalesReturnListFilters>) => commitFilters({...filters, ...patch, page: 1});
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", status: activeFilterCount ? "info" : "neutral"},
-    {icon: <ClipboardCheck className="h-4 w-4" />, label: "待处理（本页）", value: `${pendingOnPage} 单`, description: "完成后才变更退款与库存", status: pendingOnPage ? "warning" : "success"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "权限边界", value: "服务端校验", description: "按退货类型裁剪数据", status: "neutral"},
+    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", tone: activeFilterCount ? "info" : "neutral"},
+    {icon: <ClipboardCheck className="h-4 w-4" />, label: "待处理（本页）", value: `${pendingOnPage} 单`, description: "完成后才变更退款与库存", tone: pendingOnPage ? "warning" : "success"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "权限边界", value: "服务端校验", description: "按退货类型裁剪数据", tone: "neutral"},
   ];
   const exportCurrentPage = () => {
     const rows = [

@@ -26,8 +26,11 @@ function relative(file) {
   return path.relative(root, file).split(path.sep).join("/");
 }
 
-const files = sourceRoots.flatMap(collectFiles).filter((file, index, all) => all.indexOf(file) === index);
+const files = [...sourceRoots.flatMap(collectFiles), path.join(root, "src/types.ts")]
+  .filter((file) => fs.existsSync(file))
+  .filter((file, index, all) => all.indexOf(file) === index);
 const featureFiles = files.filter((file) => relative(file).startsWith("src/features/"));
+const pageFiles = featureFiles.filter((file) => /\/pages\/[^/]+\.tsx$/.test(relative(file)));
 const failures = [];
 const warnings = [];
 
@@ -47,8 +50,36 @@ for (const required of [
   "src/hooks/useTablePreferences.ts",
   "src/services/api/state-compat.ts",
   "src/services/api/invalidation.ts",
+  "src/components/common/ErpPageFrame.tsx",
+  "src/components/common/ErpPageFrames.tsx",
 ]) {
   if (!fs.existsSync(path.join(root, required))) fail(`缺少架构边界文件：${required}`);
+}
+
+const pageFrameExceptions = new Set([
+  // This page intentionally preserves the V1 inspection workstation because
+  // its two-pane scanning workflow is not a list/dashboard frame.
+  "src/features/inspections/pages/InspectionWorkspacePage.tsx",
+]);
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings)PageFrame|ErpPageFrame|DashboardShell/;
+for (const file of pageFiles) {
+  const source = fs.readFileSync(file, "utf8");
+  const fileName = relative(file);
+  if (pageFrameExceptions.has(fileName)) {
+    warn(`${fileName} 是保留的独立检测工作台例外，后续只在不改变扫描流程的前提下收口外层。`);
+    continue;
+  }
+  if (!pageFramePattern.test(source)) {
+    fail(`${fileName} 缺少统一 PageFrame；标准业务页面不得自行创建平行页面外壳。`);
+  }
+  if (/<div[^>]+className={["'`][^"'`]*(?:mx-auto\s+w-full|max-w-\[[^]]+\])[^"'`]*space-y-(?:6|8)/.test(source)) {
+    fail(`${fileName} 在未统一的页面根节点上叠加过大的顶层间距，请使用 PageFrame density。`);
+  }
+}
+
+const rootTypesFile = path.join(root, "src/types.ts");
+if (fs.existsSync(rootTypesFile) && !fs.readFileSync(rootTypesFile, "utf8").includes('from "./types/legacy"')) {
+  fail("src/types.ts 必须是指向 types/legacy.ts 的兼容门面，新的类型应按 feature 所有权归档。");
 }
 
 const routerFile = path.join(root, "src/app/router.tsx");

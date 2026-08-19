@@ -57,6 +57,9 @@
      highest application layer; drawers begin below it and must never cover it. */
   --erp-workspace-bar-height: 48px;
   --erp-page-max-width: 1720px;
+  --erp-page-gap-compact: 12px;
+  --erp-page-gap: 16px;
+  --erp-page-gap-comfortable: 20px;
   --erp-layer-tab-navigation: 1000;
   --erp-layer-popover: 950;
   --erp-layer-modal: 925;

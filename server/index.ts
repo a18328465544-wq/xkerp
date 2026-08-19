@@ -1,11 +1,13 @@
 import express from "express";
 import compression from "compression";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { acquireStateWriteLock, createDatabaseSessionStore, createManualBackup, dataFilePath, deleteAiInsightAction, findInventoryRecord, findInventoryRecordBySn, getDailyClosing, getStateRevision, listAiInsightActions, listBackups, listDailyClosings, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveDailyClosing, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
-import { createStoreActions, type AppState } from "./store.ts";
+import { createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
 import { buildExport } from "./export.ts";
 import { notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
 import { buildDailyBusinessReport } from "./dailyReport.ts";
@@ -13,7 +15,8 @@ import { getDashboardAiInsights } from "./aiInsights.ts";
 import { runCopilotTurn, type CopilotMessage } from "./aiCopilot.ts";
 import type { CopilotContext } from "../src/utils/copilotTools.ts";
 import { createSessionManager, sanitizeUserAccount } from "./security.ts";
-import { AppError, toDomainError } from "./errors.ts";
+import { createRequireAuth, createRequireOpenApiToken } from "./httpAuth.ts";
+import { AppError, NotFoundError, toDomainError, UnauthorizedError } from "./errors.ts";
 import {
   getPermissionsForUser as getScopedPermissions,
   publicCollectionForUser as getPublicCollection,
@@ -51,6 +54,9 @@ import { isInventoryLinkedToAssembly, isInventoryLinkedToPurchase } from "../src
 import { createProductIdentityIndex, sameProductIdentity } from "../src/utils/productIdentity.ts";
 import { listCrmAccounts, listCrmTimeline } from "./crmRepository.ts";
 import { ensureCrmCustomerAccount, upsertCrmCustomerAccount } from "./crmAccountRepository.ts";
+import { createSerializedMutationRunner, isMutationAbortedError } from "./mutationQueue.ts";
+import { requiresStateSerialization } from "./mutationPolicy.ts";
+import { redactRequestPath, safeErrorMessage } from "./observability.ts";
 import { syncCrmFollowUp, syncCrmQuote, syncCrmRequirement } from "./crmCommandRepository.ts";
 import {
   confirmQuickCaptureAuditInTransaction,
@@ -99,15 +105,27 @@ const OPEN_API_TOKEN = process.env.OPEN_API_TOKEN || "";
 const OPEN_API_RATE_LIMIT_WINDOW_MS = Number(process.env.OPEN_API_RATE_LIMIT_WINDOW_MS || 60 * 1000);
 const OPEN_API_RATE_LIMIT_MAX = Number(process.env.OPEN_API_RATE_LIMIT_MAX || 240);
 
-const app = express();
+export const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", "loopback");
 app.use(helmet());
+// Generate the request id before parsers or route handlers so even malformed/oversized payloads
+// can be correlated with a structured error response.
+app.use(requestContext);
 // State snapshots and analytics payloads can grow with inventory and invoice
 // history. Compress only responses large enough to benefit; compression
 // handles content negotiation and skips downloads/already encoded responses.
 app.use(compression({threshold: 1024}));
 app.use(express.json({ limit: "2mb" }));
+app.use((req, _res, next) => {
+  // Liveness must remain useful while PostgreSQL is unavailable. Authenticated and
+  // business routes still initialize state before reaching their handlers.
+  if (req.path === "/api/health") {
+    next();
+    return;
+  }
+  void ensureStateReady().then(() => next()).catch(next);
+});
 
 const loginRateLimiter = rateLimit({
   windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
@@ -115,12 +133,7 @@ const loginRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  message: {
-    error: {
-      code: "LOGIN_RATE_LIMITED",
-      message: "登录尝试过多，请稍后再试。",
-    },
-  },
+  handler: (req, res) => sendApiError(req, res, 429, "LOGIN_RATE_LIMITED", "登录尝试过多，请稍后再试。", true),
 });
 
 const openApiRateLimiter = rateLimit({
@@ -128,77 +141,180 @@ const openApiRateLimiter = rateLimit({
   limit: OPEN_API_RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    error: {
-      code: "OPEN_API_RATE_LIMITED",
-      message: "开放接口请求过于频繁，请稍后再试。",
-    },
-  },
+  handler: (req, res) => sendApiError(req, res, 429, "OPEN_API_RATE_LIMITED", "开放接口请求过于频繁，请稍后再试。", true),
 });
 
-let state: AppState = await loadState();
-let stateRevision = await getStateRevision();
+// Keep module import side-effect free with respect to PostgreSQL. The first request initializes
+// the state, which keeps HTTP tests and app composition independent from a database connection
+// at import time.
+let state!: AppState;
+let stateRevision = 0;
+let stateReady: Promise<void> | undefined;
 const sessions = createSessionManager(createDatabaseSessionStore());
-
-// Store actions still operate on an in-memory aggregate before persisting record patches.
-// Serialize the complete read -> mutate -> persist request lifecycle so two concurrent HTTP
-// writes cannot calculate from the same stale balance or daily document sequence. PostgreSQL
-// keeps its advisory write lock as the cross-process backstop; this queue protects this process.
-let writeRequestTail: Promise<void> = Promise.resolve();
 
 type AuthRequest = express.Request & {
   authToken?: string;
   authUser?: SystemUserAccount;
+  requestId?: string;
+  requestStartedAt?: number;
 };
 
-function serializeWriteRequests(req: AuthRequest, res: express.Response, next: express.NextFunction) {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+async function ensureStateReady() {
+  if (!stateReady) {
+    stateReady = (async () => {
+      state = await loadState();
+      stateRevision = await getStateRevision();
+    })().catch((error) => {
+      stateReady = undefined;
+      throw error;
+    });
+  }
+  await stateReady;
+}
+
+const runSerializedStateMutation = createSerializedMutationRunner(
+  acquireStateWriteLock,
+  async () => {
+    await reloadStateFromDatabase();
+  },
+);
+
+function createMutationRequestSignal(req: express.Request, res: express.Response) {
+  const controller = new AbortController();
+  let responseFinished = false;
+  let disposed = false;
+
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    req.off("aborted", abort);
+    res.off("finish", finished);
+    res.off("close", closed);
+  };
+  const abort = () => {
+    if (!responseFinished) controller.abort();
+  };
+  const finished = () => {
+    responseFinished = true;
+    dispose();
+  };
+  const closed = () => {
+    abort();
+    dispose();
+  };
+
+  req.once("aborted", abort);
+  res.once("finish", finished);
+  res.once("close", closed);
+  if (req.aborted || res.destroyed) controller.abort();
+
+  return { signal: controller.signal, dispose };
+}
+
+async function withStateMutation<T>(req: AuthRequest | undefined, res: express.Response | undefined, operation: () => T | PromiseLike<T>) {
+  const requestSignal = req && res ? createMutationRequestSignal(req, res) : undefined;
+  try {
+    return await runSerializedStateMutation(async () => {
+      // The request-level reload middleware deliberately runs outside this lock. Reload again
+      // here so every mutation calculates from the committed snapshot it actually owns.
+      await reloadStateFromDatabase();
+      if (req?.authUser) {
+        const freshUser = applyAuthenticatedUser(req.authUser.id);
+        if (!freshUser) {
+          await sessions.revoke(req.authToken);
+          throw new UnauthorizedError("账号已停用或不存在");
+        }
+        req.authUser = freshUser;
+      }
+      return operation();
+    }, { signal: requestSignal?.signal });
+  } finally {
+    requestSignal?.dispose();
+  }
+}
+
+function normalizeRequestId(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(candidate)
+    ? candidate
+    : randomUUID();
+}
+
+function requestContext(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const requestId = normalizeRequestId(req.headers["x-request-id"]);
+  const authRequest = req as AuthRequest;
+  authRequest.requestId = requestId;
+  authRequest.requestStartedAt = Date.now();
+  res.setHeader("X-Request-Id", requestId);
+  next();
+}
+
+function requestIdFor(req: express.Request) {
+  return (req as AuthRequest).requestId || randomUUID();
+}
+
+function logRequestError(req: express.Request, error: unknown, code: string) {
+  console.error(JSON.stringify({
+    event: "api_error",
+    requestId: requestIdFor(req),
+    method: req.method,
+    path: redactRequestPath(req.originalUrl || req.url),
+    userId: (req as AuthRequest).authUser?.id || null,
+    username: (req as AuthRequest).authUser?.username || null,
+    durationMs: Math.max(0, Date.now() - ((req as AuthRequest).requestStartedAt || Date.now())),
+    name: error instanceof Error ? error.name : "UnknownError",
+    code,
+    message: safeErrorMessage(error),
+  }));
+}
+
+function logSecurityDenial(req: express.Request, details: { status: number; code: string }) {
+  console.warn(JSON.stringify({
+    event: "security_denied",
+    requestId: requestIdFor(req),
+    method: req.method,
+    path: redactRequestPath(req.originalUrl || req.url),
+    userId: (req as AuthRequest).authUser?.id || null,
+    username: (req as AuthRequest).authUser?.username || null,
+    status: details.status,
+    code: details.code,
+  }));
+}
+
+function sendApiError(
+  req: express.Request,
+  res: express.Response,
+  status: number,
+  code: string,
+  message: string,
+  audit = false,
+) {
+  if (audit) logSecurityDenial(req, { status, code });
+  res.status(status).json({ error: { code, message, requestId: requestIdFor(req) } });
+}
+
+function isPublicApiPath(pathname: string) {
+  return pathname === "/api/health"
+    || /^\/api\/auth\/login\/?$/.test(pathname)
+    || pathname.startsWith("/api/open/");
+}
+
+// Authentication is applied before every private API route. Public health/login/open routes
+// opt out explicitly, while open routes still enforce their own token middleware below.
+function requireApiAuthentication(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!req.path.startsWith("/api/") || isPublicApiPath(req.path)) {
     next();
     return;
   }
-
-  let releaseQueue!: () => void;
-  let releaseDatabaseLock: (() => Promise<void>) | null = null;
-  const previous = writeRequestTail;
-  writeRequestTail = new Promise<void>((resolve) => {
-    releaseQueue = resolve;
-  });
-  const releaseOnce = (() => {
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      void (async () => {
-        try {
-          await releaseDatabaseLock?.();
-        } finally {
-          releaseQueue();
-        }
-      })();
-    };
-  })();
-
-  res.once("finish", releaseOnce);
-  res.once("close", releaseOnce);
-  void previous.then(async () => {
-    try {
-      releaseDatabaseLock = await acquireStateWriteLock();
-      next();
-    } catch (error) {
-      releaseOnce();
-      next(error);
-    }
-  }, next);
+  requireAuth(req as AuthRequest, res, next);
 }
 
-// All state-changing APIs, including login and external pricing sync, share one process-local
-// transaction queue. PostgreSQL advisory locks remain the cross-process write backstop.
-app.use(serializeWriteRequests);
+app.use(requireApiAuthentication);
 
-function actions(req?: AuthRequest) {
+function actions(req?: AuthRequest, context?: StoreActionContext) {
   const storeActions = createStoreActions(
     state,
-    req?.authUser ? { userId: req.authUser.id, role: req.authUser.role } : undefined,
+    req?.authUser ? { userId: req.authUser.id, role: req.authUser.role } : context,
   );
   return new Proxy(storeActions, {
     get(target, property, receiver) {
@@ -783,44 +899,27 @@ function paginated<T>(items: T[], req: express.Request) {
 
 function asyncRoute(handler: express.RequestHandler): express.RequestHandler {
   return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
+    const invoke = () => Promise.resolve(handler(req, res, next));
+    const operation = requiresStateSerialization(req.method, req.originalUrl)
+      ? withStateMutation(req as AuthRequest, res, invoke)
+      : invoke();
+    operation.catch((error) => {
+      if (isMutationAbortedError(error) && (req.destroyed || res.destroyed || res.writableEnded)) return;
+      next(error);
+    });
   };
 }
 
-function getBearerToken(req: express.Request) {
-  const header = req.headers.authorization || "";
-  const [type, token] = header.split(" ");
-  return type?.toLowerCase() === "bearer" ? token : null;
+function mutationRoute(handler: express.RequestHandler): express.RequestHandler {
+  return (req, res, next) => {
+    void withStateMutation(req as AuthRequest, res, () => handler(req, res, next)).catch((error) => {
+      if (isMutationAbortedError(error) && (req.destroyed || res.destroyed || res.writableEnded)) return;
+      next(error);
+    });
+  };
 }
 
-function tokenEquals(actual: string, expected: string) {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
-}
-
-function requireOpenApiToken(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!OPEN_API_TOKEN) {
-    res.status(503).json({
-      error: {
-        code: "OPEN_API_NOT_CONFIGURED",
-        message: "开放 API 尚未配置 OPEN_API_TOKEN。",
-      },
-    });
-    return;
-  }
-  const token = getBearerToken(req) || String(req.headers["x-api-token"] || "");
-  if (!token || !tokenEquals(token, OPEN_API_TOKEN)) {
-    res.status(401).json({
-      error: {
-        code: "OPEN_API_UNAUTHORIZED",
-        message: "开放 API Token 无效。",
-      },
-    });
-    return;
-  }
-  next();
-}
+const requireOpenApiToken = createRequireOpenApiToken(OPEN_API_TOKEN, { onDenied: logSecurityDenial });
 
 function openInventoryItem(card: AppState["inventory"][number]) {
   return {
@@ -1156,52 +1255,46 @@ function applyAuthenticatedUser(userId: string) {
   return user;
 }
 
-async function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
-  const token = getBearerToken(req);
-  const session = await sessions.resolve(token);
-  if (!session) {
-    res.status(401).json({ error: { code: "UNAUTHORIZED", message: "请先登录系统" } });
-    return;
-  }
-  const user = applyAuthenticatedUser(session.userId);
-  if (!user) {
-    await sessions.revoke(token);
-    res.status(401).json({ error: { code: "UNAUTHORIZED", message: "账号已停用或不存在" } });
-    return;
-  }
-  req.authToken = token || undefined;
-  req.authUser = user;
-  next();
+const requireAuth = createRequireAuth(sessions, applyAuthenticatedUser, { onDenied: logSecurityDenial });
+
+function requireAuthenticatedUser(req: AuthRequest, res: express.Response): req is AuthRequest & { authUser: SystemUserAccount } {
+  if (req.authUser) return true;
+  sendApiError(req, res, 401, "UNAUTHORIZED", "请先登录系统", true);
+  return false;
 }
 
 function requireBoss(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  if (!requireAuthenticatedUser(req, res)) return;
   if (req.authUser?.role !== "老板") {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "仅老板账号可执行该操作" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "仅老板账号可执行该操作", true);
     return;
   }
   next();
 }
 
 function requireDeletePermission(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  if (!requireAuthenticatedUser(req, res)) return;
   if (!getPermissionsForUser(req.authUser).canDelete) {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有删除权限" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有删除权限", true);
     return;
   }
   next();
 }
 
 function requireHistoryEditPermission(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  if (!requireAuthenticatedUser(req, res)) return;
   const permissions = getPermissionsForUser(req.authUser);
   if (req.authUser?.role !== "老板" && !permissions.canEditHistory) {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有日志管理权限" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有日志管理权限", true);
     return;
   }
   next();
 }
 
 function requireManualOutboundPermission(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  if (!requireAuthenticatedUser(req, res)) return;
   if (req.body?.manual && req.authUser?.role !== "老板" && !getPermissionsForUser(req.authUser).canManualOutbound) {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有手动确认出库权限，请使用扫码出库或联系管理员授权" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有手动确认出库权限，请使用扫码出库或联系管理员授权", true);
     return;
   }
   next();
@@ -1209,9 +1302,10 @@ function requireManualOutboundPermission(req: AuthRequest, res: express.Response
 
 function requireMenu(menuId: string): express.RequestHandler {
   return (req: AuthRequest, res, next) => {
+    if (!requireAuthenticatedUser(req, res)) return;
     const permissions = getPermissionsForUser(req.authUser);
     if (!permissions.allowedMenus.includes("all") && !permissions.allowedMenus.includes(menuId)) {
-      res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有该窗口入口权限" } });
+      sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该窗口入口权限", true);
       return;
     }
     next();
@@ -1224,12 +1318,13 @@ function crmActor(req: AuthRequest) {
 
 function requireAnyMenu(menuIds: string[]): express.RequestHandler {
   return (req: AuthRequest, res, next) => {
+    if (!requireAuthenticatedUser(req, res)) return;
     const permissions = getPermissionsForUser(req.authUser);
     if (permissions.allowedMenus.includes("all") || menuIds.some((menuId) => permissions.allowedMenus.includes(menuId))) {
       next();
       return;
     }
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有该窗口入口权限" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该窗口入口权限", true);
   };
 }
 
@@ -1244,13 +1339,14 @@ function canAccessReturnType(req: AuthRequest, type: string) {
 }
 
 function requireReturnTypeFromRecord(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  if (!requireAuthenticatedUser(req, res)) return;
   const order = state.returnOrders.find((item) => item.id === req.params.id || item.returnNo === req.params.id);
   if (!order) {
-    res.status(404).json({ error: { code: "NOT_FOUND", message: "退货单不存在" } });
+    sendApiError(req, res, 404, "NOT_FOUND", "退货单不存在");
     return;
   }
   if (!canAccessReturnType(req, order.type)) {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有该退货单的操作权限" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该退货单的操作权限", true);
     return;
   }
   next();
@@ -1284,7 +1380,7 @@ app.put("/api/finance/commission-rules", requireBoss, requireAnyMenu(commissionM
 app.post("/api/finance/daily-closing", requireMenu("finance"), asyncRoute(async (req: AuthRequest, res) => {
   const date = String(req.body?.date || storeDate());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "日结日期必须是 YYYY-MM-DD" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "日结日期必须是 YYYY-MM-DD");
     return;
   }
   const current = await loadState();
@@ -1328,8 +1424,13 @@ app.post("/api/auth/login", loginRateLimiter, asyncRoute(async (req, res) => {
       meta: { stateMode: "initial", stateRevision: await getStateRevision() },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "登录失败";
-    res.status(401).json({ error: { code: "LOGIN_FAILED", message } });
+    const domainError = toDomainError(error);
+    if (domainError.status === 401 || domainError.code === "VALIDATION_ERROR") {
+      sendApiError(req, res, 401, "LOGIN_FAILED", "账号或密码错误", true);
+      return;
+    }
+    await reloadStateFromDatabase().catch(() => undefined);
+    throw error;
   }
 }));
 
@@ -1354,7 +1455,7 @@ openInventoryRouter.get("/items", asyncRoute(async (req, res) => {
 openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
   const card = await findInventoryRecord<CardInventory>(req.params.id);
   if (!card) {
-    res.status(404).json({ error: { code: "INVENTORY_NOT_FOUND", message: "库存档案不存在" } });
+    sendApiError(req, res, 404, "INVENTORY_NOT_FOUND", "库存档案不存在");
     return;
   }
   res.json({ data: openInventoryItem(card) });
@@ -1363,7 +1464,7 @@ openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
 openInventoryRouter.get("/by-sn/:sn", asyncRoute(async (req, res) => {
   const card = await findInventoryRecordBySn<CardInventory>(req.params.sn.trim());
   if (!card) {
-    res.status(404).json({ error: { code: "INVENTORY_SN_NOT_FOUND", message: "未找到该 SN 对应库存" } });
+    sendApiError(req, res, 404, "INVENTORY_SN_NOT_FOUND", "未找到该 SN 对应库存");
     return;
   }
   res.json({ data: openInventoryItem(card) });
@@ -1371,13 +1472,13 @@ openInventoryRouter.get("/by-sn/:sn", asyncRoute(async (req, res) => {
 
 openInventoryRouter.get("/summary", asyncRoute(async (req, res) => {
   state = await loadStateCollections(state, ["inventory"]);
-  const rows = actions().getInventorySummary(req.query as Record<string, string>);
+  const rows = actions(undefined, { role: "财务", actor: "OpenAPI" }).getInventorySummary(req.query as Record<string, string>);
   res.json(paginated(rows, req));
 }));
 
 openInventoryRouter.post("/scan-in", asyncRoute(async (req, res) => {
   state = await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]);
-  const result = actions().scanInventoryFlow({
+  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
     ...req.body,
     mode: "入库",
     handler: req.body?.handler || "OpenAPI",
@@ -1389,7 +1490,7 @@ openInventoryRouter.post("/scan-in", asyncRoute(async (req, res) => {
 
 openInventoryRouter.post("/scan-out", asyncRoute(async (req, res) => {
   state = await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]);
-  const result = actions().scanInventoryFlow({
+  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
     ...req.body,
     mode: "出库",
     handler: req.body?.handler || "OpenAPI",
@@ -1401,7 +1502,7 @@ openInventoryRouter.post("/scan-out", asyncRoute(async (req, res) => {
 
 openInventoryRouter.post("/relocate", asyncRoute(async (req, res) => {
   state = await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]);
-  const result = actions().scanInventoryFlow({
+  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
     ...req.body,
     mode: "移库",
     handler: req.body?.handler || "OpenAPI",
@@ -1419,7 +1520,7 @@ openPricesRouter.use(openApiRateLimiter, requireOpenApiToken);
 openPricesRouter.post("/sync-est-sell", asyncRoute(async (req, res) => {
   state = await loadStateCollections(state, ["products", "inventory", "marketQuotes", "logs"]);
   const body = req.body || {};
-  const result = actions().syncEstimatedSellPrice({
+  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).syncEstimatedSellPrice({
     productId: String(body.productId || ""),
     estSellPrice: Number(body.estSellPrice ?? body.suggestSellPrice ?? body.refSellPrice ?? body.todaySellPrice),
     priceSource: body.priceSource || body.source,
@@ -1460,34 +1561,38 @@ openPricesRouter.get("/market-quotes", asyncRoute(async (req, res) => {
 
 app.use("/api/open/prices", openPricesRouter);
 
-app.use(asyncRoute(requireAuth));
-
 // Background clients poll this lightweight revision endpoint first. Keeping it ahead of the
 // state-reload middleware avoids deserializing every business collection when nothing changed.
 app.get("/api/state/revision", asyncRoute(async (_req: AuthRequest, res) => {
   res.json({ data: { revision: await getStateRevision() } });
 }));
 
-app.use(asyncRoute(async (req: AuthRequest, res, next) => {
-  if (!shouldReloadStateFromDatabase(req.method, req.path)) {
-    next();
-    return;
-  }
-  const databaseRevision = await getStateRevision();
-  if (databaseRevision !== stateRevision || req.method.toUpperCase() !== "GET") {
-    await reloadRequestStateFromDatabase(req);
-  }
-  if (req.authUser) {
-    const freshUser = applyAuthenticatedUser(req.authUser.id);
-    if (!freshUser) {
-      await sessions.revoke(req.authToken);
-      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "账号已停用或不存在" } });
+app.use((req: AuthRequest, res, next) => {
+  void (async () => {
+    if (requiresStateSerialization(req.method, req.originalUrl)) {
+      next();
       return;
     }
-    req.authUser = freshUser;
-  }
-  next();
-}));
+    if (!shouldReloadStateFromDatabase(req.method, req.path)) {
+      next();
+      return;
+    }
+    const databaseRevision = await getStateRevision();
+    if (databaseRevision !== stateRevision || req.method.toUpperCase() !== "GET") {
+      await reloadRequestStateFromDatabase(req);
+    }
+    if (req.authUser) {
+      const freshUser = applyAuthenticatedUser(req.authUser.id);
+      if (!freshUser) {
+        await sessions.revoke(req.authToken);
+        sendApiError(req, res, 401, "UNAUTHORIZED", "账号已停用或不存在", true);
+        return;
+      }
+      req.authUser = freshUser;
+    }
+    next();
+  })().catch(next);
+});
 
 app.use((req: AuthRequest, res, next) => {
   const sendJson = res.json.bind(res);
@@ -1560,7 +1665,8 @@ app.post("/api/ai/copilot", requireAnyMenu(copilotMenuIds), async (req: AuthRequ
     await reloadStateFromDatabase();
     await runCopilotTurn({ messages, context }, state, emit);
   } catch (error) {
-    emit({ type: "error", message: error instanceof Error ? error.message : "Copilot 请求失败" });
+    logRequestError(req, error, "AI_COPILOT_ERROR");
+    emit({ type: "error", message: "Copilot 请求失败，请稍后重试" });
   } finally {
     if (!res.writableEnded) res.end();
   }
@@ -1574,7 +1680,7 @@ app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), 
   const insightId = String(req.params.id || "").trim();
   const status = req.body?.status;
   if (!insightId || insightId.length > 180) {
-    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "经营建议标识不合法" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "经营建议标识不合法");
     return;
   }
   if (status === "pending") {
@@ -1583,18 +1689,23 @@ app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), 
     return;
   }
   if (status !== "done" && status !== "ignored") {
-    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "经营建议状态不合法" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "经营建议状态不合法");
     return;
   }
   res.json({ data: await saveAiInsightAction({ insightId, status, updatedBy: crmActor(req) }) });
 }));
 
 app.post("/api/auth/logout", asyncRoute(async (req: AuthRequest, res) => {
-  await sessions.revoke(req.authToken);
-  const result = actions(req).logout();
-  await saveStateRecords([{ key: "logs", items: state.logs.slice(0, 1) }]);
-  await reloadStateFromDatabase();
-  res.json(ok(result));
+  try {
+    await sessions.revoke(req.authToken);
+    const result = actions(req).logout();
+    await saveStateRecords([{ key: "logs", items: state.logs.slice(0, 1) }]);
+    await reloadStateFromDatabase();
+    res.json(ok(result));
+  } catch (error) {
+    await reloadStateFromDatabase().catch(() => undefined);
+    throw error;
+  }
 }));
 
 app.get("/api/users", requireBoss, requireMenu("permissions"), (req: AuthRequest, res) => {
@@ -1642,7 +1753,7 @@ app.get("/api/gpu_erp/finance/settlement-ledger", requireMenu("settlement_ledger
   const dateEnd = String(req.query.dateEnd || "");
   const keyword = String(req.query.keyword || "").trim().toLocaleLowerCase();
   if ((dateStart && !validDateKey(dateStart)) || (dateEnd && !validDateKey(dateEnd)) || (dateStart && dateEnd && dateStart > dateEnd)) {
-    res.status(400).json({error: {code: "VALIDATION_ERROR", message: "账户流水日期范围无效"}});
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "账户流水日期范围无效");
     return;
   }
   const filtered = state.settlementLedger.filter((item) => {
@@ -1681,11 +1792,11 @@ app.get("/api/gpu_erp/finance/customer-funds", requireMenu("customer_funds"), (r
   const trendEndDate = String(req.query.trendEndDate || today);
   const dates = [startDate, endDate, trendStartDate, trendEndDate];
   if (dates.some((date) => !validDateKey(date)) || startDate > endDate || trendStartDate > trendEndDate) {
-    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "资金往来日期范围无效" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "资金往来日期范围无效");
     return;
   }
   if (dateRangeDays(startDate, endDate) > 366 || dateRangeDays(trendStartDate, trendEndDate) > 366) {
-    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "资金往来查询范围不能超过 366 天" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "资金往来查询范围不能超过 366 天");
     return;
   }
   res.json(ok(buildCustomerFundsSnapshot(state, { today, startDate, endDate, trendStartDate, trendEndDate })));
@@ -2110,7 +2221,7 @@ app.post("/api/gpu_erp/crm/follow-up/create", requireMenu("crm"), asyncRoute(asy
   const created = actions(req).createCrmFollowUp({ ...req.body, handler: crmActor(req) });
   const stateMerge = crmFollowUpMerge(created);
   const customer = state.customers.find((item) => item.id === created.customerId);
-  if (!customer) throw new Error(`客户不存在: ${created.customerId}`);
+  if (!customer) throw new NotFoundError(`客户不存在: ${created.customerId}`);
   await saveStateRecords(
     stateMergeRecords(stateMerge),
     (client) => syncCrmFollowUp(client, created, customer, crmActor(req)),
@@ -2133,7 +2244,7 @@ app.post("/api/gpu_erp/crm/requirement/create", requireMenu("crm"), asyncRoute(a
   const created = actions(req).createCrmRequirement({ ...req.body, handler: crmActor(req) });
   const stateMerge = crmRequirementMerge(created);
   const customer = state.customers.find((item) => item.id === created.customerId);
-  if (!customer) throw new Error(`客户不存在: ${created.customerId}`);
+  if (!customer) throw new NotFoundError(`客户不存在: ${created.customerId}`);
   await saveStateRecords(
     stateMergeRecords(stateMerge),
     (client) => syncCrmRequirement(client, created, customer, crmActor(req)),
@@ -2145,7 +2256,7 @@ app.post("/api/gpu_erp/crm/quote/create", requireMenu("crm"), asyncRoute(async (
   const created = actions(req).createCrmQuote({ ...req.body, owner: crmActor(req) });
   const stateMerge = crmQuoteMerge(created);
   const customer = state.customers.find((item) => item.id === created.customerId);
-  if (!customer) throw new Error(`客户不存在: ${created.customerId}`);
+  if (!customer) throw new NotFoundError(`客户不存在: ${created.customerId}`);
   await saveStateRecords(
     stateMergeRecords(stateMerge),
     (client) => syncCrmQuote(client, created, customer, crmActor(req)),
@@ -2228,7 +2339,7 @@ app.get("/api/media", requireAnyMenu(mediaMenuIds), asyncRoute(async (req, res) 
 app.get("/api/media/assets/:id", requireAnyMenu(mediaMenuIds), asyncRoute(async (req, res) => {
   const asset = await getMediaAsset(req.params.id);
   if (!asset) {
-    res.status(404).json({ error: { code: "MEDIA_NOT_FOUND", message: "图片资源不存在" } });
+    sendApiError(req, res, 404, "MEDIA_NOT_FOUND", "图片资源不存在");
     return;
   }
   res.setHeader("Content-Type", asset.mime_type);
@@ -2447,7 +2558,7 @@ app.get("/api/returns", requireAnyMenu([...returnMenuIds]), (req: AuthRequest, r
 
 app.post("/api/returns", requireAnyMenu([...returnMenuIds]), asyncRoute(async (req: AuthRequest, res) => {
   if (!canAccessReturnType(req, req.body?.type)) {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "当前账号没有该退货类型的操作权限" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该退货类型的操作权限", true);
     return;
   }
   const created = actions(req).createReturnOrder(req.body);
@@ -2517,11 +2628,11 @@ app.post("/api/market-quotes", requireMenu("quotes"), asyncRoute(async (req, res
 app.post("/api/market-quotes/import", requireMenu("quotes"), asyncRoute(async (req, res) => {
   const quotes = Array.isArray(req.body?.quotes) ? req.body.quotes : [];
   if (quotes.length === 0) {
-    res.status(400).json({ error: { message: "请至少提供一条行情参考数据。" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "请至少提供一条行情参考数据。");
     return;
   }
   if (quotes.length > 2000) {
-    res.status(400).json({ error: { message: "单次最多导入 2000 条行情参考。" } });
+    sendApiError(req, res, 400, "VALIDATION_ERROR", "单次最多导入 2000 条行情参考。");
     return;
   }
   const result = actions(req).importMarketQuotes(quotes);
@@ -2676,7 +2787,7 @@ app.patch("/api/finance-ledger/:id/reconcile", requireMenu("finance"), asyncRout
 
 app.post("/api/reset", requireBoss, asyncRoute(async (req, res) => {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_RESET !== "true") {
-    res.status(403).json({ error: { code: "FORBIDDEN", message: "生产环境已禁用数据初始化接口" } });
+    sendApiError(req, res, 403, "FORBIDDEN", "生产环境已禁用数据初始化接口", true);
     return;
   }
   state = actions(req).resetToDemoData();
@@ -2694,8 +2805,7 @@ app.get("/api/export/:dataset", requireMenu("finance_reports"), (req: AuthReques
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
     res.send(`﻿${csv}`);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "导出失败";
-    res.status(400).json({ error: { code: "EXPORT_FAILED", message } });
+    throw error;
   }
 });
 
@@ -2724,36 +2834,65 @@ app.get("/api/backup/download", requireBoss, (_req, res) => {
   }, null, 2));
 });
 
-app.use((err: unknown, req: AuthRequest, res: express.Response, _next: express.NextFunction) => {
-  const sendError = () => {
-    const requestId = String(req.headers["x-request-id"] || randomUUID());
-    res.setHeader("X-Request-Id", requestId);
-    if (err instanceof AppError) {
-      res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
-      return;
-    }
-    const message = err instanceof Error ? err.message : "Unknown server error";
-    if (err instanceof QuickCaptureValidationError) {
-      res.status(err.status).json({ error: { code: err.code, message, requestId } });
-      return;
-    }
-    if (err instanceof MediaValidationError) {
-      res.status(err.status).json({ error: { code: err.code, message, requestId } });
-      return;
-    }
-    console.error(`[${requestId}] ${req.method} ${req.originalUrl}`, err);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "服务器处理失败，请稍后重试", requestId } });
-  };
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
-    sendError();
-    return;
-  }
-  // Store actions mutate the in-memory aggregate before their record patch is committed. If an
-  // action or persistence step fails, reload the last committed database state before accepting
-  // the next queued write; a failed request must never leak partial mutations into later requests.
-  void reloadStateFromDatabase().catch(() => undefined).finally(sendError);
+app.use((req: AuthRequest, res: express.Response) => {
+  sendApiError(req, res, 404, "NOT_FOUND", "接口不存在");
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend API listening on http://localhost:${PORT}`);
+app.use((err: unknown, req: AuthRequest, res: express.Response, _next: express.NextFunction) => {
+  if (isMutationAbortedError(err) && (req.destroyed || res.destroyed || res.writableEnded)) return;
+  const requestId = req.requestId || randomUUID();
+  res.setHeader("X-Request-Id", requestId);
+  const requestError = err && typeof err === "object" ? err as { type?: unknown; status?: unknown } : undefined;
+  const parserFailure = requestError?.type === "entity.parse.failed";
+  const payloadTooLarge = requestError?.type === "entity.too.large";
+  const requestErrorDetails = parserFailure
+    ? { status: 400, code: "INVALID_JSON", message: "请求体不是有效 JSON" }
+    : payloadTooLarge
+      ? { status: 413, code: "PAYLOAD_TOO_LARGE", message: "请求体超过 2MB 限制" }
+      : undefined;
+  const code = requestErrorDetails?.code || (err instanceof AppError
+    ? err.code
+    : err instanceof QuickCaptureValidationError
+      ? err.code
+      : err instanceof MediaValidationError
+        ? err.code
+        : "SERVER_ERROR");
+  logRequestError(req, err, code);
+  if (requestErrorDetails) {
+    res.status(requestErrorDetails.status).json({ error: { code: requestErrorDetails.code, message: requestErrorDetails.message, requestId } });
+    return;
+  }
+  if (err instanceof AppError) {
+    res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
+    return;
+  }
+  if (err instanceof QuickCaptureValidationError) {
+    res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
+    return;
+  }
+  if (err instanceof MediaValidationError) {
+    res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
+    return;
+  }
+
+  res.status(500).json({ error: { code: "SERVER_ERROR", message: "服务器处理失败，请稍后重试", requestId } });
 });
+
+export function createApp() {
+  return app;
+}
+
+export function startServer(port = PORT) {
+  return createApp().listen(port, () => {
+    console.log(`Backend API listening on http://localhost:${port}`);
+  });
+}
+
+function isMainModule() {
+  const entry = process.argv[1];
+  return Boolean(entry && resolve(entry) === resolve(fileURLToPath(import.meta.url)));
+}
+
+if (isMainModule()) {
+  startServer();
+}

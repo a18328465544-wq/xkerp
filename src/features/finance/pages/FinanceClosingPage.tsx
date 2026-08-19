@@ -213,7 +213,7 @@ function FinanceClosingContent({
       label: "已保存日结",
       value: `${items.length} 条`,
       description: "最近保存的日结记录",
-      status: "info",
+      tone: "info",
     },
     {
       icon: <ShieldAlert className="h-4 w-4" />,
@@ -222,7 +222,7 @@ function FinanceClosingContent({
         ? `${latest.snapshot.unreviewed + latest.snapshot.accountReconciliationDifferences} 项`
         : "—",
       description: latest ? "待复核与对账差异" : "暂无日结快照",
-      status:
+      tone:
         latest &&
         (latest.snapshot.unreviewed ||
           latest.snapshot.accountReconciliationDifferences)

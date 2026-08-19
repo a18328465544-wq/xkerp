@@ -64,6 +64,7 @@ import { createProductIdentityIndex, resolveProductIdentity, resolveProductIdent
 import { storeDate, storeDateKey, storeDateTime } from "../src/utils/storeTime.ts";
 import { isInventoryLinkedToAssembly, isInventoryLinkedToPurchase } from "../src/utils/inventoryRelations.ts";
 import { hashPassword, isPasswordHash, sanitizeUserAccount, verifyPassword } from "./security.ts";
+import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from "./errors.ts";
 import { generateEntityId, nextDailyDocumentSequence, nextProductTemplateId } from "./storeIdentifiers.ts";
 import { calculateCommission, DEFAULT_COMMISSION_RULES, normalizeCommissionRules, type CommissionRulesPatch } from "../src/utils/commissionRules.ts";
 
@@ -100,6 +101,7 @@ export interface AppState {
 export interface StoreActionContext {
   userId?: string;
   role?: StoreRole;
+  actor?: string;
 }
 
 const PRODUCT_STOCK_EXCLUDED_STATUSES = new Set<CardStatus>(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
@@ -299,7 +301,7 @@ function expandPurchaseItems(items: PurchaseItem[]) {
   return items.flatMap((item) => {
     const quantity = lineQuantity(item.quantity);
     if (quantity > 1 && item.sn?.trim()) {
-      throw new Error(`已填写SN的进货明细数量必须为 1: ${item.productName}`);
+      throw new ValidationError(`已填写SN的进货明细数量必须为 1: ${item.productName}`);
     }
     return Array.from({ length: quantity }, (_, index) => ({
       ...item,
@@ -314,7 +316,7 @@ function expandSalesItems(items: SalesItem[]) {
   return items.flatMap((item) => {
     const quantity = lineQuantity(item.quantity);
     if (quantity > 1 && item.inventoryId) {
-      throw new Error(`已绑定库存卡的销售明细数量必须为 1: ${item.productName}`);
+      throw new ValidationError(`已绑定库存卡的销售明细数量必须为 1: ${item.productName}`);
     }
     return Array.from({ length: quantity }, () => ({
       ...item,
@@ -698,23 +700,24 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   state.commissionRules = normalizeCommissionRules(state.commissionRules);
   const finiteNumber = (value: unknown, label: string) => {
     const numeric = Number(value);
-    if (!Number.isFinite(numeric)) throw new Error(`${label}必须是有效数字`);
+    if (!Number.isFinite(numeric)) throw new ValidationError(`${label}必须是有效数字`);
     return numeric;
   };
   const positiveAmount = (value: unknown, label: string) => {
     const numeric = finiteNumber(value, label);
-    if (numeric <= 0) throw new Error(`${label}必须大于 0`);
+    if (numeric <= 0) throw new ValidationError(`${label}必须大于 0`);
     return numeric;
   };
   const nonNegativeAmount = (value: unknown, label: string) => {
     const numeric = finiteNumber(value, label);
-    if (numeric < 0) throw new Error(`${label}不能小于 0`);
+    if (numeric < 0) throw new ValidationError(`${label}不能小于 0`);
     return numeric;
   };
   const getActiveUserId = () => context.userId || state.currentUserId;
   const getActiveUser = () => state.systemUsers.find((user) => user.id === getActiveUserId());
   const getActiveRole = () => context.role || getActiveUser()?.role || state.currentRole;
-  const systemActor = () => `${getActiveRole()} (系统)`;
+  const getActiveActor = () => context.actor?.trim() || getActiveRole();
+  const systemActor = () => `${getActiveActor()} (系统)`;
 
   const withCustomerGrade = (customer: CustomerCard): CustomerCard => {
     const isCoreCustomer = Boolean(customer.isCoreCustomer || customer.level === "S级");
@@ -766,7 +769,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     excludeId?: string,
   ) => {
     const name = candidate.name.trim();
-    if (!name) throw new Error("客户名称不能为空");
+    if (!name) throw new ValidationError("客户名称不能为空");
     const contact = normalizeCustomerIdentity(customerContact(candidate));
     const duplicate = state.customers.find((customer) => {
       if (customer.id === excludeId) return false;
@@ -775,19 +778,19 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       return contact ? existingContact === contact : sameName && !existingContact;
     });
     if (duplicate) {
-      throw new Error(contact ? `联系方式已被客户【${duplicate.name}】使用，请确认是否重复建档` : `客户【${name}】缺少联系方式且已存在，请补充联系方式后再建档`);
+      throw new ConflictError(contact ? `联系方式已被客户【${duplicate.name}】使用，请确认是否重复建档` : `客户【${name}】缺少联系方式且已存在，请补充联系方式后再建档`);
     }
   };
   const assertVendorIdentityAvailable = (candidate: { name: string } & Partial<Pick<Vendor, "contact" | "phone">>) => {
     const name = candidate.name.trim();
-    if (!name) throw new Error("同行名称不能为空");
+    if (!name) throw new ValidationError("同行名称不能为空");
     const contact = normalizeCustomerIdentity(vendorContact(candidate));
     const duplicate = state.vendors.find((vendor) => {
       const existingContact = normalizeCustomerIdentity(vendorContact(vendor));
       return contact ? existingContact === contact : vendor.name.trim() === name && !existingContact;
     });
     if (duplicate) {
-      throw new Error(contact ? `联系方式已被同行【${duplicate.name}】使用，请勿重复建档` : `同行【${name}】缺少联系方式且已存在，请补充联系方式后再建档`);
+      throw new ConflictError(contact ? `联系方式已被同行【${duplicate.name}】使用，请勿重复建档` : `同行【${name}】缺少联系方式且已存在，请补充联系方式后再建档`);
     }
   };
   state.customPermissions = normalizePermissions(state.customPermissions);
@@ -818,7 +821,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const assertSnUnique = (sn: string, excludeId?: string) => {
     const trimmed = sn.trim();
     if (trimmed && findCardBySn(trimmed, excludeId)) {
-      throw new Error(`SN已存在: ${trimmed}`);
+      throw new ConflictError(`SN已存在: ${trimmed}`);
     }
   };
 
@@ -928,8 +931,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const findSettlementAccount = (accountId: string) => {
     const account = state.settlementAccounts.find((item) => item.id === accountId);
-    if (!account) throw new Error(`结算账户不存在: ${accountId}`);
-    if (!account.enabled) throw new Error(`结算账户已停用: ${account.name}`);
+    if (!account) throw new NotFoundError(`结算账户不存在: ${accountId}`);
+    if (!account.enabled) throw new ConflictError(`结算账户已停用: ${account.name}`);
     return account;
   };
 
@@ -1065,7 +1068,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const createSettlementAccount = (account: Omit<SettlementAccount, "id" | "lastChangeTime"> & { id?: string }) => {
-    if (!account.name?.trim()) throw new Error("结算账户名称不能为空");
+    if (!account.name?.trim()) throw new ValidationError("结算账户名称不能为空");
     const balance = finiteNumber(account.balance ?? 0, "账户余额");
     const frozenAmount = nonNegativeAmount(account.frozenAmount ?? 0, "冻结金额");
     const availableBalance = finiteNumber(account.availableBalance ?? balance - frozenAmount, "可用余额");
@@ -1086,7 +1089,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteSettlementAccount = (id: string) => {
     const existing = state.settlementAccounts.find((account) => account.id === id);
-    if (!existing) throw new Error(`结算账户不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`结算账户不存在: ${id}`);
     const hasLedger = state.settlementLedger.some((item) => item.accountId === id);
     const hasPaymentIn = state.paymentInRecords.some((item) => item.accountId === id);
     const hasPaymentOut = state.paymentOutRecords.some((item) => item.accountId === id);
@@ -1095,7 +1098,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const hasInvoice = state.salesInvoices.some((item) => item.settlementAccountId === id) || state.purchaseInvoices.some((item) => item.settlementAccountId === id);
     const hasReturnOrder = state.returnOrders.some((item) => item.settlementAccountId === id);
     if (hasLedger || hasPaymentIn || hasPaymentOut || hasTransfer || hasFinanceLedger || hasInvoice || hasReturnOrder) {
-      throw new Error("该结算账户已有流水、收付款、调拨或业务单据关联，不能删除");
+      throw new ConflictError("该结算账户已有流水、收付款、调拨或业务单据关联，不能删除");
     }
     state.settlementAccounts = state.settlementAccounts.filter((account) => account.id !== id);
     addLog(systemActor(), "结算账户", "删除结算账户", existing.name);
@@ -1103,9 +1106,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const reconcileSettlementAccount = (id: string, actualBalance: number, handler?: string) => {
-    if (!Number.isFinite(Number(actualBalance))) throw new Error("实盘余额必须为有效数字");
+    if (!Number.isFinite(Number(actualBalance))) throw new ValidationError("实盘余额必须为有效数字");
     const existing = state.settlementAccounts.find((account) => account.id === id);
-    if (!existing) throw new Error(`结算账户不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`结算账户不存在: ${id}`);
     const actual = Number(actualBalance);
     const actor = handler?.trim() || systemActor();
     const updated = {
@@ -1205,12 +1208,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const amount = purchaseVendorCreditApplied(invoice);
     if (!amount || !delta) return;
     const vendorId = purchaseInvoiceVendorId(invoice);
-    if (!vendorId) throw new Error("供应商抵扣余额只能用于同行供应商采购单");
+    if (!vendorId) throw new ValidationError("供应商抵扣余额只能用于同行供应商采购单");
     const vendor = state.vendors.find((item) => item.id === vendorId);
-    if (!vendor) throw new Error("采购单关联供应商不存在，不能使用抵扣余额");
+    if (!vendor) throw new NotFoundError("采购单关联供应商不存在，不能使用抵扣余额");
     const nextBalance = Number(vendor.returnCreditBalance || 0) + delta;
     if (nextBalance < -0.009) {
-      throw new Error(`供应商抵扣余额不足：可用 ${Math.max(0, Number(vendor.returnCreditBalance || 0))} 元，需使用 ${amount} 元`);
+      throw new ConflictError(`供应商抵扣余额不足：可用 ${Math.max(0, Number(vendor.returnCreditBalance || 0))} 元，需使用 ${amount} 元`);
     }
     state.vendors = state.vendors.map((item) => item.id === vendorId
       ? { ...item, returnCreditBalance: Math.max(0, nextBalance) }
@@ -1221,7 +1224,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const paid = Math.max(0, Number(paidAmount || 0));
     const credit = Math.max(0, Number(vendorCreditAmount || 0));
     if (paid + credit > totalCost + 0.009) {
-      throw new Error("现金付款与供应商抵扣余额之和不能超过采购总额");
+      throw new ValidationError("现金付款与供应商抵扣余额之和不能超过采购总额");
     }
     const unpaid = Math.max(0, totalCost - paid - credit);
     return { paidAmount: paid, vendorCreditAppliedAmount: credit, unpaidAmount: unpaid };
@@ -1299,7 +1302,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const resolvePurchaseSourceArchive = (invoice: Pick<PurchaseInvoice, "sourceType" | "sourcePartnerId" | "supplierName" | "contact" | "date">) => {
     const sourceName = invoice.supplierName.trim();
     const sourceContact = invoice.contact.trim();
-    if (!sourceName) throw new Error("请选择来源档案");
+    if (!sourceName) throw new ValidationError("请选择来源档案");
     const isPersonalSource = ["个人回收", "客户置换"].includes(invoice.sourceType);
     if (isPersonalSource) {
       const candidates = state.customers.filter((customer) =>
@@ -1309,9 +1312,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const customer = invoice.sourcePartnerId
         ? state.customers.find((item) => item.id === invoice.sourcePartnerId)
         : candidates.length === 1 ? candidates[0] : undefined;
-      if (invoice.sourcePartnerId && !customer) throw new Error("所选个人客户档案不存在");
+      if (invoice.sourcePartnerId && !customer) throw new NotFoundError("所选个人客户档案不存在");
       if (!invoice.sourcePartnerId && candidates.length > 1) {
-        throw new Error("存在同名个人客户，请从来源客户中选择具体档案");
+        throw new ConflictError("存在同名个人客户，请从来源客户中选择具体档案");
       }
       const resolved = customer || {
         id: nextPartnerArchiveId("KH", state.customers),
@@ -1350,9 +1353,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const vendor = invoice.sourcePartnerId
       ? state.vendors.find((item) => item.id === invoice.sourcePartnerId)
       : candidates.length === 1 ? candidates[0] : undefined;
-    if (invoice.sourcePartnerId && !vendor) throw new Error("所选同行档案不存在");
+    if (invoice.sourcePartnerId && !vendor) throw new NotFoundError("所选同行档案不存在");
     if (!invoice.sourcePartnerId && candidates.length > 1) {
-      throw new Error("存在同名同行档案，请从来源客户中选择具体档案");
+      throw new ConflictError("存在同名同行档案，请从来源客户中选择具体档案");
     }
     const resolved = vendor || {
       id: nextPartnerArchiveId("GY", state.vendors),
@@ -1384,7 +1387,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const resolveSalesCustomerArchive = (invoice: Pick<SalesInvoice, "customerId" | "customerPartnerType" | "customerName" | "contact" | "channel" | "date">) => {
     const customerName = invoice.customerName.trim();
     const customerContact = invoice.contact.trim();
-    if (!customerName) throw new Error("请选择客户档案");
+    if (!customerName) throw new ValidationError("请选择客户档案");
     const customerPartnerType = invoice.customerPartnerType || (invoice.channel === "同行网店" ? "vendor" : "customer");
     if (customerPartnerType === "vendor") {
       const candidates = state.vendors.filter((vendor) =>
@@ -1394,9 +1397,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const vendor = invoice.customerId
         ? state.vendors.find((item) => item.id === invoice.customerId)
         : candidates.length === 1 ? candidates[0] : undefined;
-      if (invoice.customerId && !vendor) throw new Error("所选同行档案不存在");
+      if (invoice.customerId && !vendor) throw new NotFoundError("所选同行档案不存在");
       if (!invoice.customerId && candidates.length > 1) {
-        throw new Error("存在同名同行档案，请从来源客户中选择具体档案");
+        throw new ConflictError("存在同名同行档案，请从来源客户中选择具体档案");
       }
       const resolved = vendor || {
         id: nextPartnerArchiveId("GY", state.vendors),
@@ -1432,9 +1435,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const customer = invoice.customerId
       ? state.customers.find((item) => item.id === invoice.customerId)
       : candidates.length === 1 ? candidates[0] : undefined;
-    if (invoice.customerId && !customer) throw new Error("所选个人客户档案不存在");
+    if (invoice.customerId && !customer) throw new NotFoundError("所选个人客户档案不存在");
     if (!invoice.customerId && candidates.length > 1) {
-      throw new Error("存在同名个人客户，请从来源客户中选择具体档案");
+      throw new ConflictError("存在同名个人客户，请从来源客户中选择具体档案");
     }
     const resolved = customer || {
       id: nextPartnerArchiveId("KH", state.customers),
@@ -1469,7 +1472,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const createPaymentIn = (payment: Omit<PaymentInRecord, "id" | "accountName">, options?: { skipInvoiceUpdate?: boolean }) => {
     const paymentAmount = positiveAmount(payment.amount, "收款金额");
     if (payment.relatedDocNo && NON_OPERATING_INCOME_TYPES.has(String(payment.businessType || ""))) {
-      throw new Error("非经营收入不能绑定销售/采购业务单据，请使用关联参考号记录外部凭证");
+      throw new ValidationError("非经营收入不能绑定销售/采购业务单据，请使用关联参考号记录外部凭证");
     }
     const account = findSettlementAccount(payment.accountId);
     const linkedSalesInvoice = findSalesInvoiceByDocNo(payment.relatedDocNo);
@@ -1556,15 +1559,15 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updatePaymentIn = (id: string, payment: Partial<PaymentInRecord>) => {
     const existing = state.paymentInRecords.find((item) => item.id === id);
-    if (!existing) throw new Error(`收款单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`收款单不存在: ${id}`);
     if (existing.relatedDocNo) {
-      throw new Error("已绑定业务单据的收款单不能直接编辑，请在关联销售单或冲销流程中处理");
+      throw new ConflictError("已绑定业务单据的收款单不能直接编辑，请在关联销售单或冲销流程中处理");
     }
     const nextAmount = Number(payment.amount ?? existing.amount);
     const nextBusinessType = payment.businessType ?? existing.businessType;
-    if (!Number.isFinite(nextAmount) || nextAmount <= 0) throw new Error("收款金额必须大于 0");
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) throw new ValidationError("收款金额必须大于 0");
     if (payment.relatedDocNo && NON_OPERATING_INCOME_TYPES.has(String(nextBusinessType || ""))) {
-      throw new Error("非经营收入不能绑定销售/采购业务单据，请使用关联参考号记录外部凭证");
+      throw new ValidationError("非经营收入不能绑定销售/采购业务单据，请使用关联参考号记录外部凭证");
     }
     const nextAccount = findSettlementAccount(payment.accountId || existing.accountId);
     const updated: PaymentInRecord = {
@@ -1579,7 +1582,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const settlementLedgerId = findPaymentInSettlementLedgerId(existing);
     const financeLedgerId = findPaymentInFinanceLedgerId(existing);
     if (!settlementLedgerId || !financeLedgerId) {
-      throw new Error("收款单缺少唯一关联流水，不能直接编辑，请使用冲销流程处理");
+      throw new ConflictError("收款单缺少唯一关联流水，不能直接编辑，请使用冲销流程处理");
     }
     updated.settlementLedgerId = settlementLedgerId;
     updated.financeLedgerId = financeLedgerId;
@@ -1643,14 +1646,14 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deletePaymentIn = (id: string, options?: { skipInvoiceUpdate?: boolean }) => {
     const existing = state.paymentInRecords.find((item) => item.id === id);
-    if (!existing) throw new Error(`收款单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`收款单不存在: ${id}`);
     if (!options?.skipInvoiceUpdate && existing.relatedDocNo) {
-      throw new Error("已绑定业务单据的收款单不能直接删除，请先处理关联销售单或使用冲销流程");
+      throw new ConflictError("已绑定业务单据的收款单不能直接删除，请先处理关联销售单或使用冲销流程");
     }
     const settlementLedgerId = findPaymentInSettlementLedgerId(existing);
     const financeLedgerId = findPaymentInFinanceLedgerId(existing);
     if (!settlementLedgerId || !financeLedgerId) {
-      throw new Error("收款单缺少唯一关联流水，不能直接删除，请使用冲销流程处理");
+      throw new ConflictError("收款单缺少唯一关联流水，不能直接删除，请使用冲销流程处理");
     }
     adjustSettlementBalance(existing.accountId, -existing.amount);
     state.paymentInRecords = state.paymentInRecords.filter((item) => item.id !== id);
@@ -1693,7 +1696,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const createPaymentOut = (payment: Omit<PaymentOutRecord, "id" | "accountName">, options?: { skipInvoiceUpdate?: boolean }) => {
     const paymentAmount = positiveAmount(payment.amount, "付款金额");
     if (payment.relatedDocNo && NON_OPERATING_EXPENSE_TYPES.has(String(payment.businessType || ""))) {
-      throw new Error("非经营支出不能绑定采购/退货业务单据，请使用关联参考号记录外部凭证");
+      throw new ValidationError("非经营支出不能绑定采购/退货业务单据，请使用关联参考号记录外部凭证");
     }
     const account = findSettlementAccount(payment.accountId);
     const linkedPurchaseInvoice = findPurchaseInvoiceByDocNo(payment.relatedDocNo);
@@ -1788,15 +1791,15 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updatePaymentOut = (id: string, payment: Partial<PaymentOutRecord>) => {
     const existing = state.paymentOutRecords.find((item) => item.id === id);
-    if (!existing) throw new Error(`付款单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`付款单不存在: ${id}`);
     if (existing.relatedDocNo) {
-      throw new Error("已绑定业务单据的付款单不能直接编辑，请在关联进货/入库单或冲销流程中处理");
+      throw new ConflictError("已绑定业务单据的付款单不能直接编辑，请在关联进货/入库单或冲销流程中处理");
     }
     const nextAmount = Number(payment.amount ?? existing.amount);
     const nextBusinessType = payment.businessType ?? existing.businessType;
-    if (!Number.isFinite(nextAmount) || nextAmount <= 0) throw new Error("付款金额必须大于 0");
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) throw new ValidationError("付款金额必须大于 0");
     if (payment.relatedDocNo && NON_OPERATING_EXPENSE_TYPES.has(String(nextBusinessType || ""))) {
-      throw new Error("非经营支出不能绑定采购/退货业务单据，请使用关联参考号记录外部凭证");
+      throw new ValidationError("非经营支出不能绑定采购/退货业务单据，请使用关联参考号记录外部凭证");
     }
     const nextAccount = findSettlementAccount(payment.accountId || existing.accountId);
     const updated: PaymentOutRecord = {
@@ -1812,7 +1815,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const settlementLedgerId = findPaymentOutSettlementLedgerId(existing);
     const financeLedgerId = findPaymentOutFinanceLedgerId(existing);
     if (!settlementLedgerId || !financeLedgerId) {
-      throw new Error("付款单缺少唯一关联流水，不能直接编辑，请使用冲销流程处理");
+      throw new ConflictError("付款单缺少唯一关联流水，不能直接编辑，请使用冲销流程处理");
     }
     updated.settlementLedgerId = settlementLedgerId;
     updated.financeLedgerId = financeLedgerId;
@@ -1876,14 +1879,14 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deletePaymentOut = (id: string, options?: { skipInvoiceUpdate?: boolean }) => {
     const existing = state.paymentOutRecords.find((item) => item.id === id);
-    if (!existing) throw new Error(`付款单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`付款单不存在: ${id}`);
     if (!options?.skipInvoiceUpdate && existing.relatedDocNo) {
-      throw new Error("已绑定业务单据的付款单不能直接删除，请先处理关联进货/入库单或使用冲销流程");
+      throw new ConflictError("已绑定业务单据的付款单不能直接删除，请先处理关联进货/入库单或使用冲销流程");
     }
     const settlementLedgerId = findPaymentOutSettlementLedgerId(existing);
     const financeLedgerId = findPaymentOutFinanceLedgerId(existing);
     if (!settlementLedgerId || !financeLedgerId) {
-      throw new Error("付款单缺少唯一关联流水，不能直接删除，请使用冲销流程处理");
+      throw new ConflictError("付款单缺少唯一关联流水，不能直接删除，请使用冲销流程处理");
     }
     adjustSettlementBalance(existing.accountId, existing.amount);
     state.paymentOutRecords = state.paymentOutRecords.filter((item) => item.id !== id);
@@ -2064,7 +2067,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     // the caller selects an account. New documents always require real source payment records.
     if (!sourcePayments.length) {
       if (!legacyFallbackAccountId) {
-        throw new Error("原单缺少收付款流水，无法自动原路退款；请先补齐历史付款流水或选择人工退款账户");
+        throw new ConflictError("原单缺少收付款流水，无法自动原路退款；请先补齐历史付款流水或选择人工退款账户");
       }
       const account = findSettlementAccount(legacyFallbackAccountId);
       return [{
@@ -2097,10 +2100,10 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const sourceById = new Map(sourcePayments.map((payment) => [payment.id, payment]));
     const normalize = (sourcePaymentId: string, amount: number): ReturnRefundAllocation => {
       const source = sourceById.get(sourcePaymentId);
-      if (!source) throw new Error("退款分摊必须引用关联原单的收付款流水");
+      if (!source) throw new NotFoundError("退款分摊必须引用关联原单的收付款流水");
       const available = Math.max(0, availableById.get(sourcePaymentId) || 0);
       if (!Number.isFinite(amount) || amount <= 0 || amount > available + 0.009) {
-        throw new Error(`原付款流水可退款金额不足：${source.accountName} 可用 ${available} 元`);
+        throw new ConflictError(`原付款流水可退款金额不足：${source.accountName} 可用 ${available} 元`);
       }
       availableById.set(sourcePaymentId, available - amount);
       return {
@@ -2126,26 +2129,26 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         })();
     const allocated = allocations.reduce((sum, item) => sum + item.amount, 0);
     if (Math.abs(allocated - cashAmount) > 0.009) {
-      throw new Error(`原付款流水不足以覆盖本次退款：需退款 ${cashAmount} 元，已分摊 ${allocated} 元`);
+      throw new ConflictError(`原付款流水不足以覆盖本次退款：需退款 ${cashAmount} 元，已分摊 ${allocated} 元`);
     }
     return allocations;
   };
 
   const createReturnOrder = (input: Omit<ReturnOrder, "id" | "returnNo" | "status" | "date" | "settlementAccountName"> & { date?: string }) => {
-    if (!input.type) throw new Error("退货类型不能为空");
-    if (!input.relatedDocNo?.trim()) throw new Error("退货必须关联业务单据");
-    if (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0) throw new Error("退货金额必须为大于 0 的有效数字");
+    if (!input.type) throw new ValidationError("退货类型不能为空");
+    if (!input.relatedDocNo?.trim()) throw new ValidationError("退货必须关联业务单据");
+    if (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0) throw new ValidationError("退货金额必须为大于 0 的有效数字");
     if (input.type === "销售退货" && input.settlementMode !== "原路退款") {
-      throw new Error("销售退货仅支持原路退款");
+      throw new ValidationError("销售退货仅支持原路退款");
     }
     if (input.type === "进货退货" && !["原路退款", "抵扣账款", "直接冲销"].includes(input.settlementMode)) {
-      throw new Error("进货退货结算方式无效");
+      throw new ValidationError("进货退货结算方式无效");
     }
     const allowedInventoryActions = input.type === "销售退货"
       ? ["退回待检测", "直接报废"]
       : ["退回供应商", "直接报废"];
     if (!allowedInventoryActions.includes(input.inventoryAction)) {
-      throw new Error(`${input.type}的库存处理方式无效`);
+      throw new ValidationError(`${input.type}的库存处理方式无效`);
     }
 
     const sourceCard = input.sourceInventoryId || input.sn ? findReturnInventory(input) : undefined;
@@ -2162,29 +2165,29 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const amount = Number(input.amount || salesItem?.sellPrice || purchaseItem?.buyPrice || sourceCard?.costPrice || 0);
 
     if (input.type === "销售退货") {
-      if (!salesInvoice) throw new Error(`销售退货关联销售单不存在: ${input.relatedDocNo}`);
+      if (!salesInvoice) throw new NotFoundError(`销售退货关联销售单不存在: ${input.relatedDocNo}`);
       if (!sourceCard || !salesItem || sourceCard.salesInvoiceId !== salesInvoice.invoiceNo) {
-        throw new Error("所选库存不属于关联销售单");
+        throw new ConflictError("所选库存不属于关联销售单");
       }
-      if (salesInvoice.outboundStatus !== "已出库") throw new Error("销售单尚未完成出库，不能办理退货");
-      if (Math.abs(amount - Number(salesItem.sellPrice || 0)) > 0.009) throw new Error("销售退货金额必须与原商品成交价一致");
+      if (salesInvoice.outboundStatus !== "已出库") throw new ConflictError("销售单尚未完成出库，不能办理退货");
+      if (Math.abs(amount - Number(salesItem.sellPrice || 0)) > 0.009) throw new ValidationError("销售退货金额必须与原商品成交价一致");
     }
     if (input.type === "进货退货") {
-      if (!purchaseInvoice) throw new Error(`进货退货关联采购单不存在: ${input.relatedDocNo}`);
+      if (!purchaseInvoice) throw new NotFoundError(`进货退货关联采购单不存在: ${input.relatedDocNo}`);
       if (!sourceCard || findPurchaseInvoiceForCard(sourceCard)?.id !== purchaseInvoice.id || !purchaseItem) {
-        throw new Error("所选库存不属于关联采购单");
+        throw new ConflictError("所选库存不属于关联采购单");
       }
       if (["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(sourceCard.status)) {
-        throw new Error(`库存状态为${sourceCard.status}，不能办理进货退货`);
+        throw new ConflictError(`库存状态为${sourceCard.status}，不能办理进货退货`);
       }
-      if (Math.abs(amount - Number(purchaseItem.buyPrice || sourceCard.costPrice || 0)) > 0.009) throw new Error("进货退货金额必须与原商品进货价一致");
+      if (Math.abs(amount - Number(purchaseItem.buyPrice || sourceCard.costPrice || 0)) > 0.009) throw new ValidationError("进货退货金额必须与原商品进货价一致");
     }
 
     const duplicateReturn = state.returnOrders.find((order) =>
       order.status !== "已作废" &&
       order.sourceInventoryId === sourceCard?.id
     );
-    if (duplicateReturn) throw new Error(`该库存已有未完成的退货单: ${duplicateReturn.returnNo}`);
+    if (duplicateReturn) throw new ConflictError(`该库存已有未完成的退货单: ${duplicateReturn.returnNo}`);
 
     const resultingTotal = input.type === "销售退货"
       ? Math.max(0, Number(salesInvoice?.totalAmount || 0) - amount)
@@ -2200,14 +2203,14 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         payment.relatedDocNo === purchaseInvoice?.invoiceNo || payment.relatedDocNo === purchaseInvoice?.id,
       );
       if (resultingTotal > 0 || invoiceCredit > 0 || linkedPayments.length !== 1) {
-        throw new Error("直接冲销仅用于整张采购单误录的一笔现金付款；含部分退货、供应商抵扣或多笔付款时请分别处理");
+        throw new ConflictError("直接冲销仅用于整张采购单误录的一笔现金付款；含部分退货、供应商抵扣或多笔付款时请分别处理");
       }
       const linkedPayment = linkedPayments[0];
       if (
         linkedPayment.businessType !== "采购付款" ||
         Math.abs(Number(linkedPayment.amount || 0) - paidBefore) > 0.009
       ) {
-        throw new Error("直接冲销要求原采购单的唯一采购付款与现金已付金额完全一致；历史金额不一致请先核对付款流水");
+        throw new ConflictError("直接冲销要求原采购单的唯一采购付款与现金已付金额完全一致；历史金额不一致请先核对付款流水");
       }
     }
     if (
@@ -2217,7 +2220,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       ["个人回收", "客户置换"].includes(purchaseInvoice.sourceType) &&
       cashSettlementAmount > 0
     ) {
-      throw new Error("个人回收的已付款退货不能留作供应商抵扣余额，请选择原路退款");
+      throw new ValidationError("个人回收的已付款退货不能留作供应商抵扣余额，请选择原路退款");
     }
 
     const order: ReturnOrder = {
@@ -2255,11 +2258,11 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const reverseSalesReturn = (order: ReturnOrder) => {
     const invoice = state.salesInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
-    if (!invoice) throw new Error(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
+    if (!invoice) throw new NotFoundError(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
     const returnedLine = findSalesReturnLine(invoice, order, returnedCard);
     const returnedItem = returnedLine?.item;
     const refundAmount = Number(order.amount || returnedItem?.sellPrice || 0);
-    if (!returnedLine || !returnedItem) throw new Error("销售退货必须关联销售单中的商品");
+    if (!returnedLine || !returnedItem) throw new ConflictError("销售退货必须关联销售单中的商品");
 
     const remainingItems = invoice.items.filter((_, index) => index !== returnedLine.index);
     const totalCount = remainingItems.length;
@@ -2274,7 +2277,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (cashRefundAmount > 0) {
       const allocations = order.refundAllocations || [];
       const allocationTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-      if (Math.abs(allocationTotal - cashRefundAmount) > 0.009) throw new Error("销售退货退款分摊与应退现金不一致");
+      if (Math.abs(allocationTotal - cashRefundAmount) > 0.009) throw new ConflictError("销售退货退款分摊与应退现金不一致");
       refundPaymentRecordIds = allocations.map((allocation) => createPaymentOut({
         customerName: invoice.customerName,
         accountId: allocation.accountId,
@@ -2362,10 +2365,10 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const reversePurchaseReturn = (order: ReturnOrder) => {
     const invoice = state.purchaseInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
-    if (!invoice) throw new Error(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
-    if (!returnedCard) throw new Error("进货退货必须关联库存档案");
+    if (!invoice) throw new NotFoundError(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
+    if (!returnedCard) throw new NotFoundError("进货退货必须关联库存档案");
     const returnedLine = findPurchaseReturnLine(invoice, order, returnedCard);
-    if (!returnedLine) throw new Error("进货退货库存与采购明细不匹配");
+    if (!returnedLine) throw new ConflictError("进货退货库存与采购明细不匹配");
     const returnedItemIndex = returnedLine.index;
     const returnedItem = returnedLine.item;
     const amount = Number(order.amount || returnedItem.buyPrice || returnedCard.costPrice || 0);
@@ -2397,8 +2400,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const linkedPayments = state.paymentOutRecords.filter((payment) =>
         payment.relatedDocNo === invoice.invoiceNo || payment.relatedDocNo === invoice.id,
       );
-      if (totalCost > 0 || originalVendorCredit > 0) throw new Error("直接冲销仅支持未使用供应商抵扣余额的整张采购单全部退货");
-      if (linkedPayments.length !== 1) throw new Error("直接冲销要求原采购单恰好只有一笔付款；多笔付款请在付款流水中逐笔处理");
+      if (totalCost > 0 || originalVendorCredit > 0) throw new ConflictError("直接冲销仅支持未使用供应商抵扣余额的整张采购单全部退货");
+      if (linkedPayments.length !== 1) throw new ConflictError("直接冲销要求原采购单恰好只有一笔付款；多笔付款请在付款流水中逐笔处理");
       reversedPaymentSnapshot = { ...linkedPayments[0] };
       affectedAccountId = reversedPaymentSnapshot.accountId;
       deletePaymentOut(reversedPaymentSnapshot.id, { skipInvoiceUpdate: true });
@@ -2406,7 +2409,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (order.settlementMode === "原路退款" && cashRefundAmount > 0) {
       const allocations = order.refundAllocations || [];
       const allocationTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-      if (Math.abs(allocationTotal - cashRefundAmount) > 0.009) throw new Error("进货退货退款分摊与应退现金不一致");
+      if (Math.abs(allocationTotal - cashRefundAmount) > 0.009) throw new ConflictError("进货退货退款分摊与应退现金不一致");
       refundPaymentRecordIds = allocations.map((allocation) => createPaymentIn({
         customerName: invoice.supplierName,
         supplierId: purchaseInvoiceVendorId(invoice),
@@ -2500,9 +2503,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const completeReturnOrder = (id: string) => {
     const existing = state.returnOrders.find((item) => item.id === id || item.returnNo === id);
-    if (!existing) throw new Error(`退货单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`退货单不存在: ${id}`);
     if (existing.status === "已完成") return existing;
-    if (existing.status === "已作废") throw new Error("已作废退货单不能完成");
+    if (existing.status === "已作废") throw new ConflictError("已作废退货单不能完成");
     const result = existing.type === "销售退货" ? reverseSalesReturn(existing) : reversePurchaseReturn(existing);
     const completed: ReturnOrder = {
       ...existing,
@@ -2524,7 +2527,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updateReturnOrder = (id: string, patch: Partial<Pick<ReturnOrder, "handler" | "reason" | "remarks" | "responsibility">>) => {
     const existing = state.returnOrders.find((item) => item.id === id || item.returnNo === id);
-    if (!existing) throw new Error(`退货单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`退货单不存在: ${id}`);
     const updated: ReturnOrder = {
       ...existing,
       handler: typeof patch.handler === "string" && patch.handler.trim() ? patch.handler.trim() : existing.handler,
@@ -2576,8 +2579,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const restoreDeletedSalesReturn = (order: ReturnOrder) => {
     const invoice = state.salesInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
-    if (!invoice) throw new Error(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
-    if (!returnedCard) throw new Error("销售退货库存档案不存在，不能删除已完成退货单");
+    if (!invoice) throw new NotFoundError(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
+    if (!returnedCard) throw new NotFoundError("销售退货库存档案不存在，不能删除已完成退货单");
 
     const payments = returnRefundPayments(order) as PaymentOutRecord[];
     const cashRefundAmount = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
@@ -2680,8 +2683,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const restoreDeletedPurchaseReturn = (order: ReturnOrder) => {
     const invoice = state.purchaseInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
-    if (!invoice) throw new Error(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
-    if (!returnedCard) throw new Error("进货退货库存档案不存在，不能删除已完成退货单");
+    if (!invoice) throw new NotFoundError(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
+    if (!returnedCard) throw new NotFoundError("进货退货库存档案不存在，不能删除已完成退货单");
 
     const payments = returnRefundPayments(order) as PaymentInRecord[];
     const refundedCash = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
@@ -2816,9 +2819,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteReturnOrder = (id: string) => {
     const existing = state.returnOrders.find((item) => item.id === id || item.returnNo === id);
-    if (!existing) throw new Error(`退货单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`退货单不存在: ${id}`);
     if (existing.status === "已完成" && existing.type === "进货退货" && existing.settlementMode === "直接冲销" && !existing.reversedPaymentSnapshot) {
-      throw new Error("该历史直接冲销记录缺少原付款快照，不能自动还原；请先在付款流水中人工核对后处理");
+      throw new ConflictError("该历史直接冲销记录缺少原付款快照，不能自动还原；请先在付款流水中人工核对后处理");
     }
     if (existing.status === "已完成") {
       if (existing.type === "销售退货") {
@@ -2836,11 +2839,11 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const amount = positiveAmount(transfer.amount, "调拨金额");
     const fee = nonNegativeAmount(transfer.fee, "手续费");
     const receivedAmount = nonNegativeAmount(transfer.receivedAmount, "实际到账金额");
-    if (fee > amount) throw new Error("手续费不能大于调拨金额");
-    if (Math.abs(receivedAmount - (amount - fee)) > 0.009) throw new Error("实际到账金额必须等于调拨金额减手续费");
+    if (fee > amount) throw new ValidationError("手续费不能大于调拨金额");
+    if (Math.abs(receivedAmount - (amount - fee)) > 0.009) throw new ValidationError("实际到账金额必须等于调拨金额减手续费");
     const from = findSettlementAccount(transfer.fromAccountId);
     const to = findSettlementAccount(transfer.toAccountId);
-    if (from.id === to.id) throw new Error("转出账户和转入账户不能相同");
+    if (from.id === to.id) throw new ValidationError("转出账户和转入账户不能相同");
     const record: AccountTransferRecord = {
       ...transfer,
       amount,
@@ -2893,15 +2896,15 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updateAccountTransfer = (id: string, transfer: Partial<AccountTransferRecord>) => {
     const existing = state.accountTransfers.find((item) => item.id === id);
-    if (!existing) throw new Error(`资金调拨单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`资金调拨单不存在: ${id}`);
     const from = findSettlementAccount(transfer.fromAccountId || existing.fromAccountId);
     const to = findSettlementAccount(transfer.toAccountId || existing.toAccountId);
-    if (from.id === to.id) throw new Error("转出账户和转入账户不能相同");
+    if (from.id === to.id) throw new ValidationError("转出账户和转入账户不能相同");
     const amount = positiveAmount(transfer.amount ?? existing.amount, "调拨金额");
     const fee = nonNegativeAmount(transfer.fee ?? existing.fee, "手续费");
     const receivedAmount = nonNegativeAmount(transfer.receivedAmount ?? amount - fee, "实际到账金额");
-    if (fee > amount) throw new Error("手续费不能大于调拨金额");
-    if (Math.abs(receivedAmount - (amount - fee)) > 0.009) throw new Error("实际到账金额必须等于调拨金额减手续费");
+    if (fee > amount) throw new ValidationError("手续费不能大于调拨金额");
+    if (Math.abs(receivedAmount - (amount - fee)) > 0.009) throw new ValidationError("实际到账金额必须等于调拨金额减手续费");
     const updated: AccountTransferRecord = {
       ...existing,
       ...transfer,
@@ -2956,7 +2959,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteAccountTransfer = (id: string) => {
     const existing = state.accountTransfers.find((item) => item.id === id);
-    if (!existing) throw new Error(`资金调拨单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`资金调拨单不存在: ${id}`);
     adjustSettlementBalance(existing.fromAccountId, existing.amount);
     adjustSettlementBalance(existing.toAccountId, -existing.receivedAmount);
     state.accountTransfers = state.accountTransfers.filter((item) => item.id !== id);
@@ -3020,7 +3023,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const addProductTemplates = (products: Array<Omit<ProductTemplate, "id" | "currentStock"> & { id?: string; currentStock?: number }>) => {
-    if (!Array.isArray(products) || products.length === 0) throw new Error("导入商品不能为空");
+    if (!Array.isArray(products) || products.length === 0) throw new ValidationError("导入商品不能为空");
     const originalIds = new Set(state.products.map((product) => product.id));
     const existingById = new Map(state.products.map((product) => [product.id, product]));
     const usedIds = new Set(originalIds);
@@ -3081,7 +3084,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const updateProductTemplate = (updated: ProductTemplate) => {
     const existing = state.products.find((product) => product.id === updated.id);
     if (!existing) {
-      throw new Error(`商品模板不存在: ${updated.id}`);
+      throw new NotFoundError(`商品模板不存在: ${updated.id}`);
     }
     applyProductTemplateUpdate(updated);
     addLog(systemActor(), "商品库", "修改商品模板", updated.name, existing.name, "已同步未售出库存和行情名称");
@@ -3095,7 +3098,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const hasPurchaseReference = state.purchaseInvoices.some((invoice) => invoice.items.some((item) => item.productId === id));
     const hasSalesReference = state.salesInvoices.some((invoice) => invoice.items.some((item) => item.productId === id));
     if (hasInventoryReference || hasPurchaseReference || hasSalesReference) {
-      throw new Error("商品模板已被库存或单据引用，不能删除");
+      throw new ConflictError("商品模板已被库存或单据引用，不能删除");
     }
     state.products = state.products.filter((item) => item.id !== id);
     addLog(systemActor(), "商品库", "删除商品模板", product.name);
@@ -3104,7 +3107,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const createPurchaseInvoice = (invoice: Omit<PurchaseInvoice, "id" | "invoiceNo" | "totalCount" | "totalCost" | "estTotalSell" | "estTotalProfit">) => {
     const items = expandPurchaseItems(invoice.items);
-    if (!items.length) throw new Error("进货单至少需要一条商品明细");
+    if (!items.length) throw new ValidationError("进货单至少需要一条商品明细");
     if (invoice.paidAmount > 0 && invoice.settlementAccountId) findSettlementAccount(invoice.settlementAccountId);
     // Reject duplicate SNs early: both against existing inventory and within this invoice batch.
     const seenSn = new Set<string>();
@@ -3112,7 +3115,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const sn = item.sn?.trim();
       if (!sn) continue;
       const key = sn.toLowerCase();
-      if (seenSn.has(key)) throw new Error(`同一进货单内SN重复: ${sn}`);
+      if (seenSn.has(key)) throw new ConflictError(`同一进货单内SN重复: ${sn}`);
       seenSn.add(key);
       assertSnUnique(sn);
     }
@@ -3125,12 +3128,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const estTotalProfit = estTotalSell - totalCost;
     const settlement = normalizePurchaseSettlement(totalCost, invoice.paidAmount, invoice.vendorCreditAppliedAmount);
     if (settlement.vendorCreditAppliedAmount > 0 && resolvedSource.sourcePartnerType !== "vendor") {
-      throw new Error("个人回收采购单不能使用供应商抵扣余额");
+      throw new ValidationError("个人回收采购单不能使用供应商抵扣余额");
     }
     if (settlement.vendorCreditAppliedAmount > 0) {
       const vendor = state.vendors.find((item) => item.id === resolvedSource.sourcePartnerId);
       if (!vendor || Number(vendor.returnCreditBalance || 0) + 0.009 < settlement.vendorCreditAppliedAmount) {
-        throw new Error(`供应商抵扣余额不足：可用 ${Math.max(0, Number(vendor?.returnCreditBalance || 0))} 元，需使用 ${settlement.vendorCreditAppliedAmount} 元`);
+        throw new ConflictError(`供应商抵扣余额不足：可用 ${Math.max(0, Number(vendor?.returnCreditBalance || 0))} 元，需使用 ${settlement.vendorCreditAppliedAmount} 元`);
       }
     }
     const newInvoice: PurchaseInvoice = {
@@ -3224,7 +3227,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updatePurchaseInvoice = (id: string, updates: Partial<PurchaseInvoice>) => {
     const existing = state.purchaseInvoices.find((item) => item.id === id || item.invoiceNo === id);
-    if (!existing) throw new Error(`进货单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`进货单不存在: ${id}`);
     const hasCompletedReturn = state.returnOrders.some((order) =>
       order.type === "进货退货" && order.status === "已完成" && (order.relatedDocNo === existing.invoiceNo || order.relatedDocNo === existing.id),
     );
@@ -3235,7 +3238,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (hasCompletedReturn && protectedAfterReturn.some((key) =>
       key in updates && JSON.stringify(updates[key]) !== JSON.stringify(existing[key]),
     )) {
-      throw new Error("该采购单已有已完成退货，不能修改往来对象、商品或结算结构；请先冲销退货单后再调整");
+      throw new ConflictError("该采购单已有已完成退货，不能修改往来对象、商品或结算结构；请先冲销退货单后再调整");
     }
     const linkedPayments = state.paymentOutRecords.filter((payment) =>
       payment.relatedDocNo === existing.invoiceNo || payment.relatedDocNo === existing.id,
@@ -3245,10 +3248,10 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       state.inspections.some((inspection) => relatedCards.some((card) => card.id === inspection.inventoryId));
     const isChangingItems = !!updates.items && JSON.stringify(updates.items) !== JSON.stringify(existing.items);
     if (hasInboundOrInspection && isChangingItems) {
-      throw new Error("该进货单已有商品检测或入库，只能修改备注、付款等非库存字段");
+      throw new ConflictError("该进货单已有商品检测或入库，只能修改备注、付款等非库存字段");
     }
     const items = updates.items ? expandPurchaseItems(updates.items) : existing.items;
-    if (!items.length) throw new Error("进货单至少需要一条商品明细");
+    if (!items.length) throw new ValidationError("进货单至少需要一条商品明细");
     const totalCount = items.length;
     const totalCost = items.reduce((sum, item) => sum + item.buyPrice, 0);
     const estTotalSell = items.reduce((sum, item) => sum + item.estSellPrice, 0);
@@ -3263,7 +3266,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       "vendorCreditAppliedAmount", "supplierName", "sourcePartnerId", "sourcePartnerType", "sourceType", "date",
     ].some((key) => key in updates);
     if (linkedPayments.length > 1 && paymentFieldsChanged) {
-      throw new Error("该采购单已有多笔付款，请先在付款流水中完成冲销或调整，避免覆盖历史资金明细");
+      throw new ConflictError("该采购单已有多笔付款，请先在付款流水中完成冲销或调整，避免覆盖历史资金明细");
     }
 
     const updated: PurchaseInvoice = {
@@ -3281,7 +3284,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       paymentStatus: settlement.unpaidAmount <= 0 ? "已付款" : settlement.paidAmount > 0 || settlement.vendorCreditAppliedAmount > 0 ? "部分付款" : "未付款",
     };
     if (purchaseVendorCreditApplied(updated) > 0 && !purchaseInvoiceVendorId(updated)) {
-      throw new Error("个人回收采购单不能使用供应商抵扣余额");
+      throw new ValidationError("个人回收采购单不能使用供应商抵扣余额");
     }
     const oldCredit = purchaseVendorCreditApplied(existing);
     const newCredit = purchaseVendorCreditApplied(updated);
@@ -3291,7 +3294,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const newVendor = state.vendors.find((item) => item.id === newVendorId);
       const available = Number(newVendor?.returnCreditBalance || 0) + (newVendorId === oldVendorId ? oldCredit : 0);
       if (!newVendor || available + 0.009 < newCredit) {
-        throw new Error(`供应商抵扣余额不足：可用 ${Math.max(0, available)} 元，需使用 ${newCredit} 元`);
+        throw new ConflictError(`供应商抵扣余额不足：可用 ${Math.max(0, available)} 元，需使用 ${newCredit} 元`);
       }
     }
     if (updated.settlementAccountId) {
@@ -3379,12 +3382,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deletePurchaseInvoice = (id: string) => {
     const existing = state.purchaseInvoices.find((item) => item.id === id || item.invoiceNo === id);
-    if (!existing) throw new Error(`进货单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`进货单不存在: ${id}`);
     const relatedCards = state.inventory.filter((card) => isInventoryLinkedToPurchase(card, existing));
     const hasInboundOrInspection = relatedCards.some((card) => card.status !== "待检测") ||
       state.inspections.some((inspection) => relatedCards.some((card) => card.id === inspection.inventoryId));
     if (hasInboundOrInspection) {
-      throw new Error("进货单已入库或已检测，不能删除");
+      throw new ConflictError("进货单已入库或已检测，不能删除");
     }
 
     state.paymentOutRecords
@@ -3404,11 +3407,11 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const submitInspection = (report: Omit<InspectionRecord, "id" | "inspectTime">) => {
     const sn = report.sn.trim();
     if (!sn) {
-      throw new Error("检测入库必须录入SN");
+      throw new ValidationError("检测入库必须录入SN");
     }
     const targetCard = state.inventory.find((card) => card.id === report.inventoryId);
     if (!targetCard) {
-      throw new Error(`库存档案不存在: ${report.inventoryId}`);
+      throw new NotFoundError(`库存档案不存在: ${report.inventoryId}`);
     }
     const isGpuInspection = (targetCard.category || "显卡") === "显卡";
     assertSnUnique(sn, report.inventoryId);
@@ -3451,15 +3454,15 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   const updateInspection = (id: string, updates: Partial<InspectionRecord>) => {
     const existing = state.inspections.find((inspection) => inspection.id === id);
     if (!existing) {
-      throw new Error(`入库检测单不存在: ${id}`);
+      throw new NotFoundError(`入库检测单不存在: ${id}`);
     }
     const targetCard = state.inventory.find((card) => card.id === existing.inventoryId);
     if (!targetCard) {
-      throw new Error(`库存档案不存在: ${existing.inventoryId}`);
+      throw new NotFoundError(`库存档案不存在: ${existing.inventoryId}`);
     }
     const sn = String(updates.sn ?? existing.sn).trim();
     if (!sn) {
-      throw new Error("入库检测单必须保留SN");
+      throw new ValidationError("入库检测单必须保留SN");
     }
     assertSnUnique(sn, existing.inventoryId);
 
@@ -3505,7 +3508,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const productIdentityIndex = createProductIdentityIndex(state.products);
     const sellableInventoryStats = buildSellableInventoryStats(state.inventory, productIdentityIndex);
     const pendingNeedByProduct = buildPendingSalesNeedByProduct(state, productIdentityIndex);
-    if (!rawItems.length) throw new Error("销售单至少需要一条商品明细");
+    if (!rawItems.length) throw new ValidationError("销售单至少需要一条商品明细");
     if (invoice.paidAmount > 0 && invoice.settlementAccountId) findSettlementAccount(invoice.settlementAccountId);
     const seq = nextDailySeq(state.salesInvoices, "XS");
     const invoiceNo = `XS-${dateKey()}-${seq}`;
@@ -3513,7 +3516,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     for (const item of rawItems) {
       const key = productIdentityKey(item, productIdentityIndex);
       if (!key || !item.productName.trim()) {
-        throw new Error("销售明细必须选择商品型号");
+        throw new ValidationError("销售明细必须选择商品型号");
       }
       const current = productNeeds.get(key) || { name: item.productName, count: 0 };
       current.count += 1;
@@ -3524,7 +3527,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const pendingNeed = pendingNeedByProduct.get(key) || 0;
       const freeCount = Math.max(0, availableCount - pendingNeed);
       if (freeCount < need.count) {
-        throw new Error(`商品库存不足: ${need.name} 需要 ${need.count} 件，可出库 ${freeCount} 件`);
+        throw new ConflictError(`商品库存不足: ${need.name} 需要 ${need.count} 件，可出库 ${freeCount} 件`);
       }
     }
 
@@ -3590,7 +3593,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updateSalesInvoice = (id: string, updates: Partial<SalesInvoice>) => {
     const existing = state.salesInvoices.find((item) => item.id === id || item.invoiceNo === id);
-    if (!existing) throw new Error(`销售单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`销售单不存在: ${id}`);
     const hasCompletedReturn = state.returnOrders.some((order) =>
       order.type === "销售退货" && order.status === "已完成" && (order.relatedDocNo === existing.invoiceNo || order.relatedDocNo === existing.id),
     );
@@ -3601,7 +3604,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (hasCompletedReturn && protectedAfterReturn.some((key) =>
       key in updates && JSON.stringify(updates[key]) !== JSON.stringify(existing[key]),
     )) {
-      throw new Error("该销售单已有已完成退货，不能修改往来对象、商品或结算结构；请先冲销退货单后再调整");
+      throw new ConflictError("该销售单已有已完成退货，不能修改往来对象、商品或结算结构；请先冲销退货单后再调整");
     }
     const productIdentityIndex = createProductIdentityIndex(state.products);
     const linkedPayments = state.paymentInRecords.filter((payment) =>
@@ -3616,7 +3619,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     );
     const pendingNeedByProduct = buildPendingSalesNeedByProduct(state, productIdentityIndex, existing.id);
     const nextRawItems = updates.items ? expandSalesItems(updates.items) : existing.items;
-    if (!nextRawItems.length) throw new Error("销售单至少需要一条商品明细");
+    if (!nextRawItems.length) throw new ValidationError("销售单至少需要一条商品明细");
     const nextIds = new Set(nextRawItems.map((item) => item.inventoryId).filter(Boolean));
     const existingSaleShape = existing.items.map((item) => ({
       productId: item.productId,
@@ -3634,14 +3637,14 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const hasOutbound = existing.outboundStatus === "已出库" ||
       state.inventory.some((card) => existingIds.has(card.id) && card.status === "已售出" && card.salesInvoiceId === existing.invoiceNo);
     if (hasOutbound && isChangingSalesItems) {
-      throw new Error("销售单已出库，不能更换销售商品");
+      throw new ConflictError("销售单已出库，不能更换销售商品");
     }
     if (!hasOutbound) {
       const productNeeds = new Map<string, { name: string; count: number }>();
       for (const item of nextRawItems) {
         const key = productIdentityKey(item, productIdentityIndex);
         if (!key || !item.productName.trim()) {
-          throw new Error("销售明细必须选择商品型号");
+          throw new ValidationError("销售明细必须选择商品型号");
         }
         const current = productNeeds.get(key) || { name: item.productName, count: 0 };
         current.count += 1;
@@ -3652,7 +3655,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         const pendingNeed = pendingNeedByProduct.get(key) || 0;
         const freeCount = Math.max(0, availableCount - pendingNeed);
         if (freeCount < need.count) {
-          throw new Error(`商品库存不足: ${need.name} 需要 ${need.count} 件，可出库 ${freeCount} 件`);
+          throw new ConflictError(`商品库存不足: ${need.name} 需要 ${need.count} 件，可出库 ${freeCount} 件`);
         }
       }
     }
@@ -3685,7 +3688,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       "customerName", "customerId", "customerPartnerType", "date",
     ].some((key) => key in updates);
     if (linkedPayments.length > 1 && paymentFieldsChanged) {
-      throw new Error("该销售单已有多笔收款，请先在收款流水中完成冲销或调整，避免覆盖历史资金明细");
+      throw new ConflictError("该销售单已有多笔收款，请先在收款流水中完成冲销或调整，避免覆盖历史资金明细");
     }
 
     const updated: SalesInvoice = {
@@ -3746,12 +3749,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteSalesInvoice = (id: string) => {
     const existing = state.salesInvoices.find((item) => item.id === id || item.invoiceNo === id);
-    if (!existing) throw new Error(`销售单不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`销售单不存在: ${id}`);
     const chosenIds = new Set(existing.items.map((item) => item.inventoryId).filter(Boolean));
     const hasOutbound = existing.outboundStatus === "已出库" ||
       state.inventory.some((card) => chosenIds.has(card.id) && card.status === "已售出" && card.salesInvoiceId === existing.invoiceNo);
     if (hasOutbound) {
-      throw new Error("销售单已出库，不能删除");
+      throw new ConflictError("销售单已出库，不能删除");
     }
 
     state.paymentInRecords
@@ -3781,10 +3784,10 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     input: { handler: string; codes?: string[]; manual?: boolean; remarks?: string },
   ) => {
     const invoice = state.salesInvoices.find((item) => item.id === id || item.invoiceNo === id);
-    if (!invoice) throw new Error(`销售单不存在: ${id}`);
+    if (!invoice) throw new NotFoundError(`销售单不存在: ${id}`);
     if (invoice.outboundStatus === "已出库") return invoice;
     if (input.manual && !input.remarks?.trim()) {
-      throw new Error("手动确认出库必须填写原因，例如扫码设备异常、门店自提复核等");
+      throw new ValidationError("手动确认出库必须填写原因，例如扫码设备异常、门店自提复核等");
     }
     const productIdentityIndex = createProductIdentityIndex(state.products);
 
@@ -3804,7 +3807,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         cardIndex = inventoryIndexById.get(item.inventoryId);
         card = cardIndex === undefined ? undefined : state.inventory[cardIndex];
         if (card && usedInventoryIds.has(card.id)) {
-          throw new Error(`销售单重复绑定库存卡: ${card.id}`);
+          throw new ConflictError(`销售单重复绑定库存卡: ${card.id}`);
         }
         const scannedLegacyCard = [
           item.inventoryId,
@@ -3842,7 +3845,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     }
 
     if (missingItems.length > 0) {
-      throw new Error(input.manual
+      throw new ConflictError(input.manual
         ? `可出库库存不足，还有 ${missingItems.length} 件销售商品无法匹配库存`
         : `还有 ${missingItems.length} 件销售商品未扫码确认`);
     }
@@ -3931,7 +3934,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
     if (refundAmount > 0 && !claim.refundPaymentOutId && !state.paymentOutRecords.some((payment) => payment.relatedDocNo === claim.id && payment.businessType === "客户退款")) {
       const accountId = findAftersalesRefundAccountId(claim, invoice);
-      if (!accountId) throw new Error("退货退款需要至少一个启用的结算账户");
+      if (!accountId) throw new ValidationError("退货退款需要至少一个启用的结算账户");
       const refundPayment = createPaymentOut({
         customerId: effectiveCustomerId,
         customerName: claim.customerName,
@@ -3951,7 +3954,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const repairCost = Number(claim.repairCost || claim.loss || 0);
     if (repairCost > 0 && !claim.repairPaymentOutId && !state.paymentOutRecords.some((payment) => payment.relatedDocNo === claim.id && payment.businessType === "维修费")) {
       const accountId = findAftersalesRefundAccountId(claim, invoice);
-      if (!accountId) throw new Error("售后维修费需要至少一个启用的结算账户");
+      if (!accountId) throw new ValidationError("售后维修费需要至少一个启用的结算账户");
       const repairPayment = createPaymentOut({
         customerId: effectiveCustomerId,
         customerName: claim.customerName,
@@ -4050,7 +4053,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const addAftersalesClaim = (claim: Omit<AftersalesRecord, "id" | "status" | "createTime">) => {
     if (claim.type === "退货") {
-      throw new Error("售后退货退款请在【销售退货】中办理，系统会按原收款记录分摊退款并同步冲销库存和单据");
+      throw new ValidationError("售后退货退款请在【销售退货】中办理，系统会按原收款记录分摊退款并同步冲销库存和单据");
     }
     const invoice = findSalesInvoiceByDocNo(claim.salesInvoiceNo);
     const effectiveCustomerId = claim.customerId || salesInvoiceCustomerId(invoice);
@@ -4068,7 +4071,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const existingClaim = state.aftersales.find((claim) => claim.id === id);
     if (!existingClaim) return null;
     if (existingClaim.type === "退货" && updatedFields.status === "已完成") {
-      throw new Error("历史售后退货不能直接结案，请在【销售退货】中按原单重新办理，避免绕过退款分摊和资金预览");
+      throw new ConflictError("历史售后退货不能直接结案，请在【销售退货】中按原单重新办理，避免绕过退款分摊和资金预览");
     }
     let affectedClaim: AftersalesRecord | undefined;
     let previousClaim: AftersalesRecord | undefined;
@@ -4139,11 +4142,11 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     remarks?: string;
   }) => {
     const productId = input.productId?.trim();
-    if (!productId) throw new Error("缺少商品 ID productId");
+    if (!productId) throw new ValidationError("缺少商品 ID productId");
     const estSellPrice = Number(input.estSellPrice);
-    if (!Number.isFinite(estSellPrice) || estSellPrice < 0) throw new Error("预估出货价必须是大于等于 0 的数字");
+    if (!Number.isFinite(estSellPrice) || estSellPrice < 0) throw new ValidationError("预估出货价必须是大于等于 0 的数字");
     const product = state.products.find((item) => item.id === productId);
-    if (!product) throw new Error(`商品模板不存在: ${productId}`);
+    if (!product) throw new NotFoundError(`商品模板不存在: ${productId}`);
 
     const priceSource = input.priceSource?.trim() || "外部价格API";
     const priceUpdatedAt = nowStamp();
@@ -4280,13 +4283,13 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const importInventoryRows = (rows: InventoryImportRow[], handler: string = getActiveRole()) => {
-    if (!Array.isArray(rows) || rows.length === 0) throw new Error("导入库存不能为空");
+    if (!Array.isArray(rows) || rows.length === 0) throw new ValidationError("导入库存不能为空");
     const today = storeDate();
     const created: CardInventory[] = [];
     const productIdentityIndex = createProductIdentityIndex(state.products);
     rows.forEach((row, rowIndex) => {
       const productName = row.productName?.trim();
-      if (!productName) throw new Error(`第 ${rowIndex + 1} 行商品名称不能为空`);
+      if (!productName) throw new ValidationError(`第 ${rowIndex + 1} 行商品名称不能为空`);
       const quantity = Math.max(1, Math.floor(Number(row.quantity || 1)));
       const category = (row.category || "其他配件") as ProductCategory;
       const rowIdentity = {
@@ -4814,8 +4817,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       payableBalance,
       debtBalance: receivableBalance,
     };
-    if (newCustomer.level === "S级" && !newCustomer.isCoreCustomer) throw new Error("S级仅用于核心客户，请先标记为核心客户");
-    if (newCustomer.level === "R级" && !newCustomer.riskReason) throw new Error("R级客户必须填写风险原因");
+    if (newCustomer.level === "S级" && !newCustomer.isCoreCustomer) throw new ValidationError("S级仅用于核心客户，请先标记为核心客户");
+    if (newCustomer.level === "R级" && !newCustomer.riskReason) throw new ValidationError("R级客户必须填写风险原因");
     const gradedCustomer = withCustomerGrade(newCustomer);
     state.customers = [...state.customers, gradedCustomer];
     addLog(systemActor(), "合伙/客商", "新建客户档案", customer.name);
@@ -4824,12 +4827,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updateCrmCustomer = (id: string, updates: Partial<CustomerCard>) => {
     const existing = state.customers.find((item) => item.id === id);
-    if (!existing) throw new Error(`客户不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`客户不存在: ${id}`);
     const previousContact = existing.contact || existing.phone || existing.wechat || "";
     const legacyNameIsUnique = state.customers.filter((item) => item.name.trim() === existing.name.trim()).length === 1;
     const requestedCustomerLevel = normalizeCustomerLevel(updates.level ?? existing.level);
     const requestedCoreCustomer = updates.isCoreCustomer ?? existing.isCoreCustomer ?? existing.level === "S级";
-    if (requestedCustomerLevel === "S级" && !requestedCoreCustomer) throw new Error("S级仅用于核心客户，请先标记为核心客户");
+    if (requestedCustomerLevel === "S级" && !requestedCoreCustomer) throw new ValidationError("S级仅用于核心客户，请先标记为核心客户");
     const nextCustomer = withCustomerGrade({
       ...existing,
       ...updates,
@@ -4838,8 +4841,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       isCoreCustomer: requestedCoreCustomer,
       riskReason: updates.riskReason === undefined ? existing.riskReason : updates.riskReason.trim() || undefined,
     });
-    if (nextCustomer.level === "S级" && !nextCustomer.isCoreCustomer) throw new Error("S级仅用于核心客户，请先标记为核心客户");
-    if (nextCustomer.level === "R级" && !nextCustomer.riskReason) throw new Error("R级客户必须填写风险原因");
+    if (nextCustomer.level === "S级" && !nextCustomer.isCoreCustomer) throw new ValidationError("S级仅用于核心客户，请先标记为核心客户");
+    if (nextCustomer.level === "R级" && !nextCustomer.riskReason) throw new ValidationError("R级客户必须填写风险原因");
     assertCustomerIdentityAvailable(nextCustomer, id);
     const nextContact = nextCustomer.contact || nextCustomer.phone || nextCustomer.wechat || "";
     state.customers = state.customers.map((item) => (item.id === id ? nextCustomer : item));
@@ -4899,7 +4902,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteCustomer = (id: string) => {
     const existing = state.customers.find((item) => item.id === id);
-    if (!existing) throw new Error(`客户不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`客户不存在: ${id}`);
     const contact = existing.contact || existing.phone || existing.wechat || "";
     const hasLinkedSales = state.salesInvoices.some((invoice) => isInvoiceLinkedToCustomer(invoice, id, existing.name, contact));
     const hasLinkedPurchase = state.purchaseInvoices.some((invoice) => isInvoiceLinkedToCustomer(invoice, id, existing.name, contact));
@@ -4910,7 +4913,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const hasLinkedFinance = state.financeLedger.some((item) => hasUniqueLegacyName(state.customers, existing.name) && item.customerName === existing.name);
     const hasLinkedAftersales = state.aftersales.some((item) => item.customerId === id || (hasUniqueLegacyName(state.customers, existing.name) && !item.customerId && item.customerName === existing.name));
     if (hasLinkedSales || hasLinkedPurchase || hasLinkedCrm || hasLinkedPayment || hasLinkedSettlement || hasLinkedFinance || hasLinkedAftersales) {
-      throw new Error("该个人客户已有交易、收付款、售后或CRM记录，不能删除；如需停用请改备注或客户等级。");
+      throw new ConflictError("该个人客户已有交易、收付款、售后或CRM记录，不能删除；如需停用请改备注或客户等级。");
     }
     state.customers = state.customers.filter((item) => item.id !== id);
     addLog(systemActor(), "合伙/客商", "删除个人客户", existing.name);
@@ -4937,7 +4940,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const createCrmFollowUp = (followUp: Partial<CrmFollowUpRecord> & { customerId: string; content: string; result: CrmFollowUpRecord["result"]; handler: string }) => {
     const customer = state.customers.find((item) => item.id === followUp.customerId);
-    if (!customer) throw new Error(`客户不存在: ${followUp.customerId}`);
+    if (!customer) throw new NotFoundError(`客户不存在: ${followUp.customerId}`);
     const record: CrmFollowUpRecord = {
       id: genId("CRM-FU"),
       customerId: customer.id,
@@ -4978,7 +4981,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const createCrmRequirement = (requirement: Partial<CrmRequirement> & { customerId: string; productDemand: string; budget: number; intent: CrmRequirement["intent"]; handler: string }) => {
     const customer = state.customers.find((item) => item.id === requirement.customerId);
-    if (!customer) throw new Error(`客户不存在: ${requirement.customerId}`);
+    if (!customer) throw new NotFoundError(`客户不存在: ${requirement.customerId}`);
     const record: CrmRequirement = {
       id: genId("CRM-REQ"),
       customerId: customer.id,
@@ -5018,7 +5021,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const createCrmQuote = (quote: Omit<CrmQuote, "id" | "createdAt" | "customerName" | "totalAmount"> & { id?: string; createdAt?: string; customerName?: string; totalAmount?: number }) => {
     const customer = state.customers.find((item) => item.id === quote.customerId);
-    if (!customer) throw new Error(`客户不存在: ${quote.customerId}`);
+    if (!customer) throw new NotFoundError(`客户不存在: ${quote.customerId}`);
     const items = (Array.isArray(quote.items) ? quote.items : []).map((item) => ({
       ...item,
       id: item.id || genId("CRM-QI"),
@@ -5026,7 +5029,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       quantity: String(item.quantity || "1"),
       unitPrice: String(item.unitPrice || "0"),
     })).filter((item) => item.productName && Number(item.quantity) > 0 && Number(item.unitPrice) >= 0);
-    if (!items.length) throw new Error("报价单至少需要一条有效商品明细");
+    if (!items.length) throw new ValidationError("报价单至少需要一条有效商品明细");
     const totalAmount = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
     const record: CrmQuote = {
       ...quote,
@@ -5182,8 +5185,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       debtBalance: vendor.debtBalance || vendor.accountPayable || 0,
       isHighRisk: Boolean(vendor.isHighRisk),
     };
-    if (newVendor.level === "S级" && !newVendor.isCoreCustomer) throw new Error("S级仅用于核心同行，请先标记为核心同行");
-    if (newVendor.level === "R级" && !newVendor.riskReason) throw new Error("R级同行必须填写风险原因");
+    if (newVendor.level === "S级" && !newVendor.isCoreCustomer) throw new ValidationError("S级仅用于核心同行，请先标记为核心同行");
+    if (newVendor.level === "R级" && !newVendor.riskReason) throw new ValidationError("R级同行必须填写风险原因");
     const gradedVendor = withVendorGrade(newVendor);
     state.vendors = [...state.vendors, gradedVendor];
     addLog(systemActor(), "合伙/客商", "新建商号供应商", vendor.name);
@@ -5192,13 +5195,13 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const updateVendor = (id: string, updates: Partial<Vendor>) => {
     const existing = state.vendors.find((item) => item.id === id);
-    if (!existing) throw new Error(`同行档案不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`同行档案不存在: ${id}`);
     const previousContact = existing.contact || existing.phone || existing.contactPerson || "";
     const legacyNameIsUnique = state.vendors.filter((item) => item.name.trim() === existing.name.trim()).length === 1;
     const requestedVendorLevel = normalizeCustomerLevel(updates.level ?? existing.level);
     const requestedCoreVendor = updates.isCoreCustomer ?? existing.isCoreCustomer ?? existing.level === "S级";
     const requestedVendorType = updates.type ?? existing.type;
-    if (requestedVendorLevel === "S级" && !requestedCoreVendor && requestedVendorType !== "核心采购方") throw new Error("S级仅用于核心同行，请先标记为核心同行");
+    if (requestedVendorLevel === "S级" && !requestedCoreVendor && requestedVendorType !== "核心采购方") throw new ValidationError("S级仅用于核心同行，请先标记为核心同行");
     const nextVendor = withVendorGrade({
       ...existing,
       ...updates,
@@ -5215,8 +5218,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       isCoreCustomer: requestedCoreVendor || requestedVendorType === "核心采购方",
       riskReason: updates.riskReason === undefined ? existing.riskReason : updates.riskReason.trim() || undefined,
     });
-    if (nextVendor.level === "S级" && !nextVendor.isCoreCustomer) throw new Error("S级仅用于核心同行，请先标记为核心同行");
-    if (nextVendor.level === "R级" && !nextVendor.riskReason) throw new Error("R级同行必须填写风险原因");
+    if (nextVendor.level === "S级" && !nextVendor.isCoreCustomer) throw new ValidationError("S级仅用于核心同行，请先标记为核心同行");
+    if (nextVendor.level === "R级" && !nextVendor.riskReason) throw new ValidationError("R级同行必须填写风险原因");
     const nextContact = nextVendor.contact || nextVendor.phone || nextVendor.contactPerson || "";
 
     state.vendors = state.vendors.map((item) => (item.id === id ? nextVendor : item));
@@ -5253,12 +5256,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteVendor = (id: string) => {
     const existing = state.vendors.find((item) => item.id === id);
-    if (!existing) throw new Error(`同行档案不存在: ${id}`);
+    if (!existing) throw new NotFoundError(`同行档案不存在: ${id}`);
     const contact = existing.contact || existing.phone || existing.contactPerson || "";
     const hasLinkedPurchase = state.purchaseInvoices.some((invoice) => isInvoiceLinkedToVendor(invoice, id, existing.name, contact));
     const hasLinkedSales = state.salesInvoices.some((invoice) => isInvoiceLinkedToVendor(invoice, id, existing.name, contact));
     if (hasLinkedPurchase || hasLinkedSales) {
-      throw new Error("该同行已有进货或销售单据，不能删除；如需停用请改备注或标记风险。");
+      throw new ConflictError("该同行已有进货或销售单据，不能删除；如需停用请改备注或标记风险。");
     }
     state.vendors = state.vendors.filter((item) => item.id !== id);
     addLog(systemActor(), "合伙/客商", "删除同行档案", existing.name);
@@ -5272,15 +5275,22 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return current ? sanitizeUser(current) : null;
   };
 
-  const login = (credentials: { username?: string; password?: string }) => {
-    const username = String(credentials.username || "").trim();
-    const password = String(credentials.password || "");
+  const login = (credentials: { username?: string; password?: string } | null | undefined) => {
+    const input = credentials && typeof credentials === "object" ? credentials : {};
+    const username = typeof input.username === "string" ? input.username.trim() : "";
+    const password = typeof input.password === "string" ? input.password : "";
+    // Reject malformed or oversized credentials before password verification. The
+    // scrypt fallback is intentionally expensive, so unbounded request strings
+    // must not reach it.
+    if (!username || username.length > 128 || password.length > 1024) {
+      throw new UnauthorizedError("账号或密码错误");
+    }
     const user = state.systemUsers.find((item) => item.username.toLowerCase() === username.toLowerCase());
     if (!user || !verifyPassword(user.password, password)) {
-      throw new Error("账号或密码错误");
+      throw new UnauthorizedError("账号或密码错误");
     }
     if (!user.enabled) {
-      throw new Error("账号已停用");
+      throw new UnauthorizedError("账号已停用");
     }
     const loginTime = nowStamp();
     const upgradedPassword = isPasswordHash(user.password) ? user.password : hashPassword(password);
@@ -5300,49 +5310,61 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return null;
   };
 
-  const createUser = (input: Partial<SystemUserAccount>) => {
-    const username = String(input.username || "").trim();
-    const password = String(input.password || "").trim();
-    const displayName = String(input.displayName || "").trim();
-    if (!username || !password || !displayName || !input.role) {
-      throw new Error("账号、密码、姓名和角色不能为空");
+  const createUser = (input: Partial<SystemUserAccount> | null | undefined) => {
+    const payload = input && typeof input === "object" ? input : {};
+    const username = typeof payload.username === "string" ? payload.username.trim() : "";
+    const password = typeof payload.password === "string" ? payload.password.trim() : "";
+    const displayName = typeof payload.displayName === "string" ? payload.displayName.trim() : "";
+    if (!username || !password || !displayName || !payload.role) {
+      throw new ValidationError("账号、密码、姓名和角色不能为空");
+    }
+    if (username.length > 128 || password.length > 1024 || displayName.length > 128) {
+      throw new ValidationError("账号、密码或姓名长度超出限制");
     }
     if (state.systemUsers.some((item) => item.username.toLowerCase() === username.toLowerCase())) {
-      throw new Error("账号已存在");
+      throw new ConflictError("账号已存在");
     }
     const user: SystemUserAccount = {
       id: genId("USR"),
       username,
       password: hashPassword(password),
       displayName,
-      role: input.role,
-      enabled: input.enabled ?? true,
-      permissionOverrides: input.permissionOverrides || {},
-      remarks: input.remarks,
+      role: payload.role,
+      enabled: payload.enabled ?? true,
+      permissionOverrides: payload.permissionOverrides || {},
+      remarks: payload.remarks,
     };
     state.systemUsers = [user, ...state.systemUsers];
     addLog(systemActor(), "账号权限", "新增账号", username, undefined, `角色: ${user.role}`);
     return sanitizeUser(user);
   };
 
-  const updateUser = (id: string, input: Partial<SystemUserAccount>) => {
+  const updateUser = (id: string, input: Partial<SystemUserAccount> | null | undefined) => {
     const existing = state.systemUsers.find((item) => item.id === id);
-    if (!existing) throw new Error("账号不存在");
-    const nextUsername = input.username?.trim();
-    const nextDisplayName = input.displayName?.trim();
+    if (!existing) throw new NotFoundError("账号不存在");
+    const payload = input && typeof input === "object" ? input : {};
+    const nextUsername = typeof payload.username === "string" ? payload.username.trim() : undefined;
+    const nextDisplayName = typeof payload.displayName === "string" ? payload.displayName.trim() : undefined;
+    const nextPassword = typeof payload.password === "string" ? payload.password.trim() : undefined;
     if (nextUsername === "" || nextDisplayName === "") {
-      throw new Error("账号和姓名不能为空");
+      throw new ValidationError("账号和姓名不能为空");
+    }
+    if ((payload.username !== undefined && typeof payload.username !== "string") || (payload.displayName !== undefined && typeof payload.displayName !== "string") || (payload.password !== undefined && typeof payload.password !== "string")) {
+      throw new ValidationError("账号、密码或姓名格式不合法");
+    }
+    if ((nextUsername && nextUsername.length > 128) || (nextDisplayName && nextDisplayName.length > 128) || (nextPassword && nextPassword.length > 1024)) {
+      throw new ValidationError("账号、密码或姓名长度超出限制");
     }
     if (nextUsername && state.systemUsers.some((item) => item.id !== id && item.username.toLowerCase() === nextUsername.toLowerCase())) {
-      throw new Error("账号已存在");
+      throw new ConflictError("账号已存在");
     }
     const updated: SystemUserAccount = {
       ...existing,
-      ...input,
+      ...payload,
       username: nextUsername || existing.username,
       displayName: nextDisplayName || existing.displayName,
-      password: input.password ? hashPassword(input.password.trim()) : existing.password,
-      permissionOverrides: input.permissionOverrides === undefined ? existing.permissionOverrides : { ...(existing.permissionOverrides || {}), ...input.permissionOverrides },
+      password: nextPassword ? hashPassword(nextPassword) : existing.password,
+      permissionOverrides: payload.permissionOverrides === undefined ? existing.permissionOverrides : { ...(existing.permissionOverrides || {}), ...payload.permissionOverrides },
     };
     state.systemUsers = state.systemUsers.map((item) => item.id === id ? updated : item);
     if (getActiveUserId() === id) {
@@ -5451,7 +5473,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const normalizeAssemblyPart = (part: Partial<AssemblyPartRecord>, index: number): AssemblyPartRecord => {
     const sn = part.sn?.trim();
-    if (!sn) throw new Error(`第 ${index + 1} 行配件SN不能为空`);
+    if (!sn) throw new ValidationError(`第 ${index + 1} 行配件SN不能为空`);
     return {
       productId: part.productId?.trim() || undefined,
       partName: part.partName?.trim() || `配件-${index + 1}`,
@@ -5513,17 +5535,17 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
     if (input.type === "拆卸") {
       const beforeSn = input.beforeSn?.trim();
-      if (!beforeSn) throw new Error("拆卸必须录入拆之前SN");
+      if (!beforeSn) throw new ValidationError("拆卸必须录入拆之前SN");
       const source = state.inventory.find((item) => item.sn.toLowerCase() === beforeSn.toLowerCase() || item.id.toLowerCase() === beforeSn.toLowerCase());
-      if (!source) throw new Error(`未找到拆之前SN: ${beforeSn}`);
+      if (!source) throw new NotFoundError(`未找到拆之前SN: ${beforeSn}`);
       const afterParts = (input.afterParts || []).map(normalizeAssemblyPart);
-      if (!afterParts.length) throw new Error("拆卸必须录入拆之后配件SN");
+      if (!afterParts.length) throw new ValidationError("拆卸必须录入拆之后配件SN");
       const seenPartSn = new Set<string>();
       for (const part of afterParts) {
         const key = part.sn.toLowerCase();
-        if (seenPartSn.has(key)) throw new Error(`拆之后配件SN重复: ${part.sn}`);
+        if (seenPartSn.has(key)) throw new ConflictError(`拆之后配件SN重复: ${part.sn}`);
         seenPartSn.add(key);
-        if (findCardBySn(part.sn)) throw new Error(`拆之后配件SN已存在: ${part.sn}`);
+        if (findCardBySn(part.sn)) throw new ConflictError(`拆之后配件SN已存在: ${part.sn}`);
       }
 
       const record: AssemblyOperationRecord = {
@@ -5540,7 +5562,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const manualCostTotal = afterParts.reduce((sum, part) => sum + Number(part.costPrice || 0), 0);
       const manualEstSellTotal = afterParts.reduce((sum, part) => sum + Number(part.estSellPrice || 0), 0);
       const manualMarketTotal = afterParts.reduce((sum, part) => sum + Number(part.marketPrice || 0), 0);
-      if (manualCostTotal > source.costPrice) throw new Error("拆后配件成本合计不能超过拆前库存成本");
+      if (manualCostTotal > source.costPrice) throw new ValidationError("拆后配件成本合计不能超过拆前库存成本");
       const costParts = splitAmountForParts(source.costPrice - manualCostTotal, afterParts.filter((part) => !part.costPrice).length);
       const estSellParts = splitAmountForParts(Math.max(0, source.estSellPrice - manualEstSellTotal), afterParts.filter((part) => !part.estSellPrice).length);
       const marketParts = splitAmountForParts(Math.max(0, source.marketPrice - manualMarketTotal), afterParts.filter((part) => !part.marketPrice).length);
@@ -5562,16 +5584,16 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     }
 
     const beforeParts = (input.beforeParts || []).map(normalizeAssemblyPart);
-    if (!beforeParts.length) throw new Error("组装必须录入来源配件SN");
+    if (!beforeParts.length) throw new ValidationError("组装必须录入来源配件SN");
     const afterSn = input.afterSn?.trim();
-    if (!afterSn) throw new Error("组装必须录入组装后SN");
+    if (!afterSn) throw new ValidationError("组装必须录入组装后SN");
     if (findCardBySn(afterSn)) {
-      throw new Error(`组装后SN已存在: ${afterSn}`);
+      throw new ConflictError(`组装后SN已存在: ${afterSn}`);
     }
     const sourceParts = beforeParts.map((part) => {
       const sourcePart = state.inventory.find((item) => item.sn.toLowerCase() === part.sn.toLowerCase());
-      if (!sourcePart) throw new Error(`未找到来源配件SN: ${part.sn}`);
-      if (!["已入库", "已上架"].includes(sourcePart.status)) throw new Error(`来源配件不可组装: ${part.sn} 当前状态为 ${sourcePart.status}`);
+      if (!sourcePart) throw new NotFoundError(`未找到来源配件SN: ${part.sn}`);
+      if (!["已入库", "已上架"].includes(sourcePart.status)) throw new ConflictError(`来源配件不可组装: ${part.sn} 当前状态为 ${sourcePart.status}`);
       return sourcePart;
     });
     const assembledCost = sourceParts.reduce((sum, item) => sum + item.costPrice, 0);
@@ -5614,7 +5636,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
 
   const deleteAssemblyOperation = (id: string) => {
     const record = state.assemblyOperations.find((item) => item.id === id);
-    if (!record) throw new Error(`组装拆卸单不存在: ${id}`);
+    if (!record) throw new NotFoundError(`组装拆卸单不存在: ${id}`);
     const relatedItems = state.inventory.filter((item) => isInventoryLinkedToAssembly(item, id));
 
     if (record.type === "拆卸") {
@@ -5622,7 +5644,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const generatedSnSet = new Set(record.afterParts.map((part) => part.sn.toLowerCase()));
       const generatedItems = state.inventory.filter((item) => generatedSnSet.has(item.sn.toLowerCase()) && isInventoryLinkedToAssembly(item, id));
       if (!source || source.status !== "已拆卸" || generatedItems.some((item) => item.status !== "已入库")) {
-        throw new Error("拆卸单生成的配件已被后续业务使用，不能删除");
+        throw new ConflictError("拆卸单生成的配件已被后续业务使用，不能删除");
       }
       state.inventory = state.inventory
         .filter((item) => !generatedItems.some((generated) => generated.id === item.id))
@@ -5632,7 +5654,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       const beforeSnSet = new Set(record.beforeParts.map((part) => part.sn.toLowerCase()));
       const sourceParts = state.inventory.filter((item) => beforeSnSet.has(item.sn.toLowerCase()));
       if (!finished || finished.status !== "已入库" || sourceParts.length !== record.beforeParts.length || sourceParts.some((item) => item.status !== "已组装")) {
-        throw new Error("组装单生成的成品或来源配件已被后续业务使用，不能删除");
+        throw new ConflictError("组装单生成的成品或来源配件已被后续业务使用，不能删除");
       }
       state.inventory = state.inventory
         .filter((item) => item.id !== finished.id)

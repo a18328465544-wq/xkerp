@@ -54,8 +54,8 @@ function FinanceTransfersContent({session, onAuthExpired, filters, onFiltersChan
   const currentMonth = storeDate().slice(0, 7);
   const monthItems = snapshot.filter((item) => item.time.startsWith(currentMonth));
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ShieldCheck className="h-4 w-4" />, label: "账户权限", value: accountOptionsAvailable ? "可登记" : "仅查看", description: accountOptionsAvailable ? "可读取真实余额和账户候选" : "账户候选与余额未请求", status: accountOptionsAvailable ? "success" : "neutral"},
-    {icon: <ArrowLeftRight className="h-4 w-4" />, label: "到账规则", value: "实时入账", description: "转入 = 调拨金额 − 手续费", status: "info"},
+    {icon: <ShieldCheck className="h-4 w-4" />, label: "账户权限", value: accountOptionsAvailable ? "可登记" : "仅查看", description: accountOptionsAvailable ? "可读取真实余额和账户候选" : "账户候选与余额未请求", tone: accountOptionsAvailable ? "success" : "neutral"},
+    {icon: <ArrowLeftRight className="h-4 w-4" />, label: "到账规则", value: "实时入账", description: "转入 = 调拨金额 − 手续费", tone: "info"},
   ];
   const exportCurrentPage = () => {
     const table = [["调拨编号", "日期", "转出账户", "转入账户", "调拨金额", "手续费", "实际到账", "经办人", "备注"], ...collection.items.map((item) => [item.id, item.time.slice(0, 10), item.fromAccountName, item.toAccountName, item.amount, item.fee, item.receivedAmount, item.handler, item.remarks || ""])];

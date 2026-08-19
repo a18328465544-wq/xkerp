@@ -10,17 +10,13 @@ export interface QuickStatusItemData {
   icon: ReactNode;
   label: ReactNode;
   value: ReactNode;
-  /** Preferred semantic tone. */
+  /** Semantic tone used for status color and accessibility context. */
   tone?: QuickStatusTone;
-  /** @deprecated Use tone. Kept so existing Feature mappings remain source-compatible. */
-  status?: QuickStatusTone;
-  /** @deprecated Compact mode moves this copy to the tooltip. Workflow mode may show it. */
+  /** Optional supporting copy; compact mode exposes it through the item tooltip. */
   description?: ReactNode;
   tooltip?: string;
-  /** Preferred action callback. */
+  /** Optional workflow action. */
   action?: () => void;
-  /** @deprecated Use action. */
-  onClick?: () => void;
 }
 
 const toneClasses: Record<QuickStatusTone, {icon: string; value: string}> = {
@@ -32,11 +28,7 @@ const toneClasses: Record<QuickStatusTone, {icon: string; value: string}> = {
 };
 
 function resolveTone(item: QuickStatusItemData): QuickStatusTone {
-  return item.tone ?? item.status ?? "neutral";
-}
-
-function resolveAction(item: QuickStatusItemData) {
-  return item.action ?? item.onClick;
+  return item.tone ?? "neutral";
 }
 
 function resolveTooltip(item: QuickStatusItemData) {
@@ -46,7 +38,7 @@ function resolveTooltip(item: QuickStatusItemData) {
 
 export function QuickStatusItem({item, variant = "compact"}: {item: QuickStatusItemData; variant?: QuickStatusVariant}) {
   const tone = toneClasses[resolveTone(item)];
-  const action = resolveAction(item);
+  const action = item.action;
   const tooltip = resolveTooltip(item);
   const compact = variant === "compact";
   const content = compact ? <>
@@ -85,7 +77,7 @@ function QuickStatusOverflow({items, variant, expanded, onOpenChange}: {items: R
 
 export interface QuickStatusGroupProps {
   items: ReadonlyArray<QuickStatusItemData>;
-  maxVisible?: number;
+  maxVisible?: 1 | 2 | 3 | 4;
   className?: string;
   variant?: QuickStatusVariant;
 }
@@ -95,7 +87,7 @@ export function QuickStatusGroup({items, maxVisible = 4, className, variant = "c
   const [mobileExpanded, setMobileExpanded] = useState(false);
   if (!items.length) return null;
 
-  const visible = items.slice(0, Math.min(4, Math.max(1, maxVisible)));
+  const visible = items.slice(0, maxVisible);
   const overflow = items.slice(visible.length);
 
   if (variant === "workflow") {

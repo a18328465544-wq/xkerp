@@ -64,9 +64,9 @@ function MarketQuotesContent({session, query, filters, onFiltersChange, onAuthEx
     const url = URL.createObjectURL(new Blob([quoteCsv(rows)], {type: "text/csv;charset=utf-8"})); const link = document.createElement("a"); link.href = url; link.download = "行情参考.csv"; link.click(); URL.revokeObjectURL(url);
   };
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ArrowUpRight className="h-4 w-4" />, label: "价格上调", value: `${upCount} 款`, description: "服务端真实状态", status: upCount ? "success" : "neutral"},
-    {icon: <ArrowDownRight className="h-4 w-4" />, label: "价格下调", value: `${downCount} 款`, description: "需关注库存压力", status: downCount ? "warning" : "neutral"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "价格权限", value: fullPriceAccess ? "完整" : "受限", description: fullPriceAccess ? "可录入与更新" : "价格已按权限裁剪", status: fullPriceAccess ? "success" : "warning"},
+    {icon: <ArrowUpRight className="h-4 w-4" />, label: "价格上调", value: `${upCount} 款`, description: "服务端真实状态", tone: upCount ? "success" : "neutral"},
+    {icon: <ArrowDownRight className="h-4 w-4" />, label: "价格下调", value: `${downCount} 款`, description: "需关注库存压力", tone: downCount ? "warning" : "neutral"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "价格权限", value: fullPriceAccess ? "完整" : "受限", description: fullPriceAccess ? "可录入与更新" : "价格已按权限裁剪", tone: fullPriceAccess ? "success" : "warning"},
   ];
 
   return <ErpAnalyticsPageFrame>

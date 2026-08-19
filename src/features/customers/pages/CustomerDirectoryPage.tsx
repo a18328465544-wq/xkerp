@@ -59,8 +59,8 @@ function CustomerDirectoryContent({session, query, filters, onFiltersChange, onA
   const payable = customers.reduce((total, item) => total + item.payableBalance, 0);
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(filters.channel !== "all") + Number(filters.level !== "all");
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Star className="h-4 w-4" />, label: "核心客户", value: `${coreCount} 位`, description: "核心身份固定 S 级", status: coreCount ? "info" : "neutral"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "编辑权限", value: canEdit ? "可编辑" : "仅查看", description: canEdit ? "由 crm 权限控制" : "创建权限不等于 CRM 编辑权限", status: canEdit ? "success" : "warning"},
+    {icon: <Star className="h-4 w-4" />, label: "核心客户", value: `${coreCount} 位`, description: "核心身份固定 S 级", tone: coreCount ? "info" : "neutral"},
+    {icon: <ShieldAlert className="h-4 w-4" />, label: "编辑权限", value: canEdit ? "可编辑" : "仅查看", description: canEdit ? "由 crm 权限控制" : "创建权限不等于 CRM 编辑权限", tone: canEdit ? "success" : "warning"},
   ];
 
   const exportCustomers = () => {

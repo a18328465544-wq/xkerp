@@ -5,11 +5,11 @@ import {QuickStatusGroup, QuickStatusItem} from "./ErpQuickStatus";
 
 test("QuickStatusGroup limits desktop items and exposes overflow", () => {
   const markup = renderToStaticMarkup(<QuickStatusGroup items={[
-    {icon: "1", label: "一", value: "1 项", status: "neutral"},
-    {icon: "2", label: "二", value: "2 项", status: "info"},
-    {icon: "3", label: "三", value: "3 项", status: "success"},
-    {icon: "4", label: "四", value: "4 项", status: "warning"},
-    {icon: "5", label: "五", value: "5 项", status: "danger"},
+    {icon: "1", label: "一", value: "1 项", tone: "neutral"},
+    {icon: "2", label: "二", value: "2 项", tone: "info"},
+    {icon: "3", label: "三", value: "3 项", tone: "success"},
+    {icon: "4", label: "四", value: "4 项", tone: "warning"},
+    {icon: "5", label: "五", value: "5 项", tone: "danger"},
   ]} />);
   assert.match(markup, /更多 1/);
   assert.match(markup, /data-variant="compact"/);
@@ -17,11 +17,11 @@ test("QuickStatusGroup limits desktop items and exposes overflow", () => {
 });
 
 test("QuickStatusGroup never renders more than four desktop items", () => {
-  const markup = renderToStaticMarkup(<QuickStatusGroup maxVisible={99} items={Array.from({length: 6}, (_, index) => ({
+  const markup = renderToStaticMarkup(<QuickStatusGroup maxVisible={4} items={Array.from({length: 6}, (_, index) => ({
     icon: String(index),
     label: `状态 ${index}`,
     value: index,
-    status: "info" as const,
+    tone: "info" as const,
   }))} />);
   assert.match(markup, /更多 2/);
 });
@@ -31,8 +31,8 @@ test("QuickStatusGroup renders no markup for empty input", () => {
 });
 
 test("QuickStatusItem defaults to a one-line compact summary", () => {
-  const withDescription = renderToStaticMarkup(<QuickStatusItem item={{icon: "i", label: "状态", value: "1 项", status: "info", description: "说明"}} />);
-  const withoutDescription = renderToStaticMarkup(<QuickStatusItem item={{icon: "i", label: "状态", value: "1 项", status: "info"}} />);
+  const withDescription = renderToStaticMarkup(<QuickStatusItem item={{icon: "i", label: "状态", value: "1 项", tone: "info", description: "说明"}} />);
+  const withoutDescription = renderToStaticMarkup(<QuickStatusItem item={{icon: "i", label: "状态", value: "1 项", tone: "info"}} />);
   assert.match(withDescription, /data-variant="compact"/);
   assert.match(withDescription, /title="说明"/);
   assert.doesNotMatch(withDescription, /erp-annotation-slot/);

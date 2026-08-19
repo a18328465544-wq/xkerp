@@ -190,15 +190,15 @@ function FinanceDashboardContent({
           label: "待处理",
           value: `${view.exceptions.length} 项`,
           description: "资金、应收付与对账",
-          status: view.exceptions.length ? "warning" : "success",
-          onClick: () => go("/finance/closing"),
+          tone: view.exceptions.length ? "warning" : "success",
+          action: () => go("/finance/closing"),
         },
         {
           icon: <CircleDollarSign className="h-4 w-4" />,
           label: "应收 / 应付",
           value: `${compactMoney(view.receivable)} / ${compactMoney(view.payable)}`,
           description: "按当前可见业务汇总",
-          status: view.receivable || view.payable ? "info" : "success",
+          tone: view.receivable || view.payable ? "info" : "success",
         },
       ]
     : [];

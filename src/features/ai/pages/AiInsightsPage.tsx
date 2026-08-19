@@ -21,10 +21,10 @@ export function AiInsightsPage() {
   const hasData = Boolean(query.data);
   const highCount = insights.filter((item) => item.severity === "high").length;
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Sparkles className="h-4 w-4" />, label: "建议数量", value: `${insights.length} 条`, description: "当前有效建议", status: insights.length ? "info" : "neutral"},
-    {icon: <TriangleAlert className="h-4 w-4" />, label: "高优先级", value: `${highCount} 条`, description: "需要优先处理", status: highCount ? "danger" : "success"},
-    {icon: query.data?.source === "ai" ? <Sparkles className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />, label: "建议来源", value: query.data?.source === "ai" ? "AI" : "规则", description: "服务器返回来源", status: query.data?.source === "ai" ? "info" : "neutral"},
-    {icon: <Clock3 className="h-4 w-4" />, label: "生成时间", value: query.data?.generatedAt || "—", description: query.data?.expiresAt ? `有效至 ${query.data.expiresAt}` : "暂无过期时间", status: "neutral"},
+    {icon: <Sparkles className="h-4 w-4" />, label: "建议数量", value: `${insights.length} 条`, description: "当前有效建议", tone: insights.length ? "info" : "neutral"},
+    {icon: <TriangleAlert className="h-4 w-4" />, label: "高优先级", value: `${highCount} 条`, description: "需要优先处理", tone: highCount ? "danger" : "success"},
+    {icon: query.data?.source === "ai" ? <Sparkles className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />, label: "建议来源", value: query.data?.source === "ai" ? "AI" : "规则", description: "服务器返回来源", tone: query.data?.source === "ai" ? "info" : "neutral"},
+    {icon: <Clock3 className="h-4 w-4" />, label: "生成时间", value: query.data?.generatedAt || "—", description: query.data?.expiresAt ? `有效至 ${query.data.expiresAt}` : "暂无过期时间", tone: "neutral"},
   ];
 
   return <ErpAnalyticsPageFrame>

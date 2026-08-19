@@ -22,7 +22,7 @@ import type {
   SettlementLedger,
   SystemUserAccount,
   Vendor,
-} from "@/src/types";
+} from "@/src/types/legacy";
 import type {PublicStateResponseDto} from "../dto/state.dto";
 
 export interface ErpStateSnapshot {

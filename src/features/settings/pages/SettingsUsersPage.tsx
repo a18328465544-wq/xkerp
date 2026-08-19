@@ -55,10 +55,10 @@ function SettingsUsersContent({users, loading, fetching, error, onRetry, onAuthE
   }, [keyword, role, status, users]);
   const roles = [...new Set(users.map((item) => item.role).filter(Boolean))].map((value) => ({value, label: value}));
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Users className="h-4 w-4" />, label: "成员总数", value: `${users.length} 人`, description: "来自 /api/users", status: "info"},
-    {icon: <ShieldCheck className="h-4 w-4" />, label: "启用账号", value: `${users.filter((item) => item.enabled).length} 人`, description: "可继续登录", status: "success"},
-    {icon: <ShieldCheck className="h-4 w-4" />, label: "账号覆盖", value: `${users.filter((item) => item.permissionOverrides && Object.keys(item.permissionOverrides).length > 0).length} 人`, description: "存在账号级权限规则", status: "warning"},
-    {icon: <Users className="h-4 w-4" />, label: "当前筛选", value: `${filtered.length} 人`, description: "前端仅做展示筛选", status: "neutral"},
+    {icon: <Users className="h-4 w-4" />, label: "成员总数", value: `${users.length} 人`, description: "来自 /api/users", tone: "info"},
+    {icon: <ShieldCheck className="h-4 w-4" />, label: "启用账号", value: `${users.filter((item) => item.enabled).length} 人`, description: "可继续登录", tone: "success"},
+    {icon: <ShieldCheck className="h-4 w-4" />, label: "账号覆盖", value: `${users.filter((item) => item.permissionOverrides && Object.keys(item.permissionOverrides).length > 0).length} 人`, description: "存在账号级权限规则", tone: "warning"},
+    {icon: <Users className="h-4 w-4" />, label: "当前筛选", value: `${filtered.length} 人`, description: "前端仅做展示筛选", tone: "neutral"},
   ];
   const columns = useMemo<ColumnDef<SettingsUserItem, unknown>[]>(() => [
     {accessorKey: "displayName", header: "成员", size: 180, cell: ({row}) => <div><p className="font-semibold">{row.original.displayName}</p><p className="text-xs text-[var(--erp-color-text-muted)]">{row.original.username}</p></div>},

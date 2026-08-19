@@ -69,8 +69,8 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
     const link = document.createElement("a"); link.href = url; link.download = `销售利润-${filters.dimension}-${filters.dateStart || "全部"}-${filters.dateEnd || ""}.csv`; link.click(); URL.revokeObjectURL(url);
   };
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "跟随当前账号权限", status: session.permissions.showProfit ? "success" : "neutral"},
-    {icon: <FileText className="h-4 w-4" />, label: "分析单据", value: `${report.summary.orderCount} 单`, description: "当前筛选结果", status: "info"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "跟随当前账号权限", tone: session.permissions.showProfit ? "success" : "neutral"},
+    {icon: <FileText className="h-4 w-4" />, label: "分析单据", value: `${report.summary.orderCount} 单`, description: "当前筛选结果", tone: "info"},
   ];
   return <ErpAnalyticsPageFrame>
     <ErpPageHeader title="销售利润" subtitle="按商品、客户、渠道或经办人查看销售额、成本与毛利表现。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="secondary" disabled={!report.rows.length} onClick={exportReport}><Download className="h-4 w-4" />导出结果</Button></>} />

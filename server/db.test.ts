@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PoolClient } from "pg";
-import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, buildDeleteMissingRowsQuery, buildInventoryPageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys } from "./db.ts";
+import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildInventoryPageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
 
 test("production bootstrap password is required only when initializing an empty database", () => {
   assert.doesNotThrow(() => assertProductionBootstrapPasswordConfigured({ NODE_ENV: "development" }));
@@ -13,6 +13,19 @@ test("production bootstrap password is required only when initializing an empty 
     NODE_ENV: "production",
     BOOTSTRAP_ADMIN_PASSWORD: "owner-password",
   }));
+});
+
+test("integration tests require a separate test database URL", () => {
+  assert.equal(resolveDatabaseUrl({ NODE_ENV: "development", DATABASE_URL: "postgres://dev" }), "postgres://dev");
+  assert.equal(resolveDatabaseUrl({ NODE_ENV: "test", TEST_DATABASE_URL: "postgres://test" }), "postgres://test");
+  assert.throws(
+    () => assertTestDatabaseConfigured({ NODE_ENV: "test" }),
+    /必须配置独立的 TEST_DATABASE_URL/,
+  );
+  assert.throws(
+    () => resolveDatabaseUrl({ NODE_ENV: "test", DATABASE_URL: "postgres://same", TEST_DATABASE_URL: "postgres://same" }),
+    /不能与 DATABASE_URL 相同/,
+  );
 });
 
 function createFakeClient(existingIds: string[] = []) {

@@ -43,9 +43,9 @@ function AssemblyContent({session, filters, onFiltersChange, listQuery, referenc
   const deleteMutation = useMutation({mutationFn: (id: string) => assemblyApi.remove(id, access), onSuccess: async (operation) => {setDeleting(null); toast.success(`${operation.id} 已删除，库存状态由服务端完成回滚`); await invalidate();}, onError: handleError});
   const columns = useMemo(() => createAssemblyColumns({showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onView: setDetail, onDelete: setDeleting}), [session.permissions.canDelete, session.permissions.showProfit]);
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Wrench className="h-4 w-4" />, label: "操作单", value: `${listQuery.data?.total || 0} 单`, description: "拆卸与组装记录", status: "success"},
-    {icon: <PackageOpen className="h-4 w-4" />, label: "可组装来源", value: `${availableParts} 件`, description: "已入库或已上架", status: availableParts ? "info" : "neutral"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "删除回滚", value: session.permissions.canDelete ? "已授权" : "无权限", description: "最终由服务端校验", status: session.permissions.canDelete ? "warning" : "neutral"},
+    {icon: <Wrench className="h-4 w-4" />, label: "操作单", value: `${listQuery.data?.total || 0} 单`, description: "拆卸与组装记录", tone: "success"},
+    {icon: <PackageOpen className="h-4 w-4" />, label: "可组装来源", value: `${availableParts} 件`, description: "已入库或已上架", tone: availableParts ? "info" : "neutral"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "删除回滚", value: session.permissions.canDelete ? "已授权" : "无权限", description: "最终由服务端校验", tone: session.permissions.canDelete ? "warning" : "neutral"},
   ];
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(Boolean(filters.handler));
 

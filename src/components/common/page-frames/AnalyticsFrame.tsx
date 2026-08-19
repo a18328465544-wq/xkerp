@@ -1,6 +1,7 @@
 import type {HTMLAttributes, ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {ErpFilterBar} from "../ErpFilterBar";
+import {ErpPageFrame} from "../ErpPageFrame";
 
 type RegionProps = HTMLAttributes<HTMLElement> & {children: ReactNode};
 
@@ -12,8 +13,7 @@ export type AnalyticsVisualizationSize = "compact" | "standard" | "expanded";
  * business features provide content through the regions below.
  */
 export function AnalyticsFrame({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
-  const hasCustomMaxWidth = Boolean(className?.match(/(?:^|\s)max-w-/));
-  return <div {...props} data-page-frame="analytics" data-analytics-layout="reference-v2" className={cn("mx-auto w-full space-y-4 pb-6", hasCustomMaxWidth ? undefined : "max-w-[var(--erp-page-max-width)]", className)}>{children}</div>;
+  return <ErpPageFrame {...props} data-page-frame="analytics" data-analytics-layout="reference-v2" className={className}>{children}</ErpPageFrame>;
 }
 
 export function AnalyticsKpiRegion({primary, secondary, className, ...props}: Omit<RegionProps, "children"> & {primary: ReactNode; secondary?: ReactNode}) {

@@ -83,9 +83,9 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
     setScanInput("");
   }, []);
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Truck className="h-4 w-4" />, label: "待出库", value: `${invoices.length} 单`, description: "销售开单后的待处理池", status: invoices.length ? "warning" : "success"},
-    {icon: <PackageCheck className="h-4 w-4" />, label: "待核验实物", value: `${invoices.reduce((sum, item) => sum + item.lines.length, 0)} 件`, description: "出库时绑定 SN", status: invoices.length ? "info" : "neutral"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "手动出库", value: session.permissions.canManualOutbound ? "已授权" : "未授权", description: "绕过扫码的高风险权限", status: session.permissions.canManualOutbound ? "warning" : "neutral"},
+    {icon: <Truck className="h-4 w-4" />, label: "待出库", value: `${invoices.length} 单`, description: "销售开单后的待处理池", tone: invoices.length ? "warning" : "success"},
+    {icon: <PackageCheck className="h-4 w-4" />, label: "待核验实物", value: `${invoices.reduce((sum, item) => sum + item.lines.length, 0)} 件`, description: "出库时绑定 SN", tone: invoices.length ? "info" : "neutral"},
+    {icon: <ShieldAlert className="h-4 w-4" />, label: "手动出库", value: session.permissions.canManualOutbound ? "已授权" : "未授权", description: "绕过扫码的高风险权限", tone: session.permissions.canManualOutbound ? "warning" : "neutral"},
   ];
   const errorMessage = mutation.error instanceof Error ? mutation.error.message : "";
 

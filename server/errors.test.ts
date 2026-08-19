@@ -12,3 +12,9 @@ test("domain errors map validation, missing records and conflicts to stable HTTP
   assert.deepEqual([validation.status, validation.code], [400, "VALIDATION_ERROR"]);
   assert.equal(toDomainError(new AppError("已分类", 409, "CONFLICT")) instanceof AppError, true);
 });
+
+test("unknown exceptions remain server errors instead of becoming client validation errors", () => {
+  const unknown = toDomainError(new Error("ECONNRESET from database driver"));
+  assert.deepEqual([unknown.status, unknown.code], [500, "SERVER_ERROR"]);
+  assert.equal(unknown.message, "服务器处理失败，请稍后重试");
+});

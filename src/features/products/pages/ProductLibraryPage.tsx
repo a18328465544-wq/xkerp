@@ -82,9 +82,9 @@ function ProductLibraryContent({session, query, filters, onFiltersChange, onAuth
   const exportProducts = () => download("商品库.csv", productCsv([["配件ID", "分类", "商品名称", "核心型号", "品牌", "版本/系列", "规格参数", ...(session.permissions.showCost ? ["参考回收价"] : []), ...(session.permissions.showProfit ? ["参考销售价"] : []), "当前库存", "备注"], ...filtered.map((item) => [item.id, item.category, item.name, item.model, item.brand, item.version, item.vram, ...(session.permissions.showCost ? [item.refBuyPrice || 0] : []), ...(session.permissions.showProfit ? [item.refSellPrice || 0] : []), item.currentStock, item.remarks || ""])]));
 
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Layers3 className="h-4 w-4" />, label: "模板总数", value: `${products.length} 款`, description: `${query.data?.categories.length || 0} 个品类`, status: "info"},
-    {icon: <PackageCheck className="h-4 w-4" />, label: "有库存模板", value: `${stockedTemplates} 款`, description: `共 ${stockUnits} 件在库`, status: stockedTemplates ? "success" : "neutral"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "价格权限", value: fullPriceAccess ? "完整" : "受限", description: fullPriceAccess ? "可安全编辑模板" : "隐藏字段不会被编辑覆盖", status: fullPriceAccess ? "success" : "warning"},
+    {icon: <Layers3 className="h-4 w-4" />, label: "模板总数", value: `${products.length} 款`, description: `${query.data?.categories.length || 0} 个品类`, tone: "info"},
+    {icon: <PackageCheck className="h-4 w-4" />, label: "有库存模板", value: `${stockedTemplates} 款`, description: `共 ${stockUnits} 件在库`, tone: stockedTemplates ? "success" : "neutral"},
+    {icon: <ShieldAlert className="h-4 w-4" />, label: "价格权限", value: fullPriceAccess ? "完整" : "受限", description: fullPriceAccess ? "可安全编辑模板" : "隐藏字段不会被编辑覆盖", tone: fullPriceAccess ? "success" : "warning"},
   ];
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.category !== "all") + Number(filters.brand !== "all");
 

@@ -46,10 +46,10 @@ function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; on
   const owners = useMemo(() => Array.from(new Set([...(summaryQuery.data?.owners.map((item) => item.owner) || []), ...accounts.map((item) => item.owner).filter((item): item is string => Boolean(item))])).sort((a, b) => a.localeCompare(b, "zh-CN")), [accounts, summaryQuery.data?.owners]);
   const totals = summaryQuery.data?.totals;
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Users className="h-4 w-4" />, label: "客户主体", value: `${accountQuery.data?.total || 0} 位`, description: "可直接打开客户档案", status: "success"},
-    {icon: <Activity className="h-4 w-4" />, label: "客户轨迹", value: "可查看", description: "点击客户加载时间线", status: "info"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "等级规则", value: "核心客户", description: "核心客户固定 S 级", status: "success"},
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选能力", value: "关键词 / 负责人", description: "快速定位目标客户", status: "info"},
+    {icon: <Users className="h-4 w-4" />, label: "客户主体", value: `${accountQuery.data?.total || 0} 位`, description: "可直接打开客户档案", tone: "success"},
+    {icon: <Activity className="h-4 w-4" />, label: "客户轨迹", value: "可查看", description: "点击客户加载时间线", tone: "info"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "等级规则", value: "核心客户", description: "核心客户固定 S 级", tone: "success"},
+    {icon: <ListFilter className="h-4 w-4" />, label: "筛选能力", value: "关键词 / 负责人", description: "快速定位目标客户", tone: "info"},
   ];
   const refresh = async () => {await Promise.all([accountQuery.refetch(), summaryQuery.refetch(), detail ? timelineQuery.refetch() : Promise.resolve()]);};
   const activeFilters = Number(Boolean(filters.keyword.trim())) + Number(Boolean(filters.owner));

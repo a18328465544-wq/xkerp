@@ -89,9 +89,9 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
   };
   const updateFilters = (patch: Partial<PurchaseListFilters>) => commitFilters({...filters, ...patch, page: 1});
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", status: activeFilterCount ? "info" : "neutral"},
-    {icon: <CircleDollarSign className="h-4 w-4" />, label: "待付款单", value: `${selection.summary.pendingPaymentCount} 单`, description: "未付款与部分付款", status: selection.summary.pendingPaymentCount ? "warning" : "success"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "成本权限", value: session.permissions.showCost ? "可查看" : "已隐藏", description: "按账号权限裁剪", status: session.permissions.showCost ? "success" : "neutral"},
+    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", tone: activeFilterCount ? "info" : "neutral"},
+    {icon: <CircleDollarSign className="h-4 w-4" />, label: "待付款单", value: `${selection.summary.pendingPaymentCount} 单`, description: "未付款与部分付款", tone: selection.summary.pendingPaymentCount ? "warning" : "success"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "成本权限", value: session.permissions.showCost ? "可查看" : "已隐藏", description: "按账号权限裁剪", tone: session.permissions.showCost ? "success" : "neutral"},
   ];
 
   return <ErpListPageFrame>

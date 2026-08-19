@@ -2,7 +2,7 @@ import {keepPreviousData, useQuery, type UseQueryResult} from "@tanstack/react-q
 import {Boxes, Filter, ImageOff, LockKeyhole, PackageCheck, RefreshCw, RotateCcw, Search, ShieldAlert, SlidersHorizontal, Sparkles, Warehouse} from "lucide-react";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -125,10 +125,10 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   const selectedCount = Object.values(rowSelection).filter(Boolean).length;
   const activeFilterCount = countActiveInventoryFilters(filters);
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Warehouse className="h-4 w-4" />, label: "库存状态", value: "已连接", description: "库存与库位可查询", status: "success"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "待检测", value: modelSummaryQuery.data ? `${summary.pendingCount} 件` : "—", description: "检测前库存", status: summary.pendingCount ? "warning" : "success"},
-    {icon: <SlidersHorizontal className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "筛选状态已同步 URL", status: activeFilterCount ? "info" : "neutral"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "成本权限", value: permissions.showCost ? "可查看" : "已隐藏", description: permissions.showCost ? "按账号权限展示" : "服务器已隐藏", status: permissions.showCost ? "success" : "neutral"},
+    {icon: <Warehouse className="h-4 w-4" />, label: "库存状态", value: "已连接", description: "库存与库位可查询", tone: "success"},
+    {icon: <ShieldAlert className="h-4 w-4" />, label: "待检测", value: modelSummaryQuery.data ? `${summary.pendingCount} 件` : "—", description: "检测前库存", tone: summary.pendingCount ? "warning" : "success"},
+    {icon: <SlidersHorizontal className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "筛选状态已同步 URL", tone: activeFilterCount ? "info" : "neutral"},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "成本权限", value: permissions.showCost ? "可查看" : "已隐藏", description: permissions.showCost ? "按账号权限展示" : "服务器已隐藏", tone: permissions.showCost ? "success" : "neutral"},
   ];
   const columns = useMemo(() => createInventoryColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onDetail}), [onDetail, permissions.showCost, permissions.showProfit]);
   const modelColumns = useMemo(() => createInventoryModelColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onOpenCards}), [onOpenCards, permissions.showCost, permissions.showProfit]);
@@ -148,6 +148,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   return <>
     <ErpWarehousePageFrame>
       <ErpPageHeader title="库存中心" subtitle="按 SN、型号、库位和状态快速定位库存；数据视图只切换下方表格。" quickStatus={quickStatus} actions={<><InventoryViewSwitcher view={view} onChange={onChangeView} /><Button variant="secondary" onClick={onRefresh} disabled={listQuery.isFetching || modelSummaryQuery.isFetching}><RefreshCw className={listQuery.isFetching || modelSummaryQuery.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button><Button variant="primary" disabled title="新增库存接口将在录单纵向切片中接入"><PackageCheck className="h-4 w-4" />新增库存</Button></>} />
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <MetricsRegion>
         <MetricCard label="库存总数" value={modelSummaryQuery.data ? `${summary.totalCount} 件` : "—"} detail="按当前筛选" icon={<Boxes className="h-4 w-4" />} />
         <MetricCard label="在库数量" value={modelSummaryQuery.data ? `${summary.availableCount} 件` : "—"} detail="已入库 / 已上架" icon={<Warehouse className="h-4 w-4" />} />
@@ -171,6 +172,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
         <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs text-[var(--erp-color-text-secondary)]"><Boxes className="h-4 w-4 text-[var(--erp-color-primary)]" />服务端分页 · {listQuery.data?.meta.total ?? 0} 条</div><div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} exclude={["select", "actions"]} /> <div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div></div>
         <ErpDataTable columns={columns} data={rows} getRowId={(row) => row.id} loading={listQuery.isPending} fetching={listQuery.isFetching} error={listQuery.error as Error | null} errorTitle="库存加载失败" onRetry={() => void listQuery.refetch()} onRowClick={onDetail} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={filters.page} pageSize={filters.pageSize} total={listQuery.data?.meta.total} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} rowSelection={rowSelection} onRowSelectionChange={setRowSelection} enableSelection enableColumnResizing density={density} stickyHeader virtualized={rows.length >= 50} />
       </>}
+      </ErpPageContent>
     </ErpWarehousePageFrame>
     <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} title={detailQuery.data?.item?.productName || detailId || "库存详情"} description={detailQuery.data?.fallback ? "通过列表接口兼容查询，专用详情接口待补充。" : undefined}>
       {detailQuery.isPending ? <ErpLoadingState title="正在加载库存详情" /> : detailQuery.error ? <ErpEmptyState title="详情加载失败" description={(detailQuery.error as Error).message} action={<Button size="sm" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : detailQuery.data?.item ? <InventoryDetail item={detailQuery.data.item} showCost={permissions.showCost} showProfit={permissions.showProfit} /> : <ErpEmptyState title="库存记录不存在" description="该记录可能已被删除或当前账号无权访问。" />}
