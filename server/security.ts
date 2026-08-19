@@ -1,10 +1,17 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { AppState } from "./store.ts";
 import type { SafeSystemUserAccount, SystemUserAccount } from "../src/types.ts";
 
 const PASSWORD_PREFIX = "scrypt";
 const KEY_LENGTH = 64;
-const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+
+export type PersistedSession = { userId: string; expiresAt: number };
+export type SessionStore = {
+  create(tokenHash: string, session: PersistedSession): Promise<void>;
+  resolve(tokenHash: string): Promise<PersistedSession | null>;
+  revoke(tokenHash: string): Promise<void>;
+};
 
 export function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -42,29 +49,40 @@ export function sanitizeAppStateForClient(state: AppState) {
   };
 }
 
-export function createSessionManager() {
-  const sessions = new Map<string, { userId: string; expiresAt: number }>();
-
-  const resolve = (token: string | null | undefined) => {
-    if (!token) return null;
-    const session = sessions.get(token);
-    if (!session) return null;
-    if (session.expiresAt < Date.now()) {
-      sessions.delete(token);
-      return null;
-    }
-    return session;
-  };
-
+// Collections that are append-only / unbounded history and are NOT needed by the default landing
+// dashboard. They are stripped from the initial state payload and loaded on demand when the user
+// opens the page that needs them (mirrors products/logs). salesInvoices is intentionally NOT here
+// because the dashboard depends on it for revenue/profit on first paint.
+export function stripLazyStateCollections(state: ReturnType<typeof sanitizeAppStateForClient>) {
   return {
-    create(userId: string) {
+    ...state,
+    products: [],
+    logs: [],
+    financeLedger: [],
+    settlementLedger: [],
+  };
+}
+
+export function hashSessionToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+// Sessions live in the shared database instead of a process-local Map. This keeps logins valid
+// across restarts and lets every API instance authenticate the same bearer token. Only a token
+// hash is persisted, so a database read cannot be replayed as a browser credential.
+export function createSessionManager(store: SessionStore) {
+  return {
+    async create(userId: string) {
       const token = randomBytes(32).toString("hex");
-      sessions.set(token, { userId, expiresAt: Date.now() + SESSION_TTL_MS });
+      await store.create(hashSessionToken(token), { userId, expiresAt: Date.now() + SESSION_TTL_MS });
       return token;
     },
-    resolve,
-    revoke(token: string | null | undefined) {
-      if (token) sessions.delete(token);
+    async resolve(token: string | null | undefined) {
+      if (!token) return null;
+      return store.resolve(hashSessionToken(token));
+    },
+    async revoke(token: string | null | undefined) {
+      if (token) await store.revoke(hashSessionToken(token));
     },
   };
 }

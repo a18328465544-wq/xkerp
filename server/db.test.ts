@@ -1,0 +1,166 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { PoolClient } from "pg";
+import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, buildDeleteMissingRowsQuery, buildInventoryPageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys } from "./db.ts";
+
+test("production bootstrap password is required only when initializing an empty database", () => {
+  assert.doesNotThrow(() => assertProductionBootstrapPasswordConfigured({ NODE_ENV: "development" }));
+  assert.throws(
+    () => assertProductionBootstrapPasswordConfigured({ NODE_ENV: "production" }),
+    /首次初始化生产数据库必须配置 BOOTSTRAP_ADMIN_PASSWORD/,
+  );
+  assert.doesNotThrow(() => assertProductionBootstrapPasswordConfigured({
+    NODE_ENV: "production",
+    BOOTSTRAP_ADMIN_PASSWORD: "owner-password",
+  }));
+});
+
+function createFakeClient(existingIds: string[] = []) {
+  const calls: { sql: string; params: unknown[] }[] = [];
+  const client = {
+    query: async (sql: string, params: unknown[] = []) => {
+      calls.push({ sql, params });
+      if (/^\s*SELECT id FROM/i.test(sql)) {
+        return { rows: existingIds.map((id) => ({ id })) };
+      }
+      return { rows: [] };
+    },
+  } as unknown as PoolClient;
+  return { client, calls };
+}
+
+test("partial state save targets only requested collections", () => {
+  assert.deepEqual(getCollectionTablesForKeys(["systemUsers", "logs"]), [
+    { key: "logs", table: "gpu_logs" },
+    { key: "systemUsers", table: "gpu_system_users" },
+  ]);
+});
+
+test("collection sync deletes only rows missing from the current id set", () => {
+  assert.deepEqual(buildDeleteMissingRowsQuery("gpu_products", ["SP-001", "SP-002"]), {
+    sql: 'DELETE FROM "gpu_products" WHERE NOT (id = ANY($1::text[]))',
+    values: [["SP-001", "SP-002"]],
+  });
+});
+
+test("collection sync can clear an empty collection explicitly", () => {
+  assert.deepEqual(buildDeleteMissingRowsQuery("gpu_products", []), {
+    sql: 'DELETE FROM "gpu_products"',
+    values: [],
+  });
+});
+
+test("indexed inventory query applies filters and caps server-side pagination", () => {
+  const query = buildInventoryPageQuery({
+    page: 3,
+    pageSize: 999,
+    keyword: "RTX 4090",
+    status: "已入库",
+    category: "显卡",
+    warehouseLocation: "A-01",
+  });
+
+  assert.equal(query.page, 3);
+  assert.equal(query.pageSize, 200);
+  assert.equal(query.offset, 400);
+  assert.deepEqual(query.values, ["已入库", "显卡", "A-01", "%RTX 4090%"]);
+  assert.match(query.where, /data->>'status' = \$1/);
+  assert.match(query.where, /ILIKE \$4/);
+  assert.match(query.where, /<> '已售出'/);
+});
+
+test("inventory page query keeps active, brand, risk, and aging filters inside PostgreSQL", () => {
+  const query = buildInventoryPageQuery({
+    activeOnly: true,
+    brand: "华硕",
+    risk: "upturned",
+    minStorageDays: 30,
+  });
+
+  assert.match(query.where, /NOT IN \('已售出', '已退货', '已报废', '已拆卸', '已组装'\)/);
+  assert.match(query.where, /data->>'brand' = \$1/);
+  assert.match(query.where, /marketPrice/);
+  assert.match(query.where, /marketPrice[^\n]+> 0/);
+  assert.match(query.where, /entryTime/);
+  assert.equal(query.values[0], "华硕");
+  assert.equal(query.values.length, 2);
+});
+
+test("inventory page sorting uses an allowlist and never interpolates arbitrary SQL", () => {
+  const sorted = buildInventoryPageQuery({ sortKey: "profit", sortDirection: "asc" });
+  assert.match(sorted.orderBy, /estSellPrice/);
+  assert.match(sorted.orderBy, /ASC NULLS LAST/);
+
+  const rejected = buildInventoryPageQuery({ sortKey: "id; DROP TABLE gpu_inventory", sortDirection: "asc" });
+  assert.equal(rejected.orderBy, "ORDER BY data->>'entryTime' DESC NULLS LAST, id ASC");
+});
+
+test("audit log page query caps page size and keeps keyword filtering in PostgreSQL", () => {
+  const query = buildLogPageQuery({ page: 2, pageSize: 999, keyword: "采购 JH-001" });
+  assert.equal(query.page, 2);
+  assert.equal(query.pageSize, 200);
+  assert.equal(query.offset, 200);
+  assert.deepEqual(query.values, ["%采购 JH-001%"]);
+  assert.match(query.where, /CONCAT_WS/);
+  assert.match(query.where, /ILIKE \$1/);
+});
+
+test("bulk upsert dedupes duplicate ids (last write wins) into a single multi-row insert", async () => {
+  const { client, calls } = createFakeClient();
+  await bulkUpsertRows(client, "gpu_products", [
+    { id: "SP-001", json: '{"v":1}' },
+    { id: "SP-001", json: '{"v":2}' },
+    { id: "SP-002", json: '{"v":3}' },
+  ]);
+  // One INSERT with two value tuples — never the same conflict target twice in one statement.
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].sql, /INSERT INTO "gpu_products"/);
+  assert.equal((calls[0].sql.match(/::jsonb, NOW\(\)\)/g) || []).length, 2);
+  assert.deepEqual(calls[0].params, ["SP-001", '{"v":2}', "SP-002", '{"v":3}']);
+});
+
+test("bulk upsert splits large collections into chunked inserts", async () => {
+  const { client, calls } = createFakeClient();
+  const rows = Array.from({ length: BULK_UPSERT_CHUNK_SIZE + 100 }, (_, index) => ({
+    id: `L-${index}`,
+    json: `{"i":${index}}`,
+  }));
+  await bulkUpsertRows(client, "gpu_logs", rows);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].params.length, BULK_UPSERT_CHUNK_SIZE * 2);
+  assert.equal(calls[1].params.length, 100 * 2);
+});
+
+test("bulk upsert issues no query for an empty collection", async () => {
+  const { client, calls } = createFakeClient();
+  await bulkUpsertRows(client, "gpu_logs", []);
+  assert.equal(calls.length, 0);
+});
+
+test("append-only collection inserts only new rows and never rewrites existing ones", async () => {
+  // DB already holds L-1 and L-2; in-memory buffer has a new L-3 plus the existing two.
+  const { client, calls } = createFakeClient(["L-1", "L-2"]);
+  await appendOnlyCollection(client, "gpu_logs", [
+    { id: "L-3", v: 3 },
+    { id: "L-2", v: 2 },
+    { id: "L-1", v: 1 },
+  ]);
+  const inserts = calls.filter((call) => /INSERT INTO/.test(call.sql));
+  assert.equal(inserts.length, 1);
+  // Only the new row L-3 is written — L-1 / L-2 are skipped entirely.
+  assert.deepEqual(inserts[0].params, ["L-3", '{"id":"L-3","v":3}']);
+  // The trim keeps exactly the current in-memory id set.
+  const deletes = calls.filter((call) => /DELETE FROM/.test(call.sql));
+  assert.equal(deletes.length, 1);
+  assert.deepEqual(deletes[0].params, [["L-3", "L-2", "L-1"]]);
+});
+
+test("append-only collection trims rows that fell out of the capped buffer", async () => {
+  // DB holds an old L-0 that is no longer in the capped in-memory buffer — it must be deleted.
+  const { client, calls } = createFakeClient(["L-0", "L-1"]);
+  await appendOnlyCollection(client, "gpu_logs", [{ id: "L-1", v: 1 }]);
+  const inserts = calls.filter((call) => /INSERT INTO/.test(call.sql));
+  assert.equal(inserts.length, 0);
+  const deletes = calls.filter((call) => /DELETE FROM/.test(call.sql));
+  assert.deepEqual(deletes[0].params, [["L-1"]]);
+});

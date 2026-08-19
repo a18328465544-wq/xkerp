@@ -1,0 +1,302 @@
+import type {CustomerPickerOption, CustomerPartnerType} from "./customer";
+
+export interface SalesItem {
+  inventoryId: string;
+  productId: string;
+  productName: string;
+  sn: string;
+  condition: string;
+  quantity?: number;
+  costPrice: number;
+  sellPrice: number;
+  profit: number;
+  aftersalesTerms: string;
+  remarks?: string;
+}
+
+export interface SalesInvoice {
+  id: string;
+  invoiceNo: string;
+  date: string;
+  customerId?: string;
+  customerPartnerType?: "customer" | "vendor";
+  customerName: string;
+  contact: string;
+  channel: SalesChannel;
+  paymentMethod: SalesPaymentMethod;
+  isPaid: boolean;
+  paidAmount: number;
+  unpaidAmount: number;
+  settlementAccountId?: string;
+  settlementAccountName?: string;
+  paymentHandler?: string;
+  paymentStatus?: SalesPaymentStatus;
+  outboundStatus?: SalesOutboundStatus;
+  outboundTime?: string;
+  outboundHandler?: string;
+  outboundRemarks?: string;
+  needInvoice: boolean;
+  freeShipping: boolean;
+  expressCompany?: string;
+  expressNo?: string;
+  aftersalesTerms: string;
+  handleBy: string;
+  remarks?: string;
+  items: SalesItem[];
+  totalCount: number;
+  totalCost: number;
+  totalAmount: number;
+  totalProfit: number;
+}
+
+export type SalesChannel = "到店" | "闲鱼" | "抖音" | "小红书" | "B站" | "微信私域" | "同行网店";
+export type SalesPaymentMethod = "微信" | "支付宝" | "现金" | "银行卡" | "账期欠款";
+export type SalesPartnerType = CustomerPartnerType;
+export type SalesPaymentStatus = "未收款" | "部分收款" | "已收款" | "已退款";
+export type SalesOutboundStatus = "待出库" | "已出库";
+export type SalesListSortKey = "date" | "invoiceNo" | "customerName" | "totalCount" | "totalAmount" | "totalProfit" | "paymentStatus" | "outboundStatus" | "handleBy";
+export type SalesListSortDirection = "asc" | "desc";
+
+export interface SalesListFilters {
+  keyword: string;
+  channel: "" | SalesChannel;
+  paymentStatus: "" | SalesPaymentStatus;
+  outboundStatus: "" | SalesOutboundStatus;
+  dateStart: string;
+  dateEnd: string;
+  page: number;
+  pageSize: number;
+  sortKey: SalesListSortKey;
+  sortDirection: SalesListSortDirection;
+}
+
+export interface SalesListLine {
+  id: string;
+  productName: string;
+  sn: string;
+  condition: string;
+  quantity: number;
+  sellPrice: number;
+  costPrice?: number;
+  profit?: number;
+  aftersalesTerms: string;
+  remarks: string;
+}
+
+export interface SalesListItem {
+  id: string;
+  invoiceNo: string;
+  date: string;
+  customerName: string;
+  contact: string;
+  channel: SalesChannel;
+  paymentMethod: string;
+  paymentStatus: SalesPaymentStatus;
+  outboundStatus: SalesOutboundStatus;
+  outboundTime: string;
+  outboundHandler: string;
+  totalCount: number;
+  totalAmount: number;
+  totalCost?: number;
+  totalProfit?: number;
+  paidAmount: number;
+  unpaidAmount: number;
+  linkedInventoryCount: number;
+  needInvoice: boolean;
+  freeShipping: boolean;
+  expressCompany: string;
+  expressNo: string;
+  aftersalesTerms: string;
+  handleBy: string;
+  remarks: string;
+  productSummary: string;
+  searchText: string;
+  lines: SalesListLine[];
+}
+
+export interface SalesListDataset {
+  items: SalesListItem[];
+  source: "state-snapshot";
+}
+
+export interface SalesListSelection {
+  data: SalesListItem[];
+  filteredItems: SalesListItem[];
+  meta: {total: number; page: number; pageSize: number; totalPages: number};
+  summary: {
+    orderCount: number;
+    unitCount: number;
+    pendingPaymentCount: number;
+    pendingOutboundCount: number;
+    totalAmount: number;
+    totalProfit?: number;
+  };
+}
+
+export interface SalesOutboundInventoryItem {
+  id: string;
+  serialNumber: string;
+  productId: string;
+  productName: string;
+  productIdentityKey: string;
+  status: string;
+  condition: string;
+  warehouse: string;
+}
+
+export interface SalesOutboundLine {
+  id: string;
+  productId: string;
+  productName: string;
+  productIdentityKey: string;
+  inventoryId: string;
+  serialNumber: string;
+  sellPrice: number;
+}
+
+export interface SalesOutboundInvoice {
+  id: string;
+  invoiceNo: string;
+  date: string;
+  customerName: string;
+  contact: string;
+  totalCount: number;
+  totalAmount: number;
+  freeShipping: boolean;
+  expressCompany: string;
+  expressNo: string;
+  remarks: string;
+  lines: SalesOutboundLine[];
+  searchText: string;
+}
+
+export interface SalesOutboundDataset {
+  invoices: SalesOutboundInvoice[];
+  inventory: SalesOutboundInventoryItem[];
+  source: "state-snapshot";
+}
+
+export interface SalesOutboundVerificationRow {
+  lineId: string;
+  productName: string;
+  matchedInventory?: SalesOutboundInventoryItem;
+  verified: boolean;
+  reason: string;
+}
+
+export interface SalesOutboundVerification {
+  rows: SalesOutboundVerificationRow[];
+  expectedCount: number;
+  verifiedCount: number;
+  unknownCodes: string[];
+  duplicateCodes: string[];
+  ready: boolean;
+}
+
+export interface SalesOutboundRequest {
+  handler: string;
+  codes: string[];
+  manual: boolean;
+  remarks: string;
+}
+
+export interface SalesOutboundResult {
+  id: string;
+  invoiceNo: string;
+  outboundStatus: string;
+  outboundTime: string;
+  outboundHandler: string;
+}
+
+export interface SalesCustomerOption extends CustomerPickerOption {}
+
+export interface SalesInventoryCandidate {
+  id: string;
+  productId: string;
+  productName: string;
+  category: string;
+  brand: string;
+  model: string;
+  version: string;
+  vram: string;
+  serialNumber: string;
+  condition: string;
+  warehouse: string;
+  inventoryStatus: string;
+  costPrice?: number;
+  estimatedSellPrice?: number;
+  entryTime: string;
+  inventoryDays: number;
+  imageUrl?: string;
+  saleable: boolean;
+  unavailableReason?: string;
+}
+
+export interface SalesSettlementAccountOption {
+  id: string;
+  name: string;
+  type: string;
+  balance?: number;
+  availableBalance?: number;
+  enabled: boolean;
+}
+
+export interface SalesLineFormValue {
+  inventoryId: string;
+  productId: string;
+  productName: string;
+  brand: string;
+  model: string;
+  vram: string;
+  condition: string;
+  quantity: number;
+  sellPrice: number;
+  costPrice?: number;
+  remarks: string;
+  aftersalesTerms: string;
+}
+
+export interface SalesFormValues {
+  date: string;
+  customerId: string;
+  customerPartnerType: SalesPartnerType;
+  customerName: string;
+  contact: string;
+  channel: SalesChannel;
+  paymentMethod: SalesPaymentMethod;
+  settlementAccountId: string;
+  paidAmount: number;
+  needInvoice: boolean;
+  freeShipping: boolean;
+  expressCompany: string;
+  expressNo: string;
+  aftersalesTerms: string;
+  handleBy: string;
+  paymentHandler: string;
+  remarks: string;
+  items: SalesLineFormValue[];
+}
+
+export interface SalesInvoiceResult {
+  id: string;
+  invoiceNo: string;
+  date: string;
+  customerName: string;
+  totalCount: number;
+  totalAmount: number;
+  totalCost?: number;
+  totalProfit?: number;
+  paidAmount: number;
+  unpaidAmount: number;
+  paymentStatus: string;
+  outboundStatus: string;
+}
+
+export interface SalesOrderAmounts {
+  quantity: number;
+  subtotal: number;
+  paidAmount: number;
+  unpaidAmount: number;
+  estimatedCost?: number;
+  estimatedProfit?: number;
+}

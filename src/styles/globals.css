@@ -1,0 +1,275 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme {
+  --font-sans: var(--erp-font-sans);
+  --font-mono: var(--erp-font-mono);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+body {
+  background: var(--erp-color-canvas);
+  color: var(--erp-color-text);
+  font-family: var(--erp-font-sans);
+  font-size: var(--erp-font-body);
+  line-height: var(--erp-line-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+::selection { background: rgb(10 132 255 / 0.18); }
+.erp-focus-ring:focus-visible { outline: 3px solid rgb(10 132 255 / 0.28); outline-offset: 2px; }
+.erp-annotation-slot {
+  display: block;
+  height: var(--erp-annotation-height);
+  overflow: hidden;
+  line-height: var(--erp-annotation-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.erp-annotation-slot[data-empty="true"] { visibility: hidden; }
+.erp-skip-link {
+  position: fixed;
+  left: var(--erp-space-3);
+  top: var(--erp-space-3);
+  z-index: calc(var(--erp-layer-tab-navigation) + 20);
+  transform: translateY(-180%);
+  border-radius: var(--erp-radius-md);
+  background: var(--erp-color-text);
+  color: var(--erp-color-surface);
+  padding: var(--erp-space-2) var(--erp-space-3);
+  font-size: var(--erp-font-caption);
+  font-weight: 700;
+  transition: transform var(--erp-motion-fast) ease;
+}
+.erp-skip-link:focus { transform: translateY(0); }
+.erp-scrollbar::-webkit-scrollbar { width: 7px; height: 7px; }
+.erp-scrollbar::-webkit-scrollbar-thumb { border-radius: var(--erp-radius-pill); background: #cbd5e1; }
+.erp-horizontal-scroll {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.erp-safe-area-bottom {
+  padding-bottom: max(var(--erp-space-4), env(safe-area-inset-bottom));
+}
+.erp-main-content {
+  padding-bottom: max(var(--erp-space-6), env(safe-area-inset-bottom));
+}
+
+/* Global application-layer contract:
+   - Workspace Tabs are the highest application layer.
+   - Side drawers stay below that bar and start at its bottom edge.
+   - No drawer may cover, blur, or intercept the Workspace Tabs. */
+.erp-tab-navigation {
+  position: sticky;
+  top: 0;
+  z-index: var(--erp-layer-tab-navigation);
+}
+
+.erp-popover-layer {
+  z-index: var(--erp-layer-popover);
+}
+
+.erp-modal-layer {
+  z-index: var(--erp-layer-modal);
+}
+
+.erp-drawer-backdrop-layer {
+  z-index: var(--erp-layer-drawer-backdrop);
+}
+
+.erp-drawer-layer {
+  z-index: var(--erp-layer-drawer);
+}
+
+.erp-drawer-backdrop,
+.erp-drawer-viewport {
+  top: var(--erp-workspace-bar-height);
+}
+
+/* Content-local stacking contexts stay below every application overlay. */
+.erp-refresh-indicator-layer,
+.erp-sticky-action-layer {
+  z-index: 20;
+}
+
+.erp-content-sticky-layer {
+  z-index: 10;
+}
+
+.erp-table-sticky-edge-layer {
+  z-index: 30;
+}
+
+/* Inspection copy is information-dense, but Chinese labels and status text
+   must stay on the shared sans stack. Monospace remains opt-in for IDs and
+   measured values via the existing utility class. */
+.erp-inspection-page {
+  font-family: var(--erp-font-sans);
+}
+
+/* Finance uses a denser analysis rhythm than transactional pages. These rules
+   stay scoped to the finance frame so the shared primitives remain unchanged
+   everywhere else. */
+[data-page-frame="finance"] > [data-erp-component="page-header"] {
+  gap: var(--erp-space-3);
+  border-bottom: 1px solid var(--erp-color-border);
+  padding-bottom: var(--erp-space-3);
+}
+[data-page-frame="finance"] > [data-erp-component="metrics-region"] {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+[data-page-frame="finance"] > [data-erp-component="metrics-region"] > section {
+  border-radius: var(--erp-radius-lg);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
+}
+[data-page-frame="finance"] > [data-erp-component="metrics-region"] > section > div {
+  min-height: 96px;
+  padding: 14px 16px;
+}
+[data-page-frame="finance"] > [data-erp-component="filter-bar"] {
+  box-shadow: none;
+}
+[data-page-frame="finance"] [data-erp-component="dashboard-section"] {
+  padding: var(--erp-space-4);
+}
+[data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-header"] {
+  padding-bottom: var(--erp-space-3);
+}
+[data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-content"] {
+  padding-top: var(--erp-space-3);
+}
+[data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-content"]:only-child {
+  padding-top: 0;
+}
+
+/* Analytics owns the vertical rhythm and makes both main slots fill the same
+   row without asking a feature to add height or margin hacks. */
+[data-page-frame="analytics"] [data-erp-region="analytics-visualization"],
+[data-page-frame="analytics"] [data-erp-region="analytics-insights"] {
+  min-width: 0;
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-visualization"] > [data-erp-component="dashboard-section"],
+[data-page-frame="analytics"] [data-erp-region="analytics-insights"] > [data-erp-component="dashboard-section"] {
+  height: 100%;
+}
+
+/* The reference analytics layout uses one surface for the page header and
+   one compact surface for the filter toolbar. Keeping these rules scoped to
+   the frame means transaction/list headers keep their own contracts. */
+[data-page-frame="analytics"] > [data-erp-component="page-header"] {
+  gap: var(--erp-space-3);
+  border: 1px solid var(--erp-color-border);
+  border-radius: var(--erp-radius-xl);
+  background: var(--erp-color-surface);
+  padding: var(--erp-space-4) var(--erp-space-5);
+  box-shadow: var(--erp-shadow-card);
+}
+[data-page-frame="analytics"] > [data-erp-component="page-header"] h1 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+[data-page-frame="analytics"] > [data-erp-component="page-header"] p {
+  font-size: var(--erp-font-caption);
+}
+[data-page-frame="analytics"] [data-erp-component="quick-status-group"] > div:first-child {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-kpis"] [data-analytics-tier="core"] [data-erp-component="metric-card"] {
+  min-width: 0;
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-kpis"] [data-analytics-tier="supporting"] [data-erp-component="metric-card"] {
+  min-width: 0;
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-toolbar"] [data-erp-component="filter-bar"] {
+  border-color: var(--erp-color-border);
+  border-radius: var(--erp-radius-xl);
+  box-shadow: var(--erp-shadow-card);
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-visualization"] > [data-erp-component="dashboard-section"],
+[data-page-frame="analytics"] [data-erp-region="analytics-insights"] > [data-erp-component="dashboard-section"] {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-visualization"] > [data-erp-component="dashboard-section"] > [data-erp-region="section-content"],
+[data-page-frame="analytics"] [data-erp-region="analytics-insights"] > [data-erp-component="dashboard-section"] > [data-erp-region="section-content"] {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-detail"] > [data-erp-component="dashboard-section"] {
+  overflow: hidden;
+}
+[data-page-frame="analytics"] [data-erp-region="analytics-detail"] [data-erp-region="section-header"] {
+  align-items: center;
+}
+
+/* Compact dashboard sections contain cards, charts and short summaries. Their
+   empty states should not reserve a full table-sized panel. A section that
+   explicitly opts into the default density keeps the larger reading area. */
+[data-erp-component="dashboard-section"][data-density="compact"] [data-erp-component="empty-state"] {
+  min-height: var(--erp-empty-min-height-compact);
+  padding: var(--erp-space-4);
+}
+
+@media (max-width: 639px) {
+  /* Mobile is a reading surface first: preserve two-up KPIs and let the
+     value/detail text truncate inside each card instead of widening the page. */
+  [data-erp-component="metrics-region"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--erp-space-2);
+  }
+  [data-erp-component="metrics-region"] > [data-erp-component="metric-card"] > div {
+    min-height: 92px !important;
+    gap: var(--erp-space-2);
+    padding: var(--erp-space-3) !important;
+  }
+  [data-erp-component="metrics-region"] [data-erp-component="metric-card"] > div > span {
+    height: 2rem;
+    width: 2rem;
+  }
+
+  [data-erp-component="filter-bar"] {
+    gap: var(--erp-space-2);
+  }
+  [data-erp-component="filter-bar"] [data-erp-region="filter-content"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  [data-erp-component="filter-bar"] [data-erp-region="filter-content"] > * {
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+  [data-erp-component="filter-bar"] [data-erp-region="filter-actions"] {
+    width: 100%;
+    justify-content: stretch;
+  }
+  [data-erp-component="filter-bar"] [data-erp-region="filter-actions"] > * {
+    flex: 1 1 auto;
+  }
+
+  [data-erp-component="page-header"] [data-erp-region="header-actions"] {
+    width: 100%;
+  }
+  [data-page-frame="finance"] > [data-erp-component="page-header"] [data-erp-region="header-actions"] > button {
+    flex: 1 1 auto;
+  }
+  [data-page-frame="finance"] [data-erp-component="dashboard-section"] {
+    padding: var(--erp-space-3);
+  }
+  [data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-header"] {
+    align-items: stretch;
+  }
+  [data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-content"] {
+    min-width: 0;
+  }
+}
+@media (min-width: 1280px) {
+  [data-page-frame="analytics"] [data-erp-region="analytics-toolbar"] [data-erp-component="filter-bar"] > div:first-child {
+    flex-wrap: nowrap;
+  }
+}

@@ -1,115 +1,1156 @@
-import { access, copyFile, mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import "dotenv/config";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createInitialState, type AppState } from "./store.ts";
+import { Pool, type PoolClient } from "pg";
+import { createInitialState, normalizeStateConditions, type AppState } from "./store.ts";
+import { hashPassword, isPasswordHash, type PersistedSession, type SessionStore } from "./security.ts";
+import type { DailyClosing, SystemUserAccount } from "../src/types.ts";
+import { storeDateAfterDays } from "../src/utils/storeTime.ts";
+import { applyCrmFoundationSchema } from "./crmSchema.ts";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "app-state.json");
+const LEGACY_DATA_FILE = path.join(DATA_DIR, "app-state.json");
 const BACKUP_DIR = path.join(DATA_DIR, "backups");
-// Keep at most this many daily/manual backups; older ones are pruned automatically.
-const BACKUP_RETENTION = Number(process.env.BACKUP_RETENTION || 30);
-let saveQueue = Promise.resolve();
 
-export async function loadState(): Promise<AppState> {
-  try {
-    const raw = await readFile(DATA_FILE, "utf8");
-    const persisted = JSON.parse(raw) as Partial<AppState>;
+const DATABASE_URL = process.env.DATABASE_URL;
+const LEGACY_IMPORT_ENABLED = process.env.POSTGRES_IMPORT_LEGACY_JSON !== "false";
+
+let pool: Pool | null = null;
+let initialized = false;
+let saveQueue = Promise.resolve();
+let processWriteLockDepth = 0;
+
+const STATE_WRITE_LOCK_KEY = "gpu_erp_state_write";
+
+type CollectionKey = Exclude<keyof AppState, "currentRole" | "customPermissions" | "currentUserId">;
+export type StateCollectionKey = CollectionKey;
+export type StateRecordSave = { key: CollectionKey; items: unknown[]; deleteMissing?: boolean; deleteIds?: string[] };
+export type StateRecordTransactionHook = (client: PoolClient) => void | Promise<unknown>;
+export type InventoryPageFilters = {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: string;
+  category?: string;
+  brand?: string;
+  risk?: "mined" | "upturned" | "high";
+  minStorageDays?: number;
+  maxStorageDays?: number;
+  minProfitMargin?: number;
+  activeOnly?: boolean;
+  warehouseLocation?: string;
+  includeSold?: boolean;
+  sortKey?: string;
+  sortDirection?: "asc" | "desc";
+};
+export type CollectionPage<T> = { data: T[]; meta: { page: number; pageSize: number; total: number } };
+export type LogPageFilters = { page?: number; pageSize?: number; keyword?: string };
+export type AiInsightsCacheRecord = {
+  scope: string;
+  sourceHash: string;
+  payload: unknown;
+  generatedAt: string;
+  expiresAt: string;
+  provider: string;
+  model: string;
+};
+export type AiInsightActionStatus = "done" | "ignored";
+export type AiInsightActionRecord = {
+  insightId: string;
+  status: AiInsightActionStatus;
+  updatedBy: string;
+  updatedAt: string;
+};
+
+const collectionTables: Array<{
+  key: CollectionKey;
+  table: string;
+  tableComment: string;
+  dataComment: string;
+}> = [
+  {
+    key: "products",
+    table: "gpu_products",
+    tableComment: "商品库模板表，保存显卡和其他配件的标准型号、品牌、参考进销价和库存汇总。",
+    dataComment: "商品模板 JSON，结构对应 ProductTemplate，包含品类、品牌、型号、版本、显存/规格、参考价格和备注。",
+  },
+  {
+    key: "inventory",
+    table: "gpu_inventory",
+    tableComment: "单卡与配件库存档案表，保存每一件库存商品的来源、SN、状态、库位和销售关联。",
+    dataComment: "库存档案 JSON，结构对应 CardInventory，包含商品信息、SN/快递单号、来源、成本、状态、成色、保修、库位和销售信息。",
+  },
+  {
+    key: "inspections",
+    table: "gpu_inspections",
+    tableComment: "检测录入记录表，保存显卡和其他配件入库检测结果。",
+    dataComment: "检测记录 JSON，结构对应 InspectionRecord，包含库存档案、SN、成色、保修、带盒、最终库位、检测人、检测项和结论。",
+  },
+  {
+    key: "purchaseInvoices",
+    table: "gpu_purchase_invoices",
+    tableComment: "进货/回收单据表，保存采购、同行拿货和个人回收业务单据。",
+    dataComment: "进货单 JSON，结构对应 PurchaseInvoice，包含来源、供应商/个人卖家、快递单号、付款账户、经办人、明细和付款状态。",
+  },
+  {
+    key: "salesInvoices",
+    table: "gpu_sales_invoices",
+    tableComment: "销售开单与销售出库单据表，保存客户销售、收款和仓库出库联动信息。",
+    dataComment: "销售单 JSON，结构对应 SalesInvoice，包含客户、销售商品、收款账户、经办人、物流、锁定库存和出库状态。",
+  },
+  {
+    key: "purchaseCommissions",
+    table: "gpu_purchase_commissions",
+    tableComment: "进货提成记录表，保存显卡售出后按进货经办人自动计算的毛利提成。",
+    dataComment: "进货提成 JSON，结构对应 PurchaseCommissionRecord，包含库存卡、采购单、销售单、进货员工、成交价、成本、毛利、比例和提成金额。",
+  },
+  {
+    key: "marketQuotes",
+    table: "gpu_market_quotes",
+    tableComment: "行情参考表，保存显卡和配件的市场报价、参考收购价和销售建议价。",
+    dataComment: "行情参考 JSON，包含商品型号、平台行情、建议进价、建议售价、更新时间和备注。",
+  },
+  {
+    key: "aftersales",
+    table: "gpu_aftersales",
+    tableComment: "售后维护记录表，保存售后、维修、退货和风险处理过程。",
+    dataComment: "售后记录 JSON，包含关联库存/销售单、问题描述、处理状态、费用、责任人和处理结果。",
+  },
+  {
+    key: "customers",
+    table: "gpu_customers",
+    tableComment: "个人客户档案表，保存个人买家客户和个人卖家客户资料及交易统计。",
+    dataComment: "个人客户 JSON，包含姓名、联系方式、客户类型、来源、跟进人、交易数量、交易金额和常交易型号。",
+  },
+  {
+    key: "crmFollowUps",
+    table: "gpu_crm_follow_ups",
+    tableComment: "CRM 跟进记录表，保存客户沟通、回访和成交推进记录。",
+    dataComment: "CRM 跟进 JSON，包含客户、跟进人、跟进时间、沟通内容、下次跟进时间和结果。",
+  },
+  {
+    key: "crmRequirements",
+    table: "gpu_crm_requirements",
+    tableComment: "CRM 客户需求表，保存客户求购、预算、偏好型号和成交阶段。",
+    dataComment: "CRM 需求 JSON，包含客户、商品需求、预算、平台来源、阶段、负责人和备注。",
+  },
+  {
+    key: "crmQuotes",
+    table: "gpu_crm_quote_records",
+    tableComment: "CRM 报价单记录表，保存报价单版本、明细、金额、有效期和客户确认状态。",
+    dataComment: "CRM 报价单 JSON，包含客户、报价单号、商品明细、合计金额、有效期、状态和备注。",
+  },
+  {
+    key: "vendors",
+    table: "gpu_vendors",
+    tableComment: "同行档案表，保存上游供应商、下游采购方和核心采购方资料及交易统计。",
+    dataComment: "同行档案 JSON，包含商号、联系人、联系方式、同行类型、交易数量、交易金额、常交易型号和备注。",
+  },
+  {
+    key: "logs",
+    table: "gpu_logs",
+    tableComment: "操作日志表，保存账号在系统中的新增、编辑、删除、扫码、结算等审计记录。",
+    dataComment: "操作日志 JSON，包含操作账号、模块、动作、目标单号/SN、变更前后内容和操作时间。",
+  },
+  {
+    key: "financeLedger",
+    table: "gpu_finance_ledger",
+    tableComment: "财务流水表，保存收款、付款、退款、费用、调拨等财务口径流水。",
+    dataComment: "财务流水 JSON，包含业务类型、金额、方向、账户、经办人、关联单据、客户/供应商和复核状态。",
+  },
+  {
+    key: "settlementAccounts",
+    table: "gpu_settlement_accounts",
+    tableComment: "结算账户表，保存微信、支付宝、银行卡、现金、备用金等账户余额和账户属性。",
+    dataComment: "结算账户 JSON，包含账户名称、账户类型、归属人、平台、余额、冻结金额、是否启用和是否允许负数。",
+  },
+  {
+    key: "settlementLedger",
+    table: "gpu_settlement_ledger",
+    tableComment: "账户流水表，保存每个结算账户的收入、支出、转入、转出和冲销记录。",
+    dataComment: "账户流水 JSON，包含流水号、账户、方向、收入/支出金额、变动前后余额、业务类型、关联单据和经办人。",
+  },
+  {
+    key: "paymentInRecords",
+    table: "gpu_payment_in_records",
+    tableComment: "收款单表，保存客户收款、非经营收入、关联销售单和结算账户入账信息。",
+    dataComment: "收款单 JSON，包含客户/来源、收入分类、收款账户、金额、经办人、关联单据或参考号、凭证图片、时间和备注。",
+  },
+  {
+    key: "paymentOutRecords",
+    table: "gpu_payment_out_records",
+    tableComment: "付款单表，保存供应商/客户付款、非经营支出、关联采购单和结算账户出账信息。",
+    dataComment: "付款单 JSON，包含供应商/对象、支出分类、付款账户、金额、经办人、关联单据或参考号、凭证图片、时间和备注。",
+  },
+  {
+    key: "accountTransfers",
+    table: "gpu_account_transfers",
+    tableComment: "资金调拨单表，保存结算账户之间的转账、手续费和实际到账信息。",
+    dataComment: "资金调拨 JSON，包含调拨单号、转出账户、转入账户、金额、手续费、实际到账、经办人和备注。",
+  },
+  {
+    key: "assemblyOperations",
+    table: "gpu_assembly_operations",
+    tableComment: "组装拆卸单据表，保存拆卸前 SN、拆后配件 SN、组装来源和成品 SN。",
+    dataComment: "组装拆卸 JSON，包含操作类型、拆前/拆后 SN、组装来源配件、成品 SN、经办人和操作时间。",
+  },
+  {
+    key: "returnOrders",
+    table: "gpu_return_orders",
+    tableComment: "退货单据表，保存销售退货、进货退货、退款、抵扣账款和退回库存状态。",
+    dataComment: "退货单 JSON，结构对应 ReturnOrder，包含退货类型、关联单据、库存 SN、客户/供应商、退货金额、结算方式、抵扣金额和处理状态。",
+  },
+  {
+    key: "systemUsers",
+    table: "gpu_system_users",
+    tableComment: "系统账号表，保存登录账号、人员名称、账号身份、启用状态、密码哈希和账号权限覆盖。",
+    dataComment: "系统账号 JSON，包含用户名、显示姓名、角色身份、启用状态、密码哈希、登录时间和权限覆盖；接口返回时会移除密码哈希。",
+  },
+];
+
+export function getCollectionTablesForKeys(keys: CollectionKey[]) {
+  const requested = new Set(keys);
+  return collectionTables
+    .filter(({ key }) => requested.has(key))
+    .map(({ key, table }) => ({ key, table }));
+}
+
+function quoteIdentifier(identifier: string) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+    throw new Error(`Invalid SQL identifier: ${identifier}`);
+  }
+  return `"${identifier}"`;
+}
+
+export function buildDeleteMissingRowsQuery(table: string, ids: string[]) {
+  if (ids.length === 0) {
     return {
-      ...createInitialState(),
-      ...persisted,
+      sql: `DELETE FROM ${quoteIdentifier(table)}`,
+      values: [] as unknown[],
+    };
+  }
+  return {
+    sql: `DELETE FROM ${quoteIdentifier(table)} WHERE NOT (id = ANY($1::text[]))`,
+    values: [ids],
+  };
+}
+
+// Upsert many rows per table in batched multi-row INSERTs instead of one round-trip per row.
+// The previous row-by-row loop meant every submit fired N sequential queries (N = table size),
+// which made writes — especially the unbounded logs table — slower the more data accumulated.
+export const BULK_UPSERT_CHUNK_SIZE = 500;
+
+export async function bulkUpsertRows(client: PoolClient, table: string, rows: { id: string; json: string }[]) {
+  // Dedupe by id (last write wins) so a multi-row VALUES list never hits the same conflict target
+  // twice — Postgres rejects that — and to match the original "last assignment wins" semantics.
+  const deduped = new Map<string, string>();
+  for (const row of rows) deduped.set(row.id, row.json);
+  const list = Array.from(deduped, ([id, json]) => ({ id, json }));
+
+  const quotedTable = quoteIdentifier(table);
+  for (let start = 0; start < list.length; start += BULK_UPSERT_CHUNK_SIZE) {
+    const chunk = list.slice(start, start + BULK_UPSERT_CHUNK_SIZE);
+    const placeholders: string[] = [];
+    const params: unknown[] = [];
+    chunk.forEach((row, offset) => {
+      const base = offset * 2;
+      placeholders.push(`($${base + 1}, $${base + 2}::jsonb, NOW())`);
+      params.push(row.id, row.json);
+    });
+    await client.query(
+      `INSERT INTO ${quotedTable} (id, data, updated_at) VALUES ${placeholders.join(", ")}
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+      params,
+    );
+  }
+}
+
+// Append-only persistence for immutable collections (audit logs). Rather than rewriting every
+// row on each submit, fetch the existing ids (a cheap text-only transfer) and INSERT only the
+// new entries, then trim rows that fell out of the capped in-memory buffer. Safe only because
+// these records are never edited after creation — existing rows can be skipped entirely.
+export async function appendOnlyCollection(
+  client: PoolClient,
+  table: string,
+  items: unknown[],
+) {
+  const desired = new Map<string, string>();
+  items.forEach((item, index) => desired.set(rowId(item, index), JSON.stringify(item)));
+
+  const existing = await client.query<{ id: string }>(`SELECT id FROM ${quoteIdentifier(table)}`);
+  const existingIds = new Set(existing.rows.map((row) => row.id));
+
+  const newRows = Array.from(desired)
+    .filter(([id]) => !existingIds.has(id))
+    .map(([id, json]) => ({ id, json }));
+  await bulkUpsertRows(client, table, newRows);
+
+  const deleteMissing = buildDeleteMissingRowsQuery(table, Array.from(desired.keys()));
+  await client.query(deleteMissing.sql, deleteMissing.values);
+}
+
+function sqlLiteral(value: string) {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+async function commentOnTable(client: PoolClient, table: string, comment: string) {
+  await client.query(`COMMENT ON TABLE ${quoteIdentifier(table)} IS ${sqlLiteral(comment)}`);
+}
+
+async function commentOnColumn(client: PoolClient, table: string, column: string, comment: string) {
+  await client.query(`COMMENT ON COLUMN ${quoteIdentifier(table)}.${quoteIdentifier(column)} IS ${sqlLiteral(comment)}`);
+}
+
+async function applySchemaComments(client: PoolClient) {
+  await commentOnTable(client, "gpu_app_meta", "系统元数据表，保存当前全局兼容状态和角色权限模板等少量系统级配置。");
+  await commentOnColumn(client, "gpu_app_meta", "key", "元数据键名，例如 currentRole 或 customPermissions。");
+  await commentOnColumn(client, "gpu_app_meta", "value", "元数据 JSON 内容。");
+  await commentOnColumn(client, "gpu_app_meta", "updated_at", "元数据最后更新时间。");
+
+  await commentOnTable(client, "gpu_db_backups", "数据库快照备份表，保存手动备份生成的整包业务状态 JSON。");
+  await commentOnColumn(client, "gpu_db_backups", "id", "备份编号，格式通常为 postgres-backup-时间戳。");
+  await commentOnColumn(client, "gpu_db_backups", "snapshot", "整包业务数据快照 JSON，用于导出、迁移或恢复核对。");
+  await commentOnColumn(client, "gpu_db_backups", "created_at", "备份创建时间。");
+
+  for (const { table, tableComment, dataComment } of collectionTables) {
+    await commentOnTable(client, table, tableComment);
+    await commentOnColumn(client, table, "id", "业务对象主键，来源于业务 JSON 的 id 字段；缺失时由系统生成 ROW-000001 类编号。");
+    await commentOnColumn(client, table, "data", dataComment);
+    await commentOnColumn(client, table, "created_at", "该业务对象写入 PostgreSQL 的时间。");
+    await commentOnColumn(client, table, "updated_at", "该业务对象最后一次同步到 PostgreSQL 的时间。");
+  }
+}
+
+function requireDatabaseUrl() {
+  if (!DATABASE_URL) {
+    throw new Error("缺少 DATABASE_URL，系统已切换为 PostgreSQL 存储，请先配置 PostgreSQL 连接字符串。");
+  }
+  return DATABASE_URL;
+}
+
+export function assertProductionBootstrapPasswordConfigured(env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV === "production" && !env.BOOTSTRAP_ADMIN_PASSWORD?.trim()) {
+    throw new Error("首次初始化生产数据库必须配置 BOOTSTRAP_ADMIN_PASSWORD");
+  }
+}
+
+function getPool() {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: requireDatabaseUrl(),
+      ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    });
+  }
+  return pool;
+}
+
+/**
+ * Run an application-owned PostgreSQL transaction. Domain migrations and
+ * normalized repositories use this helper so they share the same pool,
+ * connection options, and schema initialization as the legacy state layer.
+ */
+export async function withDatabaseTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+  await initializePostgres();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await callback(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function cloneWithoutRuntimeSession(state: AppState): AppState {
+  return {
+    ...state,
+    currentUserId: undefined,
+  };
+}
+
+function rowId(item: unknown, index: number) {
+  if (item && typeof item === "object" && "id" in item) {
+    const id = (item as { id?: unknown }).id;
+    if (typeof id === "string" && id.trim()) return id;
+  }
+  return `ROW-${String(index + 1).padStart(6, "0")}`;
+}
+
+async function upgradePersistedUserPasswords(client: PoolClient) {
+  const result = await client.query<{ id: string; data: SystemUserAccount }>("SELECT id, data FROM gpu_system_users");
+  const upgrades = result.rows
+    .filter((row) => row.data?.password && !isPasswordHash(row.data.password))
+    .map((row) => ({
+      id: row.id,
+      json: JSON.stringify({ ...row.data, password: hashPassword(row.data.password) }),
+    }));
+  if (upgrades.length) await bulkUpsertRows(client, "gpu_system_users", upgrades);
+}
+
+async function initializePostgres() {
+  if (initialized) return;
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_app_meta (
+        key TEXT PRIMARY KEY,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_db_backups (
+        id TEXT PRIMARY KEY,
+        snapshot JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_daily_notifications (
+        report_date TEXT NOT NULL,
+        notification_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        sent_at TIMESTAMPTZ,
+        payload JSONB,
+        error_message TEXT,
+        PRIMARY KEY (report_date, notification_type)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_daily_closings (
+        date TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_ai_insights (
+        scope TEXT PRIMARY KEY,
+        source_hash TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        generated_at TIMESTAMPTZ NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gpu_ai_insight_actions (
+        insight_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL CHECK (status IN ('done', 'ignored')),
+        updated_by TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    for (const { table } of collectionTables) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ${table} (
+          id TEXT PRIMARY KEY,
+          data JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+    }
+    await upgradePersistedUserPasswords(client);
+    // Additive normalized CRM foundation. Legacy JSONB CRM collections remain intact
+    // and are migrated later through an explicit mapping/backfill process.
+    await applyCrmFoundationSchema(client);
+    // JSONB remains the canonical document format, while these expression indexes make the
+    // high-frequency operational lookups use PostgreSQL instead of loading whole collections.
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_sn_idx ON gpu_inventory (LOWER(data->>'sn')) WHERE COALESCE(BTRIM(data->>'sn'), '') <> ''`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_product_status_idx ON gpu_inventory ((data->>'productId'), (data->>'status'))`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_entry_time_idx ON gpu_inventory ((data->>'entryTime') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_category_status_entry_time_idx ON gpu_inventory ((COALESCE(data->>'category', '显卡')), (data->>'status'), (data->>'entryTime') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_brand_entry_time_idx ON gpu_inventory ((data->>'brand'), (data->>'entryTime') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_warehouse_entry_time_idx ON gpu_inventory ((data->>'warehouseLocation'), (data->>'entryTime') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_purchase_invoice_no_idx ON gpu_purchase_invoices ((data->>'invoiceNo'))`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_sales_invoice_no_idx ON gpu_sales_invoices ((data->>'invoiceNo'))`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_sales_status_idx ON gpu_sales_invoices ((data->>'status'))`);
+    // Pair the deterministic id tie-breaker with time so a log page can stop after LIMIT rows
+    // instead of sorting the entire audit history.
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_logs_time_id_idx ON gpu_logs ((data->>'time') DESC, id DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_finance_ledger_time_idx ON gpu_finance_ledger ((data->>'time') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_settlement_ledger_account_time_idx ON gpu_settlement_ledger ((data->>'accountId'), (data->>'time') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_sessions_expires_at_idx ON gpu_sessions (expires_at)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_ai_insights_expires_at_idx ON gpu_ai_insights (expires_at)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_ai_insight_actions_status_updated_at_idx ON gpu_ai_insight_actions (status, updated_at DESC)`);
+    await applySchemaComments(client);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  initialized = true;
+}
+
+// A session-level advisory lock is acquired before a request reloads its state and remains held
+// until the response has completed. This covers the full read -> mutate -> persist lifecycle
+// across PM2/Node instances; transaction-level locks in save helpers alone were too late.
+export async function acquireStateWriteLock(): Promise<() => Promise<void>> {
+  await initializePostgres();
+  const client = await getPool().connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
+    processWriteLockDepth += 1;
+  } catch (error) {
+    client.release();
+    throw error;
+  }
+
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    try {
+      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
+    } finally {
+      processWriteLockDepth = Math.max(0, processWriteLockDepth - 1);
+      client.release();
+    }
+  };
+}
+
+export async function getAiInsightsCache(scope: string): Promise<AiInsightsCacheRecord | null> {
+  await initializePostgres();
+  const result = await getPool().query<{
+    scope: string;
+    source_hash: string;
+    payload: unknown;
+    generated_at: Date;
+    expires_at: Date;
+    provider: string;
+    model: string;
+  }>(
+    `SELECT scope, source_hash, payload, generated_at, expires_at, provider, model
+     FROM gpu_ai_insights
+     WHERE scope = $1`,
+    [scope],
+  );
+  const row = result.rows[0];
+  return row ? {
+    scope: row.scope,
+    sourceHash: row.source_hash,
+    payload: row.payload,
+    generatedAt: row.generated_at.toISOString(),
+    expiresAt: row.expires_at.toISOString(),
+    provider: row.provider,
+    model: row.model,
+  } : null;
+}
+
+export async function saveAiInsightsCache(record: AiInsightsCacheRecord) {
+  await initializePostgres();
+  await getPool().query(
+    `INSERT INTO gpu_ai_insights (scope, source_hash, payload, provider, model, generated_at, expires_at)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6::timestamptz, $7::timestamptz)
+     ON CONFLICT (scope) DO UPDATE SET
+       source_hash = EXCLUDED.source_hash,
+       payload = EXCLUDED.payload,
+       provider = EXCLUDED.provider,
+       model = EXCLUDED.model,
+       generated_at = EXCLUDED.generated_at,
+       expires_at = EXCLUDED.expires_at,
+       updated_at = NOW()`,
+    [record.scope, record.sourceHash, JSON.stringify(record.payload), record.provider, record.model, record.generatedAt, record.expiresAt],
+  );
+}
+
+export async function listAiInsightActions(): Promise<AiInsightActionRecord[]> {
+  await initializePostgres();
+  const result = await getPool().query<{
+    insight_id: string;
+    status: AiInsightActionStatus;
+    updated_by: string;
+    updated_at: Date;
+  }>(`SELECT insight_id, status, updated_by, updated_at FROM gpu_ai_insight_actions ORDER BY updated_at DESC LIMIT 500`);
+  return result.rows.map(row => ({
+    insightId: row.insight_id,
+    status: row.status,
+    updatedBy: row.updated_by,
+    updatedAt: row.updated_at.toISOString(),
+  }));
+}
+
+export async function saveAiInsightAction(record: Omit<AiInsightActionRecord, "updatedAt">): Promise<AiInsightActionRecord> {
+  await initializePostgres();
+  const result = await getPool().query<{
+    insight_id: string;
+    status: AiInsightActionStatus;
+    updated_by: string;
+    updated_at: Date;
+  }>(
+    `INSERT INTO gpu_ai_insight_actions (insight_id, status, updated_by)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (insight_id) DO UPDATE SET status = EXCLUDED.status, updated_by = EXCLUDED.updated_by, updated_at = NOW()
+     RETURNING insight_id, status, updated_by, updated_at`,
+    [record.insightId, record.status, record.updatedBy],
+  );
+  const row = result.rows[0];
+  return { insightId: row.insight_id, status: row.status, updatedBy: row.updated_by, updatedAt: row.updated_at.toISOString() };
+}
+
+export async function deleteAiInsightAction(insightId: string) {
+  await initializePostgres();
+  await getPool().query(`DELETE FROM gpu_ai_insight_actions WHERE insight_id = $1`, [insightId]);
+}
+
+async function lockTransactionForStateWrite(client: PoolClient) {
+  if (processWriteLockDepth === 0) {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
+  }
+}
+
+export function createDatabaseSessionStore(): SessionStore {
+  return {
+    async create(tokenHash: string, session: PersistedSession) {
+      await initializePostgres();
+      await getPool().query(
+        `INSERT INTO gpu_sessions (token_hash, user_id, expires_at)
+         VALUES ($1, $2, to_timestamp($3 / 1000.0))
+         ON CONFLICT (token_hash) DO UPDATE SET user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at, created_at = NOW()`,
+        [tokenHash, session.userId, session.expiresAt],
+      );
+    },
+    async resolve(tokenHash: string) {
+      await initializePostgres();
+      const result = await getPool().query<{ user_id: string; expires_at: Date }>(
+        `DELETE FROM gpu_sessions WHERE token_hash = $1 AND expires_at <= NOW() RETURNING user_id, expires_at`,
+        [tokenHash],
+      );
+      if (result.rowCount) return null;
+      const active = await getPool().query<{ user_id: string; expires_at: Date }>(
+        "SELECT user_id, expires_at FROM gpu_sessions WHERE token_hash = $1 AND expires_at > NOW()",
+        [tokenHash],
+      );
+      const row = active.rows[0];
+      return row ? { userId: row.user_id, expiresAt: row.expires_at.getTime() } : null;
+    },
+    async revoke(tokenHash: string) {
+      await initializePostgres();
+      await getPool().query("DELETE FROM gpu_sessions WHERE token_hash = $1", [tokenHash]);
+    },
+  };
+}
+
+function normalizedPage(value: number | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed || fallback)) : fallback;
+}
+
+export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
+  const page = normalizedPage(filters.page, 1);
+  const pageSize = Math.min(200, normalizedPage(filters.pageSize, 20));
+  const values: unknown[] = [];
+  const clauses: string[] = [];
+  const bind = (value: unknown) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  const keyword = filters.keyword?.trim();
+  if (filters.activeOnly) {
+    clauses.push(`COALESCE(data->>'status', '') NOT IN ('已售出', '已退货', '已报废', '已拆卸', '已组装')`);
+  } else if (!filters.includeSold) {
+    clauses.push(`COALESCE(data->>'status', '') <> '已售出'`);
+  }
+  if (filters.status) clauses.push(`data->>'status' = ${bind(filters.status)}`);
+  if (filters.category && filters.category !== "all") clauses.push(`COALESCE(data->>'category', '显卡') = ${bind(filters.category)}`);
+  if (filters.brand && filters.brand !== "all") clauses.push(`data->>'brand' = ${bind(filters.brand)}`);
+  if (filters.warehouseLocation) clauses.push(`data->>'warehouseLocation' = ${bind(filters.warehouseLocation)}`);
+  if (filters.risk === "mined") clauses.push(`COALESCE((data->>'gpuRisk')::boolean, false)`);
+  if (filters.risk === "upturned") {
+    clauses.push(`COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) < COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)`);
+  }
+  if (filters.risk === "high") {
+    clauses.push(`(COALESCE(NULLIF(data->>'gpuRisk', '')::boolean, false) OR (COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) < COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)))`);
+  }
+  if (filters.minStorageDays && filters.minStorageDays > 0) {
+    const cutoff = storeDateAfterDays(-Math.floor(filters.minStorageDays));
+    clauses.push(`LEFT(COALESCE(data->>'entryTime', ''), 10) <= ${bind(cutoff)}`);
+  }
+  if (Number.isFinite(filters.maxStorageDays) && Number(filters.maxStorageDays) >= 0) {
+    const cutoff = storeDateAfterDays(-Math.floor(Number(filters.maxStorageDays)));
+    clauses.push(`LEFT(COALESCE(data->>'entryTime', ''), 10) >= ${bind(cutoff)}`);
+  }
+  if (filters.minProfitMargin && filters.minProfitMargin > 0) {
+    clauses.push(`COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'estSellPrice', '')::numeric, 0) >= COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0) * ${bind(1 + filters.minProfitMargin)}`);
+  }
+  if (keyword) {
+    const placeholder = bind(`%${keyword}%`);
+    clauses.push(`CONCAT_WS(' ', id, data->>'productId', data->>'productName', data->>'model', data->>'brand', data->>'version', data->>'vram', data->>'sn', data->>'expressNo', data->>'supplierName', data->>'warehouseLocation', data->>'remarks') ILIKE ${placeholder}`);
+  }
+  const sortExpressions: Record<string, string> = {
+    id: "id",
+    code: "id",
+    product: "data->>'productName'",
+    productName: "data->>'productName'",
+    cost: "COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
+    costPrice: "COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
+    profit: "COALESCE(NULLIF(data->>'estSellPrice', '')::numeric, 0) - COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
+    days: "CASE WHEN LEFT(COALESCE(data->>'entryTime', ''), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date - LEFT(data->>'entryTime', 10)::date END",
+    status: "data->>'status'",
+    warehouseLocation: "data->>'warehouseLocation'",
+    entryTime: "data->>'entryTime'",
+  };
+  const sortExpression = filters.sortKey ? sortExpressions[filters.sortKey] : undefined;
+  const sortDirection = filters.sortDirection === "asc" ? "ASC" : "DESC";
+  const orderBy = sortExpression
+    ? `ORDER BY ${sortExpression} ${sortDirection} NULLS LAST, id ASC`
+    : "ORDER BY data->>'entryTime' DESC NULLS LAST, id ASC";
+  return {
+    page,
+    pageSize,
+    offset: (page - 1) * pageSize,
+    values,
+    where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+    orderBy,
+  };
+}
+
+// Indexed inventory list query for API consumers. The command handlers still load the aggregate
+// for cross-record validation, but routine list/search requests no longer deserialize every stock
+// row just to return one page.
+export async function queryInventoryPage<T = unknown>(filters: InventoryPageFilters = {}): Promise<CollectionPage<T>> {
+  await initializePostgres();
+  const { page, pageSize, offset, where, orderBy, values } = buildInventoryPageQuery(filters);
+  const [rows, count] = await Promise.all([
+    getPool().query<{ data: T }>(
+      `SELECT data FROM gpu_inventory ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, pageSize, offset],
+    ),
+    getPool().query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM gpu_inventory ${where}`, values),
+  ]);
+  return {
+    data: rows.rows.map((row) => row.data),
+    meta: { page, pageSize, total: Number(count.rows[0]?.total || 0) },
+  };
+}
+
+export function buildLogPageQuery(filters: LogPageFilters = {}) {
+  const page = normalizedPage(filters.page, 1);
+  const pageSize = Math.min(200, normalizedPage(filters.pageSize, 100));
+  const keyword = filters.keyword?.trim();
+  const values: unknown[] = [];
+  const where = keyword
+    ? (() => {
+        values.push(`%${keyword}%`);
+        return `WHERE CONCAT_WS(' ', id, data->>'user', data->>'module', data->>'type', data->>'target', data->>'beforeVal', data->>'afterVal', data->>'time') ILIKE $1`;
+      })()
+    : "";
+  return { page, pageSize, offset: (page - 1) * pageSize, values, where };
+}
+
+// Audit logs grow forever in normal use. Query only the visible page instead of deserializing
+// thousands of JSON rows and mounting them in the browser whenever the log screen is opened.
+export async function queryLogsPage<T = unknown>(filters: LogPageFilters = {}): Promise<CollectionPage<T>> {
+  await initializePostgres();
+  const { page, pageSize, offset, where, values } = buildLogPageQuery(filters);
+  const [rows, count] = await Promise.all([
+    getPool().query<{ data: T }>(
+      `SELECT data FROM gpu_logs ${where} ORDER BY data->>'time' DESC NULLS LAST, id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, pageSize, offset],
+    ),
+    getPool().query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM gpu_logs ${where}`, values),
+  ]);
+  return {
+    data: rows.rows.map((row) => row.data),
+    meta: { page, pageSize, total: Number(count.rows[0]?.total || 0) },
+  };
+}
+
+export async function findInventoryRecord<T = unknown>(id: string): Promise<T | null> {
+  await initializePostgres();
+  const result = await getPool().query<{ data: T }>("SELECT data FROM gpu_inventory WHERE id = $1", [id]);
+  return result.rows[0]?.data || null;
+}
+
+export async function findInventoryRecordBySn<T = unknown>(sn: string): Promise<T | null> {
+  await initializePostgres();
+  const result = await getPool().query<{ data: T }>(
+    "SELECT data FROM gpu_inventory WHERE LOWER(data->>'sn') = LOWER($1) LIMIT 1",
+    [sn],
+  );
+  return result.rows[0]?.data || null;
+}
+
+async function hasPersistedState(client: PoolClient) {
+  const result = await client.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM gpu_app_meta WHERE key IN ('currentRole', 'customPermissions')",
+  );
+  if (Number(result.rows[0]?.count || 0) > 0) return true;
+
+  const inventory = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM gpu_inventory");
+  const users = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM gpu_system_users");
+  return Number(inventory.rows[0]?.count || 0) > 0 || Number(users.rows[0]?.count || 0) > 0;
+}
+
+async function touchStateRevision(client: PoolClient) {
+  await client.query(`
+    INSERT INTO gpu_app_meta (key, value, updated_at) VALUES ('stateRevision', '1'::jsonb, NOW())
+    ON CONFLICT (key) DO UPDATE SET
+      value = to_jsonb(COALESCE((gpu_app_meta.value #>> '{}')::bigint, 0) + 1),
+      updated_at = NOW()
+  `);
+}
+
+export async function getStateRevision() {
+  await initializePostgres();
+  const result = await getPool().query<{ value: unknown }>("SELECT value FROM gpu_app_meta WHERE key = 'stateRevision'");
+  const value = result.rows[0]?.value;
+  return typeof value === "number" ? value : Number(value || 0);
+}
+
+async function loadLegacyJsonState() {
+  if (!LEGACY_IMPORT_ENABLED) return null;
+  try {
+    const raw = await readFile(LEGACY_DATA_FILE, "utf8");
+    return {
+      ...createInitialState({ includeCrmDemoData: false }),
+      ...(JSON.parse(raw) as Partial<AppState>),
       currentUserId: undefined,
     };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      await backupCorruptDataFile();
+  } catch {
+    return null;
+  }
+}
+
+async function readStateFromPostgres(client: PoolClient): Promise<AppState> {
+  const state = createInitialState({ includeCrmDemoData: false });
+
+  for (const { key, table } of collectionTables) {
+    const result = await client.query<{ data: unknown }>(`SELECT data FROM ${table} ORDER BY id ASC`);
+    (state[key] as unknown[]) = result.rows.map((row) => row.data);
+  }
+
+  const meta = await client.query<{ key: string; value: unknown }>("SELECT key, value FROM gpu_app_meta");
+  for (const row of meta.rows) {
+    if (row.key === "currentRole") {
+      state.currentRole = row.value as AppState["currentRole"];
     }
-    const initial = createInitialState();
-    await saveState(initial);
-    return initial;
+    if (row.key === "customPermissions") {
+      state.customPermissions = row.value as AppState["customPermissions"];
+    }
+    if (row.key === "commissionRules") {
+      state.commissionRules = row.value as AppState["commissionRules"];
+    }
+  }
+
+  state.currentUserId = undefined;
+  return normalizeStateConditions(state);
+}
+
+async function readStateCollectionsFromPostgres(
+  client: PoolClient,
+  currentState: AppState,
+  keys: CollectionKey[],
+): Promise<AppState> {
+  const state = {
+    ...currentState,
+    currentUserId: undefined,
+  };
+
+  for (const { key, table } of getCollectionTablesForKeys(keys)) {
+    const result = await client.query<{ data: unknown }>(`SELECT data FROM ${table} ORDER BY id ASC`);
+    (state[key] as unknown[]) = result.rows.map((row) => row.data);
+  }
+
+  const meta = await client.query<{ key: string; value: unknown }>("SELECT key, value FROM gpu_app_meta WHERE key = 'commissionRules'");
+  if (meta.rows[0]) state.commissionRules = meta.rows[0].value as AppState["commissionRules"];
+
+  return normalizeStateConditions(state);
+}
+
+async function writeStateToPostgres(client: PoolClient, nextState: AppState) {
+  const state = cloneWithoutRuntimeSession(nextState);
+
+  await writeCollectionsToPostgres(client, state, collectionTables.map(({ key }) => key));
+
+  await client.query(
+    `INSERT INTO gpu_app_meta (key, value, updated_at) VALUES
+      ('currentRole', $1::jsonb, NOW()),
+      ('customPermissions', $2::jsonb, NOW()),
+      ('commissionRules', $3::jsonb, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(state.currentRole), JSON.stringify(state.customPermissions), JSON.stringify(state.commissionRules)],
+  );
+}
+
+async function writeCollectionsToPostgres(client: PoolClient, nextState: AppState, keys: CollectionKey[]) {
+  const state = cloneWithoutRuntimeSession(nextState);
+
+  for (const { key, table } of getCollectionTablesForKeys(keys)) {
+    const items = state[key] as unknown[];
+    // Logs are immutable + append-only: persist incrementally so a submit never rewrites the
+    // whole (capped) log table — it only inserts the few new entries and trims the tail.
+    if (key === "logs") {
+      await appendOnlyCollection(client, table, items);
+      continue;
+    }
+    const rows = items.map((item, index) => ({ id: rowId(item, index), json: JSON.stringify(item) }));
+    await bulkUpsertRows(client, table, rows);
+    const deleteMissing = buildDeleteMissingRowsQuery(table, rows.map((row) => row.id));
+    await client.query(deleteMissing.sql, deleteMissing.values);
+  }
+}
+
+async function upsertCollectionRecords(
+  client: PoolClient,
+  records: StateRecordSave[],
+) {
+  for (const record of records) {
+    const target = getCollectionTablesForKeys([record.key])[0];
+    if (!target) continue;
+
+    const rows = record.items.map((item, index) => ({ id: rowId(item, index), json: JSON.stringify(item) }));
+    await bulkUpsertRows(client, target.table, rows);
+    if (record.deleteIds?.length) {
+      await client.query(
+        `DELETE FROM ${quoteIdentifier(target.table)} WHERE id = ANY($1::text[])`,
+        [Array.from(new Set(record.deleteIds))],
+      );
+    }
+    if (record.deleteMissing) {
+      const deleteMissing = buildDeleteMissingRowsQuery(target.table, rows.map((row) => row.id));
+      await client.query(deleteMissing.sql, deleteMissing.values);
+    }
+  }
+}
+
+async function snapshotState(client: PoolClient) {
+  const state = await readStateFromPostgres(client);
+  return cloneWithoutRuntimeSession(state);
+}
+
+export async function loadState(): Promise<AppState> {
+  await initializePostgres();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    if (!(await hasPersistedState(client))) {
+      const legacy = await loadLegacyJsonState();
+      if (!legacy) assertProductionBootstrapPasswordConfigured();
+      const initial = legacy || createInitialState({ includeCrmDemoData: false });
+      await writeStateToPostgres(client, initial);
+      await touchStateRevision(client);
+    }
+    const state = await readStateFromPostgres(client);
+    await client.query("COMMIT");
+    return state;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function loadStateCollections(state: AppState, keys: CollectionKey[]): Promise<AppState> {
+  if (!keys.length) return state;
+  await initializePostgres();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    if (!(await hasPersistedState(client))) {
+      const legacy = await loadLegacyJsonState();
+      if (!legacy) assertProductionBootstrapPasswordConfigured();
+      const initial = legacy || createInitialState({ includeCrmDemoData: false });
+      await writeStateToPostgres(client, initial);
+      await touchStateRevision(client);
+    }
+    const nextState = await readStateCollectionsFromPostgres(client, state, keys);
+    await client.query("COMMIT");
+    return nextState;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
 export async function saveState(state: AppState) {
-  const persistentState = { ...state, currentUserId: undefined };
-  const content = `${JSON.stringify(persistentState, null, 2)}\n`;
-  saveQueue = saveQueue.then(() => writeStateContent(content));
+  saveQueue = saveQueue.then(async () => {
+    await initializePostgres();
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      await lockTransactionForStateWrite(client);
+      await writeStateToPostgres(client, state);
+      await touchStateRevision(client);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
   return saveQueue;
 }
 
-async function writeStateContent(content: string) {
-  await mkdir(DATA_DIR, { recursive: true });
-  await ensureDailyBackup();
-  const tempFile = path.join(DATA_DIR, `.app-state.${process.pid}.${Date.now()}.tmp`);
-  await writeFile(tempFile, content, "utf8");
-  await rename(tempFile, DATA_FILE);
-}
-
-async function ensureDailyBackup() {
-  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const backupFile = path.join(BACKUP_DIR, `app-state-${day}.json`);
-  try {
-    await access(backupFile);
-  } catch {
+export async function saveStateCollections(state: AppState, keys: CollectionKey[]) {
+  saveQueue = saveQueue.then(async () => {
+    await initializePostgres();
+    const client = await getPool().connect();
     try {
-      await mkdir(BACKUP_DIR, { recursive: true });
-      await copyFile(DATA_FILE, backupFile);
-      await pruneBackups();
+      await client.query("BEGIN");
+      await lockTransactionForStateWrite(client);
+      await writeCollectionsToPostgres(client, state, keys);
+      await touchStateRevision(client);
+      await client.query("COMMIT");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-  }
+  });
+  return saveQueue;
 }
 
-// Remove the oldest auto/daily backups beyond the retention window. Corrupt-file snapshots
-// (app-state-corrupt-*) and manual backups are kept for forensics and are not pruned here.
-async function pruneBackups() {
-  try {
-    const entries = await readdir(BACKUP_DIR);
-    const dailies = entries
-      .filter((name) => /^app-state-\d{8}\.json$/.test(name))
-      .sort();
-    const excess = dailies.length - BACKUP_RETENTION;
-    for (let i = 0; i < excess; i += 1) {
-      await unlink(path.join(BACKUP_DIR, dailies[i]));
+export async function saveStateRecords(records: StateRecordSave[], transactionHook?: StateRecordTransactionHook) {
+  saveQueue = saveQueue.then(async () => {
+    await initializePostgres();
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      await lockTransactionForStateWrite(client);
+      await upsertCollectionRecords(client, records);
+      await transactionHook?.(client);
+      await touchStateRevision(client);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-  } catch {
-    // Pruning is best-effort; never let it block a save.
-  }
+  });
+  return saveQueue;
 }
 
 export async function createManualBackup(): Promise<{ file: string }> {
-  await mkdir(BACKUP_DIR, { recursive: true });
+  await initializePostgres();
+  const client = await getPool().connect();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupFile = path.join(BACKUP_DIR, `app-state-manual-${stamp}.json`);
-  await copyFile(DATA_FILE, backupFile);
-  return { file: backupFile };
+  const backupId = `postgres-backup-${stamp}`;
+  try {
+    await client.query("BEGIN");
+    const snapshot = await snapshotState(client);
+    await client.query(
+      "INSERT INTO gpu_db_backups (id, snapshot) VALUES ($1, $2::jsonb)",
+      [backupId, JSON.stringify(snapshot)],
+    );
+    await client.query("COMMIT");
+    return { file: `postgres:${backupId}` };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function listBackups(): Promise<Array<{ name: string; size: number; createdAt: string }>> {
-  try {
-    const { stat } = await import("node:fs/promises");
-    const entries = await readdir(BACKUP_DIR);
-    const files = entries.filter((name) => name.endsWith(".json"));
-    const detailed = await Promise.all(
-      files.map(async (name) => {
-        const info = await stat(path.join(BACKUP_DIR, name));
-        return { name, size: info.size, createdAt: info.mtime.toISOString() };
-      }),
-    );
-    return detailed.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  } catch {
-    return [];
-  }
+  await initializePostgres();
+  const result = await getPool().query<{ id: string; size: string; created_at: Date }>(`
+    SELECT id, pg_column_size(snapshot)::text AS size, created_at
+    FROM gpu_db_backups
+    ORDER BY created_at DESC
+    LIMIT 100
+  `);
+  return result.rows.map((row) => ({
+    name: row.id,
+    size: Number(row.size || 0),
+    createdAt: row.created_at.toISOString(),
+  }));
 }
 
-async function backupCorruptDataFile() {
+export async function writeDownloadedBackup(state: AppState): Promise<string> {
+  await mkdir(BACKUP_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupFile = path.join(BACKUP_DIR, `app-state-corrupt-${stamp}.json`);
-  try {
-    await mkdir(BACKUP_DIR, { recursive: true });
-    await copyFile(DATA_FILE, backupFile);
-  } catch {
-    // If the damaged file cannot be copied, still allow the app to recover with initial state.
-  }
+  const backupFile = path.join(BACKUP_DIR, `postgres-export-${stamp}.json`);
+  await writeFile(backupFile, `${JSON.stringify(cloneWithoutRuntimeSession(state), null, 2)}\n`, "utf8");
+  return backupFile;
 }
 
-export const dataFilePath = DATA_FILE;
+/** Claim a daily notification before delivery. A successful report is never sent twice; a failed
+ * delivery may be retried, and a stale in-progress delivery becomes retryable after 30 minutes. */
+export async function claimDailyNotification(reportDate: string, notificationType: string) {
+  await initializePostgres();
+  const result = await getPool().query<{ report_date: string }>(`
+    INSERT INTO gpu_daily_notifications (report_date, notification_type, status, attempted_at)
+    VALUES ($1, $2, 'sending', NOW())
+    ON CONFLICT (report_date, notification_type) DO UPDATE SET
+      status = 'sending', attempted_at = NOW(), error_message = NULL
+    WHERE gpu_daily_notifications.status = 'failed'
+       OR (gpu_daily_notifications.status = 'sending' AND gpu_daily_notifications.attempted_at < NOW() - INTERVAL '30 minutes')
+    RETURNING report_date
+  `, [reportDate, notificationType]);
+  return result.rowCount === 1;
+}
+
+export async function markDailyNotificationSent(reportDate: string, notificationType: string, payload: unknown) {
+  await initializePostgres();
+  await getPool().query(`
+    UPDATE gpu_daily_notifications
+    SET status = 'sent', sent_at = NOW(), payload = $3::jsonb, error_message = NULL
+    WHERE report_date = $1 AND notification_type = $2
+  `, [reportDate, notificationType, JSON.stringify(payload)]);
+}
+
+export async function markDailyNotificationFailed(reportDate: string, notificationType: string, errorMessage: string) {
+  await initializePostgres();
+  await getPool().query(`
+    UPDATE gpu_daily_notifications
+    SET status = 'failed', error_message = $3
+    WHERE report_date = $1 AND notification_type = $2
+  `, [reportDate, notificationType, errorMessage.slice(0, 2000)]);
+}
+
+export async function getDailyClosing(date: string): Promise<DailyClosing | null> {
+  await initializePostgres();
+  const result = await getPool().query<{ data: DailyClosing }>("SELECT data FROM gpu_daily_closings WHERE date = $1", [date]);
+  return result.rows[0]?.data || null;
+}
+
+export async function listDailyClosings(limit = 14): Promise<DailyClosing[]> {
+  await initializePostgres();
+  const safeLimit = Math.max(1, Math.min(90, Math.floor(Number(limit) || 14)));
+  const result = await getPool().query<{ data: DailyClosing }>(
+    "SELECT data FROM gpu_daily_closings ORDER BY date DESC LIMIT $1",
+    [safeLimit],
+  );
+  return result.rows.map((row) => row.data);
+}
+
+export async function saveDailyClosing(closing: DailyClosing): Promise<DailyClosing> {
+  await initializePostgres();
+  const result = await getPool().query<{ data: DailyClosing }>(`
+    INSERT INTO gpu_daily_closings (date, data, updated_at) VALUES ($1, $2::jsonb, NOW())
+    ON CONFLICT (date) DO NOTHING
+    RETURNING data
+  `, [closing.date, JSON.stringify(closing)]);
+  if (result.rows[0]?.data) return result.rows[0].data;
+  return (await getDailyClosing(closing.date)) || closing;
+}
+
+export const dataFilePath = "postgresql:DATABASE_URL";

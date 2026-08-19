@@ -1,0 +1,67 @@
+:root {
+  --erp-color-canvas: #f6f8fb;
+  --erp-color-surface: #ffffff;
+  --erp-color-surface-muted: #f1f5f9;
+  --erp-color-border: #dfe7f1;
+  --erp-color-border-strong: #c9d5e3;
+  --erp-color-text: #172033;
+  --erp-color-text-secondary: #506078;
+  --erp-color-text-muted: #8290a5;
+  --erp-color-primary: #0a84ff;
+  --erp-color-primary-hover: #006edc;
+  --erp-color-info-soft: #eaf3ff;
+  --erp-color-success: #12805c;
+  --erp-color-success-soft: #e8f7f0;
+  --erp-color-warning: #b45309;
+  --erp-color-warning-soft: #fff4e5;
+  --erp-color-danger: #c2410c;
+  --erp-color-danger-soft: #fff0ed;
+  --erp-color-backdrop: rgb(15 23 42 / 0.3);
+  --erp-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --erp-font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --erp-space-1: 4px;
+  --erp-space-2: 8px;
+  --erp-space-3: 12px;
+  --erp-space-4: 16px;
+  --erp-space-5: 20px;
+  --erp-space-6: 24px;
+  --erp-space-8: 32px;
+  --erp-space-10: 40px;
+  --erp-space-12: 48px;
+  --erp-space-16: 64px;
+  --erp-radius-sm: 6px;
+  --erp-radius-md: 8px;
+  --erp-radius-lg: 12px;
+  --erp-radius-xl: 16px;
+  --erp-radius-pill: 9999px;
+  --erp-shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.03);
+  --erp-shadow-popover: 0 16px 48px rgb(15 23 42 / 0.16);
+  --erp-font-page-title: 28px;
+  --erp-font-section-title: 16px;
+  --erp-font-body: 14px;
+  --erp-font-caption: 12px;
+  --erp-line-body: 1.5;
+  /* Optional helper/annotation copy always owns one stable line. */
+  --erp-annotation-height: 16px;
+  --erp-control-height: 40px;
+  --erp-control-height-compact: 32px;
+  /* Quick Status is a single-line summary. These shared geometry tokens keep
+     every Page Header dense without page-specific height or spacing patches. */
+  --erp-quick-status-height: 32px;
+  --erp-quick-status-icon-size: 24px;
+  --erp-quick-status-gap: 12px;
+  --erp-motion-fast: 120ms;
+  --erp-motion-normal: 180ms;
+  --erp-motion-slow: 240ms;
+  /* Global shell geometry and layer contract. The workspace bar is always the
+     highest application layer; drawers begin below it and must never cover it. */
+  --erp-workspace-bar-height: 48px;
+  --erp-page-max-width: 1720px;
+  --erp-layer-tab-navigation: 1000;
+  --erp-layer-popover: 950;
+  --erp-layer-modal: 925;
+  --erp-layer-drawer-backdrop: 890;
+  --erp-layer-drawer: 900;
+  --erp-empty-min-height: 192px;
+  --erp-empty-min-height-compact: 112px;
+}

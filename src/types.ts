@@ -13,6 +13,7 @@ export type ProductCategory =
   | "散热"
   | "机箱"
   | "整机"
+  | "显示器"
   | "组装拆卸"
   | "其他配件";
 
@@ -26,11 +27,15 @@ export interface ProductTemplate {
   vram: string; // e.g. "24G", "16G", "12G", or capacity like "32G", "2TB", "1000W"
   refBuyPrice: number;
   refSellPrice: number;
+  priceSource?: string;
+  priceUpdatedAt?: string;
   currentStock: number;
   lastBuyPrice?: number;
   lastSellPrice?: number;
   lastDealTime?: string;
   remarks?: string;
+  /** 压缩后的商品图片 Data URL，最多 6 张。 */
+  imageUrls?: string[];
 }
 
 export type CardStatus =
@@ -69,11 +74,15 @@ export interface CardInventory {
   expressNo?: string;
   sourceType: SourceType;
   supplierName: string;
+  purchaseHandler?: string;
+  purchaseInvoiceNo?: string;
   costPrice: number;
   estSellPrice: number;
   marketPrice: number; // For risk pricing warnings
+  priceSource?: string;
+  priceUpdatedAt?: string;
   status: CardStatus;
-  condition: "全新官换" | "充新99新" | "靓机95新" | "良品90新" | "微划伤85新" | "瑕疵实用" | "矿卡高阻值";
+  condition: "全新" | "99新" | "95新" | "90新" | "85新" | "轻微瑕疵" | "损坏";
   inWarranty: boolean;
   warrantyDate?: string;
   repaired: boolean;
@@ -89,6 +98,82 @@ export interface CardInventory {
   salesTime?: string;
   salesInvoiceId?: string;
   buyerName?: string;
+}
+
+export type PurchaseCommissionStatus = "待结算" | "已结算";
+
+export type CommissionRuleCalculation = "fixed" | "tiered" | "amount_range";
+export type CommissionRuleBase = "purchase_amount_incl_tax" | "purchase_amount_excl_tax" | "sales_amount_incl_tax" | "sales_amount_excl_tax" | "profit";
+export type CommissionPayoutMethod = "instant" | "single";
+export type CommissionPayoutCycle = "monthly" | "per_order";
+
+export interface CommissionRuleTier {
+  minAmount: number;
+  maxAmount?: number;
+  rate?: number;
+  amount?: number;
+}
+
+export interface CommissionRule {
+  calculation: CommissionRuleCalculation;
+  fixedRate: number;
+  tiers: CommissionRuleTier[];
+  base: CommissionRuleBase;
+  targets: {
+    purchaseHandler: boolean;
+    salesHandler: boolean;
+    warehouseManager: boolean;
+    customMemberIds: string[];
+  };
+  onlyCompleted: boolean;
+  adjustOnReturn: boolean;
+  linkSupplier: boolean;
+  capEnabled: boolean;
+  capRate: number;
+  payoutMethod: CommissionPayoutMethod;
+  payoutCycle: CommissionPayoutCycle;
+  effectiveDate: string;
+}
+
+export interface CommissionRules {
+  purchase: CommissionRule;
+  sales: CommissionRule;
+  updatedAt: string;
+}
+
+export interface CommissionCalculationResult {
+  amount: number;
+  rate: number;
+  baseAmount: number;
+  method: CommissionRuleCalculation;
+}
+
+export interface PurchaseCommissionRecord {
+  id: string;
+  inventoryId: string;
+  sn: string;
+  productId: string;
+  productName: string;
+  purchaseInvoiceNo?: string;
+  salesInvoiceNo: string;
+  purchaseHandler: string;
+  salesHandler?: string;
+  outboundHandler?: string;
+  costPrice: number;
+  salesPrice: number;
+  grossProfit: number;
+  rate: number;
+  commissionAmount: number;
+  purchaseRate?: number;
+  purchaseCommissionAmount?: number;
+  purchaseCalculationMethod?: CommissionRuleCalculation;
+  salesRate?: number;
+  salesCommissionAmount?: number;
+  salesCalculationMethod?: CommissionRuleCalculation;
+  status: PurchaseCommissionStatus;
+  createdAt: string;
+  settledAt?: string;
+  remarks?: string;
 }
 
 export interface InventorySummaryRow {
@@ -112,6 +197,33 @@ export interface InventorySummaryRow {
   avgCost: number;
   avgEstSell: number;
   lastEntryTime?: string;
+}
+
+export type ProductLedgerOperationType = "增加" | "减少" | "锁定" | "释放" | "调整";
+
+export interface ProductLedgerRow {
+  id: string;
+  storeName: string;
+  operatedAt: string;
+  documentType: string;
+  documentNo: string;
+  operationType: ProductLedgerOperationType;
+  customerName: string;
+  supplierName: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  createdBy: string;
+  productRemarks?: string;
+  documentRemarks?: string;
+}
+
+export interface ProductLedgerPage {
+  rows: ProductLedgerRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface InventoryImportRow {
@@ -186,12 +298,13 @@ export interface PurchaseItem {
   version: string;
   vram: string;
   sn: string;
-  condition: "全新官换" | "充新99新" | "靓机95新" | "良品90新" | "微划伤85新" | "瑕疵实用" | "矿卡高阻值";
+  condition: "全新" | "99新" | "95新" | "90新" | "85新" | "轻微瑕疵" | "损坏";
   inWarranty: boolean;
   warrantyDate?: string;
   repaired: boolean;
   gpuRisk: boolean;
   fullBox: boolean;
+  quantity?: number;
   buyPrice: number;
   estSellPrice: number;
   warehouseLocation: string;
@@ -203,11 +316,15 @@ export interface PurchaseInvoice {
   invoiceNo: string;
   date: string;
   sourceType: SourceType;
+  sourcePartnerId?: string;
+  sourcePartnerType?: "customer" | "vendor";
   supplierName: string;
   contact: string;
   expressNo?: string;
   paymentMethod: string;
   isPaid: boolean;
+  /** 已使用的供应商退货抵扣余额；不是现金付款，不生成资金账户流水。 */
+  vendorCreditAppliedAmount?: number;
   paidAmount: number;
   unpaidAmount: number;
   settlementAccountId?: string;
@@ -216,6 +333,8 @@ export interface PurchaseInvoice {
   paymentStatus?: "未付款" | "部分付款" | "已付款" | "已退款";
   handleBy: string;
   remarks?: string;
+  /** SQL 媒体表中的凭证图片 URL；不保存原始 Base64。 */
+  images?: string[];
   items: PurchaseItem[];
   totalCount: number;
   totalCost: number;
@@ -229,6 +348,7 @@ export interface SalesItem {
   productName: string;
   sn: string;
   condition: string;
+  quantity?: number;
   costPrice: number;
   sellPrice: number;
   profit: number;
@@ -240,6 +360,8 @@ export interface SalesInvoice {
   id: string;
   invoiceNo: string;
   date: string;
+  customerId?: string;
+  customerPartnerType?: "customer" | "vendor";
   customerName: string;
   contact: string;
   channel: "到店" | "闲鱼" | "抖音" | "小红书" | "B站" | "微信私域" | "同行网店";
@@ -295,11 +417,12 @@ export interface MarketQuote {
   history?: Array<{ date: string; buyPrice: number; sellPrice: number }>;
 }
 
-export type AftersalesStatus = "待处理" | "检测中" | "已维修" | "已退款" | "已完成" | "待审核" | "处理中" | "已解决";
+export type AftersalesStatus = "待处理" | "检测中" | "已完成" | "已拒绝" | "已维修" | "已退款" | "待审核" | "处理中" | "已解决";
 
 export interface AftersalesRecord {
   id: string;
   salesInvoiceNo: string;
+  customerId?: string;
   customerName: string;
   contact: string;
   inventoryNo: string;
@@ -313,6 +436,8 @@ export interface AftersalesRecord {
   finalResult: string;
   createTime: string;
   remarks?: string;
+  refundPaymentOutId?: string;
+  repairPaymentOutId?: string;
 
   // Additional fields for AftersalesManager.tsx
   model?: string;
@@ -326,8 +451,14 @@ export interface AftersalesRecord {
 export interface CustomerCard {
   id: string;
   name: string;
+  /** 快捷录入标识，仅用于兼容 CRM 线索创建入口。 */
+  fromCrm?: boolean;
   phone: string;
   wechat: string;
+  /** 可选的标准化联系方式，快捷线索录入会优先填充这些字段。 */
+  qq?: string;
+  city?: string;
+  company?: string;
   source: string;
   firstChannel?: string; // Aliases source in PartnerManager.tsx
   type:
@@ -342,12 +473,25 @@ export interface CustomerCard {
     | "老主顾";
   crmStatus?: "线索" | "跟进中" | "已成交" | "沉睡" | "流失";
   crmStage?: "新线索" | "需求确认" | "报价中" | "已成交" | "售后维护";
-  level?: "普通客户" | "VIP客户" | "重点客户" | "黑名单" | "潜在客户";
+  level?: CustomerLevel;
+  /** 核心客户属于身份标识；启用后等级固定为 S 级。 */
+  isCoreCustomer?: boolean;
+  /** 系统按交易与风险数据计算，仅作人工复核建议，不自动覆盖 level。 */
+  suggestedLevel?: CustomerLevel;
+  levelReason?: string;
+  riskReason?: string;
+  levelReviewedAt?: string;
   owner?: string;
   intent?: "低" | "中" | "高";
   budget?: number;
   lastFollowTime?: string;
   nextFollowTime?: string;
+  nextFollowUpAt?: string;
+  nextAction?: string;
+  lastContactAt?: string;
+  dealProbability?: number;
+  estimatedAmount?: number;
+  lostReason?: string;
   lastDealTime: string;
   totalAmount: number;
   totalProfit: number;
@@ -360,8 +504,26 @@ export interface CustomerCard {
   // Compatibility fields for PartnerManager.tsx
   contact?: string;
   totalPurchases?: number;
+  /** 门店应向客户收取的余额（销售赊销等）。 */
+  receivableBalance?: number;
+  /** 门店应向客户支付的余额（个人回收、置换等）。 */
+  payableBalance?: number;
+  /** @deprecated 兼容旧数据；等同于 receivableBalance。 */
   debtBalance?: number;
 }
+
+export type CustomerLevel =
+  | "S级"
+  | "A级"
+  | "B级"
+  | "C级"
+  | "D级"
+  | "R级"
+  | "普通客户"
+  | "VIP客户"
+  | "重点客户"
+  | "黑名单"
+  | "潜在客户";
 
 export type CrmFollowUpResult = "继续跟进" | "已报价" | "已成交" | "暂缓" | "无效线索" | "售后维护";
 
@@ -375,6 +537,11 @@ export interface CrmFollowUpRecord {
   handler: string;
   followTime: string;
   nextFollowTime?: string;
+  nextFollowUpAt?: string;
+  nextAction?: string;
+  estimatedAmount?: number;
+  dealProbability?: number;
+  lostReason?: string;
   remarks?: string;
 }
 
@@ -389,8 +556,172 @@ export interface CrmRequirement {
   source: string;
   handler: string;
   createTime: string;
+  estimatedAmount?: number;
+  dealProbability?: number;
+  nextAction?: string;
   expectedDealTime?: string;
   remarks?: string;
+}
+
+export type CrmQuoteStatus = "草稿" | "已发送" | "客户已确认" | "已拒绝" | "已过期";
+
+export interface CrmQuoteItem {
+  id: string;
+  productId?: string;
+  productName: string;
+  quantity: string;
+  unitPrice: string;
+  remarks?: string;
+}
+
+export interface CrmQuote {
+  id: string;
+  quoteNo: string;
+  customerId: string;
+  customerName: string;
+  createdAt: string;
+  validUntil: string;
+  status: CrmQuoteStatus;
+  items: CrmQuoteItem[];
+  totalAmount: number;
+  notes?: string;
+  owner?: string;
+}
+
+export type QuickCaptureSourceType = "manual" | "chat" | "voice";
+export type CrmLeadStage = "新线索" | "需求确认" | "报价中" | "已成交" | "已关闭";
+export type CrmLeadPriority = "低" | "中" | "高";
+export type QuickCaptureIntentType = "求购" | "出售" | "回收" | "置换" | "其他";
+export type QuickCaptureTransactionType = "销售" | "回收" | "采购" | "置换" | "其他";
+export type QuickCaptureDeliveryMethod = "到店" | "快递" | "同城配送" | "未知";
+
+export interface QuickCaptureConflict {
+  field: string;
+  values: string[];
+  message: string;
+}
+
+export interface QuickCaptureFields {
+  customerName?: string;
+  phone?: string;
+  wechat?: string;
+  qq?: string;
+  city?: string;
+  company?: string;
+  source?: string;
+  intentType?: QuickCaptureIntentType;
+  productCategory?: ProductCategory;
+  productName?: string;
+  productModel?: string;
+  productId?: string;
+  quantity?: number;
+  expectedPrice?: number;
+  quotedPrice?: number;
+  transactionType?: QuickCaptureTransactionType;
+  deliveryMethod?: QuickCaptureDeliveryMethod;
+  followUpTime?: string;
+  priority?: CrmLeadPriority;
+  stage?: CrmLeadStage;
+  tags: string[];
+  note?: string;
+}
+
+export interface ProductMatchCandidate {
+  productId: string;
+  productName: string;
+  model?: string;
+  brand?: string;
+  category?: ProductCategory;
+  score: number;
+  reasons: string[];
+}
+
+export interface CustomerMatchCandidate {
+  customerId: string;
+  name: string;
+  contact?: string;
+  wechat?: string;
+  source?: string;
+  level?: CustomerLevel;
+  owner?: string;
+  score: number;
+  reasons: string[];
+}
+
+export interface QuickCaptureParseResult {
+  parseId: string;
+  rawText: string;
+  sourceType: QuickCaptureSourceType;
+  fields: QuickCaptureFields;
+  confidence: number;
+  missingFields: string[];
+  conflicts: QuickCaptureConflict[];
+  customerCandidates: CustomerMatchCandidate[];
+  productCandidates: ProductMatchCandidate[];
+  source: "ai" | "rules";
+  model?: string;
+  parsedAt: string;
+}
+
+export interface CrmLead {
+  id: string;
+  customerId: string;
+  customerName: string;
+  sourceType: QuickCaptureSourceType;
+  source?: string;
+  intentType?: QuickCaptureIntentType;
+  productCategory?: ProductCategory;
+  productName?: string;
+  productModel?: string;
+  productId?: string;
+  quantity?: number;
+  expectedPrice?: number;
+  quotedPrice?: number;
+  transactionType?: QuickCaptureTransactionType;
+  deliveryMethod?: QuickCaptureDeliveryMethod;
+  followUpTime?: string;
+  priority: CrmLeadPriority;
+  stage: CrmLeadStage;
+  tags: string[];
+  note?: string;
+  rawText?: string;
+  confidence: number;
+  missingFields: string[];
+  conflicts: QuickCaptureConflict[];
+  matchedCustomerId?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CrmTaskStatus = "待处理" | "已完成" | "已取消";
+
+export interface CrmTask {
+  id: string;
+  leadId: string;
+  customerId: string;
+  title: string;
+  taskType: "客户跟进" | "其他";
+  dueAt?: string;
+  status: CrmTaskStatus;
+  assignee?: string;
+  createdBy: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface QuickCaptureConfirmInput {
+  parseId: string;
+  rawText: string;
+  sourceType?: QuickCaptureSourceType;
+  fields: QuickCaptureFields;
+  /** The values shown in the parse preview; kept with the confirmation audit. */
+  confidence?: number;
+  missingFields?: string[];
+  conflicts?: QuickCaptureConflict[];
+  matchAction: "link_existing" | "create_new";
+  matchedCustomerId?: string;
+  idempotencyKey?: string;
 }
 
 export interface Vendor {
@@ -400,6 +731,9 @@ export interface Vendor {
   contactPerson: string;
   phone: string;
   type:
+    | "上游供应商"
+    | "下游采购方"
+    | "核心采购方"
     | "收货同行"
     | "卖货同行"
     | "大黄牛"
@@ -416,9 +750,20 @@ export interface Vendor {
   aftersalesCount: number;
   aftersalesRate: number; // percentage
   lastDealTime: string;
-  accountPayable: number; // 账期欠款
+  /** 门店应向同行支付的余额（采购赊账等）。 */
+  accountPayable: number;
+  /** 同行应向门店支付的余额（同行销售赊账等）。 */
+  accountReceivable?: number;
   accountPaid: number;
+  returnCreditBalance?: number; // 进货退货形成的供应商抵扣余额
   remarks?: string;
+  level?: CustomerLevel;
+  /** 核心同行属于身份标识；核心采购方默认启用，并强制为 S 级。 */
+  isCoreCustomer?: boolean;
+  suggestedLevel?: CustomerLevel;
+  levelReason?: string;
+  riskReason?: string;
+  levelReviewedAt?: string;
 
   // Compatibility fields for PartnerManager.tsx
   contact?: string;
@@ -468,6 +813,23 @@ export type SettlementAccountType =
 
 export type SettlementDirection = "收入" | "支出" | "转入" | "转出" | "冲销";
 
+/** 非经营收入登记分类，独立于销售收款和采购退款等业务自动流水。 */
+export type NonOperatingIncomeType =
+  | "赔偿收入"
+  | "返点收入"
+  | "配件销售"
+  | "利息收入"
+  | "其他收入";
+
+/** 非经营支出登记分类，独立于采购付款和销售退货等业务自动流水。 */
+export type NonOperatingExpenseType =
+  | "员工费用"
+  | "运费支出"
+  | "办公费用"
+  | "罚款支出"
+  | "差旅招待"
+  | "其他支出";
+
 export type SettlementBusinessType =
   | "销售收款"
   | "采购付款"
@@ -480,7 +842,9 @@ export type SettlementBusinessType =
   | "员工提成"
   | "运费"
   | "维修费"
-  | "平台手续费";
+  | "平台手续费"
+  | NonOperatingIncomeType
+  | NonOperatingExpenseType;
 
 export interface SettlementAccount {
   id: string;
@@ -495,6 +859,10 @@ export interface SettlementAccount {
   allowNegative: boolean;
   remarks?: string;
   lastChangeTime?: string;
+  /** 实盘对账只记录核对值，不会直接篡改账面余额。 */
+  actualBalance?: number;
+  lastReconciledAt?: string;
+  lastReconciledBy?: string;
 }
 
 export interface SettlementLedger {
@@ -519,23 +887,121 @@ export interface SettlementLedger {
   remarks?: string;
 }
 
+/** 财务日结只保存当时的经营快照，不锁定历史单据。 */
+export interface DailyClosing {
+  id: string;
+  date: string;
+  closedAt: string;
+  closedBy: string;
+  remarks?: string;
+  snapshot: {
+    income: number;
+    expense: number;
+    netCash: number;
+    salesCount: number;
+    purchaseCount: number;
+    receivable: number;
+    payable: number;
+    unreviewed: number;
+    accountReconciliationDifferences: number;
+  };
+}
+
 export interface PaymentInRecord {
   id: string;
+  customerId?: string;
+  /** 销售收款对应的档案类型；同行也可作为销售买方。 */
+  customerPartnerType?: "customer" | "vendor";
   customerName: string;
+  /** 采购退款等收入的对方可能是供应商，而不是客户。 */
+  supplierId?: string;
+  supplierName?: string;
   accountId: string;
   accountName: string;
   amount: number;
   handler: string;
   paymentMethod: string;
+  businessType?: SettlementBusinessType;
+  settlementLedgerId?: string;
+  financeLedgerId?: string;
   relatedDocType?: string;
   relatedDocNo?: string;
+  /** 非经营登记中的外部凭证/业务参考号，不参与销售单自动结算联动。 */
+  referenceNo?: string;
   time: string;
+  /** 非经营收支的凭证图片 URL；图片本体由媒体表持久化。 */
+  images?: string[];
+  remarks?: string;
+}
+
+export type ReturnOrderType = "销售退货" | "进货退货";
+export type ReturnOrderStatus = "待处理" | "已完成" | "已作废";
+export type ReturnSettlementMode = "原路退款" | "抵扣账款" | "直接冲销";
+export type ReturnInventoryAction = "退回待检测" | "退回入库" | "退回供应商" | "直接报废";
+
+/** 一笔退款对应的原收/付款来源；用于按原账户拆分退款并保持可追溯。 */
+export interface ReturnRefundAllocation {
+  sourcePaymentRecordId: string;
+  accountId: string;
+  accountName: string;
+  paymentMethod: string;
+  amount: number;
+}
+
+export interface ReturnOrder {
+  id: string;
+  returnNo: string;
+  type: ReturnOrderType;
+  status: ReturnOrderStatus;
+  date: string;
+  relatedDocType: "销售单" | "采购单" | string;
+  relatedDocNo: string;
+  sourceInventoryId?: string;
+  sourceSalesItemId?: string;
+  sourceSalesItemIndex?: number;
+  sourceSalesItemSnapshot?: SalesItem;
+  sourcePurchaseItemId?: string;
+  sourcePurchaseItemIndex?: number;
+  sourcePurchaseItemSnapshot?: PurchaseItem;
+  productId?: string;
+  productName?: string;
+  sn?: string;
+  partyId?: string;
+  partyType?: "customer" | "vendor";
+  partyName?: string;
+  contact?: string;
+  amount: number;
+  settlementMode: ReturnSettlementMode;
+  settlementAccountId?: string;
+  settlementAccountName?: string;
+  paymentRecordId?: string;
+  /** 退款生成的资金流水；保留 paymentRecordId 兼容旧数据。 */
+  refundPaymentRecordIds?: string[];
+  /** 按原付款/收款账户拆分的退款来源与金额。 */
+  refundAllocations?: ReturnRefundAllocation[];
+  /** 直接冲销时被撤销的原付款快照；用于删除退货单时还原。 */
+  reversedPaymentSnapshot?: PaymentOutRecord;
+  /** 本次退货直接冲减原采购单应付的金额。 */
+  creditAmount?: number;
+  /** 本次退货转入或返还到供应商抵扣余额的金额。 */
+  vendorCreditAmount?: number;
+  /** 本次退货解除、重新返还到原采购单的供应商抵扣使用额。 */
+  releasedVendorCreditAmount?: number;
+  /** 本次退货从原采购单释放的现金付款额；抵扣账款时不会生成资金流水。 */
+  cashReleasedAmount?: number;
+  handler: string;
+  reason: string;
+  responsibility?: "客户" | "供应商" | "平台" | "本店" | "其他";
+  inventoryAction: ReturnInventoryAction;
+  completedAt?: string;
   remarks?: string;
 }
 
 export interface PaymentOutRecord {
   id: string;
+  supplierId?: string;
   supplierName?: string;
+  customerId?: string;
   customerName?: string;
   accountId: string;
   accountName: string;
@@ -543,9 +1009,15 @@ export interface PaymentOutRecord {
   handler: string;
   paymentMethod: string;
   businessType: SettlementBusinessType;
+  settlementLedgerId?: string;
+  financeLedgerId?: string;
   relatedDocType?: string;
   relatedDocNo?: string;
+  /** 非经营登记中的外部凭证/业务参考号，不参与采购单自动结算联动。 */
+  referenceNo?: string;
   time: string;
+  /** 非经营收支的凭证图片 URL；图片本体由媒体表持久化。 */
+  images?: string[];
   remarks?: string;
 }
 
@@ -566,9 +1038,13 @@ export interface AccountTransferRecord {
 export type AssemblyOperationType = "拆卸" | "组装";
 
 export interface AssemblyPartRecord {
+  productId?: string;
   partName: string;
   category: ProductCategory;
   sn: string;
+  costPrice?: number;
+  estSellPrice?: number;
+  marketPrice?: number;
   remarks?: string;
 }
 
@@ -595,6 +1071,7 @@ export interface PermissionSettings {
   showProfit: boolean;
   canDelete: boolean;
   canEditHistory: boolean;
+  canManualOutbound: boolean;
   allowedMenus: string[];
 }
 

@@ -1,0 +1,55 @@
+import {apiRequest} from "../client";
+import {adaptPurchaseReturnList, adaptSalesReturnComplete, adaptSalesReturnList, adaptSalesReturnMutation, toPurchaseReturnRequestDto, toSalesReturnUpdateRequestDto} from "../adapters/returns.adapter";
+import type {SalesReturnCompleteResponseDto, SalesReturnListResponseDto, SalesReturnMutationResponseDto} from "../dto/returns.dto";
+import type {PurchaseReturnFormValues, SalesReturnFormValues, SalesReturnListFilters, SalesReturnListItem} from "@/src/types/returns";
+
+export function toSalesReturnListQueryParams(filters: SalesReturnListFilters) {
+  const params = new URLSearchParams({type: "销售退货", page: String(filters.page), pageSize: String(filters.pageSize)});
+  if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+  if (filters.status) params.set("status", filters.status);
+  return params;
+}
+
+export function toPurchaseReturnListQueryParams(filters: SalesReturnListFilters) {
+  const params = new URLSearchParams({type: "进货退货", page: String(filters.page), pageSize: String(filters.pageSize)});
+  if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+  if (filters.status) params.set("status", filters.status);
+  return params;
+}
+
+export const returnsApi = {
+  async listSales(filters: SalesReturnListFilters, signal?: AbortSignal) {
+    const params = toSalesReturnListQueryParams(filters);
+    const response = await apiRequest<SalesReturnListResponseDto>(`/api/returns?${params.toString()}`, {signal});
+    return adaptSalesReturnList(response);
+  },
+
+  async listPurchase(filters: SalesReturnListFilters, signal?: AbortSignal) {
+    const params = toPurchaseReturnListQueryParams(filters);
+    const response = await apiRequest<SalesReturnListResponseDto>(`/api/returns?${params.toString()}`, {signal});
+    return adaptPurchaseReturnList(response);
+  },
+
+  async createSales(values: SalesReturnFormValues, signal?: AbortSignal) {
+    return apiRequest<{data?: unknown; state?: unknown}>("/api/returns", {method: "POST", body: JSON.stringify({type: "销售退货", relatedDocType: "销售单", settlementMode: "原路退款", ...values, sourceInventoryId: values.sourceInventoryId || undefined, partyId: values.partyId || undefined}), signal});
+  },
+
+  async createPurchase(values: PurchaseReturnFormValues, signal?: AbortSignal) {
+    return apiRequest<{data?: unknown; state?: unknown}>("/api/returns", {method: "POST", body: JSON.stringify(toPurchaseReturnRequestDto(values)), signal});
+  },
+
+  async complete(id: string, signal?: AbortSignal) {
+    const response = await apiRequest<SalesReturnCompleteResponseDto>(`/api/returns/${encodeURIComponent(id)}/complete`, {method: "POST", signal});
+    return adaptSalesReturnComplete(response.data);
+  },
+
+  async update(id: string, values: Pick<SalesReturnListItem, "handler" | "reason" | "remarks">, signal?: AbortSignal) {
+    const response = await apiRequest<SalesReturnMutationResponseDto>(`/api/returns/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(toSalesReturnUpdateRequestDto(values)), signal});
+    return adaptSalesReturnMutation(response);
+  },
+
+  async remove(id: string, signal?: AbortSignal) {
+    const response = await apiRequest<SalesReturnMutationResponseDto>(`/api/returns/${encodeURIComponent(id)}`, {method: "DELETE", signal});
+    return adaptSalesReturnMutation(response);
+  },
+};

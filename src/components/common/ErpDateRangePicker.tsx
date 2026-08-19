@@ -1,0 +1,314 @@
+import {Popover as BasePopover} from "@base-ui/react/popover";
+import {CalendarRange, X} from "lucide-react";
+import {useEffect, useState} from "react";
+import {Button, Input} from "@/src/components/ui";
+import {cn} from "@/src/lib/cn";
+import {formatDateKey, getDateRangePreset, isDateKey, parseDateKey, validateDateRange, type DateRangePreset, type DateRangeValue} from "@/src/lib/dateRangePickerUtils";
+import {ErpCalendar} from "./ErpCalendar";
+
+export interface DateRangePresetOption {
+  label: string;
+  value: DateRangePreset;
+}
+
+export const defaultDateRangePresets: DateRangePresetOption[] = [
+  {label: "今天", value: "today"},
+  {label: "昨天", value: "yesterday"},
+  {label: "近 7 天", value: "last7"},
+  {label: "近 30 天", value: "last30"},
+  {label: "近 90 天", value: "last90"},
+  {label: "本月", value: "thisMonth"},
+  {label: "上月", value: "lastMonth"},
+  {label: "本季度", value: "thisQuarter"},
+  {label: "今年", value: "thisYear"},
+];
+
+export interface ErpDateRangePickerProps {
+  value: DateRangeValue;
+  onChange: (value: DateRangeValue) => void;
+  /** Use the compact control height when the picker lives in a filter toolbar. */
+  density?: "default" | "compact";
+  startPlaceholder?: string;
+  endPlaceholder?: string;
+  startAriaLabel?: string;
+  endAriaLabel?: string;
+  ariaLabel?: string;
+  fieldClassName?: string;
+  className?: string;
+  min?: string;
+  max?: string;
+  maxDays?: number;
+  requireComplete?: boolean;
+  presets?: DateRangePresetOption[];
+  error?: string | null;
+  disabled?: boolean;
+}
+
+function safeRange(value: DateRangeValue): DateRangeValue {
+  return {
+    startDate: isDateKey(value.startDate) ? value.startDate : "",
+    endDate: isDateKey(value.endDate) ? value.endDate : "",
+  };
+}
+
+function dateRangeToCalendarValue(value: DateRangeValue) {
+  const from = parseDateKey(value.startDate) || undefined;
+  const to = parseDateKey(value.endDate) || undefined;
+  return from || to ? {from, to} : undefined;
+}
+
+function dateRangeFromCalendarValue(value: {from: Date | undefined; to?: Date} | undefined): DateRangeValue {
+  return {
+    startDate: value?.from ? formatDateKey(value.from) : "",
+    endDate: value?.to ? formatDateKey(value.to) : "",
+  };
+}
+
+function inputError(startDate: string, endDate: string) {
+  if (startDate && !isDateKey(startDate.trim())) return "请输入有效的开始日期（YYYY-MM-DD）";
+  if (endDate && !isDateKey(endDate.trim())) return "请输入有效的结束日期（YYYY-MM-DD）";
+  return null;
+}
+
+function completeRangeError(value: DateRangeValue, requireComplete?: boolean) {
+  return requireComplete && (!value.startDate || !value.endDate) ? "请选择完整日期范围" : null;
+}
+
+function useCompactViewport() {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  return compact;
+}
+
+/** A single-entry range picker with presets, direct input, atomic apply, and a mobile sheet layout. */
+export function ErpDateRangePicker({
+  value,
+  onChange,
+  density = "default",
+  startPlaceholder = "开始日期",
+  endPlaceholder = "结束日期",
+  startAriaLabel = "开始日期",
+  endAriaLabel = "结束日期",
+  ariaLabel = "日期范围",
+  fieldClassName,
+  className,
+  min,
+  max,
+  maxDays,
+  requireComplete = false,
+  presets = defaultDateRangePresets,
+  error,
+  disabled,
+}: ErpDateRangePickerProps) {
+  const [open, setOpen] = useState(false);
+  const [draftRange, setDraftRange] = useState<DateRangeValue>(() => safeRange(value));
+  const [startInput, setStartInput] = useState(() => safeRange(value).startDate);
+  const [endInput, setEndInput] = useState(() => safeRange(value).endDate);
+  const compactViewport = useCompactViewport();
+  const minDate = parseDateKey(min || "");
+  const maxDate = parseDateKey(max || "");
+
+  const syncDraftFromValue = () => {
+    const next = safeRange(value);
+    setDraftRange(next);
+    setStartInput(next.startDate);
+    setEndInput(next.endDate);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    syncDraftFromValue();
+    setOpen(nextOpen);
+  };
+
+  const handleCancel = () => {
+    syncDraftFromValue();
+    setOpen(false);
+  };
+
+  const rangeConstraints = {minDate: min, maxDate: max};
+  const draftError = inputError(startInput, endInput) || validateDateRange(draftRange, maxDays, rangeConstraints) || completeRangeError(draftRange, requireComplete);
+  const committedValue = safeRange(value);
+  const committedError = validateDateRange(committedValue, maxDays, rangeConstraints) || completeRangeError(committedValue, requireComplete);
+  const visibleError = open ? draftError : error || committedError;
+
+  const handleApply = () => {
+    if (draftError) return;
+    onChange(draftRange);
+    setOpen(false);
+  };
+
+  const setDraftField = (field: "startDate" | "endDate", nextValue: string) => {
+    setDraftRange((current) => ({...current, [field]: nextValue}));
+  };
+
+  const updateInput = (field: "startDate" | "endDate", rawValue: string) => {
+    if (field === "startDate") setStartInput(rawValue);
+    else setEndInput(rawValue);
+    const trimmed = rawValue.trim();
+    setDraftField(field, isDateKey(trimmed) ? trimmed : "");
+  };
+
+  const normalizeInput = (field: "startDate" | "endDate", rawValue: string) => {
+    const trimmed = rawValue.trim();
+    const parsed = parseDateKey(trimmed);
+    const normalized = parsed ? formatDateKey(parsed) : trimmed;
+    if (field === "startDate") setStartInput(normalized);
+    else setEndInput(normalized);
+    setDraftField(field, parsed ? normalized : "");
+  };
+
+  const handleCalendarSelect = (nextValue: {from: Date | undefined; to?: Date} | undefined) => {
+    const next = dateRangeFromCalendarValue(nextValue);
+    setDraftRange(next);
+    setStartInput(next.startDate);
+    setEndInput(next.endDate);
+  };
+
+  const handlePreset = (preset: DateRangePreset) => {
+    const next = getDateRangePreset(preset);
+    setDraftRange(next);
+    setStartInput(next.startDate);
+    setEndInput(next.endDate);
+  };
+
+  const handleClear = () => {
+    const next = {startDate: "", endDate: ""};
+    setDraftRange(next);
+    setStartInput("");
+    setEndInput("");
+  };
+
+  const displayStart = isDateKey(value.startDate) ? value.startDate : "";
+  const displayEnd = isDateKey(value.endDate) ? value.endDate : "";
+  const displayValue = displayStart && displayEnd
+    ? `${displayStart} 至 ${displayEnd}`
+    : displayStart
+      ? `${displayStart} 至 ${endPlaceholder}`
+      : displayEnd
+        ? `${startPlaceholder} 至 ${displayEnd}`
+        : "选择日期范围";
+  const hasCustomWidth = Boolean(fieldClassName?.match(/(?:^|\s)!?w-/));
+  const controlHeight = density === "compact" ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
+
+  return (
+    <div className={cn("min-w-0 w-full sm:w-auto", className)} role="group" aria-label={ariaLabel}>
+      <BasePopover.Root open={open} onOpenChange={handleOpenChange}>
+        <BasePopover.Trigger
+          className={cn(
+            "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)] data-disabled:text-[var(--erp-color-text-muted)] sm:min-w-56",
+            controlHeight,
+            visibleError && "border-[var(--erp-color-danger)]",
+            hasCustomWidth ? undefined : "w-full",
+            fieldClassName,
+          )}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-invalid={Boolean(visibleError) || undefined}
+        >
+          <span className={cn("truncate font-mono", !displayStart && !displayEnd && "font-sans text-[var(--erp-color-text-muted)]")}>
+            {displayValue}
+          </span>
+          <CalendarRange className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
+        </BasePopover.Trigger>
+        <BasePopover.Portal>
+          {open && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 sm:hidden" aria-hidden="true" onMouseDown={handleCancel} />}
+          <BasePopover.Positioner className="erp-popover-layer outline-none" sideOffset={6} align="start">
+            <BasePopover.Popup className="relative max-h-[min(90dvh,720px)] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none max-sm:!fixed max-sm:inset-x-2 max-sm:bottom-2 max-sm:top-auto max-sm:max-h-[calc(100dvh-1rem)] max-sm:w-[calc(100vw-1rem)] max-sm:max-w-none">
+              <div className="flex items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--erp-color-text)]">选择日期范围</p>
+                  <p className="mt-0.5 truncate text-xs text-[var(--erp-color-text-muted)]">支持快捷选择，也可以直接输入日期</p>
+                </div>
+                <Button type="button" size="icon" variant="ghost" className="-mr-1 -mt-1" aria-label="关闭日期范围" onClick={handleCancel}>
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+              <div className="flex flex-col sm:flex-row">
+                <div className="erp-horizontal-scroll flex gap-1 overflow-x-auto border-b border-[var(--erp-color-border)] p-2 sm:w-32 sm:shrink-0 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3">
+                  {presets.map((preset) => (
+                    <Button
+                      key={preset.value}
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="justify-start whitespace-nowrap text-xs"
+                      onClick={() => handlePreset(preset.value)}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="grid gap-2 p-3 sm:grid-cols-2 sm:px-4">
+                    <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+                      {startPlaceholder}
+                      <Input
+                        className="mt-1 h-[var(--erp-control-height-compact)] w-full font-mono text-xs placeholder:font-sans"
+                        value={startInput}
+                        onChange={(event) => updateInput("startDate", event.target.value)}
+                        onBlur={(event) => normalizeInput("startDate", event.target.value)}
+                        onKeyDown={(event) => { if (event.key === "Escape") handleCancel(); if (event.key === "Enter") { event.preventDefault(); handleApply(); } }}
+                        placeholder="YYYY-MM-DD"
+                        inputMode="numeric"
+                        aria-label={startAriaLabel}
+                      />
+                    </label>
+                    <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+                      {endPlaceholder}
+                      <Input
+                        className="mt-1 h-[var(--erp-control-height-compact)] w-full font-mono text-xs placeholder:font-sans"
+                        value={endInput}
+                        onChange={(event) => updateInput("endDate", event.target.value)}
+                        onBlur={(event) => normalizeInput("endDate", event.target.value)}
+                        onKeyDown={(event) => { if (event.key === "Escape") handleCancel(); if (event.key === "Enter") { event.preventDefault(); handleApply(); } }}
+                        placeholder="YYYY-MM-DD"
+                        inputMode="numeric"
+                        aria-label={endAriaLabel}
+                      />
+                    </label>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <ErpCalendar
+                      mode="range"
+                      selected={dateRangeToCalendarValue(draftRange)}
+                      onSelect={handleCalendarSelect}
+                      minDate={minDate || undefined}
+                      maxDate={maxDate || undefined}
+                      maxDays={maxDays}
+                      numberOfMonths={compactViewport ? 1 : 2}
+                      defaultMonth={parseDateKey(draftRange.startDate) || parseDateKey(draftRange.endDate) || undefined}
+                      startMonth={minDate || undefined}
+                      endMonth={maxDate || undefined}
+                    />
+                  </div>
+                  <div className="border-t border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4">
+                    {draftError && <p className="mb-2 text-xs text-[var(--erp-color-danger)]" role="alert">{draftError}</p>}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="min-w-0 truncate text-xs text-[var(--erp-color-text-muted)]" aria-live="polite">
+                        {draftRange.startDate || draftRange.endDate ? `${draftRange.startDate || "未选择"} 至 ${draftRange.endDate || "未选择"}` : "尚未选择日期"}
+                      </p>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" size="sm" variant="ghost" onClick={handleClear}>清除</Button>
+                        <Button type="button" size="sm" variant="secondary" onClick={handleCancel}>取消</Button>
+                        <Button type="button" size="sm" variant="primary" disabled={Boolean(draftError) || disabled} onClick={handleApply}>应用</Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </BasePopover.Popup>
+          </BasePopover.Positioner>
+        </BasePopover.Portal>
+      </BasePopover.Root>
+      {visibleError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]" role="alert">{visibleError}</p>}
+    </div>
+  );
+}
