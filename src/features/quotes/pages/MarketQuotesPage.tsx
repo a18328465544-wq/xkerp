@@ -4,7 +4,7 @@ import {ArrowDownRight, ArrowUpRight, Download, Filter, LineChart, LockKeyhole, 
 import {useEffect, useMemo, useState} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDetailDrawer, ErpLoadingState, ErpMetricCard, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDetailDrawer, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, quotesApi, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -71,6 +71,7 @@ function MarketQuotesContent({session, query, filters, onFiltersChange, onAuthEx
 
   return <ErpAnalyticsPageFrame>
     <ErpPageHeader title="行情参考" subtitle="维护回收与销售参考价；价格更新由服务端追加真实历史并同步关联库存。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setPasteOpen(true)}><Upload className="h-4 w-4" />批量粘贴</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="primary" onClick={openCreate}><Plus className="h-4 w-4" />新增参考价</Button>}</>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <AnalyticsKpiRegion primary={<>
       <ErpMetricCard label="行情型号" value={`${quotes.length} 款`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<LineChart className="h-4 w-4" />} tone="info" />
       <ErpMetricCard label="上调型号" value={`${upCount} 款`} detail="服务端记录为上涨" icon={<ArrowUpRight className="h-4 w-4" />} tone="success" />
@@ -92,6 +93,7 @@ function MarketQuotesContent({session, query, filters, onFiltersChange, onAuthEx
     <MarketQuotePasteDialog open={pasteOpen} value={pasteText} pending={importMutation.isPending} onValueChange={setPasteText} onOpenChange={setPasteOpen} onImport={(result) => importMutation.mutate(result)} />
     <QuoteDetail quote={detail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} onClose={() => setDetail(null)} />
     <DeleteDialog quote={deleting} pending={deleteMutation.isPending} onClose={() => setDeleting(null)} onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}} />
+    </ErpPageContent>
   </ErpAnalyticsPageFrame>;
 }
 

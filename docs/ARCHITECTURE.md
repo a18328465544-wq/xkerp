@@ -146,6 +146,14 @@ Query Key 统一从 `src/services/api/query-keys/index.ts` 获取。
 - 列显隐和密度通过统一 `useTablePreferences`，必须带版本和页面作用域。
 - 组件展示页仅用于本地开发，不进入生产菜单。
 
+正式页面的一级结构统一为：
+
+```text
+ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageToolbar（可选）→ ErpPageContent
+```
+
+列表筛选必须位于 `ErpPageToolbar`，业务主体必须位于 `ErpPageContent`。`DashboardShell` 仅保留为 `ErpDashboardPageFrame` 的兼容别名，架构检查不把它视为合法的新页面外壳；检测工作台是已登记的独立流程例外。
+
 ## 6. 后端架构
 
 ### 6.1 Express 入口

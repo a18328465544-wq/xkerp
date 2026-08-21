@@ -64,7 +64,7 @@ React Hook Form、Zod、cmdk、TanStack Virtual、react-number-format、React Da
 
 业务页面只能依赖这些语义组件和 `shared` 出口；底层按钮、卡片、表单、反馈和弹窗分别从 `shared/actions`、`shared/layout`、`shared/forms`、`shared/feedback`、`shared/overlays` 发现。旧的 `ui.tsx` 只作为兼容重导出保留。
 
-Dashboard 页面骨架入口为 `src/components/erp/DashboardSkeleton.tsx`，提供 `DashboardShell`、`PageHeader`、`QuickStatusGroup`、`MetricsRegion`、`MainRegion`、`BottomRegion` 和 `DashboardSection`。骨架只负责区域、响应式排布和空区隐藏，不携带库存、财务或 CRM 业务事实。
+Dashboard 页面骨架入口为 `src/components/common/DashboardShell.tsx`，提供 `ErpDashboardPageFrame`、`PageHeader`、`QuickStatusGroup`、`MetricsRegion`、`MainRegion`、`BottomRegion` 和 `DashboardSection`。`DashboardShell` 仅作为兼容别名保留，正式页面统一使用 `ErpDashboardPageFrame`。骨架只负责区域、响应式排布和空区隐藏，不携带库存、财务或 CRM 业务事实。
 
 ## 4. 销售开单试点
 
@@ -145,9 +145,9 @@ npm run build
 - `AiInsightsCenter.tsx`：已迁移，建议统计进入 `MetricsRegion`，筛选和建议列表进入 `MainRegion`。
 - `MarketQuotes.tsx`：已迁移，页面标题与操作统一使用 `PageHeader`。
 - `FinanceCenter.tsx`：已迁移，指标、现金流主区、健康度和底部账户区使用骨架槽位；财务二级导航仍由 `FinanceWorkspaceNav` 单独负责。
-- `FinanceManager.tsx`、`CustomerFundsCenter.tsx`、`FinanceTransferWorkspace.tsx`、`NonOperatingFinancePage.tsx`、`PurchaseCommissionManager.tsx`、`SettlementFinance.tsx`：已迁移到 `DashboardShell`；原有财务数据、权限、筛选和写入流程保持不变，明显指标区使用 `MetricsRegion`。
+- `FinanceManager.tsx`、`CustomerFundsCenter.tsx`、`FinanceTransferWorkspace.tsx`、`NonOperatingFinancePage.tsx`、`PurchaseCommissionManager.tsx`、`SettlementFinance.tsx`：已迁移到 `ErpDashboardPageFrame`；原有财务数据、权限、筛选和写入流程保持不变，明显指标区使用 `MetricsRegion`。
 - `InventoryManager.tsx`：已迁移，库存标题/操作、指标、主表与 AI 侧栏复用骨架，库存筛选、分页、批量操作和抽屉逻辑保持不变。
-- `CrmManager.tsx`、`PartnerManager.tsx`、`ProductLibrary.tsx`、`InspectionManager.tsx`、`AssemblyManager.tsx`、`SalesOutboundManager.tsx`、`ReturnManager.tsx`、`AftersalesManager.tsx`、`InvoiceList.tsx`、`AdminSettings.tsx`：已接入 `DashboardShell` 作为统一外壳；领域工作区内部导航和录入布局保留，避免把业务流程强行改造成仪表盘。
+- `CrmManager.tsx`、`PartnerManager.tsx`、`ProductLibrary.tsx`、`InspectionManager.tsx`、`AssemblyManager.tsx`、`SalesOutboundManager.tsx`、`ReturnManager.tsx`、`AftersalesManager.tsx`、`InvoiceList.tsx`、`AdminSettings.tsx`：已接入 `ErpDashboardPageFrame` 作为统一外壳；领域工作区内部导航和录入布局保留，避免把业务流程强行改造成仪表盘。
 
 销售/采购录入、检测表单和详情抽屉仍优先复用现有领域组件（`ErpSection`、`ErpDocumentMeta`、`shared.DataTable`），后续只在出现真实的页面级重复时补充 `PageHeader` 或区域槽位。`ComponentShowcase` 作为开发展示页保留 `PageShell`，不参与业务迁移。不得在业务页复制 `PageHeader`、`MetricsRegion` 或主区比例规则。
 

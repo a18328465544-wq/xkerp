@@ -4,7 +4,7 @@ import {useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {Link, useBlocker, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
-import {ErpDatePicker, ErpFormSection, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
+import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -77,6 +77,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
 
   return <ErpTransactionPageFrame className="max-w-[1300px]">
     <ErpPageHeader title="新建销售退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联已出库销售单和原库存卡片，退款沿用原路退款规则。</span><ErpStatusBadge label="原路退款" tone="info" /></span>} actions={<Link to="/sales/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><ArrowLeft className="h-4 w-4" />返回销售退货</Link>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {success && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="p-4 text-sm font-semibold text-[var(--erp-color-success)]">{success}</CardContent></Card>}
     {error && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="p-4 text-sm text-[var(--erp-color-danger)]">{error}</CardContent></Card>}
     <form className="flex flex-col gap-5" onSubmit={submit}>
@@ -100,6 +101,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
       <ErpSubmitBar dirty={dirty} submitting={mutation.isPending} onCancel={() => void navigate({to: "/sales/returns"})} submitLabel="提交销售退货"><span>退款方式：原路退款</span></ErpSubmitBar>
     </form>
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
+    </ErpPageContent>
   </ErpTransactionPageFrame>;
 }
 

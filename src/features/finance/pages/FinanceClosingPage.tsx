@@ -31,8 +31,10 @@ import {
   ErpEmptyState,
   ErpFilterBar,
   ErpLoadingState,
+  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
+  ErpPageToolbar,
   ErpStatusBadge,
   MainRegion,
   MetricsRegion,
@@ -329,6 +331,7 @@ function FinanceClosingContent({
           }
         />
       </MetricsRegion>
+      <ErpPageToolbar>
       <ErpFilterBar
         compact
         actions={
@@ -363,6 +366,8 @@ function FinanceClosingContent({
           ariaLabel="日结日期范围"
         />
       </ErpFilterBar>
+      </ErpPageToolbar>
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <MainRegion variant="70-30" className="gap-3">
         <MainRegion.Primary>
           <FinanceTableRegion
@@ -437,6 +442,7 @@ function FinanceClosingContent({
         </MainRegion.Secondary>
       </MainRegion>
       <ClosingDetail item={detail} onClose={() => setDetail(null)} />
+      </ErpPageContent>
     </ErpFinancePageFrame>
   );
 }

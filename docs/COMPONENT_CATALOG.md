@@ -24,7 +24,7 @@
 - 单据：`ErpDocumentMeta`
 - 业务分区：`ErpSection`
 - 指标与汇总：`ErpMetricCard`、`ErpSummaryCard`
-- Dashboard 骨架：`DashboardShell`、`PageHeader`、`QuickStatusGroup`、`MetricsRegion`、`MainRegion`、`BottomRegion`、`DashboardSection`
+- Dashboard 骨架：`ErpDashboardPageFrame`、`PageHeader`、`QuickStatusGroup`、`MetricsRegion`、`MainRegion`、`BottomRegion`、`DashboardSection`；`DashboardShell` 仅为兼容别名，禁止新页面使用
 
 首个迁移页面是 `SalesManager`（销售开单）。随后按“财务 → 库存 → CRM → 采购 → 售后 → 设置”完成了所有主要业务页的统一入口迁移。后续页面必须先复用 ERP 业务组件，再决定是否需要新增组件，禁止在页面内复制金额、状态和单号样式。
 

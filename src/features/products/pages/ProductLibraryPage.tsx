@@ -4,7 +4,7 @@ import {Boxes, Download, Filter, Layers3, PackageCheck, Plus, RefreshCw, Search,
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, productsApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -96,17 +96,19 @@ function ProductLibraryContent({session, query, filters, onFiltersChange, onAuth
       <MetricCard label="品类覆盖" value={`${query.data?.categories.length || 0} 类`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<Layers3 className="h-4 w-4" />} />
       <MetricCard label="当前筛选" value={`${filtered.length} 款`} detail={activeFilters ? `${activeFilters} 项筛选生效` : "全部商品模板"} icon={<Filter className="h-4 w-4" />} tone={activeFilters ? "warning" : "neutral"} />
     </MetricsRegion>
-    <ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultProductFilters)}>重置</Button><Button type="button" size="sm" variant="secondary" onClick={downloadTemplate}><Download className="h-4 w-4" />导入模板</Button><Button type="button" size="sm" variant="secondary" onClick={() => importRef.current?.click()} disabled={importMutation.isPending}><Upload className="h-4 w-4" />CSV 导入</Button><Button type="button" size="sm" variant="secondary" onClick={exportProducts}><Download className="h-4 w-4" />导出</Button></>}>
+    <ErpPageToolbar><ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultProductFilters)}>重置</Button><Button type="button" size="sm" variant="secondary" onClick={downloadTemplate}><Download className="h-4 w-4" />导入模板</Button><Button type="button" size="sm" variant="secondary" onClick={() => importRef.current?.click()} disabled={importMutation.isPending}><Upload className="h-4 w-4" />CSV 导入</Button><Button type="button" size="sm" variant="secondary" onClick={exportProducts}><Download className="h-4 w-4" />导出</Button></>}>
       <div className="relative min-w-64 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="商品名称、型号、品牌、版本、规格或配件 ID" aria-label="搜索商品模板" /></div>
       <Select value={filters.category} onValueChange={(category) => onFiltersChange({...filters, category, page: 1})} options={[{value: "all", label: "全部品类"}, ...(query.data?.categories || []).map((value) => ({value, label: value}))]} className="w-40" aria-label="筛选商品品类" />
       <Select value={filters.brand} onValueChange={(brand) => onFiltersChange({...filters, brand, page: 1})} options={[{value: "all", label: "全部品牌"}, ...(query.data?.brands || []).map((value) => ({value, label: value}))]} className="w-40" aria-label="筛选商品品牌" />
-    </ErpFilterBar>
+    </ErpFilterBar></ErpPageToolbar>
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {!fullPriceAccess && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div>}
     <DashboardSection title="商品规格列表">
       <ErpDataTable columns={columns} data={pageRows} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="商品库加载失败" emptyTitle="暂无匹配商品" emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击新建模板创建第一条商品规格。"} onRetry={() => void query.refetch()} onRowClick={fullPriceAccess ? openEdit : undefined} manualSorting sorting={sorting} onSortingChange={setSorting} page={filters.page} pageSize={filters.pageSize} total={filtered.length} onPageChange={(page) => onFiltersChange({...filters, page})} onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})} enableColumnResizing density="compact" stickyHeader />
     </DashboardSection>
     <ErpProductTemplateDialog open={dialogOpen} product={editing} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, product: editing});}} />
     <ConfirmationDialog state={confirmState} pending={deleteMutation.isPending || importMutation.isPending} onClose={() => setConfirmState(null)} onConfirm={() => {if (confirmState?.kind === "delete") deleteMutation.mutate(confirmState.product.id); if (confirmState?.kind === "import") importMutation.mutate(confirmState.rows);}} />
+    </ErpPageContent>
   </ErpListPageFrame>;
 }
 

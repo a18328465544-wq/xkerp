@@ -4,7 +4,7 @@ import type {SortingState, VisibilityState} from "@tanstack/react-table";
 import {CircleDollarSign, ClipboardList, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search} from "lucide-react";
 import {useMemo, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageError, ErpPageHeader, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {purchaseApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -110,13 +110,14 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
       {session.permissions.showCost && session.permissions.showProfit && <MetricCard label="预计利润" value={selection.summary.estimatedProfit === undefined ? "—" : formatCurrency(selection.summary.estimatedProfit)} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} />}
     </MetricsRegion>
 
-    <ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultPurchaseListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
+    <ErpPageToolbar><ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultPurchaseListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
       <div className="relative min-w-[260px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索采购单号、来源、商品或经办人" aria-label="搜索采购单据" /></div>
       <Select className="w-36" value={filters.sourceType} options={sourceOptions} onValueChange={(value) => updateFilters({sourceType: value as PurchaseListFilters["sourceType"]})} aria-label="采购来源筛选" />
       <Select className="w-36" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as PurchaseListFilters["paymentStatus"]})} aria-label="付款状态筛选" />
       <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} fieldClassName="sm:w-36" startAriaLabel="采购开始日期" endAriaLabel="采购结束日期" ariaLabel="采购日期范围" />
-    </ErpFilterBar>
+    </ErpFilterBar></ErpPageToolbar>
 
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2 text-xs text-[var(--erp-color-text-secondary)]"><Filter className="h-4 w-4 text-[var(--erp-color-primary)]" /><span>共 {selection.meta.total} 条</span></div>
       <div className="flex items-center gap-2">
@@ -151,6 +152,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
       density={density}
       stickyHeader
     />
+    </ErpPageContent>
   </ErpListPageFrame>;
 }
 

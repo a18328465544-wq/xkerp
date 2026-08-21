@@ -7,7 +7,7 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {CustomerPicker} from "@/src/components/domain";
-import {ErpFormSection, ErpLoadingState, ErpPageError, ErpPageHeader, ErpPartnerQuickCreateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
+import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPartnerQuickCreateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, partnersApi, queryKeys, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -66,15 +66,18 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const values = watchedValues as SalesFormValues;
   const amounts = useMemo(() => calculateSalesAmounts({items: values.items || [], paidAmount: values.paidAmount || 0}, showCost && permissions.showProfit), [permissions.showProfit, showCost, values.items, values.paidAmount]);
   const [selectedCustomer, setSelectedCustomer] = useState<SalesCustomerOption | null>(null);
+  const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
   const [customerCreate, setCustomerCreate] = useState<{initialName: string} | null>(null);
   const [selectedCandidates, setSelectedCandidates] = useState<Record<string, SalesInventoryCandidate | null>>({});
   const [customerKeyword, setCustomerKeyword] = useState("");
-  const [inventoryKeyword, setInventoryKeyword] = useState("");
+  const [inventoryKeywords, setInventoryKeywords] = useState<Record<string, string>>({});
+  const [activeInventoryFieldId, setActiveInventoryFieldId] = useState<string | null>(null);
   const debouncedCustomerKeyword = useDebouncedValue(customerKeyword);
-  const debouncedInventoryKeyword = useDebouncedValue(inventoryKeyword);
+  const activeInventoryKeyword = activeInventoryFieldId ? inventoryKeywords[activeInventoryFieldId] || "" : "";
+  const debouncedInventoryKeyword = useDebouncedValue(activeInventoryKeyword);
   const customerQuery = useQuery({queryKey: queryKeys.sales.customers(debouncedCustomerKeyword), queryFn: ({signal}) => salesApi.searchCustomers(debouncedCustomerKeyword, signal), enabled: Boolean(session) && canReadCustomers && !selectedCustomer, retry: false, staleTime: 30_000});
-  const inventoryQuery = useQuery({queryKey: queryKeys.sales.inventoryCandidates(debouncedInventoryKeyword), queryFn: ({signal}) => salesApi.searchInventory(debouncedInventoryKeyword, {showCost, showProfit: permissions.showProfit}, signal), enabled: Boolean(session) && canReadInventory, retry: false, staleTime: 15_000});
-  const accountQuery = useQuery({queryKey: queryKeys.sales.settlementAccounts(), queryFn: ({signal}) => salesApi.settlementAccounts(signal), enabled: Boolean(session) && canReadSettlementAccounts && values.paidAmount > 0, retry: false, staleTime: 30_000});
+  const inventoryQuery = useQuery({queryKey: queryKeys.sales.inventoryCandidates(debouncedInventoryKeyword), queryFn: ({signal}) => salesApi.searchInventory(debouncedInventoryKeyword, {showCost, showProfit: permissions.showProfit}, signal), enabled: Boolean(session) && canReadInventory && Boolean(activeInventoryFieldId), retry: false, staleTime: 15_000});
+  const accountQuery = useQuery({queryKey: queryKeys.sales.settlementAccounts(), queryFn: ({signal}) => salesApi.settlementAccounts(signal), enabled: Boolean(session) && canReadSettlementAccounts, retry: false, staleTime: 30_000});
   const [serverError, setServerError] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -89,6 +92,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
 
   const handleSelectCustomer = (option: SalesCustomerOption) => {
     if (!option.selectable) return;
+    setRecentCustomerIds((current) => [option.id, ...current.filter((id) => id !== option.id)].slice(0, 5));
     setSelectedCustomer(option);
     setValue("customerId", option.id, {shouldDirty: true, shouldValidate: true});
     setValue("customerPartnerType", option.partnerType, {shouldDirty: true, shouldValidate: true});
@@ -132,6 +136,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       return;
     }
     setSelectedCandidates((current) => ({...current, [fieldId]: option}));
+    setInventoryKeywords((current) => ({...current, [fieldId]: ""}));
     setValue(`items.${index}.inventoryId`, option.id, {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.productId`, option.productId, {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.productName`, option.productName, {shouldDirty: true, shouldValidate: true});
@@ -145,6 +150,8 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   };
   const clearCandidate = (fieldId: string, index: number) => {
     setSelectedCandidates((current) => ({...current, [fieldId]: null}));
+    setInventoryKeywords((current) => ({...current, [fieldId]: ""}));
+    setActiveInventoryFieldId(fieldId);
     setValue(`items.${index}.inventoryId`, "", {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.productId`, "", {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.productName`, "", {shouldDirty: true, shouldValidate: true});
@@ -159,6 +166,11 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     remove(index);
   };
   const addLine = () => append({...createSalesLineDefaults(values.aftersalesTerms || "店保三个月"), costPrice: showCost ? 0 : undefined});
+  const focusInventoryPicker = (fieldId: string) => setActiveInventoryFieldId(fieldId);
+  const updateInventoryKeyword = (fieldId: string, keyword: string) => {
+    setActiveInventoryFieldId(fieldId);
+    setInventoryKeywords((current) => ({...current, [fieldId]: keyword}));
+  };
 
   const submit = async (submitted: SalesFormValues) => {
     if (submitLock.current) return;
@@ -180,7 +192,8 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       setSelectedCustomer(null);
       setSelectedCandidates({});
       setCustomerKeyword("");
-      setInventoryKeyword("");
+      setInventoryKeywords({});
+      setActiveInventoryFieldId(null);
       await queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()});
       await queryClient.invalidateQueries({queryKey: queryKeys.sales.all()});
     } catch (caught) {
@@ -203,6 +216,10 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     disabled: !formState.isDirty,
   });
   const customerError = !canReadCustomers ? "当前账号没有客户搜索权限" : customerQuery.error ? (customerQuery.error instanceof ApiError && customerQuery.error.isForbidden ? "当前账号没有客户搜索权限" : errorText(customerQuery.error)) : undefined;
+  const customerOptions = useMemo(() => {
+    const recentRank = new Map(recentCustomerIds.map((id, index) => [id, index]));
+    return [...(customerQuery.data || [])].sort((left, right) => (recentRank.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (recentRank.get(right.id) ?? Number.MAX_SAFE_INTEGER));
+  }, [customerQuery.data, recentCustomerIds]);
   const inventoryError = !canReadInventory ? "当前账号没有库存候选读取权限" : inventoryQuery.error ? errorText(inventoryQuery.error) : undefined;
   const accountError = !canReadSettlementAccounts ? "当前账号没有收款账户读取权限" : accountQuery.error ? (accountQuery.error instanceof ApiError && accountQuery.error.isForbidden ? "当前账号没有收款账户读取权限" : errorText(accountQuery.error)) : undefined;
   const refreshInventoryCandidates = () => {
@@ -213,6 +230,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
 
   return <ErpTransactionPageFrame>
     <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader density="default" title="销售开单" subtitle="选择客户、收款账户和销售型号，提交后由仓库出库扫码绑定 SN。" actions={<Button type="button" variant="secondary" onClick={leave}><ArrowLeft className="h-4 w-4" />返回销售管理</Button>} /></CardContent></Card>
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">库存未在开单阶段改为已售出，出库时再完成物理卡绑定。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
     {serverError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{serverError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">库存可能已被其他订单占用；刷新候选不会清空当前表单。</p>}</div><div className="flex shrink-0 items-center gap-2">{conflictError && <Button type="button" size="sm" variant="secondary" onClick={refreshInventoryCandidates}><RefreshCw className="h-3.5 w-3.5" />刷新库存候选</Button>}<Button type="button" size="icon" variant="ghost" onClick={() => { setServerError(null); setConflictError(false); }} aria-label="关闭错误提示">×</Button></div></CardContent></Card>}
     {!canReadCustomers && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有 CRM 客户读取权限，客户选择已禁用；请联系管理员授权后再开单。</CardContent></Card>}
@@ -220,8 +238,8 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     <form onSubmit={(event: FormEvent<HTMLFormElement>) => { void handleSubmit(submit)(event); }}>
       <ErpTransactionColumns>
         <ErpTransactionPrimary>
-            <Card><CardContent className="p-4"><div className="grid items-start gap-3 md:grid-cols-12"><div className="min-w-0 md:col-span-2"><p className="text-sm font-semibold">单据编号</p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 truncate font-mono text-xs text-[var(--erp-color-text-secondary)]">提交后生成</span><span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--erp-color-primary)]">待出库</span></div></div><label className="block text-sm font-semibold md:col-span-7">客户档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerQuery.data || []} loading={customerQuery.isPending || customerQuery.isFetching} error={customerError} disabled={!canReadCustomers} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户" candidateLabel="客户候选" entityLabel="客户" quickCreateActions={canReadCustomers && canCreateCustomer ? [{label: "新建客户", onClick: openCustomerCreate}] : []} onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={handleSelectCustomer} onClear={clearCustomer} /></div></label><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 font-mono" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label><label className="block text-sm font-semibold md:col-span-12">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label></div></CardContent></Card>
-          <SalesLineItemsTable control={control} fields={fields} selectedCandidates={selectedCandidates} pickerKeyword={inventoryKeyword} pickerOptions={inventoryQuery.data || []} pickerLoading={inventoryQuery.isPending || inventoryQuery.isFetching} pickerError={inventoryError} pickerDisabled={!canReadInventory} onPickerKeywordChange={setInventoryKeyword} onPickerRetry={() => void inventoryQuery.refetch()} onCandidateSelect={selectCandidate} onCandidateClear={clearCandidate} onAdd={addLine} onRemove={removeLine} />
+            <Card><CardContent className="p-4"><div className="grid items-start gap-3 md:grid-cols-12"><div className="min-w-0 md:col-span-2"><p className="text-sm font-semibold">单据编号</p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 truncate font-mono text-xs text-[var(--erp-color-text-secondary)]">提交后生成</span><span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--erp-color-primary)]">待出库</span></div></div><label className="block text-sm font-semibold md:col-span-7">客户档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isPending || customerQuery.isFetching} error={customerError} disabled={!canReadCustomers} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户" candidateLabel="客户候选" entityLabel="客户" quickCreateActions={canReadCustomers && canCreateCustomer ? [{label: "新建客户", onClick: openCustomerCreate}] : []} onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={handleSelectCustomer} onClear={clearCustomer} /></div></label><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 font-mono" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label><label className="block text-sm font-semibold md:col-span-12">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label></div></CardContent></Card>
+          <SalesLineItemsTable control={control} fields={fields} selectedCandidates={selectedCandidates} pickerKeyword={(fieldId) => inventoryKeywords[fieldId] || ""} pickerOptions={(fieldId) => activeInventoryFieldId === fieldId ? inventoryQuery.data || [] : []} pickerLoading={(fieldId) => activeInventoryFieldId === fieldId && (inventoryQuery.isPending || inventoryQuery.isFetching)} pickerError={(fieldId) => activeInventoryFieldId === fieldId ? inventoryError : undefined} pickerDisabled={!canReadInventory} onPickerFocus={focusInventoryPicker} onPickerKeywordChange={updateInventoryKeyword} onPickerRetry={() => void inventoryQuery.refetch()} onCandidateSelect={selectCandidate} onCandidateClear={clearCandidate} onAdd={addLine} onRemove={removeLine} />
           <ErpFormSection title="销售备注" description="记录交付、售后和客户特殊要求。"><Textarea {...register("remarks")} className="min-h-24" placeholder="销售单备注、交付说明或客户特殊要求" /></ErpFormSection>
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
@@ -231,5 +249,6 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     </form>
     <ErpPartnerQuickCreateDialog open={Boolean(customerCreate)} target="customer" initialName={customerCreate?.initialName || ""} pending={customerCreateMutation.isPending} error={customerCreateMutation.error ? customerQuickCreateError(customerCreateMutation.error) : undefined} onOpenChange={(open) => {if (!open) {setCustomerCreate(null); customerCreateMutation.reset();}}} onSubmit={submitCustomerCreate} />
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
+    </ErpPageContent>
   </ErpTransactionPageFrame>;
 }

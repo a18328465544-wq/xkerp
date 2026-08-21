@@ -4,7 +4,7 @@ import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
 import {useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
-import {ErpDatePicker, ErpFormSection, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
+import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -83,6 +83,7 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
 
   return <ErpTransactionPageFrame className="max-w-[1400px]">
     <ErpPageHeader title="新建采购退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联原采购单和真实库存卡片，最终金额与结算由服务端再次校验。</span><ErpStatusBadge label="待完成处理" tone="warning" /></span>} actions={<Link to="/purchase/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><ArrowLeft className="h-4 w-4" />返回采购退货</Link>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {success && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="p-4 text-sm font-semibold text-[var(--erp-color-success)]">{success}</CardContent></Card>}
     {error && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="p-4 text-sm text-[var(--erp-color-danger)]">{error}</CardContent></Card>}
     <form className="flex flex-col gap-5" onSubmit={submit}>
@@ -93,6 +94,7 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
       <ErpSubmitBar dirty={dirty} submitting={mutation.isPending} onCancel={() => void navigate({to: "/purchase/returns"})} submitLabel="提交采购退货"><span>创建后状态：待处理</span></ErpSubmitBar>
     </form>
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
+    </ErpPageContent>
   </ErpTransactionPageFrame>;
 }
 

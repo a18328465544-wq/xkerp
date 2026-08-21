@@ -156,14 +156,14 @@ export function FinanceEventList({
     <div className="divide-y divide-[var(--erp-color-border)]">
       {view.recentEvents.map((item) => (
         <div key={item.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.net >= 0 ? "bg-[var(--erp-color-success-soft)] text-[var(--erp-color-success)]" : "bg-[var(--erp-color-danger-soft)] text-[var(--erp-color-danger)]"}`}>
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.net >= 0 ? "bg-[var(--erp-color-income-soft)] text-[var(--erp-color-income)]" : "bg-[var(--erp-color-expense-soft)] text-[var(--erp-color-expense)]"}`}>
             {item.net >= 0 ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{item.businessType}</span>
             <span className="block truncate font-mono text-[11px] text-[var(--erp-color-text-muted)]">{item.time} · {item.accountName || "未标记账户"}</span>
           </span>
-          <span className={`font-mono text-sm font-bold ${item.net >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>
+          <span className={`font-mono text-sm font-bold ${item.net >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}>
             {item.net >= 0 ? "+" : ""}{formatCurrency(item.net)}
           </span>
         </div>

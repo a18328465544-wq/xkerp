@@ -263,7 +263,13 @@ function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera,
   const temperature = form.watch("temperature");
   const validationErrorCount = Object.keys(form.formState.errors).length;
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const serialInputRef = useRef<HTMLInputElement>(null);
+  const serialRegistration = form.register("serialNumber");
   const previewItem = media.items.find((item) => item.id === previewId);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => serialInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [candidate.id, editing]);
   return <>
     <form onSubmit={onSubmit} className="relative space-y-4 overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4">
       <div className="relative rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-4">
@@ -273,7 +279,7 @@ function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera,
       </div>
 
       <div className="grid grid-cols-1 items-end gap-4 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] p-4 md:grid-cols-[1fr_1.2fr]">
-        <Field label="入库 SN 录入" error={form.formState.errors.serialNumber?.message}><div className="flex gap-2"><Input {...form.register("serialNumber")} className={`font-mono placeholder:font-sans ${duplicateOwner ? "border-[var(--erp-color-danger)]" : ""}`} placeholder={candidate.expressNo ? `快递 ${candidate.expressNo} 到货后录入实物SN` : "扫描或输入实物 SN"} /><Button type="button" size="icon" variant="primary" onClick={onOpenCamera} aria-label="调用摄像头扫码录入 SN"><Camera className="h-4 w-4" /></Button></div></Field>
+        <Field label="入库 SN 录入" error={form.formState.errors.serialNumber?.message}><div className="flex gap-2"><Input {...serialRegistration} ref={(element) => {serialRegistration.ref(element); serialInputRef.current = element;}} className={`font-mono placeholder:font-sans ${duplicateOwner ? "border-[var(--erp-color-danger)]" : ""}`} placeholder={candidate.expressNo ? `快递 ${candidate.expressNo} 到货后录入实物SN` : "扫描或输入实物 SN"} /><Button type="button" size="icon" variant="primary" onClick={onOpenCamera} aria-label="调用摄像头扫码录入 SN"><Camera className="h-4 w-4" /></Button></div></Field>
         <div className="text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">{isGpu ? "显卡检测录入会写入 SN，并按检测结论更新为已入库、维修中或已退货。" : "其他配件只做简易检测：SN、成色、是否带盒、保修期，提交后写入库存档案。"}{candidate.expressNo && <span className="mt-1 block text-[var(--erp-color-primary)]">关联快递单号：<span className="font-mono">{candidate.expressNo}</span></span>}{duplicateOwner && <span className="mt-1 block font-bold text-[var(--erp-color-danger)]">SN 已被 {duplicateOwner} 占用，请重新扫码或核对标签。</span>}</div>
       </div>
 
@@ -329,7 +335,7 @@ function Field({label, error, children}: {label: string; error?: string; childre
   return <label className="block text-xs font-semibold tracking-normal text-[var(--erp-color-text-secondary)]">
     <span className="block">{label}</span>
     <div className="mt-1.5">{children}</div>
-    {error ? <span role="alert" className="mt-1 block text-xs font-medium tracking-normal text-[var(--erp-color-danger)]">{error}</span> : null}
+    <span role={error ? "alert" : undefined} className="erp-annotation-slot mt-1 text-xs font-medium tracking-normal text-[var(--erp-color-danger)]" data-empty={!error || undefined} aria-hidden={!error || undefined}>{error || "\u00a0"}</span>
   </label>;
 }
 

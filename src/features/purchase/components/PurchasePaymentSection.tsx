@@ -31,6 +31,7 @@ export function PurchasePaymentSection({control, setValue, totalCost, sourcePart
   const vendorCreditAppliedAmount = useWatch({control, name: "vendorCreditAppliedAmount"}) || 0;
   const isPaid = useWatch({control, name: "isPaid"}) ?? true;
   const handleBy = useWatch({control, name: "handleBy"}) || "";
+  const settlementAccountId = useWatch({control, name: "settlementAccountId"}) || "";
   const settlement = calculatePurchaseSettlement(totalCost, paidAmount, vendorCreditAppliedAmount);
   const maxCredit = sourcePartnerType === "vendor" ? Math.min(Math.max(0, vendorCreditAvailable || 0), Math.max(0, totalCost - paidAmount)) : 0;
   const maxPaid = Math.max(0, totalCost - vendorCreditAppliedAmount);
@@ -44,6 +45,19 @@ export function PurchasePaymentSection({control, setValue, totalCost, sourcePart
   useEffect(() => {
     if (paidAmount <= 0 && !isPaid) setValue("paymentMethod", "账期欠款", {shouldDirty: totalCost > 0, shouldValidate: true});
   }, [isPaid, paidAmount, setValue, totalCost]);
+
+  useEffect(() => {
+    // Only default an account when the server returns exactly one enabled
+    // option. Never guess between multiple accounts in a money flow.
+    const enabledAccounts = accounts.filter((account) => account.enabled !== false);
+    const account = enabledAccounts[0];
+    if (!accountDisabled && paidAmount > 0 && !settlementAccountId && account && enabledAccounts.length === 1) {
+      setValue("settlementAccountId", account.id, {shouldDirty: false, shouldValidate: true});
+      const accountType = account.type;
+      if (["微信", "支付宝", "现金"].includes(accountType)) setValue("paymentMethod", accountType as PurchaseFormValues["paymentMethod"], {shouldDirty: false, shouldValidate: true});
+      else setValue("paymentMethod", "银行卡", {shouldDirty: false, shouldValidate: true});
+    }
+  }, [accountDisabled, accounts, paidAmount, settlementAccountId, setValue]);
 
   const content = <div className={cn("grid gap-3", compact && "sm:grid-cols-2", !compact && "md:grid-cols-2 xl:grid-cols-4")}>
       {!embedded ? <label className="block text-sm font-semibold">支付方式<Controller control={control} name="paymentMethod" render={({field}) => <Select className="mt-2" value={field.value} options={paymentOptions} onValueChange={field.onChange} aria-label="采购支付方式" />} /></label> : null}

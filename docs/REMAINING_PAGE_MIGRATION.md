@@ -13,7 +13,7 @@
 
 活动页面已经全部脱离 `LegacyRoutePage`，并按工作方式选择统一业务框架：
 
-- 看板：`DashboardShell`
+- 看板：`ErpDashboardPageFrame`（`DashboardShell` 仅为兼容别名）
 - 列表：`ErpListPageFrame`
 - 开单/退货：`ErpTransactionPageFrame`
 - 仓储/检测/售后：`ErpWarehousePageFrame`

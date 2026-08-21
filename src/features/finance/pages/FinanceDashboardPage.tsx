@@ -25,6 +25,7 @@ import {
   ErpEmptyState,
   ErpFinancePageFrame,
   ErpLoadingState,
+  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
   MainRegion,
@@ -58,8 +59,8 @@ import {FinanceSummaryCell} from "../components/FinanceDashboardWidgets";
 
 const financeDashboardChartConfig = {
   net: {label: "净现金流", color: "var(--erp-color-primary)", indicator: "line" as const},
-  income: {label: "收入", color: "var(--erp-color-success)", indicator: "dashed" as const},
-  expense: {label: "支出", color: "var(--erp-color-danger)", indicator: "dashed" as const},
+  income: {label: "收入", color: "var(--erp-color-income)", indicator: "dashed" as const},
+  expense: {label: "支出", color: "var(--erp-color-expense)", indicator: "dashed" as const},
 } satisfies ChartConfig;
 
 function accessFor(session: AuthSession): FinanceDashboardAccess {
@@ -248,6 +249,7 @@ function FinanceDashboardContent({
           </>
         }
       />
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {pending ? (
         <Card>
           <ErpLoadingState title="正在加载真实资金数据" />
@@ -435,6 +437,7 @@ function FinanceDashboardContent({
           <FinanceDashboardBottomRegion view={view} accounts={dataset?.accounts || []} access={access} onNavigate={go} />
         </>
       ) : null}
+      </ErpPageContent>
     </ErpFinancePageFrame>
   );
 }

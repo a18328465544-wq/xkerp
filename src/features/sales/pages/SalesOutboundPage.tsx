@@ -1,10 +1,10 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import {AlertTriangle, Camera, CheckCircle2, Database, PackageCheck, RefreshCw, ScanLine, Search, ShieldAlert, Truck} from "lucide-react";
-import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpEmptyState, ErpLoadingState, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, salesApi} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -45,6 +45,7 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
   const [remarks, setRemarks] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const scanInputRef = useRef<HTMLInputElement>(null);
   const pageSize = 20;
   const invoices = query.data?.invoices || [];
   const filtered = useMemo(() => {
@@ -81,6 +82,7 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
     if (!code) return;
     setScanCodes((current) => current.trim() ? `${current.trimEnd()}\n${code}` : code);
     setScanInput("");
+    requestAnimationFrame(() => scanInputRef.current?.focus());
   }, []);
   const quickStatus: QuickStatusItemData[] = [
     {icon: <Truck className="h-4 w-4" />, label: "待出库", value: `${invoices.length} 单`, description: "销售开单后的待处理池", tone: invoices.length ? "warning" : "success"},
@@ -90,9 +92,15 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
   const errorMessage = mutation.error instanceof Error ? mutation.error.message : "";
 
   useEffect(() => {setPage(1);}, [keyword]);
+  useEffect(() => {
+    if (!selectedInvoice) return;
+    const frame = requestAnimationFrame(() => scanInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [selectedInvoice?.id]);
 
   return <ErpWarehousePageFrame>
     <ErpPageHeader title="销售出库" subtitle="仓库核验库存 ID / SN 后完成实物出库；服务端负责最终匹配、扣减和审计。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="secondary" onClick={() => void navigate({to: "/sales"})}>销售单据</Button></>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <MetricsRegion>
       <MetricCard label="待出库销售单" value={`${filtered.length} 单`} detail={keyword ? "当前搜索结果" : "全部待处理"} icon={<Truck className="h-4 w-4" />} tone={filtered.length ? "warning" : "neutral"} />
       <MetricCard label="待绑定实物" value={`${filtered.reduce((sum, item) => sum + item.lines.length, 0)} 件`} detail="实际 SN 在本页绑定" icon={<PackageCheck className="h-4 w-4" />} />
@@ -110,7 +118,7 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
           {!selectedInvoice ? <ErpEmptyState title="选择待出库销售单" description="选择左侧销售单后开始核验库存 ID 或 SN。" /> : <div className="space-y-4">
             <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-xs font-bold text-[var(--erp-color-primary)]">{selectedInvoice.invoiceNo}</span><ErpStatusBadge label={`${verification.verifiedCount}/${verification.expectedCount} 已核验`} tone={verification.ready ? "success" : "warning"} /></div><p className="mt-2 font-semibold">{selectedInvoice.customerName}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{selectedInvoice.lines.length} 件 · {formatCurrency(selectedInvoice.totalAmount)}</p></div>
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">{verification.rows.map((row) => <div key={row.lineId} className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{row.productName}</p><p className="mt-1 font-mono text-xs text-[var(--erp-color-text-muted)]">{row.matchedInventory ? `${row.matchedInventory.id} · ${row.matchedInventory.serialNumber || "无 SN"}` : row.reason}</p></div><ErpStatusBadge label={row.verified ? "已核验" : "待扫码"} tone={row.verified ? "success" : "neutral"} /></div></div>)}</div>
-            <div><label className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">扫码枪输入</label><div className="mt-2 flex gap-2"><Input value={scanInput} onChange={(event) => setScanInput(event.target.value)} onKeyDown={(event) => {if (event.key === "Enter") {event.preventDefault(); appendCode(scanInput);}}} placeholder="扫描后按回车追加" aria-label="销售出库扫码枪输入" autoFocus /><Button type="button" size="icon" variant="secondary" onClick={() => appendCode(scanInput)} aria-label="追加扫码内容"><ScanLine className="h-4 w-4" /></Button><Button type="button" size="icon" variant="secondary" onClick={() => setCameraOpen(true)} aria-label="打开摄像头扫码"><Camera className="h-4 w-4" /></Button></div></div>
+            <div><label className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">扫码枪输入</label><div className="mt-2 flex gap-2"><Input ref={scanInputRef} value={scanInput} onChange={(event) => setScanInput(event.target.value)} onKeyDown={(event) => {if (event.key === "Enter") {event.preventDefault(); appendCode(scanInput);}}} placeholder="扫描后按回车追加" aria-label="销售出库扫码枪输入" autoFocus /><Button type="button" size="icon" variant="secondary" onClick={() => appendCode(scanInput)} aria-label="追加扫码内容"><ScanLine className="h-4 w-4" /></Button><Button type="button" size="icon" variant="secondary" onClick={() => setCameraOpen(true)} aria-label="打开摄像头扫码"><Camera className="h-4 w-4" /></Button></div></div>
             <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">已扫描库存 ID / SN<Textarea className="mt-2 min-h-24 font-mono" value={scanCodes} onChange={(event) => setScanCodes(event.target.value)} placeholder="支持逐行、空格或逗号分隔" /></label>
             {(verification.unknownCodes.length > 0 || verification.duplicateCodes.length > 0) && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]"><p className="font-semibold">核验提示</p>{verification.unknownCodes.length > 0 && <p className="mt-1">未匹配：{verification.unknownCodes.join("、")}</p>}{verification.duplicateCodes.length > 0 && <p className="mt-1">重复扫码：{verification.duplicateCodes.join("、")}</p>}</div>}
             <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">出库经办人<Input className="mt-2" value={session.user.displayName} disabled /></label>
@@ -124,6 +132,7 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
       </MainRegion.Secondary>
     </MainRegion>
     <SalesOutboundCameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onDetected={appendCode} />
+    </ErpPageContent>
   </ErpWarehousePageFrame>;
 }
 

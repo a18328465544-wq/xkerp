@@ -30,8 +30,10 @@ import {
   ErpDetailDrawer,
   ErpFilterBar,
   ErpLoadingState,
+  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
+  ErpPageToolbar,
   ErpStatusBadge,
   MetricsRegion,
   type QuickStatusItemData,
@@ -334,7 +336,7 @@ function FinanceIncomeContent({
           )}
           detail={`${monthItems.length} 笔非经营收入`}
           icon={<CalendarRange className="h-4 w-4" />}
-          tone="info"
+          tone="success"
         />
         <Metric
           label="主要来源类型"
@@ -351,6 +353,7 @@ function FinanceIncomeContent({
           tone="warning"
         />
       </MetricsRegion>
+      <ErpPageToolbar>
       <ErpFilterBar
         compact
         actions={
@@ -427,6 +430,8 @@ function FinanceIncomeContent({
           ariaLabel="收入日期范围"
         />
       </ErpFilterBar>
+      </ErpPageToolbar>
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <FinanceTableRegion
         title="收入明细"
         description="点击行查看凭证与登记详情；采购退款等业务关联收入只能从原流程调整。"
@@ -491,6 +496,7 @@ function FinanceIncomeContent({
           if (deleting) deleteMutation.mutate(deleting.id);
         }}
       />
+      </ErpPageContent>
     </ErpFinancePageFrame>
   );
 }

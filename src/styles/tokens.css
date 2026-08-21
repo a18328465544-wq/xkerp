@@ -16,6 +16,16 @@
   --erp-color-warning-soft: #fff4e5;
   --erp-color-danger: #c2410c;
   --erp-color-danger-soft: #fff0ed;
+  /* Global business semantic aliases. Keep status tokens as the single
+     palette source; these names make transaction meaning explicit across
+     finance, sales, purchase, inventory and CRM surfaces. */
+  --erp-color-income: var(--erp-color-success);
+  --erp-color-income-soft: var(--erp-color-success-soft);
+  --erp-color-expense: var(--erp-color-danger);
+  --erp-color-expense-soft: var(--erp-color-danger-soft);
+  --erp-color-net: var(--erp-color-primary);
+  --erp-color-risk: var(--erp-color-warning);
+  --erp-color-risk-soft: var(--erp-color-warning-soft);
   --erp-color-backdrop: rgb(15 23 42 / 0.3);
   --erp-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
   --erp-font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

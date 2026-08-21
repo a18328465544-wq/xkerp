@@ -4,7 +4,7 @@ import {useState, type FormEvent, type ReactNode} from "react";
 import {Link, useBlocker, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Select, Textarea} from "@/src/components/ui";
-import {ErpCrmPageFrame, ErpFormSection, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
+import {ErpCrmPageFrame, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
 import {crmApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -45,6 +45,7 @@ function LeadForm({session, onSuccess}: {session: AuthSession; onSuccess: () => 
   const blocker = useBlocker({withResolver: true, shouldBlockFn: () => dirty, enableBeforeUnload: false, disabled: !dirty});
   return <ErpCrmPageFrame className="max-w-[1450px]">
     <ErpPageHeader density="default" title="新增客户线索" subtitle="粘贴一句话或聊天记录，由现有 CRM 规则解析并在确认后写入客户、跟进和时间线。" actions={<Link to="/crm" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><Link2 className="h-4 w-4" />返回客户 CRM</Link>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {success && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center gap-2 p-4 text-sm font-semibold text-[var(--erp-color-success)]"><Check className="h-4 w-4" />{success}</CardContent></Card>}
     {error && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="p-4 text-sm text-[var(--erp-color-danger)]">{error}</CardContent></Card>}
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -62,6 +63,7 @@ function LeadForm({session, onSuccess}: {session: AuthSession; onSuccess: () => 
       </aside>
     </div>
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
+    </ErpPageContent>
   </ErpCrmPageFrame>;
 }
 

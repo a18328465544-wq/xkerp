@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import {collectJsxElements} from "./architecture-utils.mjs";
 
 const root = process.cwd();
 const sourceRoots = [
@@ -61,7 +62,7 @@ const pageFrameExceptions = new Set([
   // its two-pane scanning workflow is not a list/dashboard frame.
   "src/features/inspections/pages/InspectionWorkspacePage.tsx",
 ]);
-const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings)PageFrame|ErpPageFrame|DashboardShell/;
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame/;
 for (const file of pageFiles) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
@@ -71,6 +72,15 @@ for (const file of pageFiles) {
   }
   if (!pageFramePattern.test(source)) {
     fail(`${fileName} 缺少统一 PageFrame；标准业务页面不得自行创建平行页面外壳。`);
+  }
+  if (/\bDashboardShell\b/.test(source)) {
+    fail(`${fileName} 仍使用 DashboardShell；正式页面必须使用 ErpDashboardPageFrame。`);
+  }
+  const filtersOutsideToolbar = collectJsxElements(source)
+    .filter((element) => element.name === "ErpFilterBar")
+    .filter((element) => !element.ancestors.includes("ErpPageToolbar"));
+  if (filtersOutsideToolbar.length) {
+    fail(`${fileName} 的 ErpFilterBar 必须位于 ErpPageToolbar 语义区域内。`);
   }
   if (/<div[^>]+className={["'`][^"'`]*(?:mx-auto\s+w-full|max-w-\[[^]]+\])[^"'`]*space-y-(?:6|8)/.test(source)) {
     fail(`${fileName} 在未统一的页面根节点上叠加过大的顶层间距，请使用 PageFrame density。`);
@@ -120,10 +130,15 @@ const allowedLegacyTypeBoundaries = new Set([
 const rootTypeImports = allSource.filter(({file, source}) => /from\s+["']@\/src\/types["']/.test(source) && !allowedLegacyTypeBoundaries.has(relative(file))).length;
 const allowedHistoryBoundaries = new Set([
   "src/hooks/useUrlSearchState.ts",
+  // Transaction pages may intentionally return to the browser entry point;
+  // this is not list-filter state synchronization.
+  "src/features/sales/pages/NewSalesOrderPage.tsx",
 ]);
 const allowedStorageBoundaries = new Set([
   "src/hooks/useTablePreferences.ts",
   "src/services/api/client.ts",
+  // Workspace tabs persist shell state, not table preferences.
+  "src/app/shell/WorkspaceTabs.tsx",
 ]);
 const allowedAuthBoundaries = new Set([
   "src/app/auth/AuthProvider.tsx",
@@ -133,8 +148,8 @@ const rawStorageFiles = allSource.filter(({file, source}) => /window\.localStora
 const localAuthFiles = allSource.filter(({file, source}) => /authApi\.login\s*\(/.test(source) && !allowedAuthBoundaries.has(relative(file)) && !relative(file).startsWith("src/features/legacy/")).length;
 
 if (rootTypeImports) warn(`仍有 ${rootTypeImports} 个正式文件使用 src/types.ts 兼容入口；新代码请使用 src/types/*。`);
-if (rawHistoryFiles > 1) warn(`仍有 ${rawHistoryFiles} 个文件直接操作 window.history；新 List 页面必须使用 useUrlSearchState。`);
-if (rawStorageFiles > 1) warn(`仍有 ${rawStorageFiles} 个文件直接操作 localStorage；表格偏好必须使用 useTablePreferences。`);
+if (rawHistoryFiles > 0) warn(`仍有 ${rawHistoryFiles} 个文件直接操作 window.history；新 List 页面必须使用 useUrlSearchState。`);
+if (rawStorageFiles > 0) warn(`仍有 ${rawStorageFiles} 个文件直接操作 localStorage；表格偏好必须使用 useTablePreferences。`);
 if (localAuthFiles) warn(`仍有 ${localAuthFiles} 个页面保留局部 authApi.login；新增页面不得复制登录表单，逐批迁移到 AuthBoundary。`);
 
 for (const file of [

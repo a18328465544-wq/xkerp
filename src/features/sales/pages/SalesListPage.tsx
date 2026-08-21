@@ -4,7 +4,7 @@ import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-tab
 import {Banknote, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search, ShoppingCart, Truck} from "lucide-react";
 import {useCallback, useMemo, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {queryKeys, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -111,13 +111,13 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
         {session.permissions.showProfit && <MetricCard label="销售利润" value={selection.summary.totalProfit === undefined ? "—" : formatCurrency(selection.summary.totalProfit)} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} />}
       </MetricsRegion>
 
-      <ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
+      <ErpPageToolbar><ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
         <div className="relative min-w-[260px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索销售单号、客户、商品、SN 或经办人" aria-label="搜索销售单据" /></div>
         <Select className="w-36" value={filters.channel} options={channelOptions} onValueChange={(value) => updateFilters({channel: value as SalesListFilters["channel"]})} aria-label="销售渠道筛选" />
         <Select className="w-36" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as SalesListFilters["paymentStatus"]})} aria-label="收款状态筛选" />
         <Select className="w-36" value={filters.outboundStatus} options={outboundOptions} onValueChange={(value) => updateFilters({outboundStatus: value as SalesListFilters["outboundStatus"]})} aria-label="出库状态筛选" />
         <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} fieldClassName="sm:w-36" startAriaLabel="销售开始日期" endAriaLabel="销售结束日期" ariaLabel="销售日期范围" />
-      </ErpFilterBar>
+      </ErpFilterBar></ErpPageToolbar>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-[var(--erp-color-text-secondary)]"><Filter className="h-4 w-4 text-[var(--erp-color-primary)]" /><span>共 {selection.meta.total} 条</span></div>

@@ -5,7 +5,7 @@ import {Banknote, CheckCircle2, ClipboardCheck, Download, Filter, ListFilter, Lo
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageError, ErpPageHeader, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -156,10 +156,11 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
       <MetricCard label="待处理（本页）" value={`${pendingOnPage} 单`} detail="完成动作会触发业务变更" icon={<ClipboardCheck className="h-4 w-4" />} tone={pendingOnPage ? "warning" : "neutral"} />
       <MetricCard label="已完成（本页）" value={`${completedOnPage} 单`} detail="退款与库存已由服务端处理" icon={<CheckCircle2 className="h-4 w-4" />} />
     </MetricsRegion>
-    <ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesReturnListFilters)} disabled={!activeFilterCount}><Filter className="h-4 w-4" />重置筛选</Button>}>
+    <ErpPageToolbar><ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesReturnListFilters)} disabled={!activeFilterCount}><Filter className="h-4 w-4" />重置筛选</Button>}>
       <div className="relative min-w-[280px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索退货单、销售单、客户、商品、SN 或原因" aria-label="搜索销售退货" /></div>
       <Select className="w-40" value={filters.status} options={statusOptions} onValueChange={(value) => updateFilters({status: value as SalesReturnListFilters["status"]})} aria-label="退货处理状态筛选" />
-    </ErpFilterBar>
+    </ErpFilterBar></ErpPageToolbar>
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div>
     </div>
@@ -170,6 +171,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
     <CompleteReturnDialog target={completeTarget} pending={completeMutation.isPending} error={completeMutation.error instanceof Error ? completeMutation.error.message : ""} onClose={() => {if (!completeMutation.isPending) setCompleteTarget(null);}} onConfirm={() => {if (completeTarget) completeMutation.mutate(completeTarget);}} />
     <ReturnEditDialog target={editTarget} draft={editDraft} pending={updateMutation.isPending} error={updateMutation.error instanceof Error ? updateMutation.error.message : ""} onClose={() => {if (!updateMutation.isPending) setEditTarget(null);}} onDraftChange={setEditDraft} onConfirm={() => {if (editTarget) updateMutation.mutate({item: editTarget, values: editDraft});}} />
     <DeleteReturnDialog target={deleteTarget} pending={deleteMutation.isPending} error={deleteMutation.error instanceof Error ? deleteMutation.error.message : ""} onClose={() => {if (!deleteMutation.isPending) setDeleteTarget(null);}} onConfirm={() => {if (deleteTarget) deleteMutation.mutate(deleteTarget);}} />
+    </ErpPageContent>
   </ErpListPageFrame>;
 }
 

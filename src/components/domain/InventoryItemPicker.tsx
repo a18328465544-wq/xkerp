@@ -15,7 +15,7 @@ function nextSaleableIndex(options: SalesInventoryCandidate[], current: number, 
   return -1;
 }
 
-export function InventoryItemPicker({value, keyword, options, loading, error, disabled, onKeywordChange, onSelect, onClear, onRetry}: {
+export function InventoryItemPicker({value, keyword, options, loading, error, disabled, onKeywordChange, onSelect, onClear, onRetry, onFocus}: {
   value: SalesInventoryCandidate | null;
   keyword: string;
   options: SalesInventoryCandidate[];
@@ -26,6 +26,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
   onSelect: (option: SalesInventoryCandidate) => void;
   onClear: () => void;
   onRetry?: () => void;
+  onFocus?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -70,7 +71,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
       <Input
         value={value ? `${value.productName}${value.serialNumber ? ` · ${value.serialNumber}` : ""}` : keyword}
         onChange={(event) => { onKeywordChange(event.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { onFocus?.(); setOpen(true); }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown") {
             event.preventDefault();

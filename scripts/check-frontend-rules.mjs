@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import {collectJsxElements} from "./architecture-utils.mjs";
 
 const root = process.cwd();
 const sourceRoots = [
@@ -74,12 +75,17 @@ const warnings = [];
 const pageFrameExceptions = new Set([
   "src/features/inspections/pages/InspectionWorkspacePage.tsx",
 ]);
-const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings)PageFrame|ErpPageFrame|DashboardShell/;
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame/;
 for (const file of productionFiles.filter((candidate) => /\/pages\/[^/]+\.tsx$/.test(relative(candidate)) && relative(candidate).startsWith("src/features/"))) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
   if (pageFrameExceptions.has(fileName)) continue;
   if (!pageFramePattern.test(source)) fail(file, "标准 Feature 页面必须复用统一 PageFrame，不得新增平行页面 Shell。");
+  if (/\bDashboardShell\b/.test(source)) fail(file, "正式 Feature 页面不得使用 DashboardShell，请使用 ErpDashboardPageFrame。");
+  const filtersOutsideToolbar = collectJsxElements(source)
+    .filter((element) => element.name === "ErpFilterBar")
+    .filter((element) => !element.ancestors.includes("ErpPageToolbar"));
+  if (filtersOutsideToolbar.length) fail(file, "ErpFilterBar 必须放在 ErpPageToolbar 语义区域中。");
   if (/export\s+(?:function|const)\s+\w*(?:Shell|PageShell|Frame)\b/.test(source)) fail(file, "业务页面不得定义新的 Shell/Frame 组件；请扩展白名单 Frame 或使用现有场景 Frame。");
   if (/mx-auto[\s\S]{0,120}space-y-(?:6|8)|space-y-(?:6|8)[\s\S]{0,120}mx-auto/.test(source) && !pageFramePattern.test(source)) {
     fail(file, "页面根布局不得使用过大的自定义 vertical rhythm，请使用 PageFrame density。");

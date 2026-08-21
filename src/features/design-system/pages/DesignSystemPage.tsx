@@ -1,7 +1,7 @@
 import {ArrowUpRight, Boxes, ClipboardList, PackageCheck, Sparkles, Warehouse} from "lucide-react";
 import {useState} from "react";
 import {Avatar, Badge, Button, Card, CardContent, CardHeader, Input, Select, Separator, Skeleton, Textarea} from "@/src/components/ui";
-import {DashboardSection, DashboardShell, ErpAmountInput, ErpDataTable, ErpDatePicker, ErpEmptyState, ErpFilterBar, ErpFormSection, ErpLoadingState, ErpPageError, ErpPageHeader, ErpStatusBadge, MetricsRegion, QuickStatusGroup, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDashboardPageFrame, ErpAmountInput, ErpDataTable, ErpDatePicker, ErpEmptyState, ErpFilterBar, ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, QuickStatusGroup, type QuickStatusItemData} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
 
 type DemoRow = {id: string; name: string; status: string; amount: number};
@@ -41,8 +41,9 @@ export function DesignSystemPage() {
     {icon: <ClipboardList className="h-4 w-4" />, label: "完成处理", value: "10 张", tone: "success", description: "进入下一业务环节"},
   ];
 
-  return <DashboardShell>
+  return <ErpDashboardPageFrame>
     <ErpPageHeader title="组件展示与验收" subtitle="Frontend V2 Design System · 仅开发环境可见" quickStatus={quickStatus} dateContent={<span className="text-xs text-[var(--erp-color-text-muted)]">最后更新：现在</span>} actions={<Button variant="primary" size="sm"><ArrowUpRight className="h-4 w-4" />验收记录</Button>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <DashboardSection title="Quick Status v2" description="Compact 是默认状态摘要；只有真实流程场景才使用 Workflow 变体。">
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="min-w-0 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><p className="mb-2 text-xs font-semibold text-[var(--erp-color-text-secondary)]">Compact</p><QuickStatusGroup items={quickStatus} /></div>
@@ -56,6 +57,10 @@ export function DesignSystemPage() {
         <TokenSwatch name="Primary" value="--erp-color-primary" className="bg-[var(--erp-color-primary)]" dark />
         <TokenSwatch name="Success" value="--erp-color-success" className="bg-[var(--erp-color-success)]" dark />
         <TokenSwatch name="Danger" value="--erp-color-danger" className="bg-[var(--erp-color-danger)]" dark />
+        <TokenSwatch name="收入 / 收款" value="--erp-color-income" className="bg-[var(--erp-color-income)]" dark />
+        <TokenSwatch name="支出 / 付款" value="--erp-color-expense" className="bg-[var(--erp-color-expense)]" dark />
+        <TokenSwatch name="净额 / 中性汇总" value="--erp-color-net" className="bg-[var(--erp-color-net)]" dark />
+        <TokenSwatch name="待处理 / 风险" value="--erp-color-risk" className="bg-[var(--erp-color-risk)]" dark />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="页面标题" value="28px" /><Metric label="正文" value="14px" /><Metric label="默认控件" value="40px" /><Metric label="卡片圆角" value="12px" /></div>
     </DashboardSection>
@@ -68,12 +73,13 @@ export function DesignSystemPage() {
     <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(280px,3fr)]">
       <div className="min-w-0 space-y-5">
         <ErpFormSection title="表单控件" description="统一输入、金额、日期、选择和多行文本的高度、焦点和错误承载。"><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-semibold">关键字<Input className="mt-2" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索商品、SN 或单号" /></label><label className="text-sm font-semibold">业务模块<Select className="mt-2" value={selectValue} options={[{value: "inventory", label: "库存管理"}, {value: "sales", label: "销售管理"}, {value: "finance", label: "财务管理"}]} onValueChange={setSelectValue} aria-label="业务模块" /></label><label className="text-sm font-semibold">实体搜索选择<Select searchable searchPlaceholder="搜索商品名称或型号" emptyText="没有找到匹配商品" className="mt-2" value={entityValue} options={[{value: "gpu-4090", label: "华硕 RTX 4090 ROG 24G"}, {value: "gpu-4080", label: "微星 RTX 4080 Super 16G"}, {value: "gpu-3090", label: "磐镭 RTX 3090 涡轮 24G"}]} onValueChange={setEntityValue} quickCreateAction={{label: "新建商品", onClick: () => undefined}} aria-label="选择商品模板" /></label><label className="text-sm font-semibold">金额<ErpAmountInput className="mt-2" value={amount} onValueChange={(detail) => setAmount(detail.floatValue || 0)} aria-label="金额" /></label><label className="text-sm font-semibold">日期<ErpDatePicker className="mt-2" value={date} onChange={setDate} aria-label="日期" /></label><label className="text-sm font-semibold md:col-span-2">备注<Textarea className="mt-2" placeholder="补充说明（可选）" /></label></div></ErpFormSection>
-        <ErpFilterBar actions={<Button variant="ghost" size="sm" onClick={() => setKeyword("")}>清除筛选</Button>}><span className="text-xs text-[var(--erp-color-text-secondary)]">当前筛选：{keyword || "全部"}</span></ErpFilterBar>
+        <ErpPageToolbar><ErpFilterBar actions={<Button variant="ghost" size="sm" onClick={() => setKeyword("")}>清除筛选</Button>}><span className="text-xs text-[var(--erp-color-text-secondary)]">当前筛选：{keyword || "全部"}</span></ErpFilterBar></ErpPageToolbar>
         <Card><CardHeader><div><h2 className="text-sm font-bold">DataTable</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">排序、空态、加载态和状态展示由统一表格组件承载。</p></div><Badge tone="info">TanStack Table</Badge></CardHeader><ErpDataTable columns={demoColumns} data={demoRows} getRowId={(row) => row.id} stickyHeader density="compact" /></Card>
       </div>
       <aside className="min-w-0 space-y-5"><DashboardSection title="状态反馈"><div className="space-y-3"><ErpLoadingState /><Separator /><ErpEmptyState title="空数据状态" description="没有需要处理的记录。" /></div></DashboardSection><Card><CardContent className="p-4"><h2 className="text-sm font-bold">当前输入</h2><p className="mt-2 text-xs text-[var(--erp-color-text-secondary)]">金额：{formatCurrency(amount)}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">日期：{date || "未选择"}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">模块：{selectValue}</p></CardContent></Card></aside>
     </div>
-  </DashboardShell>;
+    </ErpPageContent>
+  </ErpDashboardPageFrame>;
 }
 
 function TokenSwatch({name, value, className, dark = false}: {name: string; value: string; className: string; dark?: boolean}) {

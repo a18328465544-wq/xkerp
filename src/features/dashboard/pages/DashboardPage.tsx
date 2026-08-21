@@ -4,7 +4,7 @@ import {lazy, Suspense, useEffect, useMemo, useState, type ReactNode} from "reac
 import {toast} from "sonner";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, ChartMeta} from "@/src/components/ui";
-import {BottomRegion, DashboardSection, DashboardShell, ErpEmptyState, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {BottomRegion, DashboardSection, ErpDashboardPageFrame, ErpEmptyState, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {aiApi, queryKeys, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -22,7 +22,6 @@ const inactiveStatuses = new Set(["已售出", "已退货", "已报废", "已拆
 const dateKey = (value?: string) => String(value || "").slice(0, 10);
 const percent = (current: number, previous: number) => previous === 0 ? null : ((current - previous) / Math.abs(previous)) * 100;
 const toneForSeverity: Record<string, "danger" | "warning" | "success" | "info"> = {high: "danger", medium: "warning", low: "success"};
-
 export function DashboardPage() {
   const {session, status, error: authError, refresh} = useAuth();
   const capabilities = createCapabilities(session);
@@ -94,7 +93,7 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
     {icon: <Warehouse className="h-4 w-4" />, label: "待扫码出库", value: `${stats.pendingOutbound} 张`, description: "销售单待出库", tone: stats.pendingOutbound ? "warning" : "success", action: () => navigate({to: "/sales/outbound"})},
     {icon: <XCircle className="h-4 w-4" />, label: "异常订单", value: `${stats.unpaidOrders + stats.pendingReturns} 项`, description: "欠款或退货待跟进", tone: stats.unpaidOrders + stats.pendingReturns ? "danger" : "success", action: () => navigate({to: "/sales"})},
   ];
-  return <DashboardShell>
+  return <ErpDashboardPageFrame>
     <ErpPageHeader title={`${greeting}，${session.user.displayName || "老板"}`} subtitle="专注经营每一天，让数据驱动增长" quickStatus={quickStatus} dateContent={<span className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs text-[var(--erp-color-text-secondary)]"><CalendarDays className="h-4 w-4" />{today}</span>} actions={<Button variant="secondary" size="sm" onClick={onRefresh}><RefreshCw className="h-4 w-4" />刷新</Button>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap-comfortable)]">
       <MetricsRegion>
@@ -125,7 +124,7 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
     </MainRegion>
       <BottomRegion><DashboardSection title="快捷操作" description="常用业务入口"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><QuickAction to="/sales/new" label="新建销售单" icon={<ClipboardList className="h-4 w-4" />} /><QuickAction to="/purchase/new" label="新建采购单" icon={<PackageCheck className="h-4 w-4" />} /><QuickAction to="/inventory" label="查询库存" icon={<Warehouse className="h-4 w-4" />} /><QuickAction to="/crm" label="客户管理" icon={<Boxes className="h-4 w-4" />} /></div></DashboardSection></BottomRegion>
     </ErpPageContent>
-  </DashboardShell>;
+  </ErpDashboardPageFrame>;
 }
 
 function calculateDashboardStats(inventory: CardInventory[], invoices: SalesInvoice[], returnOrders: ReturnOrder[], today: string, yesterday: string) {

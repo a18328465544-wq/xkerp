@@ -5,7 +5,7 @@ import {ChevronRight, CircleDollarSign, Download, RefreshCw, RotateCcw, Search, 
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ReferenceLine, XAxis, YAxis} from "recharts";
 import {Button, Card, CardContent, ChartContainer, ChartLegend, ChartMeta, ChartTooltip, ChartTooltipContent, Input, Select, type ChartConfig} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, DashboardSection, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpFinancePageFrame, ErpLoadingState, ErpPageError, ErpStatusBadge} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, DashboardSection, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpFinancePageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageToolbar, ErpStatusBadge} from "@/src/components/common";
 import {ApiError, financeAccountsApi, financeLedgerApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -22,8 +22,8 @@ type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const chartColors = ["var(--erp-color-primary)", "var(--erp-color-success)", "var(--erp-color-warning)", "var(--erp-color-danger)", "var(--erp-color-text-muted)"];
 const ledgerChartConfig = {
-  income: {label: "收入", color: "var(--erp-color-success)", indicator: "line" as const},
-  expense: {label: "支出", color: "var(--erp-color-danger)", indicator: "dashed" as const},
+  income: {label: "收入", color: "var(--erp-color-income)", indicator: "line" as const},
+  expense: {label: "支出", color: "var(--erp-color-expense)", indicator: "dashed" as const},
   value: {label: "支出", color: "var(--erp-color-primary)"},
 } satisfies ChartConfig;
 function chartColor(index: number) {return chartColors[index % chartColors.length] || "var(--erp-color-primary)";}
@@ -82,9 +82,11 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
 
   return <ErpFinancePageFrame>
     <FinanceLedgerHeader reconciliation={reconciliation} loading={ledgerQuery.isFetching} onRefresh={() => void ledgerQuery.refetch()} onExport={exportCurrentPage} hasRows={rows.length > 0} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_232px]">
       <main className="min-w-0 space-y-4">
         <SummaryCards openingBalance={openingBalance} income={summary.income} expense={summary.expense} closingBalance={closingBalance} />
+        <ErpPageToolbar>
         <ErpFilterBar className="bg-[var(--erp-color-surface)]" actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" size="sm" variant={advancedOpen ? "secondary" : "ghost"} onClick={() => setAdvancedOpen((value) => !value)}><SlidersHorizontal className="h-4 w-4" />更多筛选</Button></>}>
           <div className="relative min-w-[220px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索备注、对方账户、单号" aria-label="搜索备注、对方账户或单号" /></div>
           {accountOptionsAvailable ? <Select className="w-36" value={filters.accountId} onValueChange={(accountId) => update({accountId})} options={[{value: "all", label: "全部账户"}, ...accounts.map((item) => ({value: item.id, label: item.name}))]} aria-label="筛选账户" /> : <Select className="w-36" value="unavailable" onValueChange={() => undefined} options={[{value: "unavailable", label: "账户权限受限"}]} disabled aria-label="账户筛选不可用" />}
@@ -93,6 +95,7 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
           <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} fieldClassName="sm:w-32" startPlaceholder="开始日期" endPlaceholder="结束日期" startAriaLabel="流水开始日期" endAriaLabel="流水结束日期" ariaLabel="流水日期范围" />
           {advancedOpen && <><Input className="w-32" value={filters.handler} onChange={(event) => update({handler: event.target.value})} placeholder="经办人" aria-label="筛选经办人" /><Input className="w-36" value={filters.relatedDocNo} onChange={(event) => update({relatedDocNo: event.target.value})} placeholder="关联单号" aria-label="筛选关联单号" /><Select className="w-32" value={filters.customerName} onValueChange={(customerName) => update({customerName})} options={customerOptions} aria-label="筛选客户" /></>}
         </ErpFilterBar>
+        </ErpPageToolbar>
         {activeFilters > 0 && <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[var(--erp-color-text-secondary)]"><span>已应用 {activeFilters} 项筛选</span><button type="button" className="font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}>清空全部</button></div>}
         <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]"><TrendCard rows={trendRows} range={trendRange} onRangeChange={setTrendRange} /><ExpenseShareCard rows={expenses} /></div>
         <LedgerTableCard rows={rows} summary={summary} total={ledgerQuery.data?.total || 0} page={ledgerQuery.data?.page || filters.page} pageSize={ledgerQuery.data?.pageSize || filters.pageSize} query={ledgerQuery} columns={columns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} activeFilters={activeFilters} onRowClick={setDetail} />
@@ -101,6 +104,7 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
     </div>
     <p className="px-1 text-xs text-[var(--erp-color-text-muted)]">注：概览、趋势与分类统计均按当前筛选结果计算；账户余额以服务端账户账面余额为准。</p>
     <LedgerDetailDrawer item={detail} onClose={() => setDetail(null)} />
+    </ErpPageContent>
   </ErpFinancePageFrame>;
 }
 
@@ -122,7 +126,7 @@ function StatusPill({label, value, tone}: {label: string; value: string; tone: T
 }
 
 function ArrowIcon({direction}: {direction: "in" | "out"}) {
-  return <span className={direction === "in" ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}>{direction === "in" ? "↓" : "↑"}</span>;
+  return <span className={direction === "in" ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}>{direction === "in" ? "↓" : "↑"}</span>;
 }
 
 function TrendCard({rows, range, onRangeChange}: {rows: TrendRow[]; range: string; onRangeChange: (value: string) => void}) {
@@ -138,7 +142,7 @@ function ExpenseShareCard({rows}: {rows: ExpenseRow[]}) {
 }
 
 function LedgerTableCard({rows, summary, total, page, pageSize, query, columns, columnVisibility, onColumnVisibilityChange, density, onDensityChange, onPageChange, onPageSizeChange, activeFilters, onRowClick}: {rows: FinanceLedgerItem[]; summary: ReturnType<typeof summarizeFinanceLedgerPage>; total: number; page: number; pageSize: number; query: LedgerQuery; columns: ReturnType<typeof createFinanceLedgerColumns>; columnVisibility: VisibilityState; onColumnVisibilityChange: OnChangeFn<VisibilityState>; density: "comfortable" | "compact"; onDensityChange: (value: "comfortable" | "compact") => void; onPageChange: (page: number) => void; onPageSizeChange: (pageSize: number) => void; activeFilters: number; onRowClick: (item: FinanceLedgerItem) => void}) {
-  return <DashboardSection title={<span>流水明细 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {total} 条</span></span>} actions={<TableControls columns={columns} visibility={columnVisibility} onVisibilityChange={onColumnVisibilityChange} density={density} onDensityChange={onDensityChange} />} className="overflow-hidden p-0"><ErpDataTable surface="plain" columns={columns} data={rows} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="账户流水加载失败" emptyTitle="暂无匹配流水" emptyDescription={activeFilters ? "当前筛选条件没有匹配结果。" : "当前账本尚无账户流水。"} onRetry={() => void query.refetch()} onRowClick={onRowClick} manualSorting page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} columnVisibility={columnVisibility} onColumnVisibilityChange={onColumnVisibilityChange} enableColumnResizing density={density} stickyHeader virtualized={rows.length >= 50} footer={<div className="flex flex-wrap items-center gap-4"><span>合计（当前筛选结果）</span><span className="text-[var(--erp-color-success)]">收入：{formatMoney(summary.income)}</span><span className="text-[var(--erp-color-danger)]">支出：{formatMoney(summary.expense)}</span><span className={summary.net >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}>净额：{formatMoney(summary.net)}</span></div>} /></DashboardSection>;
+  return <DashboardSection title={<span>流水明细 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {total} 条</span></span>} actions={<TableControls columns={columns} visibility={columnVisibility} onVisibilityChange={onColumnVisibilityChange} density={density} onDensityChange={onDensityChange} />} className="overflow-hidden p-0"><ErpDataTable surface="plain" columns={columns} data={rows} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="账户流水加载失败" emptyTitle="暂无匹配流水" emptyDescription={activeFilters ? "当前筛选条件没有匹配结果。" : "当前账本尚无账户流水。"} onRetry={() => void query.refetch()} onRowClick={onRowClick} manualSorting page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} columnVisibility={columnVisibility} onColumnVisibilityChange={onColumnVisibilityChange} enableColumnResizing density={density} stickyHeader virtualized={rows.length >= 50} footer={<div className="flex flex-wrap items-center gap-4"><span>合计（当前筛选结果）</span><span className="text-[var(--erp-color-income)]">收入：{formatMoney(summary.income)}</span><span className="text-[var(--erp-color-expense)]">支出：{formatMoney(summary.expense)}</span><span className={summary.net >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}>净额：{formatMoney(summary.net)}</span></div>} /></DashboardSection>;
 }
 
 function TableControls({columns, visibility, onVisibilityChange, density, onDensityChange}: {columns: ReturnType<typeof createFinanceLedgerColumns>; visibility: VisibilityState; onVisibilityChange: OnChangeFn<VisibilityState>; density: "comfortable" | "compact"; onDensityChange: (value: "comfortable" | "compact") => void}) {
@@ -153,7 +157,7 @@ function LedgerDetailDrawer({item, onClose}: {item: FinanceLedgerItem | null; on
   return <ErpDetailDrawer open={Boolean(item)} onOpenChange={(open) => {if (!open) onClose();}} title={item?.businessType || "流水详情"} description={item ? `${item.id} · ${formatLedgerDateTime(item.time)}` : undefined}><div className="space-y-5">{item && <><div className="grid grid-cols-2 gap-3"><Fact label="收入" value={formatMoney(item.incomeAmount)} tone="success" /><Fact label="支出" value={formatMoney(item.expenseAmount)} tone="danger" /><Fact label="变动前余额" value={formatMoney(item.beforeBalance)} /><Fact label="变动后余额" value={formatMoney(item.afterBalance)} tone={item.afterBalance < 0 ? "danger" : "neutral"} /></div><DashboardSection title="流水归属"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="账户" value={`${item.accountName} · ${item.accountType}`} /><DetailRow label="方向" value={item.direction} /><DetailRow label="往来方" value={item.party || item.customerName || item.supplierName || "未记录"} /><DetailRow label="经办人" value={item.handler} /><DetailRow label="创建人" value={item.createdBy} /><DetailRow label="发生时间" value={formatLedgerDateTime(item.time)} /></div></DashboardSection><DashboardSection title="关联单据"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="单据类型" value={item.relatedDocType || "未记录"} /><DetailRow label="单据编号" value={item.relatedDocNo || "未关联"} /></div></DashboardSection>{item.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{item.remarks}</p>}</>}</div></ErpDetailDrawer>;
 }
 
-function Fact({label, value, tone = "neutral"}: {label: string; value: string; tone?: "neutral" | "success" | "danger"}) {return <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3"><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 font-mono text-base font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : tone === "danger" ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>;}
+function Fact({label, value, tone = "neutral"}: {label: string; value: string; tone?: "neutral" | "success" | "danger"}) {return <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3"><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 font-mono text-base font-bold ${tone === "success" ? "text-[var(--erp-color-income)]" : tone === "danger" ? "text-[var(--erp-color-expense)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>;}
 function DetailRow({label, value}: {label: string; value: string}) {return <div><p className="text-[11px] text-[var(--erp-color-text-muted)]">{label}</p><p className="mt-0.5 truncate text-sm font-medium">{value}</p></div>;}
 type TrendRow = {label: string; income: number; expense: number; key: string};
 type ExpenseRow = {label: string; value: number};

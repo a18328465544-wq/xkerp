@@ -14,6 +14,7 @@
     "build:api": "esbuild server/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=server-dist/index.mjs",
     "build:daily-report": "esbuild server/dailyReportCli.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=server-dist/daily-report.mjs",
     "test:crm-lead": "tsx --test server/crmCustomerLead.test.ts",
+    "test:backend-http": "NODE_ENV=test RUN_BACKEND_HTTP_TESTS=1 tsx --test server/httpIntegration.test.ts",
     "test:non-operating": "tsx --test src/components/nonOperatingFinanceUtils.test.ts src/components/nonOperatingFinanceRender.test.tsx server/nonOperatingFinance.test.ts",
     "crm:migrate": "tsx server/crmMigrationCli.ts",
     "crm:migrate:apply": "tsx server/crmMigrationCli.ts --apply",

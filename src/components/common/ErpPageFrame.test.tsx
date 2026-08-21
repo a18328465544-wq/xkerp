@@ -42,3 +42,36 @@ test("page architecture keeps one frame boundary and canonical QuickStatus API",
   assert.doesNotMatch(quickStatusSource, /status\?: QuickStatusTone/);
   assert.doesNotMatch(quickStatusSource, /onClick\?: \(\) => void/);
 });
+
+test("formal dashboard pages use the canonical dashboard frame", () => {
+  const dashboardSource = readFileSync(new URL("../../features/dashboard/pages/DashboardPage.tsx", import.meta.url), "utf8");
+  const designSystemSource = readFileSync(new URL("../../features/design-system/pages/DesignSystemPage.tsx", import.meta.url), "utf8");
+
+  for (const source of [dashboardSource, designSystemSource]) {
+    assert.match(source, /ErpDashboardPageFrame/);
+    assert.doesNotMatch(source, /DashboardShell/);
+    assert.match(source, /ErpPageContent/);
+  }
+});
+
+test("typical list pages keep filters in the toolbar and content in PageContent", () => {
+  const inventorySource = readFileSync(new URL("../../features/inventory/pages/InventoryListPage.tsx", import.meta.url), "utf8");
+  const financeSource = readFileSync(new URL("../../features/finance/pages/FinanceIncomePage.tsx", import.meta.url), "utf8");
+
+  for (const source of [inventorySource, financeSource]) {
+    const toolbarStart = source.indexOf("<ErpPageToolbar");
+    const filterStart = source.indexOf("<ErpFilterBar");
+    const contentStart = source.indexOf("<ErpPageContent");
+    assert.ok(toolbarStart >= 0, "页面必须声明 ErpPageToolbar");
+    assert.ok(filterStart > toolbarStart, "ErpFilterBar 必须出现在 ErpPageToolbar 之后");
+    assert.ok(contentStart > toolbarStart, "业务主体必须出现在 ErpPageContent 之后");
+  }
+});
+
+test("architecture guard protects structural regions and registered browser boundaries", () => {
+  const guardSource = readFileSync(new URL("../../../scripts/check-architecture.mjs", import.meta.url), "utf8");
+  assert.match(guardSource, /collectJsxElements/);
+  assert.match(guardSource, /DashboardShell/);
+  assert.match(guardSource, /rawHistoryFiles > 0/);
+  assert.match(guardSource, /rawStorageFiles > 0/);
+});

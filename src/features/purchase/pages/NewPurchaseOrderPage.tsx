@@ -6,7 +6,7 @@ import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form"
 import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
-import {ErpFormSection, ErpLoadingState, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
+import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, productsApi, purchaseApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -220,6 +220,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const accountError = !canReadSettlementAccounts ? "当前账号没有结算账户读取权限" : undefined;
   return <ErpTransactionPageFrame>
     <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader density="default" title="进货与回收" subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" actions={<><Button type="button" variant="secondary" onClick={leave}><ArrowLeft className="h-4 w-4" />返回采购单据</Button><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></>} /></CardContent></Card>
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {serverError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{serverError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">余额、来源或服务端状态可能已变化；表单内容保留，请重新核对后重试。</p>}</div><Button type="button" size="icon" variant="ghost" onClick={() => {setServerError(null); setConflictError(false);}} aria-label="关闭错误提示">×</Button></CardContent></Card>}
     {!canReadProducts && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有商品规格读取权限，商品选择已禁用；服务端仍会校验采购商品。</CardContent></Card>}
     <form onSubmit={(event: FormEvent<HTMLFormElement>) => {void handleSubmit(submit)(event);}}>
@@ -251,5 +252,6 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     <PurchasePartnerCreateDialog open={Boolean(partnerCreate)} target={partnerCreate?.target || null} initialName={partnerCreate?.initialName || ""} onOpenChange={(open) => {if (!open) setPartnerCreate(null);}} onCreated={handleCreatedSource} />
     <ErpProductTemplateDialog open={Boolean(productCreate)} product={null} initialValues={productCreateInitialValues} showCost={permissions.showCost} showProfit={permissions.showProfit} pending={productCreateMutation.isPending} error={productCreateMutation.error ? quickCreateError(productCreateMutation.error, "商品模板") : undefined} onOpenChange={(open) => {if (!open) {setProductCreate(null); productCreateMutation.reset();}}} onSubmit={submitProductTemplate} />
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
+    </ErpPageContent>
   </ErpTransactionPageFrame>;
 }

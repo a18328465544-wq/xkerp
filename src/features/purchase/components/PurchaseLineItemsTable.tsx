@@ -1,5 +1,6 @@
 import {Plus, Trash2} from "lucide-react";
 import {Controller, type Control, type FieldArrayWithId} from "react-hook-form";
+import {useMemo, useState} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
 import {ErpAmountInput, ErpEmptyState} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
@@ -25,6 +26,20 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
   onRemove: (index: number) => void;
   onOpenCreateProduct?: (index: number, initialName?: string) => void;
 }) {
+  const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
+  const orderedProducts = useMemo(() => [...products].sort((left, right) => {
+    const leftIndex = recentProductIds.indexOf(left.id);
+    const rightIndex = recentProductIds.indexOf(right.id);
+    if (leftIndex === -1 && rightIndex === -1) return 0;
+    if (leftIndex === -1) return 1;
+    if (rightIndex === -1) return -1;
+    return leftIndex - rightIndex;
+  }), [products, recentProductIds]);
+  const productOptions = useMemo(() => orderedProducts.map((product) => ({value: product.id, label: productLabel(product), labelText: productLabel(product), description: [product.category, product.version, product.vram].filter(Boolean).join(" · "), searchText: `${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`})), [orderedProducts]);
+  const handleProductSelect = (index: number, productId: string) => {
+    setRecentProductIds((current) => [productId, ...current.filter((id) => id !== productId)].slice(0, 6));
+    onProductSelect(index, productId);
+  };
   return <Card><CardContent>
     {!products.length ? <div className="rounded-[var(--erp-radius-md)] border border-dashed border-[var(--erp-color-warning)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-sm text-[var(--erp-color-warning)]">当前没有可用商品规格，或当前账号没有商品读取权限。请先建立商品模板并确认 products 权限。</div> : null}
     <div className={`${!products.length ? "mt-3 " : ""}overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)]`}>
@@ -38,12 +53,12 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
           const expectedProfit = (item.estSellPrice - item.buyPrice) * item.quantity;
           return <tr key={field.id} className="group align-middle last:[&>td]:border-b-0 hover:bg-[var(--erp-color-surface-muted)]/60">
             <td className="sticky left-0 erp-content-sticky-layer border-b border-r border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2 group-hover:bg-[var(--erp-color-surface-muted)]">
-              <Controller control={control} name={`items.${index}.productId` as const} render={({field: input}) => <Select searchable searchPlaceholder="搜索商品…" emptyText="没有找到匹配的商品规格" className="min-w-0" value={input.value} options={products.map((product) => ({value: product.id, label: productLabel(product), labelText: productLabel(product), description: [product.category, product.version, product.vram].filter(Boolean).join(" · "), searchText: `${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`}))} onValueChange={(value) => { input.onChange(value); onProductSelect(index, value); }} onClear={() => onProductClear(index)} quickCreateAction={canCreateProduct && onOpenCreateProduct ? {label: "新建商品", onClick: (searchText) => onOpenCreateProduct(index, searchText || item.productName), disabled} : undefined} disabled={disabled || (!products.length && !(canCreateProduct && onOpenCreateProduct))} placeholder={products.length ? "选择商品规格" : "搜索或新建商品"} aria-label={`第 ${index + 1} 行商品`} aria-invalid={missingProductIdentity} />} />
+              <Controller control={control} name={`items.${index}.productId` as const} render={({field: input}) => <Select searchable searchPlaceholder="搜索商品…" emptyText="没有找到匹配的商品规格" className="min-w-0" value={input.value} options={productOptions} onValueChange={(value) => { input.onChange(value); handleProductSelect(index, value); }} onClear={() => onProductClear(index)} quickCreateAction={canCreateProduct && onOpenCreateProduct ? {label: "新建商品", onClick: (searchText) => onOpenCreateProduct(index, searchText || item.productName), disabled} : undefined} disabled={disabled || (!products.length && !(canCreateProduct && onOpenCreateProduct))} placeholder={products.length ? "选择商品规格" : "搜索或新建商品"} aria-label={`第 ${index + 1} 行商品`} aria-invalid={missingProductIdentity} />} />
             </td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">{canEnterCost ? <Controller control={control} name={`items.${index}.buyPrice` as const} render={({field: input}) => <ErpAmountInput value={input.value} onBlur={input.onBlur} onValueChange={(detail) => input.onChange(detail.floatValue || 0)} disabled={disabled} aria-label={`第 ${index + 1} 行进货价`} />} /> : <span className="flex h-10 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-2 text-xs text-[var(--erp-color-text-muted)]">不可录入</span>}</td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">{showProfit ? <Controller control={control} name={`items.${index}.estSellPrice` as const} render={({field: input}) => <ErpAmountInput value={input.value} onBlur={input.onBlur} onValueChange={(detail) => input.onChange(detail.floatValue || 0)} disabled={disabled} aria-label={`第 ${index + 1} 行预估售价`} />} /> : <span className="flex h-10 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-2 text-xs text-[var(--erp-color-text-muted)]">—</span>}</td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">
-              <Controller control={control} name={`items.${index}.quantity` as const} render={({field: input}) => <Input {...input} type="number" min={1} step={1} className="text-center font-mono font-semibold" onChange={(event) => input.onChange(Math.max(1, Number(event.target.value) || 1))} disabled={disabled} aria-label={`第 ${index + 1} 行数量`} />} />
+              <Controller control={control} name={`items.${index}.quantity` as const} render={({field: input}) => <Input {...input} type="number" min={1} step={1} className="text-center font-mono font-semibold" onChange={(event) => input.onChange(Math.max(1, Number(event.target.value) || 1))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); document.querySelector<HTMLElement>(`[aria-label="第 ${index + 2} 行商品"]`)?.focus(); } }} disabled={disabled} aria-label={`第 ${index + 1} 行数量`} />} />
             </td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2 text-center"><span className={`whitespace-nowrap font-mono text-sm font-bold ${expectedProfit < 0 ? "text-[var(--erp-color-danger)]" : expectedProfit > 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-text)]"}`}>{canEnterCost && showProfit ? formatCurrency(expectedProfit) : "—"}</span></td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2"><Controller control={control} name={`items.${index}.remarks` as const} render={({field: input}) => <Input {...input} className="text-center text-xs" placeholder="商品来源、包装或谈价说明" disabled={disabled} aria-label={`第 ${index + 1} 行备注`} />} /></td>

@@ -20,6 +20,7 @@ import {
   ErpDataTable,
   ErpDetailDrawer,
   ErpMetricCard,
+  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
   ErpStatusBadge,
@@ -270,6 +271,7 @@ function FinanceCommissionContent({
           </Button>
         }
       />
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <FinanceSectionTabs
         label="员工提成分类"
         items={[
@@ -366,6 +368,7 @@ function FinanceCommissionContent({
           </div>
         )}
       </ErpDetailDrawer>
+      </ErpPageContent>
     </ErpAnalyticsPageFrame>
   );
 }

@@ -8,8 +8,10 @@ import {
   ErpFinancePageFrame,
   ErpDetailDrawer,
   ErpFilterBar,
+  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
+  ErpPageToolbar,
   ErpStatusBadge,
   MetricsRegion,
   type QuickStatusItemData,
@@ -339,6 +341,7 @@ function FinanceReturnReconcileContent({
           tone="success"
         />
       </MetricsRegion>
+      <ErpPageToolbar>
       <ErpFilterBar
         compact
         actions={
@@ -389,6 +392,8 @@ function FinanceReturnReconcileContent({
           aria-label="退货状态"
         />
       </ErpFilterBar>
+      </ErpPageToolbar>
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <FinanceTableRegion
         title="对账记录"
         description="集中查看销售退货与进货退货的结算状态。"
@@ -457,6 +462,7 @@ function FinanceReturnReconcileContent({
           </div>
         )}
       </ErpDetailDrawer>
+      </ErpPageContent>
     </ErpFinancePageFrame>
   );
 }

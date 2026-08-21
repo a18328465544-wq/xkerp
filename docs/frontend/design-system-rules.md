@@ -11,6 +11,7 @@
 | 类别 | Token 示例 |
 | --- | --- |
 | 颜色 | `--erp-color-canvas`、`--erp-color-primary`、`--erp-color-success`、`--erp-color-warning`、`--erp-color-danger` |
+| 业务语义色 | `--erp-color-income`、`--erp-color-expense`、`--erp-color-net`、`--erp-color-risk`（及对应 `*-soft`） |
 | 间距 | `--erp-space-1` 至 `--erp-space-16` |
 | 圆角 | `--erp-radius-sm`、`md`、`lg`、`xl`、`pill` |
 | 阴影 | `--erp-shadow-card`、`--erp-shadow-popover` |
@@ -23,6 +24,9 @@
 ## 规则
 
 - 状态颜色使用语义 Token 或统一 Badge tone。
+- 全局金额语义固定：收入/收款/到账使用 `--erp-color-income`（绿色），支出/付款/成本/手续费/损失使用 `--erp-color-expense`（红色），净额/调拨本金/中性汇总使用 `--erp-color-net`（蓝色），待处理/逾期/异常/风险使用 `--erp-color-risk`（橙色）。
+- 同一业务事实在 KPI、图表、表格、抽屉和通知中必须使用同一语义 Token；风险色不是支出色，不能用橙色代替已发生的支出。
+- 正负号、文字、图例或无障碍名称必须与颜色同时表达含义，不能只依赖颜色区分收入和支出。
 - 新 Token 必须有跨页面需求和命名说明。
 - 禁止在业务页面新增 hex、rgb、hsl 或内联颜色。
 - 间距、圆角、边框、阴影和控件高度使用 Token 或受控变体。

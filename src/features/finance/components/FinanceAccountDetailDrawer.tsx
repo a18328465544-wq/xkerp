@@ -185,7 +185,7 @@ export function FinanceAccountDetailDrawer({
                     className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
                   >
                     <span
-                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.changeAmount >= 0 ? "bg-[var(--erp-color-success-soft)] text-[var(--erp-color-success)]" : "bg-[var(--erp-color-danger-soft)] text-[var(--erp-color-danger)]"}`}
+                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.changeAmount >= 0 ? "bg-[var(--erp-color-income-soft)] text-[var(--erp-color-income)]" : "bg-[var(--erp-color-expense-soft)] text-[var(--erp-color-expense)]"}`}
                     >
                       <BadgeDollarSign className="h-4 w-4" />
                     </span>
@@ -199,7 +199,7 @@ export function FinanceAccountDetailDrawer({
                       </p>
                     </div>
                     <span
-                      className={`font-mono text-sm font-bold ${item.changeAmount >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}
+                      className={`font-mono text-sm font-bold ${item.changeAmount >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}
                     >
                       {item.changeAmount >= 0 ? "+" : ""}
                       {formatCurrency(item.changeAmount)}

@@ -4,7 +4,7 @@ import {ArrowLeft, Boxes, CircleDollarSign, ExternalLink, FileImage, LockKeyhole
 import {useEffect, useMemo, useState} from "react";
 import {Link} from "@tanstack/react-router";
 import {Button, Card, CardContent, CardHeader} from "@/src/components/ui";
-import {ErpDataTable, ErpDetailPageFrame, ErpEmptyState, ErpLoadingState, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {ErpDataTable, ErpDetailPageFrame, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, apiDownload, purchaseApi, queryKeys} from "@/src/services/api";
 import {useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -109,7 +109,8 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
   ];
 
   return <ErpDetailPageFrame className="max-w-[1600px] space-y-5 pb-12">
-    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label="只读详情" tone="neutral" /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" disabled title="后端缺少字段白名单、独立编辑权限和并发版本控制"><LockKeyhole className="h-4 w-4" />编辑待开放</Button></>} />
+    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label="只读详情" tone="neutral" /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <DetailMetric label="商品数量" value={`${invoice.totalCount} 件`} detail={`${invoice.items.length} 条实物明细`} />
@@ -140,6 +141,7 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
         <Card><CardHeader><div className="flex items-center gap-2"><Truck className="h-4 w-4 text-[var(--erp-color-primary)]" /><h2 className="text-sm font-bold">付款与抵扣</h2></div></CardHeader><CardContent>{canReadPayments ? <div className="space-y-3"><InfoRow label="付款方式" value={invoice.paymentMethod || "—"} /><InfoRow label="结算账户" value={invoice.settlementAccountName || "—"} /><InfoRow label="现金已付" value={formatCurrency(invoice.paidAmount)} /><InfoRow label="供应商抵扣" value={formatCurrency(invoice.vendorCreditAppliedAmount || 0)} /><InfoRow label="未付" value={formatCurrency(invoice.unpaidAmount)} /><InfoRow label="关联付款流水" value={`${detail.paymentCount ?? 0} 笔`} /></div> : <p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">当前账号没有支出流水权限，不展示金额、账户和历史流水。</p>}</CardContent></Card>
       </aside>
     </div>
+    </ErpPageContent>
   </ErpDetailPageFrame>;
 }
 

@@ -1,14 +1,15 @@
 import {keepPreviousData, useQuery, type UseQueryResult} from "@tanstack/react-query";
-import {Boxes, Filter, ImageOff, LockKeyhole, PackageCheck, RefreshCw, RotateCcw, Search, ShieldAlert, SlidersHorizontal, Sparkles, Warehouse} from "lucide-react";
+import {ArrowRight, Boxes, ImageOff, LockKeyhole, RefreshCw, RotateCcw, Search, ShieldAlert, SlidersHorizontal, Warehouse} from "lucide-react";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
+import {Link} from "@tanstack/react-router";
 import type {InventoryFilters, InventoryListItem, InventoryModelSummary, InventorySummary, InventoryView} from "@/src/types/inventory";
 import {createInventoryColumns} from "@/src/features/inventory/inventory.columns";
 import {createInventoryModelColumns} from "@/src/features/inventory/inventory.model-columns";
@@ -141,14 +142,11 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     const first = next[0];
     commitFilters({...filters, sortKey: columnToServerSort[first?.id || ""] || "entryTime", sortDirection: first?.desc ? "desc" : "asc", page: 1});
   };
-  const unsupported = ["model", "condition", "entryStart", "entryEnd"];
-
   useEffect(() => setRowSelection({}), [filters]);
 
   return <>
     <ErpWarehousePageFrame>
-      <ErpPageHeader title="库存中心" subtitle="按 SN、型号、库位和状态快速定位库存；数据视图只切换下方表格。" quickStatus={quickStatus} actions={<><InventoryViewSwitcher view={view} onChange={onChangeView} /><Button variant="secondary" onClick={onRefresh} disabled={listQuery.isFetching || modelSummaryQuery.isFetching}><RefreshCw className={listQuery.isFetching || modelSummaryQuery.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button><Button variant="primary" disabled title="新增库存接口将在录单纵向切片中接入"><PackageCheck className="h-4 w-4" />新增库存</Button></>} />
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+      <ErpPageHeader title="库存中心" subtitle="按 SN、型号、库位和状态快速定位库存；数据视图只切换下方表格。" quickStatus={quickStatus} actions={<><InventoryViewSwitcher view={view} onChange={onChangeView} /><Button variant="secondary" onClick={onRefresh} disabled={listQuery.isFetching || modelSummaryQuery.isFetching}><RefreshCw className={listQuery.isFetching || modelSummaryQuery.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button></>} />
       <MetricsRegion>
         <MetricCard label="库存总数" value={modelSummaryQuery.data ? `${summary.totalCount} 件` : "—"} detail="按当前筛选" icon={<Boxes className="h-4 w-4" />} />
         <MetricCard label="在库数量" value={modelSummaryQuery.data ? `${summary.availableCount} 件` : "—"} detail="已入库 / 已上架" icon={<Warehouse className="h-4 w-4" />} />
@@ -156,25 +154,26 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
         <MetricCard label="已预订" value={modelSummaryQuery.data ? `${summary.lockedCount} 件` : "—"} detail="已锁定库存" icon={<LockKeyhole className="h-4 w-4" />} />
         {permissions.showCost ? <MetricCard label="库存总成本" value={summary.totalCost === undefined ? "—" : formatCurrency(summary.totalCost)} detail="按接口摘要汇总" icon={<Boxes className="h-4 w-4" />} /> : <MetricCard label="成本信息" value="无权限" detail="服务器已隐藏成本字段" tone="muted" icon={<LockKeyhole className="h-4 w-4" />} />}
       </MetricsRegion>
+      {(summary.pendingCount > 0 || summary.lockedCount > 0) && <Card className="border-[var(--erp-color-border)] bg-[var(--erp-color-surface)]"><CardContent className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]"><ShieldAlert className="h-4 w-4" /></span><div className="min-w-0"><p className="text-sm font-semibold text-[var(--erp-color-text)]">库存下一步</p><p className="truncate text-xs text-[var(--erp-color-text-secondary)]">把需要人工处理的库存直接送到对应工作台，列表本身只负责查询。</p></div></div><div className="flex flex-wrap items-center gap-2">{summary.pendingCount > 0 && <Link to={permissions.allowedMenus.includes("all") || permissions.allowedMenus.includes("inspections") ? "/inspections" : "/inventory"} className="inline-flex items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-warning)] bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs font-semibold text-[var(--erp-color-warning)]">待检测 {summary.pendingCount}<ArrowRight className="h-3.5 w-3.5" /></Link>}{summary.lockedCount > 0 && <Link to="/sales/outbound" className="inline-flex items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-info)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs font-semibold text-[var(--erp-color-primary)]">已预订 {summary.lockedCount}<ArrowRight className="h-3.5 w-3.5" /></Link>}</div></CardContent></Card>}
+      <ErpPageToolbar>
       <ErpFilterBar actions={<Button variant="ghost" size="sm" onClick={() => commitFilters(defaultInventoryFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
         <div className="relative min-w-[240px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => updateFilter({keyword: event.target.value})} placeholder="搜索 SN、商品、品牌、型号" aria-label="搜索库存" /></div>
         <FilterInput value={filters.brand} onChange={(value) => updateFilter({brand: value})} label="品牌" placeholder="品牌" />
         <FilterInput value={filters.warehouseLocation} onChange={(value) => updateFilter({warehouseLocation: value})} label="仓库 / 库位" placeholder="仓位" />
         <FilterSelect value={filters.status} onChange={(value) => updateFilter({status: value, inspectionStatus: ""})} label="库存 / 检测状态" placeholder="全部状态" options={["待检测", "检测中", "已入库", "已上架", "已锁定", "已售出", "维修中", "售后中", "已报废"]} />
         <FilterSelect value={filters.risk} onChange={(value) => updateFilter({risk: value as InventoryFilters["risk"]})} label="风险" placeholder="全部风险" options={["high", "mined", "upturned"]} optionLabels={{high: "高风险", mined: "疑似矿卡", upturned: "倒挂价"}} />
-        <Input className="w-28" value={filters.model} disabled title="型号精确筛选待后端接口补充" placeholder="型号（待补充）" aria-label="型号筛选（待补充）" />
-        <Input className="w-24" value={filters.condition} disabled title="成色筛选待后端接口补充" placeholder="成色（待补充）" aria-label="成色筛选（待补充）" />
         <label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs text-[var(--erp-color-text-secondary)]"><input type="checkbox" checked={filters.includeSold} onChange={(event) => updateFilter({includeSold: event.target.checked})} />包含已售出</label>
       </ErpFilterBar>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--erp-color-text-muted)]"><SlidersHorizontal className="h-3.5 w-3.5" /><span>暂不可服务端筛选：</span>{unsupported.map((key) => <ErpStatusBadge key={key} label={key === "model" ? "型号" : key === "condition" ? "成色" : "入库日期"} tone="neutral" />)}<span>关键字仍可搜索型号和 SN；其余筛选将在后端契约补齐后启用。</span></div>
+      </ErpPageToolbar>
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {view === "models" ? <InventoryModelTableRegion filters={filters} commitFilters={commitFilters} modelSummaryQuery={modelSummaryQuery} rows={modelRows} pageRows={modelPageRows} columns={modelColumns} columnVisibility={modelColumnVisibility} setColumnVisibility={setModelColumnVisibility} density={modelDensity} setDensity={setModelDensity} onOpenCards={onOpenCards} /> : <>
-        {selectedCount > 0 && <Card className="flex flex-wrap items-center justify-between gap-3 border-[var(--erp-color-border-strong)] bg-[var(--erp-color-info-soft)] px-4 py-3"><span className="text-sm font-semibold text-[var(--erp-color-primary)]">已选择 {selectedCount} 条库存</span><div className="flex items-center gap-2"><Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>清除选择</Button><Button size="sm" variant="secondary" disabled title="批量编辑权限和字段契约待确认">批量操作（待权限契约）</Button></div></Card>}
+        {selectedCount > 0 && <Card className="flex flex-wrap items-center justify-between gap-3 border-[var(--erp-color-border-strong)] bg-[var(--erp-color-info-soft)] px-4 py-3"><span className="text-sm font-semibold text-[var(--erp-color-primary)]">已选择 {selectedCount} 条库存</span><Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>清除选择</Button></Card>}
         <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs text-[var(--erp-color-text-secondary)]"><Boxes className="h-4 w-4 text-[var(--erp-color-primary)]" />服务端分页 · {listQuery.data?.meta.total ?? 0} 条</div><div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} exclude={["select", "actions"]} /> <div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div></div>
         <ErpDataTable columns={columns} data={rows} getRowId={(row) => row.id} loading={listQuery.isPending} fetching={listQuery.isFetching} error={listQuery.error as Error | null} errorTitle="库存加载失败" onRetry={() => void listQuery.refetch()} onRowClick={onDetail} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={filters.page} pageSize={filters.pageSize} total={listQuery.data?.meta.total} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} rowSelection={rowSelection} onRowSelectionChange={setRowSelection} enableSelection enableColumnResizing density={density} stickyHeader virtualized={rows.length >= 50} />
       </>}
       </ErpPageContent>
     </ErpWarehousePageFrame>
-    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} title={detailQuery.data?.item?.productName || detailId || "库存详情"} description={detailQuery.data?.fallback ? "通过列表接口兼容查询，专用详情接口待补充。" : undefined}>
+    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} title={detailQuery.data?.item?.productName || detailId || "库存详情"}>
       {detailQuery.isPending ? <ErpLoadingState title="正在加载库存详情" /> : detailQuery.error ? <ErpEmptyState title="详情加载失败" description={(detailQuery.error as Error).message} action={<Button size="sm" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : detailQuery.data?.item ? <InventoryDetail item={detailQuery.data.item} showCost={permissions.showCost} showProfit={permissions.showProfit} /> : <ErpEmptyState title="库存记录不存在" description="该记录可能已被删除或当前账号无权访问。" />}
     </ErpDetailDrawer>
   </>;
@@ -218,7 +217,6 @@ function InventoryDetail({item, showCost, showProfit}: {item: InventoryListItem;
     <InventoryDetailSection title="基础信息"><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{details.map(([label, value]) => <DetailField key={label} label={label} value={value} />)}</div></InventoryDetailSection>
     {showCost && <InventoryDetailSection title="成本与售价"><div className="grid grid-cols-2 gap-4 sm:grid-cols-3"><DetailAmount label="成本价" value={item.costPrice} /><DetailAmount label="当前售价" value={item.estimatedSellPrice} /><div><p className="text-xs text-[var(--erp-color-text-muted)]">预计利润</p><p className="mt-1 text-base"><ProfitDisplay value={showProfit ? item.estimatedProfit : undefined} /></p></div></div></InventoryDetailSection>}
     <InventoryDetailSection title="库存属性"><div className="flex flex-wrap gap-2"><ErpStatusBadge label={item.inWarranty ? "质保中" : "无质保"} tone={item.inWarranty ? "success" : "neutral"} />{item.repaired && <ErpStatusBadge label="维修记录" tone="warning" />}{item.gpuRisk && <ErpStatusBadge label="风险库存" tone="danger" />}{item.fullBox && <ErpStatusBadge label="全套包装" tone="info" />}</div>{item.remarks && <p className="mt-3 text-xs leading-5 text-[var(--erp-color-text-secondary)]">备注：{item.remarks}</p>}</InventoryDetailSection>
-    <section className="rounded-[var(--erp-radius-lg)] border border-dashed border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-4"><div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />AI 分析<ErpStatusBadge label="准备中" tone="neutral" /></div><p className="mt-2 text-xs text-[var(--erp-color-text-secondary)]">本轮只预留入口，不生成假建议、不调用 AI 接口。</p><Button className="mt-3" size="sm" variant="secondary" disabled><Sparkles className="h-3.5 w-3.5" />暂未接入</Button></section>
   </div>;
 }
 

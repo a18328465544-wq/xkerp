@@ -30,8 +30,10 @@ import {
   ErpDetailDrawer,
   ErpFilterBar,
   ErpLoadingState,
+  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
+  ErpPageToolbar,
   ErpStatusBadge,
   MetricsRegion,
   type QuickStatusItemData,
@@ -334,7 +336,7 @@ function FinanceExpenseContent({
           )}
           detail={`${monthItems.length} 笔非经营支出`}
           icon={<CalendarRange className="h-4 w-4" />}
-          tone="warning"
+          tone="danger"
         />
         <Metric
           label="主要支出类型"
@@ -351,6 +353,7 @@ function FinanceExpenseContent({
           tone="warning"
         />
       </MetricsRegion>
+      <ErpPageToolbar>
       <ErpFilterBar
         compact
         actions={
@@ -430,6 +433,8 @@ function FinanceExpenseContent({
           ariaLabel="支出日期范围"
         />
       </ErpFilterBar>
+      </ErpPageToolbar>
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <FinanceTableRegion
         title="支出明细"
         description="点击行查看凭证；客户退款、提成等自动支出只能从原业务流程调整。"
@@ -494,6 +499,7 @@ function FinanceExpenseContent({
           if (deleting) deleteMutation.mutate(deleting.id);
         }}
       />
+      </ErpPageContent>
     </ErpFinancePageFrame>
   );
 }

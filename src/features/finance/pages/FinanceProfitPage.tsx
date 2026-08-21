@@ -4,7 +4,7 @@ import {BarChart3, CircleDollarSign, Download, FileText, Layers3, LockKeyhole, R
 import {Area, AreaChart, CartesianGrid, Line, ReferenceLine, XAxis, YAxis} from "recharts";
 import {useEffect, useMemo} from "react";
 import {Button, Card, ChartContainer, ChartLegend, ChartMeta, ChartTooltip, ChartTooltipContent, Input, Select, type ChartConfig} from "@/src/components/ui";
-import {AnalyticsDetailRegion, AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDateRangePicker, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageError, ErpPageHeader, ErpStatusBadge, type AnalyticsVisualizationSize, type QuickStatusItemData} from "@/src/components/common";
+import {AnalyticsDetailRegion, AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDateRangePicker, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type AnalyticsVisualizationSize, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, salesApi, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -74,6 +74,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
   ];
   return <ErpAnalyticsPageFrame>
     <ErpPageHeader title="销售利润" subtitle="按商品、客户、渠道或经办人查看销售额、成本与毛利表现。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="secondary" disabled={!report.rows.length} onClick={exportReport}><Download className="h-4 w-4" />导出结果</Button></>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <AnalyticsKpiRegion
       primary={<>
         <ErpMetricCard label="销售额" value={formatCurrency(report.summary.revenue)} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} tone="info" />
@@ -81,7 +82,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
         <ErpMetricCard label="毛利率" value={session.permissions.showProfit && report.summary.margin !== undefined ? `${(report.summary.margin * 100).toFixed(2)}%` : "—"} detail="利润 ÷ 销售额" icon={<BarChart3 className="h-4 w-4" />} tone="success" />
       </>}
       secondary={<>
-        {session.permissions.showCost && <ErpMetricCard label="销售成本" value={report.summary.cost === undefined ? "—" : formatCurrency(report.summary.cost)} detail="当前筛选汇总" icon={<WalletCards className="h-4 w-4" />} tone="warning" variant="compact" />}
+        {session.permissions.showCost && <ErpMetricCard label="销售成本" value={report.summary.cost === undefined ? "—" : formatCurrency(report.summary.cost)} detail="当前筛选汇总" icon={<WalletCards className="h-4 w-4" />} tone="danger" variant="compact" />}
         <ErpMetricCard label="分析订单" value={`${report.summary.orderCount} 单`} detail="当前筛选结果" icon={<FileText className="h-4 w-4" />} tone="neutral" variant="compact" />
         <ErpMetricCard label="销售数量" value={`${report.summary.quantity} 件`} detail="销售单实物数量" icon={<Layers3 className="h-4 w-4" />} tone="neutral" variant="compact" />
         {session.permissions.showProfit && <ErpMetricCard label="盈利分组" value={`${report.summary.profitableGroups} 组`} detail="当前维度有利润" icon={<TrendingUp className="h-4 w-4" />} tone="success" variant="compact" />}
@@ -98,6 +99,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
       <AnalyticsMainRegion.Insights><DashboardSection title="利润洞察" description="从当前结果中优先展示机会与风险。"><ProfitInsights insights={insights} showProfit={session.permissions.showProfit} /></DashboardSection></AnalyticsMainRegion.Insights>
     </AnalyticsMainRegion>
     <AnalyticsDetailRegion><DashboardSection title="利润明细" description="按当前维度展示聚合结果，成本与毛利遵循账号权限。" actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`${report.meta.page} / ${report.meta.totalPages} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}><ErpDataTable surface="plain" columns={columns} data={report.pageRows} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="销售利润加载失败" emptyTitle="暂无利润数据" emptyDescription={activeFilters ? "当前筛选条件没有匹配的销售单。" : "当前没有可展示的销售单据。"} onRetry={() => void query.refetch()} page={report.meta.page} pageSize={report.meta.pageSize} total={report.meta.total} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader /></DashboardSection></AnalyticsDetailRegion>
+    </ErpPageContent>
   </ErpAnalyticsPageFrame>;
 }
 

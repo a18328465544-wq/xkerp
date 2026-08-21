@@ -21,6 +21,7 @@
 | 品牌色 | `--erp-color-primary` / `primary-hover` | `#0a84ff` / `#006edc` |
 | 状态色 | `--erp-color-success` / `warning` / `danger` | `#12805c` / `#b45309` / `#c2410c` |
 | 状态底色 | `--erp-color-info-soft` / `success-soft` / `warning-soft` / `danger-soft` | 统一语义浅色背景 |
+| 业务语义色 | `--erp-color-income` / `expense` / `net` / `risk` 及对应 `*-soft` | 收入绿色、支出红色、净额蓝色、风险橙色；均为状态 Token 的别名 |
 | 间距 | `--erp-space-1` 至 `--erp-space-16` | `4, 8, 12, 16, 20, 24, 32, 40, 48, 64px` |
 | 圆角 | `--erp-radius-sm` / `md` / `lg` / `xl` / `pill` | `6 / 8 / 12 / 16 / 9999px` |
 | 阴影 | `--erp-shadow-card` / `popover` | 卡片弱阴影 / 浮层阴影 |
@@ -29,6 +30,19 @@
 | Quick Status | `--erp-quick-status-height` / `icon-size` / `gap` | `32 / 24 / 12px` |
 
 新增视觉值必须先补 Token，并说明跨页面复用场景。业务 TSX 禁止直接写 hex、rgb、hsl；状态底色应使用语义 Token 或 `Badge tone`。
+
+### 全局业务语义色
+
+业务颜色按“事实含义”统一，不按页面或组件自行决定：
+
+| 业务事实 | 文字/图标 Token | 背景 Token | 规则 |
+| --- | --- | --- | --- |
+| 收入、收款、到账、现金流入 | `--erp-color-income` | `--erp-color-income-soft` | 统一使用绿色；金额可带 `+` 或“收入/流入”文字 |
+| 支出、付款、成本、手续费、损失 | `--erp-color-expense` | `--erp-color-expense-soft` | 统一使用红色；金额可带 `−` 或“支出/流出”文字 |
+| 净额、调拨本金、中性汇总 | `--erp-color-net` | `--erp-color-info-soft` | 默认使用品牌蓝；若净额按正负表达方向，则按实际正负切换收入/支出色 |
+| 待处理、逾期、异常、风险 | `--erp-color-risk` | `--erp-color-risk-soft` | 只表示需要关注，不得把橙色当作支出色 |
+
+这套映射适用于 KPI、图表、表格、抽屉、徽章和通知。相同业务事实必须引用相同 Token；禁止在 Feature 内为同一含义创建新的颜色别名。颜色不能作为唯一信息，必须同时提供文字、符号、图例或可访问名称。应收/应付、未付款等“尚未完成”的状态可以使用风险色，但实际发生的收入、支出仍必须使用收入/支出色。
 
 ### 全局层级契约
 
@@ -47,9 +61,17 @@ UI 不读取业务状态；Common 不读取具体 Feature 数据；Domain 不直
 
 ## 4. 页面骨架与业务框架
 
-App Shell 和 Design Token 是全局统一的；页面工作方式通过业务框架区分。统一入口包括 `ErpListPageFrame`、`ErpTransactionPageFrame`、`ErpWarehousePageFrame`、`ErpFinancePageFrame`、`ErpAnalyticsPageFrame`、`ErpCrmPageFrame`，Dashboard 页面继续使用 `DashboardShell`。
+App Shell 和 Design Token 是全局统一的；页面工作方式通过业务框架区分。统一入口包括 `ErpListPageFrame`、`ErpTransactionPageFrame`、`ErpWarehousePageFrame`、`ErpFinancePageFrame`、`ErpAnalyticsPageFrame`、`ErpCrmPageFrame` 和 `ErpDashboardPageFrame`。`DashboardShell` 仅保留为兼容导出，禁止新正式页面继续使用。
 
 业务框架位于 `src/components/common/ErpPageFrames.tsx`。它们只负责页面宽度、间距、区域语义和响应式排布，不规定业务内容，也不替代 Feature 内的 API、权限或表单逻辑。
+
+正式页面的一级区域契约为：
+
+```text
+ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageToolbar（可选）→ ErpPageContent
+```
+
+列表筛选必须进入 `ErpPageToolbar`；表格、看板、表单和详情主体必须进入 `ErpPageContent`。页面可以保留业务专属的上下文、页签和抽屉，但不得再创建平行的 Page Shell。
 
 `MainRegion` 支持 `full`、`70-30`、`60-40`、`50-50`，只规定区域权重，不规定业务内容。`BottomRegion` 没有内容时不渲染空容器。交易页使用 `ErpTransactionColumns`、`ErpTransactionPrimary` 和 `ErpTransactionSecondary`，不再借用 Dashboard 的指标区语义。
 
