@@ -115,24 +115,29 @@ function searchInventory(state: CopilotToolState, args: Record<string, unknown>)
   const keyword = textValue(args.keyword || args.query);
   const minStorageDays = Math.max(0, numberValue(args.minStorageDays || args.days, 0));
   const status = textValue(args.status);
+  const businessDate = storeDate();
+  const ageDays = (card: CardInventory) => storeDateDiffDays(card.entryTime, businessDate);
   const rows = activeInventory(state)
     .filter(card => !keyword || matchesKeyword([card.id, card.sn, card.productName, card.model, card.brand, card.version, card.supplierName, card.warehouseLocation], keyword))
-    .filter(card => !minStorageDays || storeDateDiffDays(card.entryTime) >= minStorageDays)
+    .filter(card => !minStorageDays || ageDays(card) >= minStorageDays)
     .filter(card => !status || card.status === status || (status === "可售" && ["已入库", "已上架"].includes(card.status)))
-    .sort((left, right) => (right.storageDays || 0) - (left.storageDays || 0))
+    .sort((left, right) => ageDays(right) - ageDays(left))
     .slice(0, safeLimit(args.limit))
-    .map(card => ({
-      id: card.id,
-      productName: card.productName,
-      model: card.model,
-      sn: card.sn,
-      storageDays: card.storageDays,
-      costPrice: money(card.costPrice),
-      estSellPrice: money(card.estSellPrice || card.marketPrice),
-      status: card.status,
-      location: card.warehouseLocation,
-      risk: card.gpuRisk || (card.marketPrice > 0 && card.marketPrice < card.costPrice) || card.storageDays >= 45,
-    }));
+    .map(card => {
+      const storageDays = ageDays(card);
+      return {
+        id: card.id,
+        productName: card.productName,
+        model: card.model,
+        sn: card.sn,
+        storageDays,
+        costPrice: money(card.costPrice),
+        estSellPrice: money(card.estSellPrice || card.marketPrice),
+        status: card.status,
+        location: card.warehouseLocation,
+        risk: card.gpuRisk || (card.marketPrice > 0 && card.marketPrice < card.costPrice) || storageDays >= 45,
+      };
+    });
 
   if (!rows.length) return emptyResult("searchInventory", "没有匹配库存", keyword ? `没有找到与“${keyword}”匹配的库存。` : "当前条件下没有可用库存。");
   const agedCount = rows.filter(row => Number(row.storageDays) >= 45).length;

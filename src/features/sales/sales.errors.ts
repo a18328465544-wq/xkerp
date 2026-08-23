@@ -51,3 +51,20 @@ export function salesSubmitErrorMessage(error: unknown) {
   }
   return error instanceof Error ? error.message : "请求失败，请稍后重试";
 }
+
+function firstValidationMessage(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const recordValue = value as Record<string, unknown>;
+  if (typeof recordValue.message === "string" && recordValue.message.trim()) return recordValue.message;
+  for (const child of Object.values(recordValue)) {
+    const message = firstValidationMessage(child);
+    if (message) return message;
+  }
+  return undefined;
+}
+
+/** Surfaces resolver failures that otherwise never enter the submit mutation. */
+export function salesFormValidationMessage(errors: unknown) {
+  const message = firstValidationMessage(errors);
+  return message ? `请先完善销售单信息：${message}` : "请先完善销售单信息";
+}

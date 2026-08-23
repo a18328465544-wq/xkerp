@@ -229,7 +229,9 @@ export function adaptSalesCustomer(dto: SalesCustomerDto): SalesCustomerOption {
   const legacyCustomer = legacyRecord(dto, "legacyCustomer");
   const legacyVendor = legacyRecord(dto, "legacyVendor");
   const roles = Array.isArray(dto.roles) ? dto.roles.filter((item): item is string => typeof item === "string") : [];
-  const partnerType: SalesPartnerType = roles.includes("vendor") || Boolean(legacyVendor) ? "vendor" : "customer";
+  const hasCustomerRole = roles.includes("customer") || Boolean(legacyCustomer);
+  const hasVendorRole = roles.includes("vendor") || roles.includes("supplier") || Boolean(legacyVendor);
+  const partnerType: SalesPartnerType = hasCustomerRole ? "customer" : hasVendorRole ? "vendor" : "customer";
   const legacy = partnerType === "vendor" ? legacyVendor : legacyCustomer;
   const id = text(legacy?.id || dto.id);
   const phone = text(dto.primaryPhone || legacy?.phone || legacy?.contact);

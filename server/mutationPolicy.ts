@@ -1,5 +1,7 @@
 const stateMutationRoutePatterns = [
   /^\/api\/finance\/(?:commission-rules|daily-closing)$/,
+  /^\/api\/ai\/insights\/refresh$/,
+  /^\/api\/ai\/insight-actions\/[^/]+$/,
   /^\/api\/open\/inventory\/(?:scan-in|scan-out|relocate)$/,
   /^\/api\/open\/prices\/sync-est-sell$/,
   /^\/api\/users(?:\/[^/]+)?$/,
@@ -32,7 +34,7 @@ const stateSnapshotRoutePatterns = [
 ];
 
 function normalizedPath(originalUrl: string) {
-  return originalUrl.split("?", 1)[0].replace(/\/$/, "") || "/";
+  return (originalUrl.split("?", 1)[0] ?? "").replace(/\/$/, "") || "/";
 }
 
 export function isStateMutationPath(method: string, originalUrl: string) {

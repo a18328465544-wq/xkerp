@@ -1,5 +1,6 @@
 import type {InventoryItemDto, InventoryPageResponseDto, InventorySummaryResponseDto, InventorySummaryRowDto} from "../dto/inventory.dto";
 import type {InventoryListItem, InventoryListResult, InventoryModelSummary, InventoryPageMeta, InventorySummary, InventoryStatusValue} from "@/src/types/inventory";
+import {storeDateDiffDays} from "@/src/utils/storeTime";
 
 const inventoryStatuses: readonly InventoryStatusValue[] = [
   "待检测", "检测中", "已入库", "已上架", "已锁定", "已售出", "已拆卸", "已组装", "退货中", "已退货", "售后中", "维修中", "已报废",
@@ -42,6 +43,7 @@ export function adaptInventoryItem(dto: InventoryItemDto, permissions: {showCost
   const inventoryStatus = statusValue(dto.status);
   const imageUrls = Array.isArray(dto.imageUrls) ? dto.imageUrls : [];
   const imageUrl = typeof imageUrls[0] === "string" ? imageUrls[0] : undefined;
+  const entryTime = text(dto.entryTime);
   return {
     id: text(dto.id),
     productId: text(dto.productId),
@@ -62,8 +64,9 @@ export function adaptInventoryItem(dto: InventoryItemDto, permissions: {showCost
     estimatedSellPrice: sell,
     marketPrice: market,
     estimatedProfit: canShowProfit && cost !== undefined && sell !== undefined ? sell - cost : undefined,
-    entryTime: text(dto.entryTime),
-    inventoryDays: numberValue(dto.storageDays),
+    entryTime,
+    // 入库日期是库龄的唯一依据。storageDays 仅作为没有可解析日期的历史数据兜底。
+    inventoryDays: entryTime ? storeDateDiffDays(entryTime) : Math.max(0, Math.floor(numberValue(dto.storageDays))),
     inWarranty: booleanValue(dto.inWarranty),
     warrantyDate: text(dto.warrantyDate) || undefined,
     repaired: booleanValue(dto.repaired),

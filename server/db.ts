@@ -21,6 +21,7 @@ const enqueueStateSave = createResilientQueue();
 let processWriteLockDepth = 0;
 
 const STATE_WRITE_LOCK_KEY = "gpu_erp_state_write";
+const AUTH_WRITE_LOCK_KEY = "gpu_erp_auth_write";
 
 type CollectionKey = Exclude<keyof AppState, "currentRole" | "customPermissions" | "currentUserId">;
 export type StateCollectionKey = CollectionKey;
@@ -417,10 +418,14 @@ async function upgradePersistedUserPasswords(client: PoolClient) {
   const result = await client.query<{ id: string; data: SystemUserAccount }>("SELECT id, data FROM gpu_system_users");
   const upgrades = result.rows
     .filter((row) => row.data?.password && !isPasswordHash(row.data.password))
-    .map((row) => ({
-      id: row.id,
-      json: JSON.stringify({ ...row.data, password: hashPassword(row.data.password) }),
-    }));
+    .map((row) => {
+      const password = row.data?.password;
+      return password ? {
+        id: row.id,
+        json: JSON.stringify({ ...row.data, password: hashPassword(password) }),
+      } : null;
+    })
+    .filter((row): row is { id: string; json: string } => Boolean(row));
   if (upgrades.length) await bulkUpsertRows(client, "gpu_system_users", upgrades);
 }
 
@@ -560,18 +565,18 @@ function waitForAdvisoryLockRetry(signal?: AbortSignal) {
   });
 }
 
-async function acquireAdvisoryLock(client: PoolClient, signal?: AbortSignal) {
+async function acquireAdvisoryLock(client: PoolClient, signal: AbortSignal | undefined, lockKey: string) {
   // pg_advisory_lock blocks inside the driver and cannot observe a disconnected HTTP
   // request. Try-lock polling lets the mutation runner cancel queued work safely.
   while (true) {
     if (signal?.aborted) throw mutationAbortError();
     const result = await client.query<{ acquired: boolean }>(
       "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired",
-      [STATE_WRITE_LOCK_KEY],
+      [lockKey],
     );
     if (result.rows[0]?.acquired) {
       if (signal?.aborted) {
-        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
+        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
         throw mutationAbortError();
       }
       return;
@@ -588,7 +593,7 @@ export async function acquireStateWriteLock(signal?: AbortSignal): Promise<() =>
   await initializePostgres();
   const client = await getPool().connect();
   try {
-    await acquireAdvisoryLock(client, signal);
+    await acquireAdvisoryLock(client, signal, STATE_WRITE_LOCK_KEY);
     processWriteLockDepth += 1;
   } catch (error) {
     client.release();
@@ -603,6 +608,34 @@ export async function acquireStateWriteLock(signal?: AbortSignal): Promise<() =>
       await client.query("SELECT pg_advisory_unlock(hashtext($1))", [STATE_WRITE_LOCK_KEY]);
     } finally {
       processWriteLockDepth = Math.max(0, processWriteLockDepth - 1);
+      client.release();
+    }
+  };
+}
+
+/**
+ * Auth persistence has a separate lock from business mutations. Login/logout update
+ * account and audit rows, but must not join the business mutation queue: an auth burst
+ * should serialize against itself without making unrelated inventory/finance writes wait.
+ */
+export async function acquireAuthWriteLock(signal?: AbortSignal): Promise<() => Promise<void>> {
+  if (signal?.aborted) throw mutationAbortError();
+  await initializePostgres();
+  const client = await getPool().connect();
+  try {
+    await acquireAdvisoryLock(client, signal, AUTH_WRITE_LOCK_KEY);
+  } catch (error) {
+    client.release();
+    throw error;
+  }
+
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    try {
+      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [AUTH_WRITE_LOCK_KEY]);
+    } finally {
       client.release();
     }
   };
@@ -684,6 +717,7 @@ export async function saveAiInsightAction(record: Omit<AiInsightActionRecord, "u
     [record.insightId, record.status, record.updatedBy],
   );
   const row = result.rows[0];
+  if (!row) throw new Error("AI insight action insert returned no row");
   return { insightId: row.insight_id, status: row.status, updatedBy: row.updated_by, updatedAt: row.updated_at.toISOString() };
 }
 
@@ -735,6 +769,11 @@ function normalizedPage(value: number | undefined, fallback: number) {
   return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed || fallback)) : fallback;
 }
 
+// 库龄是入库日期相对于门店当前营业日的派生值，不能依赖库存 JSON
+// 中历史写入的 storageDays 快照。所有 PostgreSQL 库存列表查询都使用这条表达式，
+// 这样排序、筛选和返回给前端的数值保持同一口径。
+const inventoryStorageDaysExpression = `GREATEST(CASE WHEN LEFT(COALESCE(data->>'entryTime', ''), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date - LEFT(data->>'entryTime', 10)::date ELSE 0 END, 0)`;
+
 export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
   const page = normalizedPage(filters.page, 1);
   const pageSize = Math.min(200, normalizedPage(filters.pageSize, 20));
@@ -784,7 +823,7 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     cost: "COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
     costPrice: "COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
     profit: "COALESCE(NULLIF(data->>'estSellPrice', '')::numeric, 0) - COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
-    days: "CASE WHEN LEFT(COALESCE(data->>'entryTime', ''), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date - LEFT(data->>'entryTime', 10)::date END",
+    days: inventoryStorageDaysExpression,
     status: "data->>'status'",
     warehouseLocation: "data->>'warehouseLocation'",
     entryTime: "data->>'entryTime'",
@@ -801,6 +840,7 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     values,
     where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
     orderBy,
+    select: `data || jsonb_build_object('storageDays', ${inventoryStorageDaysExpression}) AS data`,
   };
 }
 
@@ -809,10 +849,10 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
 // row just to return one page.
 export async function queryInventoryPage<T = unknown>(filters: InventoryPageFilters = {}): Promise<CollectionPage<T>> {
   await initializePostgres();
-  const { page, pageSize, offset, where, orderBy, values } = buildInventoryPageQuery(filters);
+  const { page, pageSize, offset, where, orderBy, values, select } = buildInventoryPageQuery(filters);
   const [rows, count] = await Promise.all([
     getPool().query<{ data: T }>(
-      `SELECT data FROM gpu_inventory ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      `SELECT ${select} FROM gpu_inventory ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, pageSize, offset],
     ),
     getPool().query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM gpu_inventory ${where}`, values),

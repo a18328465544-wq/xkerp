@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gpu_erp_test
+          POSTGRES_PASSWORD: gpu_erp_test_password
+          POSTGRES_DB: gpu_erp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gpu_erp_test -d gpu_erp_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck frontend
+        run: npm run typecheck
+      - name: Typecheck server
+        run: npm run typecheck:server
+      - name: Lint and architecture checks
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Release traceability check
+        run: npm run check:release
+      - name: Backend HTTP integration tests
+        env:
+          NODE_ENV: test
+          TEST_DATABASE_URL: postgresql://gpu_erp_test:gpu_erp_test_password@127.0.0.1:5432/gpu_erp_test
+          TEST_DATABASE_SSL: "false"
+          POSTGRES_IMPORT_LEGACY_JSON: "false"
+          RUN_BACKEND_HTTP_TESTS: "1"
+          BACKEND_TEST_USERNAME: admin
+          BACKEND_TEST_PASSWORD: admin123
+        run: npm run test:backend-http

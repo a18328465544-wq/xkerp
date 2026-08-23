@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# 将最新 PostgreSQL custom dump 恢复到明确隔离的演练数据库，并执行基本可读性校验。
+# 该脚本会清理目标数据库内的对象；必须显式确认，且严禁指向 DATABASE_URL。
+set -Eeuo pipefail
+umask 077
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${APP_DIR}/.env"
+BACKUP_DIR="${BACKUP_DIR:-${APP_DIR}/../gpu-erp-backups}"
+
+if [[ ! -r "${ENV_FILE}" ]]; then
+  echo "[restore-drill] 无法读取环境文件: ${ENV_FILE}" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+set -a
+source "${ENV_FILE}"
+set +a
+
+if [[ "${RESTORE_DRILL_CONFIRM:-}" != "I_UNDERSTAND_ISOLATED_DATABASE" ]]; then
+  echo "[restore-drill] 请设置 RESTORE_DRILL_CONFIRM=I_UNDERSTAND_ISOLATED_DATABASE" >&2
+  exit 1
+fi
+if [[ -z "${DATABASE_URL:-}" || -z "${RESTORE_TEST_DATABASE_URL:-}" ]]; then
+  echo "[restore-drill] DATABASE_URL 和 RESTORE_TEST_DATABASE_URL 都必须配置" >&2
+  exit 1
+fi
+if [[ "${DATABASE_URL}" == "${RESTORE_TEST_DATABASE_URL}" ]]; then
+  echo "[restore-drill] 拒绝把生产数据库作为恢复目标" >&2
+  exit 1
+fi
+
+command -v pg_restore >/dev/null || { echo "[restore-drill] 未安装 pg_restore" >&2; exit 1; }
+command -v psql >/dev/null || { echo "[restore-drill] 未安装 psql" >&2; exit 1; }
+
+DUMP_FILE="${1:-}"
+if [[ -z "${DUMP_FILE}" ]]; then
+  DUMP_FILE="$(find "${BACKUP_DIR}" -maxdepth 1 -type f -name 'gpu_erp_*.dump' -print | sort | tail -n 1)"
+fi
+if [[ -z "${DUMP_FILE}" || ! -f "${DUMP_FILE}" ]]; then
+  echo "[restore-drill] 没有找到可恢复的 dump 文件" >&2
+  exit 1
+fi
+
+pg_restore --list "${DUMP_FILE}" >/dev/null
+pg_restore \
+  --exit-on-error \
+  --single-transaction \
+  --clean \
+  --if-exists \
+  --no-owner \
+  --no-privileges \
+  --dbname="${RESTORE_TEST_DATABASE_URL}" \
+  "${DUMP_FILE}"
+
+psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT 1" >/dev/null
+echo "[restore-drill] 恢复演练通过: ${DUMP_FILE}"

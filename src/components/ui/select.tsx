@@ -125,8 +125,8 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
         </div>
       </BaseCombobox.InputGroup>
       <BaseCombobox.Portal>
-        <BaseCombobox.Positioner className="erp-popover-layer max-w-[calc(100vw-2rem)] outline-none" sideOffset={4} align="start">
-          <BaseCombobox.Popup className="w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
+        <BaseCombobox.Positioner className="erp-popover-layer erp-option-positioner max-w-[calc(100vw-2rem)] outline-none" sideOffset={4} align="start">
+          <BaseCombobox.Popup className="erp-option-popup w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
             {quickCreateAction ? <div className="mb-0.5 flex min-h-8 items-center justify-between gap-2 border-b border-[var(--erp-color-border)] px-2 py-1"><span className="text-[11px] font-semibold text-[var(--erp-color-text-muted)]">快捷新建</span><Button type="button" size="sm" variant="ghost" disabled={quickCreateAction.disabled} className="h-7 px-2" onClick={() => {const query = searchText.trim(); setSearchOpen(false); setSearchText(""); onSearchValueChange?.(""); quickCreateAction.onClick(query);}}><Plus className="h-3.5 w-3.5" />{quickCreateAction.label}</Button></div> : null}
             {searchLoading ? <div className="px-3 py-4 text-center text-xs text-[var(--erp-color-text-muted)]" role="status">正在搜索…</div> : null}
             {!searchLoading ? <BaseCombobox.Empty>
@@ -172,8 +172,8 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
       </BaseSelect.Icon>
     </BaseSelect.Trigger>
     <BaseSelect.Portal>
-      <BaseSelect.Positioner className="erp-popover-layer outline-none" sideOffset={4}>
-        <BaseSelect.Popup className="min-w-[var(--anchor-width)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
+      <BaseSelect.Positioner className="erp-popover-layer erp-option-positioner outline-none" sideOffset={4}>
+        <BaseSelect.Popup className="erp-option-popup min-w-[var(--anchor-width)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
           <BaseSelect.List className="erp-scrollbar max-h-[min(18rem,var(--available-height))] overflow-y-auto">
             {options.map((option) => <BaseSelect.Item
               key={option.value}

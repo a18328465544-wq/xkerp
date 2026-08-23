@@ -4,9 +4,16 @@ import {toSalesCustomerQueryParams, toSalesInventoryQueryParams} from "./sales";
 
 test("sales customer query uses server paging and keyword contract", () => {
   const params = toSalesCustomerQueryParams(" 张三 ", 2, 20);
+  assert.equal(params.get("role"), "customer");
   assert.equal(params.get("keyword"), "张三");
   assert.equal(params.get("page"), "2");
   assert.equal(params.get("pageSize"), "20");
+});
+
+test("sales customer picker requests the bounded full first page", () => {
+  const params = toSalesCustomerQueryParams("", 1, 200);
+  assert.equal(params.get("role"), "customer");
+  assert.equal(params.get("pageSize"), "200");
 });
 
 test("sales inventory query requests only active candidates", () => {
@@ -16,4 +23,3 @@ test("sales inventory query requests only active candidates", () => {
   assert.equal(params.get("keyword"), "SN-1");
   assert.equal(params.get("sortKey"), "entryTime");
 });
-

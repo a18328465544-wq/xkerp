@@ -34,6 +34,8 @@ export function adaptCrmAccount(value: unknown): CrmAccount {
   const legacy = record(dto.legacyCustomer);
   const legacyStatus = optionalText(legacy.crmStatus);
   const normalizedStatus = text(dto.status, "active");
+  const rawLevel = optionalText(dto.level) || optionalText(legacy.level) || optionalText(legacy.suggestedLevel);
+  const isCoreCustomer = legacy.isCoreCustomer === true || rawLevel === "S级";
   return {
     id: text(dto.id),
     legacyCustomerId: optionalText(legacy.id),
@@ -42,8 +44,8 @@ export function adaptCrmAccount(value: unknown): CrmAccount {
     businessStatus: legacyStatus || (numberValue(legacy.buyCount) > 0 ? "已成交" : "线索"),
     normalizedStatus,
     stage: optionalText(legacy.crmStage),
-    level: optionalText(dto.level) || optionalText(legacy.level) || optionalText(legacy.suggestedLevel),
-    isCoreCustomer: legacy.isCoreCustomer === true,
+    level: isCoreCustomer ? "S级" : rawLevel,
+    isCoreCustomer,
     owner: optionalText(dto.ownerId) || optionalText(legacy.owner),
     intent: optionalText(legacy.intent),
     source: optionalText(dto.source) || optionalText(legacy.source),

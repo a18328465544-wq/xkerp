@@ -66,8 +66,8 @@ export function AppHeader() {
                 <UserRound className="h-4 w-4" />
               </BasePopover.Trigger>
               <BasePopover.Portal>
-                <BasePopover.Positioner className="erp-popover-layer outline-none" sideOffset={6} align="end">
-                  <BasePopover.Popup className="w-52 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1.5 shadow-[var(--erp-shadow-popover)] outline-none">
+                <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="end">
+                  <BasePopover.Popup className="erp-popover-surface w-52 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1.5 shadow-[var(--erp-shadow-popover)] outline-none">
                     <Button type="button" variant="ghost" className="w-full justify-start" onClick={() => { setAiDrawerOpen(true); setAccountOpen(false); }}>
                       <Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />
                       AI 助手

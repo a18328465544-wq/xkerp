@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import { acquireStateWriteLock, createDatabaseSessionStore, createManualBackup, dataFilePath, deleteAiInsightAction, findInventoryRecord, findInventoryRecordBySn, getDailyClosing, getStateRevision, listAiInsightActions, listBackups, listDailyClosings, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveDailyClosing, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
+import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, createManualBackup, dataFilePath, deleteAiInsightAction, findInventoryRecord, findInventoryRecordBySn, getDailyClosing, getStateRevision, listAiInsightActions, listBackups, listDailyClosings, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveDailyClosing, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
 import { buildExport } from "./export.ts";
@@ -47,7 +47,7 @@ import {
   isInventoryCardLinkedToPurchase,
   ledgerItemMatchesSelectedInventoryCards,
 } from "./productLedger.ts";
-import { storeDate, storeDateTime } from "../src/utils/storeTime.ts";
+import { storeDate, storeDateDiffDays, storeDateTime } from "../src/utils/storeTime.ts";
 import {addDateDays, startOfMonth} from "../src/lib/dateRangePickerUtils.ts";
 import { matchesKeyword, normalizeSearchText } from "../src/utils/search.ts";
 import { isInventoryLinkedToAssembly, isInventoryLinkedToPurchase } from "../src/utils/inventoryRelations.ts";
@@ -55,6 +55,7 @@ import { createProductIdentityIndex, sameProductIdentity } from "../src/utils/pr
 import { listCrmAccounts, listCrmTimeline } from "./crmRepository.ts";
 import { ensureCrmCustomerAccount, upsertCrmCustomerAccount } from "./crmAccountRepository.ts";
 import { createSerializedMutationRunner, isMutationAbortedError } from "./mutationQueue.ts";
+import { createAuthMutationRunner } from "./authMutation.ts";
 import { requiresStateSerialization } from "./mutationPolicy.ts";
 import { redactRequestPath, safeErrorMessage } from "./observability.ts";
 import { syncCrmFollowUp, syncCrmQuote, syncCrmRequirement } from "./crmCommandRepository.ts";
@@ -120,7 +121,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use((req, _res, next) => {
   // Liveness must remain useful while PostgreSQL is unavailable. Authenticated and
   // business routes still initialize state before reaching their handlers.
-  if (req.path === "/api/health") {
+  if (req.path === "/api/health" || req.path === "/api/ready") {
     next();
     return;
   }
@@ -179,6 +180,13 @@ const runSerializedStateMutation = createSerializedMutationRunner(
   },
 );
 
+const runSerializedAuthMutation = createAuthMutationRunner(
+  acquireAuthWriteLock,
+  async () => {
+    await reloadStateFromDatabase();
+  },
+);
+
 function createMutationRequestSignal(req: express.Request, res: express.Response) {
   const controller = new AbortController();
   let responseFinished = false;
@@ -230,6 +238,20 @@ async function withStateMutation<T>(req: AuthRequest | undefined, res: express.R
     }, { signal: requestSignal?.signal });
   } finally {
     requestSignal?.dispose();
+  }
+}
+
+async function withAuthMutation<T>(req: AuthRequest, res: express.Response, operation: () => T | PromiseLike<T>) {
+  const requestSignal = createMutationRequestSignal(req, res);
+  try {
+    return await runSerializedAuthMutation(async () => {
+      // Login/logout only need these two collections. Refresh them while holding the
+      // auth lock so two processes cannot calculate audit/account writes from stale rows.
+      state = await loadStateCollections(state, ["systemUsers", "logs"]);
+      return operation();
+    }, { signal: requestSignal.signal });
+  } finally {
+    requestSignal.dispose();
   }
 }
 
@@ -295,6 +317,7 @@ function sendApiError(
 
 function isPublicApiPath(pathname: string) {
   return pathname === "/api/health"
+    || pathname === "/api/ready"
     || /^\/api\/auth\/login\/?$/.test(pathname)
     || pathname.startsWith("/api/open/");
 }
@@ -786,7 +809,11 @@ function aftersalesMerge(record: { id: string; sn: string; customerId?: string; 
 
 function sanitizeInventoryRowsForUser(inventory: CardInventory[], user?: SystemUserAccount) {
   const permissions = getPermissionsForUser(user);
-  return permissions.showCost ? inventory : inventory.map((item) => ({ ...item, costPrice: 0 }));
+  const currentInventory = inventory.map((item) => ({
+    ...item,
+    storageDays: storeDateDiffDays(item.entryTime),
+  }));
+  return permissions.showCost ? currentInventory : currentInventory.map((item) => ({ ...item, costPrice: 0 }));
 }
 
 function productTemplateMerge(req: AuthRequest, products: ProductTemplate | ProductTemplate[] | null) {
@@ -910,6 +937,16 @@ function asyncRoute(handler: express.RequestHandler): express.RequestHandler {
   };
 }
 
+function authMutationRoute(handler: express.RequestHandler): express.RequestHandler {
+  return (req, res, next) => {
+    const operation = withAuthMutation(req as AuthRequest, res, () => handler(req, res, next));
+    operation.catch((error) => {
+      if (isMutationAbortedError(error) && (req.destroyed || res.destroyed || res.writableEnded)) return;
+      next(error);
+    });
+  };
+}
+
 function mutationRoute(handler: express.RequestHandler): express.RequestHandler {
   return (req, res, next) => {
     void withStateMutation(req as AuthRequest, res, () => handler(req, res, next)).catch((error) => {
@@ -949,7 +986,7 @@ function openInventoryItem(card: AppState["inventory"][number]) {
     fullBox: card.fullBox,
     warehouseLocation: card.warehouseLocation,
     entryTime: card.entryTime,
-    storageDays: card.storageDays,
+    storageDays: storeDateDiffDays(card.entryTime),
     remarks: card.remarks,
     salesPrice: card.salesPrice,
     salesTime: card.salesTime,
@@ -1356,6 +1393,20 @@ app.get("/api/health", (_req, res) => {
   res.json({ data: { ok: true, dataFile: dataFilePath } });
 });
 
+// Liveness and readiness are intentionally separate. The process can be alive while
+// PostgreSQL is unavailable; orchestration should only send traffic after state and
+// migrations have initialized successfully.
+app.get("/api/ready", (req, res) => {
+  void ensureStateReady()
+    .then(() => {
+      res.json({ data: { ok: true, stateRevision } });
+    })
+    .catch((error) => {
+      logRequestError(req, error, "SERVICE_NOT_READY");
+      sendApiError(req, res, 503, "SERVICE_NOT_READY", "服务尚未就绪，请稍后重试");
+    });
+});
+
 app.get("/api/finance/daily-closing", requireMenu("finance"), asyncRoute(async (req: AuthRequest, res) => {
   const date = String(req.query.date || storeDate());
   // 日结查询只需要一条快照，不能随通用响应附带完整经营状态。
@@ -1407,7 +1458,7 @@ app.post("/api/finance/daily-closing", requireMenu("finance"), asyncRoute(async 
   res.status(201).json({ data: saved });
 }));
 
-app.post("/api/auth/login", loginRateLimiter, asyncRoute(async (req, res) => {
+app.post("/api/auth/login", loginRateLimiter, authMutationRoute(async (req, res) => {
   try {
 	    // Login only needs a current account record. Loading every order, log and ledger row here
 	    // made a normal sign-in slower as the audit trail grew.
@@ -1453,7 +1504,7 @@ openInventoryRouter.get("/items", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
-  const card = await findInventoryRecord<CardInventory>(req.params.id);
+  const card = await findInventoryRecord<CardInventory>(req.params.id!);
   if (!card) {
     sendApiError(req, res, 404, "INVENTORY_NOT_FOUND", "库存档案不存在");
     return;
@@ -1462,7 +1513,7 @@ openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.get("/by-sn/:sn", asyncRoute(async (req, res) => {
-  const card = await findInventoryRecordBySn<CardInventory>(req.params.sn.trim());
+  const card = await findInventoryRecordBySn<CardInventory>(req.params.sn!.trim());
   if (!card) {
     sendApiError(req, res, 404, "INVENTORY_SN_NOT_FOUND", "未找到该 SN 对应库存");
     return;
@@ -1641,7 +1692,7 @@ app.post("/api/ai/copilot", requireAnyMenu(copilotMenuIds), async (req: AuthRequ
     const item = message && typeof message === "object" ? message as Record<string, unknown> : {};
     const role = item.role === "assistant" || item.role === "tool" ? item.role : "user";
     return { role, content: String(item.content || "").slice(0, 6000), toolName: item.toolName ? String(item.toolName).slice(0, 80) : undefined };
-  }).filter(message => message.content || message.role !== "user");
+  }).filter((message: CopilotMessage) => message.content || message.role !== "user");
   const rawContext = req.body?.context && typeof req.body.context === "object" ? req.body.context as Record<string, unknown> : {};
   const context: CopilotContext = {
     currentTab: String(rawContext.currentTab || "dashboard").slice(0, 80),
@@ -1695,7 +1746,7 @@ app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), 
   res.json({ data: await saveAiInsightAction({ insightId, status, updatedBy: crmActor(req) }) });
 }));
 
-app.post("/api/auth/logout", asyncRoute(async (req: AuthRequest, res) => {
+app.post("/api/auth/logout", authMutationRoute(async (req: AuthRequest, res) => {
   try {
     await sessions.revoke(req.authToken);
     const result = actions(req).logout();
@@ -1717,7 +1768,7 @@ app.post("/api/users", requireBoss, requireMenu("permissions"), asyncRoute(async
 }));
 
 app.put("/api/users/:id", requireBoss, requireMenu("permissions"), asyncRoute(async (req, res) => {
-  res.json(ok(await persistRequest(req, actions(req).updateUser(req.params.id, req.body))));
+  res.json(ok(await persistRequest(req, actions(req).updateUser(req.params.id!, req.body))));
 }));
 
 app.get("/api/gpu_erp/finance/settlement-accounts", requireMenu("settlement_accounts"), (req, res) => {
@@ -1734,14 +1785,14 @@ app.post("/api/gpu_erp/finance/settlement-account/create", requireMenu("settleme
 
 app.patch("/api/gpu_erp/finance/settlement-account/:id/reconcile", requireMenu("settlement_accounts"), asyncRoute(async (req: AuthRequest, res) => {
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).reconcileSettlementAccount(req.params.id, req.body?.actualBalance, req.authUser?.displayName || req.authUser?.username),
+    () => actions(req).reconcileSettlementAccount(req.params.id!, req.body?.actualBalance, req.authUser?.displayName || req.authUser?.username),
     (record) => ({ stateMerge: simpleRecordCreateMerge("settlementAccounts", record) }),
   );
   res.json(okMerge(updated, stateMerge));
 }));
 
 app.delete("/api/gpu_erp/finance/settlement-account/:id", requireMenu("settlement_accounts"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const deleted = actions(req).deleteSettlementAccount(req.params.id);
+  const deleted = actions(req).deleteSettlementAccount(req.params.id!);
   const stateMerge = deleteMerge();
   const stateDelete = { settlementAccounts: deleted?.id ? [deleted.id] : [] };
   await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
@@ -1816,7 +1867,7 @@ app.post("/api/gpu_erp/finance/payment-in/create", requireMenu("payment_in"), as
 
 app.put("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), asyncRoute(async (req, res) => {
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updatePaymentIn(req.params.id, withoutImagePayload(req.body) as any),
+    () => actions(req).updatePaymentIn(req.params.id!, withoutImagePayload(req.body) as any),
     paymentInMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "payment_in", record.id, "payment-evidence");
@@ -1827,8 +1878,8 @@ app.put("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), asyncR
 }));
 
 app.delete("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const existing = state.paymentInRecords.find((item) => item.id === req.params.id);
-  const deleted = actions(req).deletePaymentIn(req.params.id);
+  const existing = state.paymentInRecords.find((item) => item.id === req.params.id!);
+  const deleted = actions(req).deletePaymentIn(req.params.id!);
   const relatedDocNos = new Set([existing?.id, existing?.relatedDocNo, deleted?.id, deleted?.relatedDocNo].filter(Boolean));
   const stateMerge = compactStateMerge({
     settlementAccounts: recordsByIds(state.settlementAccounts, [existing?.accountId, deleted?.accountId]),
@@ -1859,7 +1910,7 @@ app.post("/api/gpu_erp/finance/payment-out/create", requireMenu("payment_out"), 
 
 app.put("/api/gpu_erp/finance/payment-out/:id", requireMenu("payment_out"), asyncRoute(async (req, res) => {
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updatePaymentOut(req.params.id, withoutImagePayload(req.body) as any),
+    () => actions(req).updatePaymentOut(req.params.id!, withoutImagePayload(req.body) as any),
     paymentOutMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "payment_out", record.id, "payment-evidence");
@@ -1870,8 +1921,8 @@ app.put("/api/gpu_erp/finance/payment-out/:id", requireMenu("payment_out"), asyn
 }));
 
 app.delete("/api/gpu_erp/finance/payment-out/:id", requireMenu("payment_out"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const existing = state.paymentOutRecords.find((item) => item.id === req.params.id);
-  const deleted = actions(req).deletePaymentOut(req.params.id);
+  const existing = state.paymentOutRecords.find((item) => item.id === req.params.id!);
+  const deleted = actions(req).deletePaymentOut(req.params.id!);
   const relatedDocNos = new Set([existing?.id, existing?.relatedDocNo, deleted?.id, deleted?.relatedDocNo].filter(Boolean));
   const stateMerge = compactStateMerge({
     settlementAccounts: recordsByIds(state.settlementAccounts, [existing?.accountId, deleted?.accountId]),
@@ -1899,17 +1950,17 @@ app.post("/api/gpu_erp/finance/account-transfer/create", requireMenu("account_tr
 
 app.put("/api/gpu_erp/finance/account-transfer/:id", requireMenu("account_transfer"), asyncRoute(async (req, res) => {
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updateAccountTransfer(req.params.id, req.body),
+    () => actions(req).updateAccountTransfer(req.params.id!, req.body),
     accountTransferMerge,
   );
   res.json(okMerge(updated, stateMerge));
 }));
 
 app.delete("/api/gpu_erp/finance/account-transfer/:id", requireMenu("account_transfer"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const existing = state.accountTransfers.find((item) => item.id === req.params.id);
-  const settlementLedgerIds = state.settlementLedger.filter((item) => item.relatedDocNo === req.params.id).map((item) => item.id);
-  const financeLedgerIds = state.financeLedger.filter((item) => item.relatedId === req.params.id).map((item) => item.id);
-  const deleted = actions(req).deleteAccountTransfer(req.params.id);
+  const existing = state.accountTransfers.find((item) => item.id === req.params.id!);
+  const settlementLedgerIds = state.settlementLedger.filter((item) => item.relatedDocNo === req.params.id!).map((item) => item.id);
+  const financeLedgerIds = state.financeLedger.filter((item) => item.relatedId === req.params.id!).map((item) => item.id);
+  const deleted = actions(req).deleteAccountTransfer(req.params.id!);
   const stateMerge = compactStateMerge({
     settlementAccounts: recordsByIds(state.settlementAccounts, [existing?.fromAccountId, existing?.toAccountId, deleted?.fromAccountId, deleted?.toAccountId]),
     logs: state.logs.slice(0, 1),
@@ -1962,7 +2013,7 @@ app.get("/api/gpu_erp/crm/accounts", requireMenu("crm"), asyncRoute(async (req, 
 }));
 
 app.get("/api/gpu_erp/crm/accounts/:id/timeline", requireMenu("crm"), asyncRoute(async (req, res) => {
-  const result = await listCrmTimeline(req.params.id, {
+  const result = await listCrmTimeline(req.params.id!, {
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || req.query.per_page || 50),
   });
@@ -2011,8 +2062,9 @@ app.post("/api/gpu_erp/crm/quick-capture/confirm", requireMenu("crm"), asyncRout
   let customer: AppState["customers"][number];
   let createdCustomer: AppState["customers"][number] | null = null;
   if (input.matchAction === "link_existing") {
-    customer = state.customers.find(item => item.id === input.matchedCustomerId);
-    if (!customer) throw new QuickCaptureValidationError("要关联的客户不存在，请重新匹配", "CRM_QUICK_CAPTURE_CUSTOMER_NOT_FOUND", 404);
+    const matchedCustomer = state.customers.find(item => item.id === input.matchedCustomerId);
+    if (!matchedCustomer) throw new QuickCaptureValidationError("要关联的客户不存在，请重新匹配", "CRM_QUICK_CAPTURE_CUSTOMER_NOT_FOUND", 404);
+    customer = matchedCustomer;
   } else {
     const exactMatch = state.customers.find(item => {
       const phone = String(fields.phone || "").trim().toLowerCase();
@@ -2027,6 +2079,7 @@ app.post("/api/gpu_erp/crm/quick-capture/confirm", requireMenu("crm"), asyncRout
       throw new QuickCaptureValidationError(`联系方式已匹配客户【${exactMatch.name}】，请在预览中选择“关联已有客户”`, "CRM_QUICK_CAPTURE_MATCH_REQUIRED", 409);
     }
     const intent = fields.intentType === "回收" ? "高" : fields.priority === "高" ? "高" : fields.priority === "低" ? "低" : "中";
+    if (!fields.customerName) throw new QuickCaptureValidationError("客户名称不能为空", "CRM_QUICK_CAPTURE_CUSTOMER_NAME_REQUIRED", 400);
     createdCustomer = actions(req).createCustomer({
       name: fields.customerName,
       contact: fields.phone,
@@ -2198,7 +2251,7 @@ app.patch("/api/gpu_erp/crm/customer/:id", requireMenu("crm"), asyncRoute(async 
   // Customer ownership is a controlled assignment. Normal CRM users cannot silently
   // transfer a customer by submitting an owner field through the API.
   if (req.authUser?.role !== "老板") delete updates.owner;
-  const updated = actions(req).updateCrmCustomer(req.params.id, updates);
+  const updated = actions(req).updateCrmCustomer(req.params.id!, updates);
   const stateMerge = customerRecordMerge(updated);
   await saveStateRecords(
     stateMergeRecords(stateMerge),
@@ -2299,7 +2352,7 @@ app.put("/api/products/:id", requireMenu("products"), asyncRoute(async (req, res
 }));
 
 app.delete("/api/products/:id", requireMenu("products"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const deleted = actions(req).deleteProductTemplate(req.params.id);
+  const deleted = actions(req).deleteProductTemplate(req.params.id!);
   const stateMerge = deleteMerge();
   const stateDelete = { products: deleted?.id ? [deleted.id] : [] };
   await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
@@ -2337,7 +2390,7 @@ app.get("/api/media", requireAnyMenu(mediaMenuIds), asyncRoute(async (req, res) 
 }));
 
 app.get("/api/media/assets/:id", requireAnyMenu(mediaMenuIds), asyncRoute(async (req, res) => {
-  const asset = await getMediaAsset(req.params.id);
+  const asset = await getMediaAsset(req.params.id!);
   if (!asset) {
     sendApiError(req, res, 404, "MEDIA_NOT_FOUND", "图片资源不存在");
     return;
@@ -2362,11 +2415,11 @@ app.post("/api/purchase-invoices", requireMenu("purchase_add"), asyncRoute(async
 }));
 
 app.put("/api/purchase-invoices/:id", requireMenu("purchase_list"), asyncRoute(async (req, res) => {
-  const existing = state.purchaseInvoices.find((item) => item.id === req.params.id || item.invoiceNo === req.params.id);
+  const existing = state.purchaseInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
   const paymentsBeforeUpdate = existing ? relatedPurchasePayments(existing) : [];
   const financeBeforeUpdate = existing ? relatedPurchaseFinanceLedger(existing) : [];
   const { data: updated, stateMerge, stateDelete } = await runStateCommand(
-    () => actions(req).updatePurchaseInvoice(req.params.id, withoutImagePayload(req.body) as any),
+    () => actions(req).updatePurchaseInvoice(req.params.id!, withoutImagePayload(req.body) as any),
     (invoice) => purchaseInvoiceUpdatePatch(invoice, paymentsBeforeUpdate, financeBeforeUpdate),
     async (invoice) => {
       const urls = await persistEntityImages(req, "purchase_invoice", invoice.id, "purchase-evidence");
@@ -2378,7 +2431,7 @@ app.put("/api/purchase-invoices/:id", requireMenu("purchase_list"), asyncRoute(a
 }));
 
 app.delete("/api/purchase-invoices/:id", requireMenu("purchase_list"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const existing = state.purchaseInvoices.find((item) => item.id === req.params.id || item.invoiceNo === req.params.id);
+  const existing = state.purchaseInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
   const relatedCards = existing ? state.inventory.filter((card) => isInventoryLinkedToPurchase(card, existing)) : [];
   const relatedPayments = existing
     ? state.paymentOutRecords.filter((payment) => payment.relatedDocNo === existing.invoiceNo || payment.relatedDocNo === existing.id)
@@ -2386,7 +2439,7 @@ app.delete("/api/purchase-invoices/:id", requireMenu("purchase_list"), requireDe
   const relatedFinanceIds = state.financeLedger
     .filter((item) => existing && (item.relatedId === existing.invoiceNo || item.relatedId === existing.id))
     .map((item) => item.id);
-  const deleted = actions(req).deletePurchaseInvoice(req.params.id);
+  const deleted = actions(req).deletePurchaseInvoice(req.params.id!);
   const accountIds = relatedPayments.map((payment) => payment.accountId);
   const stateMerge = compactStateMerge({
     settlementAccounts: recordsByIds(state.settlementAccounts, accountIds),
@@ -2419,7 +2472,7 @@ app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req, 
 
 app.put("/api/inspections/:id", requireMenu("inspections"), asyncRoute(async (req, res) => {
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updateInspection(req.params.id, withoutImagePayload(req.body) as any),
+    () => actions(req).updateInspection(req.params.id!, withoutImagePayload(req.body) as any),
     inspectionMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
@@ -2456,9 +2509,9 @@ app.post("/api/assembly-operations", requireMenu("assembly"), asyncRoute(async (
 }));
 
 app.delete("/api/assembly-operations/:id", requireMenu("assembly"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const beforeIds = new Set(state.inventory.filter((item) => isInventoryLinkedToAssembly(item, req.params.id)).map((item) => item.id));
-  const beforeOperation = state.assemblyOperations.find((item) => item.id === req.params.id);
-  const deleted = actions(req).deleteAssemblyOperation(req.params.id);
+  const beforeIds = new Set(state.inventory.filter((item) => isInventoryLinkedToAssembly(item, req.params.id!)).map((item) => item.id));
+  const beforeOperation = state.assemblyOperations.find((item) => item.id === req.params.id!);
+  const deleted = actions(req).deleteAssemblyOperation(req.params.id!);
   const afterRelated = state.inventory.filter((item) => beforeIds.has(item.id));
   const afterIds = new Set(afterRelated.map((item) => item.id));
   const stateMerge = compactStateMerge({
@@ -2487,11 +2540,11 @@ app.post("/api/sales-invoices", requireMenu("sales_add"), asyncRoute(async (req,
 }));
 
 app.put("/api/sales-invoices/:id", requireMenu("sales_list"), asyncRoute(async (req, res) => {
-  const existing = state.salesInvoices.find((item) => item.id === req.params.id || item.invoiceNo === req.params.id);
+  const existing = state.salesInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
   const paymentsBeforeUpdate = existing ? relatedSalesPayments(existing) : [];
   const financeBeforeUpdate = existing ? relatedSalesFinanceLedger(existing) : [];
   const { data: updated, stateMerge, stateDelete } = await runStateCommand(
-    () => actions(req).updateSalesInvoice(req.params.id, req.body),
+    () => actions(req).updateSalesInvoice(req.params.id!, req.body),
     (invoice) => salesInvoiceUpdatePatch(invoice, paymentsBeforeUpdate, financeBeforeUpdate),
     undefined,
     (client, invoice) => syncCrmSalesInvoiceLink(client, invoice, crmActor(req)),
@@ -2500,7 +2553,7 @@ app.put("/api/sales-invoices/:id", requireMenu("sales_list"), asyncRoute(async (
 }));
 
 app.delete("/api/sales-invoices/:id", requireMenu("sales_list"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const existing = state.salesInvoices.find((item) => item.id === req.params.id || item.invoiceNo === req.params.id);
+  const existing = state.salesInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
   const chosenIds = new Set(existing?.items.map((item) => item.inventoryId).filter(Boolean) || []);
   const relatedPayments = existing
     ? state.paymentInRecords.filter((payment) => payment.relatedDocNo === existing.invoiceNo || payment.relatedDocNo === existing.id)
@@ -2508,7 +2561,7 @@ app.delete("/api/sales-invoices/:id", requireMenu("sales_list"), requireDeletePe
   const relatedFinanceIds = state.financeLedger
     .filter((item) => existing && (item.relatedId === existing.invoiceNo || item.relatedId === existing.id))
     .map((item) => item.id);
-  const deleted = actions(req).deleteSalesInvoice(req.params.id);
+  const deleted = actions(req).deleteSalesInvoice(req.params.id!);
   const stateMerge = compactStateMerge({
     inventory: state.inventory.filter((item) => chosenIds.has(item.id)),
     settlementAccounts: recordsByIds(state.settlementAccounts, relatedPayments.map((payment) => payment.accountId)),
@@ -2528,7 +2581,7 @@ app.delete("/api/sales-invoices/:id", requireMenu("sales_list"), requireDeletePe
 
 app.post("/api/sales-invoices/:id/outbound", requireMenu("sales_outbound"), requireManualOutboundPermission, asyncRoute(async (req, res) => {
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).confirmSalesOutbound(req.params.id, req.body),
+    () => actions(req).confirmSalesOutbound(req.params.id!, req.body),
     salesInvoiceMerge,
   );
   res.json(okMerge(updated, stateMerge));
@@ -2568,21 +2621,21 @@ app.post("/api/returns", requireAnyMenu([...returnMenuIds]), asyncRoute(async (r
 }));
 
 app.post("/api/returns/:id/complete", requireAnyMenu([...returnMenuIds]), requireReturnTypeFromRecord, asyncRoute(async (req, res) => {
-  const completed = actions(req).completeReturnOrder(req.params.id);
+  const completed = actions(req).completeReturnOrder(req.params.id!);
   const stateMerge = returnOrderMerge(completed);
   await saveStateRecords(stateMergeRecords(stateMerge));
   res.json(okMerge(completed, stateMerge));
 }));
 
 app.patch("/api/returns/:id", requireAnyMenu([...returnMenuIds]), requireReturnTypeFromRecord, asyncRoute(async (req, res) => {
-  const updated = actions(req).updateReturnOrder(req.params.id, req.body);
+  const updated = actions(req).updateReturnOrder(req.params.id!, req.body);
   const stateMerge = returnOrderMerge(updated);
   await saveStateRecords(stateMergeRecords(stateMerge));
   res.json(okMerge(updated, stateMerge));
 }));
 
 app.delete("/api/returns/:id", requireAnyMenu([...returnMenuIds]), requireReturnTypeFromRecord, requireDeletePermission, asyncRoute(async (req, res) => {
-  const existing = state.returnOrders.find((item) => item.id === req.params.id || item.returnNo === req.params.id);
+  const existing = state.returnOrders.find((item) => item.id === req.params.id! || item.returnNo === req.params.id!);
   const relatedReturnNos = existing ? new Set([existing.id, existing.returnNo].filter(Boolean)) : new Set<string>();
   const returnPaymentIds = new Set([existing?.paymentRecordId, ...(existing?.refundPaymentRecordIds || [])].filter(Boolean));
   const returnPaymentIn = existing ? state.paymentInRecords.filter((item) =>
@@ -2591,7 +2644,7 @@ app.delete("/api/returns/:id", requireAnyMenu([...returnMenuIds]), requireReturn
   const returnPaymentOut = existing ? state.paymentOutRecords.filter((item) =>
     returnPaymentIds.has(item.id) || (!!item.relatedDocNo && relatedReturnNos.has(item.relatedDocNo) && item.businessType === "客户退款")
   ) : [];
-  const deleted = actions(req).deleteReturnOrder(req.params.id);
+  const deleted = actions(req).deleteReturnOrder(req.params.id!);
   const stateMerge = returnOrderMerge(deleted);
   const stateDelete = {
     returnOrders: deleted?.id ? [deleted.id] : [],
@@ -2612,7 +2665,7 @@ app.post("/api/aftersales", requireMenu("aftersales"), asyncRoute(async (req, re
 }));
 
 app.patch("/api/aftersales/:id", requireMenu("aftersales"), asyncRoute(async (req, res) => {
-  const updated = actions(req).updateAftersalesStatus(req.params.id, req.body);
+  const updated = actions(req).updateAftersalesStatus(req.params.id!, req.body);
   const stateMerge = aftersalesMerge(updated);
   await saveStateRecords(stateMergeRecords(stateMerge));
   res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));
@@ -2642,14 +2695,14 @@ app.post("/api/market-quotes/import", requireMenu("quotes"), asyncRoute(async (r
 }));
 
 app.patch("/api/market-quotes/:id", requireMenu("quotes"), asyncRoute(async (req, res) => {
-  const updated = actions(req).updateMarketPrice(req.params.id, req.body.todayBuyPrice, req.body.todaySellPrice, req.body.remarks);
+  const updated = actions(req).updateMarketPrice(req.params.id!, req.body.todayBuyPrice, req.body.todaySellPrice, req.body.remarks);
   const stateMerge = marketQuoteMerge(updated);
   await saveStateRecords(stateMergeRecords(stateMerge));
   res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));
 }));
 
 app.delete("/api/market-quotes/:id", requireMenu("quotes"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const deleted = actions(req).deleteMarketQuote(req.params.id);
+  const deleted = actions(req).deleteMarketQuote(req.params.id!);
   const stateMerge = deleteMerge();
   const stateDelete = { marketQuotes: deleted?.id ? [deleted.id] : [] };
   await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
@@ -2718,7 +2771,7 @@ app.post("/api/customers", requireMenu("customers"), asyncRoute(async (req, res)
 }));
 
 app.delete("/api/customers/:id", requireMenu("customers"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const deleted = actions(req).deleteCustomer(req.params.id);
+  const deleted = actions(req).deleteCustomer(req.params.id!);
   const stateMerge = deleteMerge();
   const stateDelete = { customers: deleted?.id ? [deleted.id] : [] };
   await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
@@ -2733,14 +2786,14 @@ app.post("/api/vendors", requireMenu("vendors"), asyncRoute(async (req, res) => 
 }));
 
 app.put("/api/vendors/:id", requireMenu("vendors"), asyncRoute(async (req, res) => {
-  const updated = actions(req).updateVendor(req.params.id, req.body);
+  const updated = actions(req).updateVendor(req.params.id!, req.body);
   const stateMerge = vendorRecordMerge(updated);
   await saveStateRecords(stateMergeRecords(stateMerge));
   res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));
 }));
 
 app.delete("/api/vendors/:id", requireMenu("vendors"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const deleted = actions(req).deleteVendor(req.params.id);
+  const deleted = actions(req).deleteVendor(req.params.id!);
   const stateMerge = deleteMerge();
   const stateDelete = { vendors: deleted?.id ? [deleted.id] : [] };
   await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
@@ -2776,7 +2829,7 @@ app.get("/api/finance-ledger", requireMenu("finance"), (req: AuthRequest, res) =
 });
 
 app.patch("/api/finance-ledger/:id/reconcile", requireMenu("finance"), asyncRoute(async (req, res) => {
-  const updated = actions(req).reconcileLedgerItem(req.params.id);
+  const updated = actions(req).reconcileLedgerItem(req.params.id!);
   const stateMerge = compactStateMerge({
     financeLedger: updated ? [updated] : [],
     logs: state.logs.slice(0, 1),
@@ -2800,7 +2853,7 @@ app.post("/api/reset", requireBoss, asyncRoute(async (req, res) => {
 app.get("/api/export/:dataset", requireMenu("finance_reports"), (req: AuthRequest, res) => {
   try {
     const showCost = Boolean(actions(req).getPermissions().showCost);
-    const { filename, csv } = buildExport(state, req.params.dataset, { showCost });
+    const { filename, csv } = buildExport(state, req.params.dataset!, { showCost });
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
     res.send(`﻿${csv}`);

@@ -43,6 +43,25 @@ test("private finance routes reject anonymous HTTP requests with 401 and a reque
   }
 });
 
+test("liveness stays public while readiness verifies the PostgreSQL-backed app state", {
+  skip: !integrationEnabled,
+}, async () => {
+  const { createApp } = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const health = await fetch(`${baseUrl}/api/health`);
+    assert.equal(health.status, 200);
+    const ready = await fetch(`${baseUrl}/api/ready`);
+    assert.equal(ready.status, 200);
+    const payload = await ready.json() as { data?: { ok?: boolean; stateRevision?: number } };
+    assert.equal(payload.data?.ok, true);
+    assert.equal(typeof payload.data?.stateRevision, "number");
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("open inventory endpoints keep token authentication separate from session auth", {
   skip: !integrationEnabled,
 }, async () => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {adaptInventoryItem, adaptInventoryModelSummaries, adaptInventoryPage, adaptInventorySummary} from "./inventory.adapter";
+import {storeDateAfterDays} from "@/src/utils/storeTime";
 
 test("inventory adapter respects cost and profit permissions", () => {
   const row = adaptInventoryItem({id: "KC-1", productName: "RTX 4090", sn: "SN-1", status: "已入库", costPrice: 100, estSellPrice: 150, storageDays: 8}, {showCost: false, showProfit: true});
@@ -8,6 +9,11 @@ test("inventory adapter respects cost and profit permissions", () => {
   assert.equal(row.costPrice, undefined);
   assert.equal(row.estimatedProfit, undefined);
   assert.equal(row.inventoryStatus, "已入库");
+});
+
+test("inventory adapter derives age from entry date instead of a stale snapshot", () => {
+  const row = adaptInventoryItem({id: "KC-AGE", productName: "RTX 4090", status: "已入库", entryTime: storeDateAfterDays(-7), storageDays: 0}, {showCost: true, showProfit: true});
+  assert.equal(row.inventoryDays, 7);
 });
 
 test("inventory page adapter preserves server pagination metadata", () => {

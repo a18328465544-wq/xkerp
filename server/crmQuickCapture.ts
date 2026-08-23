@@ -171,13 +171,15 @@ function parseFollowUpTime(text: string) {
   if (explicit) return explicit;
   const relative = text.match(/(今天|明天|后天|三天后|今晚|下周一|下周二|下周三|下周四|下周五|下周六|下周日)/);
   if (!relative) return undefined;
+  const relativePhrase = relative[1];
+  if (!relativePhrase) return undefined;
   const now = new Date();
   const today = storeDate(now);
   const weekday = new Date(`${today}T00:00:00+08:00`).getDay();
   const relativeDays: Record<string, number> = { 今天: 0, 明天: 1, 后天: 2, 三天后: 3, 今晚: 0 };
-  const dayMatch = relative[1].match(/下周([一二三四五六日])/);
-  const dayIndex = dayMatch ? "日一二三四五六".indexOf(dayMatch[1]) : -1;
-  const days = dayMatch ? 7 + ((dayIndex - weekday + 7) % 7 || 7) : relativeDays[relative[1]];
+  const dayMatch = relativePhrase.match(/下周([一二三四五六日])/);
+  const dayIndex = dayMatch?.[1] ? "日一二三四五六".indexOf(dayMatch[1]) : -1;
+  const days = dayMatch ? 7 + ((dayIndex - weekday + 7) % 7 || 7) : relativeDays[relativePhrase];
   const date = storeDateAfterDays(days ?? 0, now);
   // Only inspect the text after the relative-day phrase. Otherwise digits in a
   // phone number or model (for example RTX4080) can be mistaken for the hour.
@@ -468,7 +470,7 @@ export async function parseQuickCaptureText(
   }
   const productCandidates = findProductCandidates(fields, context.products);
   const bestProduct = productCandidates[0];
-  if (!fields.productId && bestProduct?.score >= 82) {
+  if (!fields.productId && bestProduct && bestProduct.score >= 82) {
     fields = {
       ...fields,
       productId: bestProduct.productId,

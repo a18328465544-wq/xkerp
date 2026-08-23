@@ -80,6 +80,8 @@ test("indexed inventory query applies filters and caps server-side pagination", 
   assert.match(query.where, /data->>'status' = \$1/);
   assert.match(query.where, /ILIKE \$4/);
   assert.match(query.where, /<> '已售出'/);
+  assert.match(query.select, /jsonb_build_object\('storageDays'/);
+  assert.match(query.select, /CURRENT_TIMESTAMP AT TIME ZONE 'Asia\/Shanghai'/);
 });
 
 test("inventory page query keeps active, brand, risk, and aging filters inside PostgreSQL", () => {

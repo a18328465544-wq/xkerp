@@ -8,6 +8,12 @@ export function filledSalesLines<T extends Pick<SalesLineFormValue, "inventoryId
   return items.filter(isSalesLineFilled);
 }
 
+export function normalizeSalesPaidAmount(paidAmount: number, totalAmount: number, paymentMode: "full" | "credit"): number {
+  const total = Math.max(0, Math.round(totalAmount || 0));
+  const current = Math.max(0, Math.round(paidAmount || 0));
+  return paymentMode === "full" ? total : Math.min(current, total);
+}
+
 export function calculateSalesAmounts(values: Pick<SalesFormValues, "items" | "paidAmount">, includeCost: boolean): SalesOrderAmounts {
   const items = filledSalesLines(values.items);
   const quantity = items.reduce((sum, item) => sum + Math.max(1, Math.floor(item.quantity || 1)), 0);

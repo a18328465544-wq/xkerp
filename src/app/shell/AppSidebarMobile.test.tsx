@@ -8,7 +8,7 @@ test("mobile sidebar keeps labels visible instead of inheriting desktop collapse
   assert.match(source, /data-mobile-navigation/);
   assert.match(source, /const showLabels = mobileSidebarOpen \|\| !visualCollapsed/);
   assert.match(source, /role=\{mobileSidebarOpen \? "dialog"/);
-  assert.match(source, /w-\[min\(22rem,calc\(100vw-1rem\)\)\]/);
+  assert.match(source, /w-\[var\(--erp-drawer-mobile-width\)\]/);
 });
 
 test("mobile sidebar locks the page and keeps secondary links touch-sized", () => {

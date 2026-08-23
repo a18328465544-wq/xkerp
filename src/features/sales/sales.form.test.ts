@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {calculateSalesAmounts} from "./sales.calculations";
+import {calculateSalesAmounts, normalizeSalesPaidAmount} from "./sales.calculations";
 import {salesOrderSchema} from "./sales.schema";
 import {createSalesDefaults} from "./sales.defaults";
-import {salesFieldErrors, salesSubmitErrorMessage} from "./sales.errors";
+import {salesFieldErrors, salesFormValidationMessage, salesSubmitErrorMessage} from "./sales.errors";
 import {ApiError} from "@/src/services/api";
 
 function validValues() {
@@ -66,6 +66,12 @@ test("sales amount calculation respects cost visibility and keeps integer curren
   assert.equal(withoutCost.estimatedProfit, undefined);
 });
 
+test("sales payment amount follows the current item total", () => {
+  assert.equal(normalizeSalesPaidAmount(22500, 4720, "full"), 4720);
+  assert.equal(normalizeSalesPaidAmount(22500, 4720, "credit"), 4720);
+  assert.equal(normalizeSalesPaidAmount(1000, 4720, "credit"), 1000);
+});
+
 test("sales submit errors preserve actionable permission and conflict messages", () => {
   assert.match(salesSubmitErrorMessage(new ApiError(401, "expired")), /重新登录/);
   assert.match(salesSubmitErrorMessage(new ApiError(403, "forbidden")), /权限/);
@@ -84,4 +90,10 @@ test("sales field errors accept FastAPI field maps and validation arrays", () =>
     payload: {error: {fields: [{loc: ["items", 1, "quantity"], msg: "数量无效"}]}},
   }));
   assert.equal(listed["items.1.quantity"], "数量无效");
+});
+
+test("sales form validation failures produce visible actionable feedback", () => {
+  assert.equal(salesFormValidationMessage({customerId: {message: "请选择客户档案"}}), "请先完善销售单信息：请选择客户档案");
+  assert.equal(salesFormValidationMessage({items: {0: {productId: {message: "请选择销售商品"}}}}), "请先完善销售单信息：请选择销售商品");
+  assert.equal(salesFormValidationMessage({}), "请先完善销售单信息");
 });

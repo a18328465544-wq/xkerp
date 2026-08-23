@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PostgreSQL 逻辑备份：由 cron 每日执行，也可手动运行。
+# PostgreSQL 逻辑备份：由 systemd timer 每日执行，也可手动运行。
 # 备份采用 pg_dump custom 格式；完成后会用 pg_restore 校验，再原子移动到备份目录。
 set -Eeuo pipefail
 umask 077

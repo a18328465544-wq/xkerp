@@ -65,6 +65,10 @@ POSTGRES_IMPORT_LEGACY_JSON=false
 
 ## Production backup
 
-Production uses `scripts/pg_backup.sh` from cron. It creates a PostgreSQL custom-format dump, verifies it with `pg_restore --list`, and only then publishes it to the backup directory. Set `BACKUP_RETENTION_DAYS` to control retention (default: 30 days).
+Production uses `scripts/pg_backup.sh` from the systemd timer in
+`ops/systemd/gpu-erp-backup.timer`. It creates a PostgreSQL custom-format dump,
+verifies it with `pg_restore --list`, and only then publishes it to the backup
+directory. Set `BACKUP_RETENTION_DAYS` to control retention (default: 30 days).
+Install `gpu-erp-backup.service` and `.timer` before relying on automatic backups.
 
 Restore testing should be performed against a separate PostgreSQL database; never restore over the live database without a confirmed maintenance plan.

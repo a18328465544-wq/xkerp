@@ -4,6 +4,7 @@ import type { SystemUserAccount } from "../src/types.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { sanitizeAppStateForClient, sanitizeUserAccount, stripLazyStateCollections } from "./security.ts";
 import type { AppState } from "./store.ts";
+import { storeDateDiffDays } from "../src/utils/storeTime.ts";
 
 export type PublicStateMode = "full" | "initial";
 
@@ -48,6 +49,13 @@ function canAccessCollection(permissions: { allowedMenus: string[] }, key: State
   return !requiredMenus || requiredMenus.some((menuId) => canAccessMenu(permissions, menuId));
 }
 
+function inventoryWithCurrentAge(inventory: AppState["inventory"]) {
+  return inventory.map((item) => ({
+    ...item,
+    storageDays: storeDateDiffDays(item.entryTime),
+  }));
+}
+
 function canAccessReturnType(permissions: { allowedMenus: string[] }, type: string) {
   if (canAccessMenu(permissions, "return_orders")) return true;
   return type === "销售退货"
@@ -82,6 +90,7 @@ export function publicStateForUser(state: AppState, user?: SystemUserAccount, mo
   const safeState = mode === "initial"
     ? stripLazyStateCollections(sanitizeAppStateForClient(state))
     : sanitizeAppStateForClient(state);
+  safeState.inventory = inventoryWithCurrentAge(safeState.inventory);
   if (!user) return safeState;
 
   const permissions = getPermissionsForUser(state, user);
@@ -150,7 +159,10 @@ export function publicCollectionForUser(
 ) {
   const value = state[key];
   if (!Array.isArray(value)) return value;
-  if (!user) return key === "systemUsers" ? state.systemUsers.map(sanitizeUserAccount) : value;
+  if (!user) {
+    if (key === "inventory") return inventoryWithCurrentAge(state.inventory);
+    return key === "systemUsers" ? state.systemUsers.map(sanitizeUserAccount) : value;
+  }
 
   const permissions = getPermissionsForUser(state, user);
   const canAccessCommissions =
@@ -159,7 +171,8 @@ export function publicCollectionForUser(
   if (!canAccessCollection(permissions, key)) return [];
 
   if (key === "inventory") {
-    return permissions.showCost ? state.inventory : state.inventory.map((item) => ({ ...item, costPrice: 0 }));
+    const inventory = inventoryWithCurrentAge(state.inventory);
+    return permissions.showCost ? inventory : inventory.map((item) => ({ ...item, costPrice: 0 }));
   }
   if (key === "purchaseInvoices") {
     return permissions.showCost ? state.purchaseInvoices : state.purchaseInvoices.map((invoice) => ({

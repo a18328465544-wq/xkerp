@@ -236,6 +236,10 @@ export function buildCrmMigrationPlan(data: LegacyCrmData): CrmMigrationPlan {
     const customer = group.find((source) => source.sourceType === "customer");
     const vendor = group.find((source) => source.sourceType === "vendor");
     const primary = customer || vendor || group[0];
+    if (!primary) {
+      warnings.push(`跳过空的 CRM 分组：${key}`);
+      continue;
+    }
     const accountId = stableId("CRM", key);
     const aliases = Array.from(new Set(group.map((source) => source.name.trim()).filter(Boolean)));
     const primaryPhone = group.find((source) => normalizeCrmIdentity(source.phone))?.phone?.trim();

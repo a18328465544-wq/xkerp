@@ -45,8 +45,10 @@ type AiBusinessSnapshot = {
 
 const INSIGHT_SCOPE = "dashboard";
 const CACHE_TTL_MS = 15 * 60 * 1000;
+const AI_PROVIDER_FAILURE_COOLDOWN_MS = Math.max(0, Number(process.env.AI_PROVIDER_FAILURE_COOLDOWN_MS || 5 * 60 * 1000));
 const ACTION_TABS = new Set<AiInsightActionTab>(["inventory", "finance_reports", "purchase_add", "quotes", "sales_list"]);
 const severityRank: Record<AiInsightSeverity, number> = { high: 3, medium: 2, low: 1 };
+let lastAiProviderFailureAt = 0;
 
 const money = (value: unknown) => Math.round(Number(value || 0) * 100) / 100;
 const formatMoney = (value: number) => `¥${Math.round(value || 0).toLocaleString("zh-CN")}`;
@@ -229,7 +231,37 @@ function normalizeModelInsights(value: unknown, fallback: AiInsight[]) {
   return normalized.length ? normalized.sort((left, right) => severityRank[right.severity] - severityRank[left.severity]).slice(0, 3) : fallback;
 }
 
-async function askDeepSeek(snapshot: AiBusinessSnapshot, fallback: AiInsight[]) {
+function parseJsonContent(content: string) {
+  const trimmed = content.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1]?.trim();
+  const candidates = [fenced, trimmed].filter((candidate, index, all): candidate is string => Boolean(candidate) && all.indexOf(candidate) === index);
+  const objectStart = trimmed.indexOf("{");
+  const objectEnd = trimmed.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    candidates.push(trimmed.slice(objectStart, objectEnd + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch {
+      // Try the next bounded candidate. The provider may wrap JSON in prose or a code fence.
+    }
+  }
+  throw new Error("DeepSeek 返回内容不是合法 JSON");
+}
+
+export function parseModelInsightsContent(content: unknown): AiInsight[] {
+  if (typeof content !== "string" || content.length > 20_000) {
+    throw new Error("DeepSeek 返回建议内容无效或超过长度限制");
+  }
+  const parsed = parseJsonContent(content);
+  const normalized = normalizeModelInsights(parsed, []);
+  if (!normalized.length) throw new Error("DeepSeek 返回建议结构无效");
+  return normalized;
+}
+
+async function askDeepSeek(snapshot: AiBusinessSnapshot) {
   const apiKey = process.env.AI_API_KEY?.trim();
   const baseUrl = process.env.AI_BASE_URL?.trim().replace(/\/$/, "");
   const model = process.env.AI_MODEL?.trim();
@@ -253,11 +285,11 @@ async function askDeepSeek(snapshot: AiBusinessSnapshot, fallback: AiInsight[]) 
     }),
     signal: AbortSignal.timeout(15_000),
   });
-  const body = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } } | null;
+  const body = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: string } } | null;
   if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}: ${body?.error?.message || "request failed"}`);
   const content = body?.choices?.[0]?.message?.content;
   if (!content) throw new Error("DeepSeek 未返回建议内容");
-  return normalizeModelInsights(JSON.parse(content), fallback);
+  return parseModelInsightsContent(content);
 }
 
 export async function getDashboardAiInsights(state: AppState, options: { force?: boolean } = {}): Promise<AiInsightsPayload> {
@@ -273,14 +305,19 @@ export async function getDashboardAiInsights(state: AppState, options: { force?:
   const expiresAt = new Date(now.getTime() + CACHE_TTL_MS).toISOString();
   let source: AiInsightsPayload["source"] = "rules";
   let insights = rules;
-  try {
-    const modelInsights = await askDeepSeek(snapshot, rules);
-    if (modelInsights) {
-      insights = modelInsights;
-      source = "ai";
+  const providerCoolingDown = AI_PROVIDER_FAILURE_COOLDOWN_MS > 0
+    && now.getTime() - lastAiProviderFailureAt < AI_PROVIDER_FAILURE_COOLDOWN_MS;
+  if (!providerCoolingDown) {
+    try {
+      const modelInsights = await askDeepSeek(snapshot);
+      if (modelInsights?.length) {
+        insights = modelInsights;
+        source = "ai";
+      }
+    } catch (error) {
+      lastAiProviderFailureAt = now.getTime();
+      console.warn("[ai] DeepSeek 经营建议生成失败，已降级为规则建议", { error: error instanceof Error ? error.message : String(error) });
     }
-  } catch (error) {
-    console.warn("[ai] DeepSeek 经营建议生成失败，已降级为规则建议", { error: error instanceof Error ? error.message : String(error) });
   }
 
   const payload: AiInsightsPayload = {

@@ -18,6 +18,20 @@ test("sales customer adapter accepts normalized CRM page envelope", () => {
   assert.equal(customers[0]?.id, "KH-1");
 });
 
+test("sales customer adapter prefers the customer role for a dual-role主体", () => {
+  const customer = adaptSalesCustomer({
+    id: "CRM-CORE-1",
+    displayName: "核心合作伙伴",
+    roles: ["buyer", "customer", "peer", "supplier"],
+    legacyCustomer: {id: "KH-CORE-1", name: "核心合作伙伴", type: "购买客户", level: "S级"},
+    legacyVendor: {id: "GY-CORE-1", name: "核心合作伙伴", type: "核心采购方", level: "S级"},
+  });
+  assert.equal(customer.partnerType, "customer");
+  assert.equal(customer.id, "KH-CORE-1");
+  assert.equal(customer.type, "购买客户");
+  assert.equal(customer.selectable, true);
+});
+
 test("sales inventory adapter hides cost without permission and gates saleable statuses", () => {
   const available = adaptSalesInventoryCandidate({id: "KC-1", productId: "P-1", productName: "RTX 4090", brand: "华硕", model: "4090", status: "已上架", sn: "SN-1", costPrice: 100, estSellPrice: 200}, {showCost: false, showProfit: false});
   assert.equal(available.saleable, true);

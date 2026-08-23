@@ -7,7 +7,7 @@ import type {SalesApiPermissions} from "../adapters/sales.adapter";
 import {fetchFullStateCompat} from "../state-compat";
 
 export function toSalesCustomerQueryParams(keyword: string, page = 1, pageSize = 20) {
-  const params = new URLSearchParams({page: String(page), pageSize: String(pageSize)});
+  const params = new URLSearchParams({page: String(page), pageSize: String(pageSize), role: "customer"});
   if (keyword.trim()) params.set("keyword", keyword.trim());
   return params;
 }
@@ -36,7 +36,7 @@ export const salesApi = {
   },
 
   async searchCustomers(keyword: string, signal?: AbortSignal): Promise<SalesCustomerOption[]> {
-    const params = toSalesCustomerQueryParams(keyword);
+    const params = toSalesCustomerQueryParams(keyword, 1, 200);
     const response = await apiRequest<SalesCustomerListResponseDto>(`/api/gpu_erp/crm/accounts?${params.toString()}`, {signal});
     return adaptSalesCustomers(response);
   },

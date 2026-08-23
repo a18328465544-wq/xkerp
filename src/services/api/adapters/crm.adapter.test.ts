@@ -19,6 +19,12 @@ test("CRM account adapter preserves server level and never recalculates core-cus
   assert.equal(result.items[0]?.isCoreCustomer, true);
 });
 
+test("CRM account level S is core even when legacy boolean is absent", () => {
+  const result = adaptCrmAccountPage({data: {items: [{id: "A3", displayName: "旧核心客户", status: "active", level: "S级", legacyCustomer: {id: "C3"}}], meta: {}}});
+  assert.equal(result.items[0]?.level, "S级");
+  assert.equal(result.items[0]?.isCoreCustomer, true);
+});
+
 test("CRM summary adapter discards full legacy collections", () => {
   const result = adaptCrmSummary({data: {customers: [{phone: "secret"}], followUps: [{}], requirements: [{}], totals: {customers: 4, leads: 2, following: 1, deals: 1, highIntent: 2, pendingFollowUps: 1, requirements: 3}, ownerSummary: [{owner: "郭鑫", customers: 4, followUps: 2, requirements: 3, highIntent: 2}]}});
   assert.equal(result.totals.customers, 4);

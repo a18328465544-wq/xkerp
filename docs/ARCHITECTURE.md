@@ -9,6 +9,7 @@
 - [docs/PORTS.md](./PORTS.md)：服务器端口规划。
 - [docs/OPEN_INVENTORY_API.md](./OPEN_INVENTORY_API.md)：开放库存 API 和外部价格同步接口。
 - [docs/上线前测试报告.md](./上线前测试报告.md)：上线前测试记录。
+- [docs/RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)：发布门禁、备份演练和上线后验收。
 
 ## 1. 系统定位
 
@@ -53,7 +54,7 @@ flowchart LR
   Api --> Security["权限/脱敏/会话<br/>server/security.ts"]
   Api --> Policy["持久化/刷新策略<br/>server/requestStatePolicy.ts"]
   Store --> Db["PostgreSQL JSONB 集合表"]
-  Api --> Backup["data/backups 手动备份"]
+  Api --> Backup["PostgreSQL pg_dump + systemd timer"]
 ```
 
 生产访问路径：
@@ -173,7 +174,8 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 
 | 分组 | 示例接口 |
 | --- | --- |
-| 健康检查 | `GET /api/health` |
+| 存活检查 | `GET /api/health`（不依赖数据库） |
+| 就绪检查 | `GET /api/ready`（校验 PostgreSQL 状态初始化） |
 | 登录会话 | `POST /api/auth/login`、`GET /api/auth/me`、`POST /api/auth/logout` |
 | 全局状态 | `GET /api/state` |
 | 商品库 | `/api/products`、`/api/products/import` |
@@ -526,6 +528,7 @@ pm2 save
 sudo nginx -t
 sudo systemctl reload nginx
 curl -fsS http://127.0.0.1:3001/api/health
+curl -fsS http://127.0.0.1:3001/api/ready
 ```
 
 ### 11.3 上线检查
@@ -535,6 +538,7 @@ curl -fsS http://127.0.0.1:3001/api/health
 ```bash
 curl -fsSI https://gpu-erp.cdgpu.cn/
 curl -fsS https://gpu-erp.cdgpu.cn/api/health
+curl -fsS https://gpu-erp.cdgpu.cn/api/ready
 pm2 jlist
 sudo nginx -t
 ```
@@ -542,7 +546,7 @@ sudo nginx -t
 要求：
 
 - 首页 HTTP 状态 200。
-- `/api/health` 返回 `ok: true`。
+- `/api/health` 返回 `ok: true`；`/api/ready` 返回 `ok: true` 和状态版本。
 - PM2 只有一个 `gpu-erp-api` 实例，且为 `fork_mode`。
 - Nginx 配置校验成功。
 
@@ -550,13 +554,15 @@ sudo nginx -t
 
 当前备份方式：
 
-- 系统内可通过备份接口创建手动 JSON 备份。
-- 建议服务器额外配置 PostgreSQL `pg_dump` 定时备份。
+- 系统内可通过备份接口创建手动业务快照，用于人工核对和迁移。
+- `scripts/pg_backup.sh` 生成 PostgreSQL custom dump；生产由
+  `ops/systemd/gpu-erp-backup.timer` 每日 03:20（Asia/Shanghai）触发。
+- `scripts/pg_restore_drill.sh` 只允许在显式确认的隔离数据库执行恢复演练。
 
 建议生产备份策略：
 
-- 每日自动 `pg_dump`。
-- 保留最近 7 天每日备份和最近 4 周周备份。
+- 每日自动 `pg_dump`，默认保留 30 天，可由 `BACKUP_RETENTION_DAYS` 调整。
+- 备份目录应放在应用目录之外，并纳入异地/对象存储同步。
 - 部署前创建一次手动备份。
 - 重大导入前创建一次手动备份。
 
@@ -640,8 +646,8 @@ sudo nginx -t
 4. **统计口径需要继续后端化**  
    首页、客户等级、利润、库存价值等应逐步变成后端汇总接口或汇总表，避免前端全量计算。
 
-5. **会话当前为单实例内存态**  
-   PM2 重启会让用户重新登录。若未来多实例部署，需要把会话迁移到数据库或 Redis。
+5. **会话已持久化，但仍需关注过期清理与多实例运维**
+   `gpu_sessions` 只保存 token 哈希，已支持 PM2 重启和多实例共享；后续可增加定期清理任务和 Redis 作为高并发场景的专用会话层。
 
 6. **网站和小程序应复用 Open API**  
    不建议复制 ERP 业务逻辑到网站或小程序后端。网站/小程序应作为 API 消费方。

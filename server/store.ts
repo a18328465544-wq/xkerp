@@ -185,7 +185,7 @@ export function normalizeStateConditions(state: AppState) {
   // individual account to log in. Database initialization persists the upgraded rows.
   state.systemUsers = state.systemUsers.map((user) => ({
     ...user,
-    password: isPasswordHash(user.password) ? user.password : hashPassword(user.password),
+    password: isPasswordHash(user.password || "") ? user.password || "" : hashPassword(user.password || ""),
   }));
   return state;
 }
@@ -399,7 +399,7 @@ function secureInitialSystemUsers() {
     const password = user.role === "老板" && configuredAdminPassword ? configuredAdminPassword : user.password;
     return {
       ...structuredClone(user),
-      password: isPasswordHash(password) ? password : hashPassword(password),
+      password: isPasswordHash(password || "") ? password || "" : hashPassword(password || ""),
       enabled: production && user.role !== "老板" ? false : user.enabled,
     };
   });
@@ -1133,7 +1133,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       item.incomeAmount === record.amount &&
       item.relatedDocNo === record.relatedDocNo
     );
-    return matches.length === 1 ? matches[0].id : undefined;
+    return matches.length === 1 ? matches[0]?.id : undefined;
   };
 
   const findPaymentInFinanceLedgerId = (record: PaymentInRecord) => {
@@ -1147,7 +1147,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       item.amount === record.amount &&
       item.relatedId === (record.relatedDocNo || record.id)
     );
-    return matches.length === 1 ? matches[0].id : undefined;
+    return matches.length === 1 ? matches[0]?.id : undefined;
   };
 
   const findPaymentOutSettlementLedgerId = (record: PaymentOutRecord) => {
@@ -1161,7 +1161,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       item.expenseAmount === record.amount &&
       item.relatedDocNo === record.relatedDocNo
     );
-    return matches.length === 1 ? matches[0].id : undefined;
+    return matches.length === 1 ? matches[0]?.id : undefined;
   };
 
   const findPaymentOutFinanceLedgerId = (record: PaymentOutRecord) => {
@@ -1175,7 +1175,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       item.amount === -record.amount &&
       item.relatedId === (record.relatedDocNo || record.id)
     );
-    return matches.length === 1 ? matches[0].id : undefined;
+    return matches.length === 1 ? matches[0]?.id : undefined;
   };
 
   const findSalesInvoiceByDocNo = (docNo?: string) => {
@@ -2206,6 +2206,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         throw new ConflictError("直接冲销仅用于整张采购单误录的一笔现金付款；含部分退货、供应商抵扣或多笔付款时请分别处理");
       }
       const linkedPayment = linkedPayments[0];
+      if (!linkedPayment) throw new ConflictError("直接冲销未找到原采购付款");
       if (
         linkedPayment.businessType !== "采购付款" ||
         Math.abs(Number(linkedPayment.amount || 0) - paidBefore) > 0.009
@@ -2247,8 +2248,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       contact: input.contact || salesInvoice?.contact || purchaseInvoice?.contact,
       amount,
       refundAllocations,
-      settlementAccountId: refundAllocations.length === 1 ? refundAllocations[0].accountId : undefined,
-      settlementAccountName: refundAllocations.length === 1 ? refundAllocations[0].accountName : undefined,
+      settlementAccountId: refundAllocations.length === 1 ? refundAllocations[0]?.accountId : undefined,
+      settlementAccountName: refundAllocations.length === 1 ? refundAllocations[0]?.accountName : undefined,
     };
     state.returnOrders = [order, ...state.returnOrders];
     addLog(systemActor(), "退货管理", `创建${order.type}`, order.returnNo, undefined, `${order.partyName || "未记录对象"} / ${order.amount}元`);
@@ -2402,7 +2403,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       );
       if (totalCost > 0 || originalVendorCredit > 0) throw new ConflictError("直接冲销仅支持未使用供应商抵扣余额的整张采购单全部退货");
       if (linkedPayments.length !== 1) throw new ConflictError("直接冲销要求原采购单恰好只有一笔付款；多笔付款请在付款流水中逐笔处理");
-      reversedPaymentSnapshot = { ...linkedPayments[0] };
+      const linkedPayment = linkedPayments[0];
+      if (!linkedPayment) throw new ConflictError("直接冲销未找到原采购付款");
+      reversedPaymentSnapshot = { ...linkedPayment };
       affectedAccountId = reversedPaymentSnapshot.accountId;
       deletePaymentOut(reversedPaymentSnapshot.id, { skipInvoiceUpdate: true });
     }
@@ -3315,7 +3318,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       !item.settlementAccountId
     ));
     if (linkedPayments.length === 1 && paymentFieldsChanged) {
-      deletePaymentOut(linkedPayments[0].id, { skipInvoiceUpdate: true });
+      const linkedPayment = linkedPayments[0];
+      if (linkedPayment) deletePaymentOut(linkedPayment.id, { skipInvoiceUpdate: true });
     }
     if (updated.paidAmount > 0 && updated.settlementAccountId && (!linkedPayments.length || paymentFieldsChanged)) {
       createPaymentOut({
@@ -3578,7 +3582,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         customerId: newInvoice.customerId,
         customerPartnerType: newInvoice.customerPartnerType || "customer",
         customerName: newInvoice.customerName,
-        accountId: newInvoice.settlementAccountId,
+        accountId: newInvoice.settlementAccountId!,
         amount: newInvoice.paidAmount,
         handler: newInvoice.paymentHandler || newInvoice.handleBy,
         paymentMethod: newInvoice.paymentMethod,
@@ -3719,7 +3723,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       !item.settlementAccountId
     ));
     if (linkedPayments.length === 1 && paymentFieldsChanged) {
-      deletePaymentIn(linkedPayments[0].id, { skipInvoiceUpdate: true });
+      const linkedPayment = linkedPayments[0];
+      if (linkedPayment) deletePaymentIn(linkedPayment.id, { skipInvoiceUpdate: true });
     }
     if (updated.paidAmount > 0 && updated.settlementAccountId && (!linkedPayments.length || paymentFieldsChanged)) {
       createPaymentIn({
@@ -5399,7 +5404,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const getPermissions = () => {
-    const base = state.customPermissions.find((item) => item.role === getActiveRole()) || defaultPermissions[0];
+    const base = state.customPermissions.find((item) => item.role === getActiveRole()) || defaultPermissions[0]!;
     const currentUser = state.systemUsers.find((user) => user.id === getActiveUserId());
     const merged = currentUser?.permissionOverrides
       ? { ...base, ...currentUser.permissionOverrides, role: getActiveRole() }

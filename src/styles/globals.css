@@ -7,7 +7,8 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { min-height: 100%; margin: 0; }
+html, body, #root { min-height: 100%; margin: 0; max-width: 100%; }
+html, body { overflow-x: hidden; }
 body {
   background: var(--erp-color-canvas);
   color: var(--erp-color-text);
@@ -57,6 +58,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .erp-main-content {
   padding-bottom: max(var(--erp-space-6), env(safe-area-inset-bottom));
+  overflow-x: hidden;
 }
 
 /* Global application-layer contract:
@@ -83,6 +85,70 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .erp-drawer-layer {
   z-index: var(--erp-layer-drawer);
+}
+
+.erp-dialog-backdrop {
+  top: var(--erp-workspace-bar-height);
+}
+
+.erp-dialog-viewport {
+  top: var(--erp-workspace-bar-height);
+  min-height: calc(100dvh - var(--erp-workspace-bar-height));
+  overscroll-behavior: contain;
+}
+
+.erp-dialog-popup {
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.erp-dialog-viewport:not(.erp-drawer-viewport) > .erp-dialog-popup {
+  max-height: var(--erp-overlay-mobile-height);
+}
+
+@media (min-width: 640px) {
+  /* Center short dialogs, but clamp tall dialogs to the first usable pixel
+     below the workspace tabs instead of letting flex centering push them
+     underneath the highest application layer. */
+  .erp-dialog-viewport:not(.erp-drawer-viewport) {
+    overflow-y: auto;
+  }
+  .erp-dialog-viewport:not(.erp-drawer-viewport) > .erp-dialog-popup {
+    margin-block: auto;
+  }
+}
+
+.erp-option-positioner {
+  min-width: 0;
+  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
+}
+
+.erp-option-popup {
+  min-width: 0;
+  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
+  overscroll-behavior: contain;
+}
+
+.erp-popover-positioner {
+  min-width: 0;
+  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
+}
+
+.erp-popover-surface {
+  min-width: 0;
+  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
+  overscroll-behavior: contain;
+}
+
+.erp-picker-listbox {
+  min-width: 0;
+  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
+  overscroll-behavior: contain;
+}
+
+.erp-drawer-viewport {
+  min-height: calc(100dvh - var(--erp-workspace-bar-height));
 }
 
 .erp-drawer-backdrop,
@@ -216,6 +282,95 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 @media (max-width: 639px) {
+  /* Every modal becomes a bottom sheet below the workspace tabs. The drawer
+     contract is excluded because drawers already own their right/full-width
+     geometry. */
+  .erp-dialog-viewport:not(.erp-drawer-viewport) {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+  .erp-dialog-viewport:not(.erp-drawer-viewport) > .erp-dialog-popup {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - var(--erp-workspace-bar-height));
+    margin-block: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Base UI calculates option-list coordinates inline. Fixed positioning here
+     gives every shared select/combobox the same usable bottom-sheet surface on
+     phones while retaining the anchored desktop menu. */
+  .erp-option-positioner {
+    position: fixed !important;
+    inset-inline: var(--erp-overlay-gutter) !important;
+    top: auto !important;
+    bottom: var(--erp-overlay-gutter) !important;
+    width: auto !important;
+    max-width: none;
+    transform: none !important;
+  }
+  .erp-option-positioner::before {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    background: rgb(15 23 42 / 0.3);
+    content: "";
+  }
+  .erp-option-popup {
+    width: 100% !important;
+    max-width: none;
+    max-height: var(--erp-overlay-mobile-height);
+    border-radius: var(--erp-radius-xl);
+    padding-bottom: max(var(--erp-space-2), env(safe-area-inset-bottom));
+  }
+
+  .erp-popover-positioner {
+    position: fixed !important;
+    inset-inline: var(--erp-overlay-gutter) !important;
+    top: auto !important;
+    bottom: var(--erp-overlay-gutter) !important;
+    width: auto !important;
+    max-width: none;
+    transform: none !important;
+  }
+  .erp-popover-positioner::before {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    background: rgb(15 23 42 / 0.3);
+    content: "";
+  }
+  .erp-popover-surface {
+    width: 100% !important;
+    max-width: none;
+    max-height: var(--erp-overlay-mobile-height);
+    overflow-y: auto;
+    border-radius: var(--erp-radius-xl);
+    padding-bottom: max(var(--erp-space-2), env(safe-area-inset-bottom));
+  }
+
+  .erp-picker-listbox {
+    left: var(--erp-overlay-gutter) !important;
+    right: var(--erp-overlay-gutter) !important;
+    top: auto !important;
+    bottom: var(--erp-overlay-gutter) !important;
+    width: auto !important;
+    max-width: none;
+    max-height: var(--erp-overlay-mobile-height) !important;
+    border-radius: var(--erp-radius-xl);
+    padding-bottom: max(var(--erp-space-2), env(safe-area-inset-bottom));
+  }
+  .erp-picker-listbox::before {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    background: rgb(15 23 42 / 0.3);
+    content: "";
+  }
+
   /* Mobile is a reading surface first: preserve two-up KPIs and let the
      value/detail text truncate inside each card instead of widening the page. */
   [data-erp-component="metrics-region"] {

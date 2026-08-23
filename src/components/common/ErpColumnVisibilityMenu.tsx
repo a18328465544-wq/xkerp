@@ -38,8 +38,8 @@ export function ErpColumnVisibilityMenu<TData>({columns, visibility, onVisibilit
       {label}
     </BasePopover.Trigger>
     <BasePopover.Portal>
-      <BasePopover.Positioner className="erp-popover-layer outline-none" sideOffset={8} align="end">
-        <BasePopover.Popup className={`${width} max-w-[calc(100vw-1rem)] rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none`}>
+      <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={8} align="end">
+        <BasePopover.Popup className={`erp-popover-surface ${width} max-w-[calc(100vw-1rem)] rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none`}>
           {options.map(({column, id}) => <label key={id} className="flex cursor-pointer items-center gap-2 rounded-[var(--erp-radius-sm)] px-2 py-1.5 text-xs text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)]">
             <input type="checkbox" checked={visibility[id] !== false} onChange={(event) => onVisibilityChange((current) => ({...current, [id]: event.target.checked}))} />
             {columnLabel(column, id)}

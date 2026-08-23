@@ -2,6 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createInitialState } from "./store.ts";
 import { getPermissionsForUser, publicCollectionForUser, publicStateForUser } from "./publicState.ts";
+import { storeDateAfterDays } from "../src/utils/storeTime.ts";
+
+test("公开库存状态按入库日期实时计算库龄", () => {
+  const state = createInitialState({includeDemoData: true});
+  const card = state.inventory[0];
+  assert.ok(card);
+  card.entryTime = storeDateAfterDays(-11);
+  card.storageDays = 0;
+
+  const publicState = publicStateForUser(state);
+  const publicCard = publicState.inventory.find((item) => item.id === card.id);
+  assert.equal(publicCard?.storageDays, 11);
+
+  const publicCollection = publicCollectionForUser(state, "inventory");
+  const collectionCard = publicCollection.find((item) => item.id === card.id);
+  assert.equal(collectionCard?.storageDays, 11);
+});
 
 test("老板账号始终保留完整经营权限，不受历史覆盖项限制", () => {
   const state = createInitialState();

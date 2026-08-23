@@ -58,7 +58,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
     setOpen(false);
   };
 
-  const listbox = open && !value && panelPosition ? <div ref={listboxRef} id={listboxId} role="listbox" aria-label="可销售库存候选" className="fixed erp-popover-layer max-h-80 overflow-y-auto rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 shadow-[var(--erp-shadow-popover)]" style={{left: panelPosition.left, top: panelPosition.top, width: panelPosition.width, maxHeight: panelPosition.maxHeight}}>
+  const listbox = open && !value && panelPosition ? <div ref={listboxRef} id={listboxId} role="listbox" aria-label="可销售库存候选" className="erp-picker-listbox fixed erp-popover-layer max-h-80 overflow-y-auto rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 shadow-[var(--erp-shadow-popover)]" style={{left: panelPosition.left, top: panelPosition.top, width: panelPosition.width, maxHeight: panelPosition.maxHeight}}>
       {loading && <div className="flex items-center gap-2 px-3 py-4 text-xs text-[var(--erp-color-text-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" />正在查询可销售商品候选…</div>}
       {error && !loading && <div className="flex items-center justify-between gap-3 px-3 py-3 text-xs text-[var(--erp-color-danger)]"><span>{error}</span>{onRetry && <Button type="button" size="sm" variant="ghost" onClick={onRetry}><RefreshCw className="h-3.5 w-3.5" />重试</Button>}</div>}
       {!loading && !error && !options.length && <div className="px-3 py-5 text-center text-xs text-[var(--erp-color-text-muted)]"><Search className="mx-auto mb-2 h-4 w-4" />没有找到可销售商品候选</div>}

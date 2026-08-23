@@ -5,6 +5,7 @@ import {ErpAmountInput, ErpFormSection} from "@/src/components/common";
 import {Button, Input, Select} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
 import type {SalesFormValues, SalesSettlementAccountOption} from "@/src/types/sales";
+import {normalizeSalesPaidAmount} from "@/src/features/sales/sales.calculations";
 
 const paymentMethods = ["微信", "支付宝", "现金", "银行卡", "账期欠款"] as const;
 const paymentOptions = paymentMethods.map((value) => ({value, label: value}));
@@ -14,8 +15,9 @@ export function SalesPaymentSection({control, setValue, accounts, accountsLoadin
   const unpaidAmount = Math.max(0, totalAmount - paidAmount);
 
   useEffect(() => {
-    if (paymentMode === "full" && paidAmount !== totalAmount) {
-      setValue("paidAmount", totalAmount, {shouldDirty: totalAmount > 0, shouldValidate: true});
+    const normalizedPaidAmount = normalizeSalesPaidAmount(paidAmount, totalAmount, paymentMode);
+    if (Math.round(paidAmount || 0) !== normalizedPaidAmount) {
+      setValue("paidAmount", normalizedPaidAmount, {shouldDirty: totalAmount > 0, shouldValidate: true});
     }
   }, [paidAmount, paymentMode, setValue, totalAmount]);
 

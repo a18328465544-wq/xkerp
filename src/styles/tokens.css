@@ -70,6 +70,12 @@
   --erp-page-gap-compact: 12px;
   --erp-page-gap: 16px;
   --erp-page-gap-comfortable: 20px;
+  /* Overlay geometry is shared by dialogs, option lists and drawers. Keep
+     these values in one place so narrow-window behavior does not drift by
+     component or feature. */
+  --erp-overlay-gutter: 12px;
+  --erp-overlay-mobile-height: calc(100dvh - var(--erp-workspace-bar-height) - (var(--erp-overlay-gutter) * 2));
+  --erp-drawer-mobile-width: min(22rem, calc(100vw - 1rem));
   --erp-layer-tab-navigation: 1000;
   --erp-layer-popover: 950;
   --erp-layer-modal: 925;

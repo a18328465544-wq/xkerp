@@ -10,3 +10,9 @@ coverage/
 data/app-state.json
 data/backups/
 .claude/
+
+# Local browser/design QA artifacts; keep them out of releases.
+.playwright-cli/
+output/
+design-qa-*.png
+design-qa.md

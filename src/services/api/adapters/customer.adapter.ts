@@ -35,8 +35,9 @@ export function adaptCustomer(value: unknown, permissions: {showProfit: boolean}
   const dto = record(value);
   const phone = optionalText(dto.phone || dto.contact);
   const wechat = optionalText(dto.wechat);
-  const isCoreCustomer = dto.isCoreCustomer === true;
-  const level = isCoreCustomer ? "S级" : normalizeLevel(dto.level);
+  const normalizedLevel = normalizeLevel(dto.level);
+  const isCoreCustomer = dto.isCoreCustomer === true || normalizedLevel === "S级";
+  const level = isCoreCustomer ? "S级" : normalizedLevel;
   return {
     id: text(dto.id),
     name: text(dto.name, "未命名客户"),

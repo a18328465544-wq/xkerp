@@ -1,10 +1,10 @@
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
-import {LogIn, ShieldAlert} from "lucide-react";
+import {ArrowUpRight, Boxes, Eye, EyeOff, LockKeyhole, ShieldAlert, ShieldCheck, Store, UserRound, WalletCards} from "lucide-react";
 import {authApi, type AuthSession} from "@/src/services/api/endpoints/auth";
 import {ApiError, getAccessToken} from "@/src/services/api/client";
 import {queryKeys} from "@/src/services/api/query-keys";
-import {Button, Card, CardContent, Input} from "@/src/components/ui";
+import {Button, Card, Input} from "@/src/components/ui";
 import {ErpLoadingState, ErpPageError} from "@/src/components/common";
 
 type AuthContextValue = {
@@ -105,6 +105,7 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -119,20 +120,111 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
     }
   };
 
-  return <main className="flex min-h-screen items-center justify-center bg-[var(--erp-color-canvas)] p-4">
-    <Card className="w-full max-w-md">
-      <CardContent className="space-y-6 p-7">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"><LogIn className="h-5 w-5" /></span>
-          <div><h1 className="text-xl font-bold text-[var(--erp-color-text)]">GPU ERP</h1><p className="mt-1 text-sm text-[var(--erp-color-text-secondary)]">登录后进入经营工作台</p></div>
-        </div>
-        <form className="space-y-4" onSubmit={submit}>
-          <label className="block text-sm font-semibold">账号<Input className="mt-2" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required /></label>
-          <label className="block text-sm font-semibold">密码<Input className="mt-2" value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" required /></label>
-          {message && <p role="alert" aria-live="assertive" className="flex items-start gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />{message}</p>}
-          <Button className="w-full" type="submit" variant="primary" disabled={pending}>{pending ? "登录中…" : "登录并继续"}</Button>
-        </form>
-      </CardContent>
-    </Card>
-  </main>;
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--erp-color-canvas)] px-4 py-6 sm:px-6 sm:py-10">
+      <div aria-hidden="true" className="pointer-events-none absolute -left-24 top-12 h-64 w-64 rounded-full bg-[var(--erp-color-primary)] opacity-10 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-[var(--erp-color-primary)] opacity-10 blur-3xl" />
+
+      <Card className="relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[0_24px_80px_rgb(15_23_42_/_0.12)] lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="relative hidden min-h-[580px] overflow-hidden bg-[var(--erp-color-text)] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full border-[28px] border-[var(--erp-color-primary)] opacity-30" />
+          <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full border-[34px] border-white opacity-5" />
+
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-primary)] shadow-lg shadow-blue-950/30">
+                <Store className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-base font-bold tracking-wide">GPU ERP</p>
+                <p className="mt-0.5 text-xs text-white/60">经营工作台</p>
+              </div>
+            </div>
+            <p className="mt-16 text-xs font-semibold uppercase tracking-[0.24em] text-white/50">OPERATING DESK</p>
+            <h2 className="mt-5 max-w-md text-4xl font-bold leading-tight tracking-tight xl:text-[2.75rem]">
+              让库存、资金和订单，始终清晰可见。
+            </h2>
+            <p className="mt-6 max-w-md text-sm leading-7 text-white/65">
+              从采购入库到销售出库，在同一个工作台里掌握每天的经营节奏。
+            </p>
+          </div>
+
+          <div className="relative space-y-5">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
+                <Boxes className="h-4 w-4 text-[var(--erp-color-info-soft)]" />
+                <p className="mt-3 text-xs font-semibold">库存</p>
+                <p className="mt-1 text-[11px] text-white/50">实时掌握</p>
+              </div>
+              <div className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
+                <WalletCards className="h-4 w-4 text-[var(--erp-color-success-soft)]" />
+                <p className="mt-3 text-xs font-semibold">资金</p>
+                <p className="mt-1 text-[11px] text-white/50">清晰可追溯</p>
+              </div>
+              <div className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
+                <ArrowUpRight className="h-4 w-4 text-[var(--erp-color-warning-soft)]" />
+                <p className="mt-3 text-xs font-semibold">订单</p>
+                <p className="mt-1 text-[11px] text-white/50">流程可跟进</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-white/45">
+              <ShieldCheck className="h-4 w-4" />
+              <span>授权账号登录 · 权限按角色生效</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="min-w-0 p-6 sm:p-10 lg:p-12">
+          <div className="flex items-center justify-between gap-3 lg:hidden">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]">
+                <Store className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-[var(--erp-color-text)]">GPU ERP</p>
+                <p className="mt-0.5 text-[11px] text-[var(--erp-color-text-muted)]">经营工作台</p>
+              </div>
+            </div>
+            <span className="rounded-full bg-[var(--erp-color-info-soft)] px-3 py-1 text-[11px] font-semibold text-[var(--erp-color-primary)]">员工登录</span>
+          </div>
+
+          <div className="mt-8 lg:mt-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--erp-color-primary)]">WELCOME BACK</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-[var(--erp-color-text)] sm:text-[2.1rem]">登录经营工作台</h1>
+            <p className="mt-3 text-sm leading-6 text-[var(--erp-color-text-secondary)]">使用授权账号继续处理今天的业务。</p>
+          </div>
+
+          <form className="mt-9 space-y-5" onSubmit={submit}>
+            <div>
+              <label htmlFor="login-username" className="text-sm font-semibold text-[var(--erp-color-text)]">账号</label>
+              <div className="relative mt-2">
+                <UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
+                <Input id="login-username" className="h-11 pl-10" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="请输入账号" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="login-password" className="text-sm font-semibold text-[var(--erp-color-text)]">密码</label>
+                <span className="text-xs text-[var(--erp-color-text-muted)]">安全登录</span>
+              </div>
+              <div className="relative mt-2">
+                <LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
+                <Input id="login-password" className="h-11 pl-10 pr-11" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="请输入密码" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
+                <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--erp-color-text-muted)]" aria-label={showPassword ? "隐藏密码" : "显示密码"} title={showPassword ? "隐藏密码" : "显示密码"} onClick={() => setShowPassword((visible) => !visible)}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            {message && <div id="login-error" role="alert" aria-live="assertive" className="flex items-start gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-danger)]/20 bg-[var(--erp-color-danger-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--erp-color-danger)]"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>{message}</p></div>}
+            <Button className="h-12 w-full text-sm shadow-[0_8px_18px_rgb(10_132_255_/_0.2)]" type="submit" variant="primary" disabled={pending}>{pending ? "登录中…" : "登录并继续"}<ArrowUpRight className="h-4 w-4" /></Button>
+          </form>
+
+          <div className="mt-8 flex items-start gap-2 border-t border-[var(--erp-color-border)] pt-5 text-xs leading-5 text-[var(--erp-color-text-muted)]">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--erp-color-success)]" />
+            <p>仅限授权员工使用。登录后将按当前账号角色展示可访问的业务模块。</p>
+          </div>
+        </section>
+      </Card>
+    </main>
+  );
 }

@@ -19,6 +19,12 @@ test("core customer is always projected and submitted as S level", () => {
   assert.equal(toCustomerCreateRequest({...values, isCoreCustomer: true}).level, "S级");
 });
 
+test("legacy S level is projected as a core customer even without the boolean flag", () => {
+  const result = adaptCustomerDirectory({data: {customers: [{id: "KH-3", name: "旧核心", level: "S级"}]}}, {showProfit: true});
+  assert.equal(result.customers[0]?.level, "S级");
+  assert.equal(result.customers[0]?.isCoreCustomer, true);
+});
+
 test("create and update adapters preserve customer semantics without leaking create-only tags", () => {
   const create = toCustomerCreateRequest(values);
   const update = toCustomerUpdateRequest(values);

@@ -154,7 +154,7 @@ npm run build
 
 1. 确认用户明确授权上线，并记录本次包含的文件/功能。
 2. 执行 npm run lint、npm test、npm run build。
-3. 确认生产数据库备份可用；涉及迁移先完成迁移演练。
+3. 确认生产数据库备份可用；涉及迁移先完成迁移演练，并确认 `/api/ready` 通过。
 4. 使用 rsync 时必须排除 .env、.git、node_modules、data/、dist/、server-dist/，避免覆盖生产数据和本地环境。
 
 ### 9.2 当前生产流程
@@ -175,10 +175,12 @@ ssh -o BatchMode=yes ubuntu@1.14.64.60 '
   pm2 save
   sleep 3
   curl -fsS http://127.0.0.1:3001/api/health
+  curl -fsS http://127.0.0.1:3001/api/ready
 '
 
 curl -fsSI https://gpu-erp.cdgpu.cn/
 curl -fsS https://gpu-erp.cdgpu.cn/api/health
+curl -fsS https://gpu-erp.cdgpu.cn/api/ready
 ```
 
 ### 9.3 上线后

@@ -128,7 +128,7 @@ export function AppSidebar() {
         onMouseLeave={mobileSidebarOpen ? undefined : scheduleCloseDrawer}
         className={cn(
           "erp-drawer-layer fixed bottom-0 left-0 top-[var(--erp-workspace-bar-height)] flex h-[calc(100dvh-var(--erp-workspace-bar-height))] max-w-[calc(100vw-1rem)] shrink-0 flex-col overflow-hidden border-r border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] transition-[width,transform] duration-200 lg:static lg:z-auto lg:h-[100dvh] lg:flex",
-          mobileSidebarOpen ? "w-[min(22rem,calc(100vw-1rem))] translate-x-0" : "w-[min(18rem,calc(100vw-1rem))] -translate-x-full lg:translate-x-0",
+          mobileSidebarOpen ? "w-[var(--erp-drawer-mobile-width)] translate-x-0" : "w-[min(18rem,calc(100vw-1rem))] -translate-x-full lg:translate-x-0",
           visualCollapsed ? "lg:w-20" : "lg:w-48",
         )}
       >

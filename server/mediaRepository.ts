@@ -58,11 +58,14 @@ function parseDataUrl(dataUrl: unknown): ParsedImage {
   if (!match) {
     throw new MediaValidationError("UNSUPPORTED_IMAGE", "仅支持 JPG、PNG 或 WEBP 图片");
   }
-  const mimeType = match[1].toLowerCase();
+  const rawMimeType = match[1];
+  const encodedContent = match[2];
+  if (!rawMimeType || !encodedContent) throw new MediaValidationError("INVALID_IMAGE", "图片内容为空");
+  const mimeType = rawMimeType.toLowerCase();
   if (!supportedMimeTypes.has(mimeType)) {
     throw new MediaValidationError("UNSUPPORTED_IMAGE", "仅支持 JPG、PNG 或 WEBP 图片");
   }
-  const content = Buffer.from(match[2].replace(/\s+/g, ""), "base64");
+  const content = Buffer.from(encodedContent.replace(/\s+/g, ""), "base64");
   if (!content.length) throw new MediaValidationError("INVALID_IMAGE", "图片内容为空");
   if (content.length > MEDIA_MAX_INPUT_BYTES) {
     throw new MediaValidationError("IMAGE_INPUT_TOO_LARGE", "原始图片不能超过 12MB");
