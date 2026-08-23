@@ -566,6 +566,8 @@ sudo nginx -t
 - 系统内可通过备份接口创建手动业务快照，用于人工核对和迁移。
 - `scripts/pg_backup.sh` 生成 PostgreSQL custom dump；生产由
   `ops/systemd/gpu-erp-backup.timer` 每日 03:20（Asia/Shanghai）触发。
+- systemd 通过 `/usr/bin/bash` 调用备份脚本，避免 `rsync --no-perms` 环境下的
+  文件执行位差异让定时任务失效。
 - `scripts/pg_restore_drill.sh` 只允许在显式确认的隔离数据库执行恢复演练。
 
 建议生产备份策略：

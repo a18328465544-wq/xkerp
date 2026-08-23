@@ -17,3 +17,8 @@ for (const file of ["pg_backup.sh", "pg_restore_drill.sh"]) {
     assert.notEqual(mode & 0o111, 0);
   });
 }
+
+test("systemd backup service invokes the script through bash across rsync permission modes", () => {
+  const source = readFileSync(new URL("../ops/systemd/gpu-erp-backup.service", import.meta.url), "utf8");
+  assert.match(source, /ExecStart=\/usr\/bin\/bash \/home\/ubuntu\/gpu-erp\/scripts\/pg_backup\.sh/);
+});
