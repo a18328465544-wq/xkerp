@@ -5,7 +5,7 @@ import { Pool } from "pg";
 
 const projectRoot = process.cwd();
 const requiredEnv = ["DATABASE_URL", "OPEN_API_TOKEN", "BOOTSTRAP_ADMIN_PASSWORD"];
-const requiredMigrations = ["crm-foundation-v2"];
+const requiredMigrations = ["crm-foundation-v2", "operational-projections-v1"];
 const requiredTables = [
   "gpu_inventory",
   "gpu_purchase_invoices",

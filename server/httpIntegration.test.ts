@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import test from "node:test";
-import { assertTestDatabaseConfigured, acquireStateWriteLock } from "./db.ts";
+import { assertTestDatabaseConfigured, acquireStateWriteLock, withDatabaseTransaction } from "./db.ts";
+import { OPERATIONAL_PROJECTION_SCHEMA_VERSION } from "./operationalSchema.ts";
 
 const integrationEnabled = Boolean(
   process.env.NODE_ENV === "test"
@@ -131,4 +132,29 @@ test("PostgreSQL advisory writes serialize independent database connections", {
   const secondRelease = await secondReleasePromise;
   assert.equal(secondAcquired, true);
   await secondRelease();
+});
+
+test("operational projection migration is applied with generated inventory columns", {
+  skip: !integrationEnabled,
+}, async () => {
+  await withDatabaseTransaction(async (client) => {
+    const migration = await client.query<{ version: string }>(
+      "SELECT version FROM gpu_schema_migrations WHERE version = $1",
+      [OPERATIONAL_PROJECTION_SCHEMA_VERSION],
+    );
+    assert.equal(migration.rows[0]?.version, OPERATIONAL_PROJECTION_SCHEMA_VERSION);
+    const columns = await client.query<{ column_name: string; is_generated: string }>(`
+      SELECT column_name, is_generated
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'gpu_inventory'
+        AND column_name IN ('op_sn', 'op_status', 'op_entry_time')
+      ORDER BY column_name
+    `);
+    assert.deepEqual(columns.rows, [
+      { column_name: "op_entry_time", is_generated: "ALWAYS" },
+      { column_name: "op_sn", is_generated: "ALWAYS" },
+      { column_name: "op_status", is_generated: "ALWAYS" },
+    ]);
+  });
 });

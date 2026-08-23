@@ -76,10 +76,10 @@ if [[ "${REQUIRED_TABLE_COUNT}" != "6" ]]; then
 fi
 
 MIGRATION_COUNT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
-  SELECT COUNT(*) FROM gpu_schema_migrations WHERE version = 'crm-foundation-v2';
+  SELECT COUNT(*) FROM gpu_schema_migrations WHERE version IN ('crm-foundation-v2', 'operational-projections-v1');
 ")"
-if [[ "${MIGRATION_COUNT}" != "1" ]]; then
-  echo "[restore-drill] 必需迁移版本缺失: crm-foundation-v2" >&2
+if [[ "${MIGRATION_COUNT}" != "2" ]]; then
+  echo "[restore-drill] 必需迁移版本缺失: crm-foundation-v2 / operational-projections-v1" >&2
   exit 1
 fi
 

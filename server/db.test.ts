@@ -77,7 +77,7 @@ test("indexed inventory query applies filters and caps server-side pagination", 
   assert.equal(query.pageSize, 200);
   assert.equal(query.offset, 400);
   assert.deepEqual(query.values, ["已入库", "显卡", "A-01", "%RTX 4090%"]);
-  assert.match(query.where, /data->>'status' = \$1/);
+  assert.match(query.where, /op_status = \$1/);
   assert.match(query.where, /ILIKE \$4/);
   assert.match(query.where, /<> '已售出'/);
   assert.match(query.select, /jsonb_build_object\('storageDays'/);
@@ -93,10 +93,10 @@ test("inventory page query keeps active, brand, risk, and aging filters inside P
   });
 
   assert.match(query.where, /NOT IN \('已售出', '已退货', '已报废', '已拆卸', '已组装'\)/);
-  assert.match(query.where, /data->>'brand' = \$1/);
+  assert.match(query.where, /op_brand = \$1/);
   assert.match(query.where, /marketPrice/);
   assert.match(query.where, /marketPrice[^\n]+> 0/);
-  assert.match(query.where, /entryTime/);
+  assert.match(query.where, /op_entry_time/);
   assert.equal(query.values[0], "华硕");
   assert.equal(query.values.length, 2);
 });
@@ -107,7 +107,7 @@ test("inventory page sorting uses an allowlist and never interpolates arbitrary 
   assert.match(sorted.orderBy, /ASC NULLS LAST/);
 
   const rejected = buildInventoryPageQuery({ sortKey: "id; DROP TABLE gpu_inventory", sortDirection: "asc" });
-  assert.equal(rejected.orderBy, "ORDER BY data->>'entryTime' DESC NULLS LAST, id ASC");
+  assert.equal(rejected.orderBy, "ORDER BY op_entry_time DESC NULLS LAST, id ASC");
 });
 
 test("audit log page query caps page size and keeps keyword filtering in PostgreSQL", () => {

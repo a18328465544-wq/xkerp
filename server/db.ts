@@ -7,6 +7,7 @@ import { hashPassword, isPasswordHash, type PersistedSession, type SessionStore 
 import type { DailyClosing, SystemUserAccount } from "../src/types.ts";
 import { storeDateAfterDays } from "../src/utils/storeTime.ts";
 import { applyCrmFoundationSchema } from "./crmSchema.ts";
+import { applyOperationalProjectionSchema } from "./operationalSchema.ts";
 import { createResilientQueue } from "./resilientQueue.ts";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
@@ -510,6 +511,7 @@ async function initializePostgres() {
     // Additive normalized CRM foundation. Legacy JSONB CRM collections remain intact
     // and are migrated later through an explicit mapping/backfill process.
     await applyCrmFoundationSchema(client);
+    await applyOperationalProjectionSchema(client);
     // JSONB remains the canonical document format, while these expression indexes make the
     // high-frequency operational lookups use PostgreSQL instead of loading whole collections.
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_sn_idx ON gpu_inventory (LOWER(data->>'sn')) WHERE COALESCE(BTRIM(data->>'sn'), '') <> ''`);
@@ -785,14 +787,14 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
   };
   const keyword = filters.keyword?.trim();
   if (filters.activeOnly) {
-    clauses.push(`COALESCE(data->>'status', '') NOT IN ('已售出', '已退货', '已报废', '已拆卸', '已组装')`);
+    clauses.push(`COALESCE(op_status, '') NOT IN ('已售出', '已退货', '已报废', '已拆卸', '已组装')`);
   } else if (!filters.includeSold) {
-    clauses.push(`COALESCE(data->>'status', '') <> '已售出'`);
+    clauses.push(`COALESCE(op_status, '') <> '已售出'`);
   }
-  if (filters.status) clauses.push(`data->>'status' = ${bind(filters.status)}`);
-  if (filters.category && filters.category !== "all") clauses.push(`COALESCE(data->>'category', '显卡') = ${bind(filters.category)}`);
-  if (filters.brand && filters.brand !== "all") clauses.push(`data->>'brand' = ${bind(filters.brand)}`);
-  if (filters.warehouseLocation) clauses.push(`data->>'warehouseLocation' = ${bind(filters.warehouseLocation)}`);
+  if (filters.status) clauses.push(`op_status = ${bind(filters.status)}`);
+  if (filters.category && filters.category !== "all") clauses.push(`op_category = ${bind(filters.category)}`);
+  if (filters.brand && filters.brand !== "all") clauses.push(`op_brand = ${bind(filters.brand)}`);
+  if (filters.warehouseLocation) clauses.push(`op_warehouse = ${bind(filters.warehouseLocation)}`);
   if (filters.risk === "mined") clauses.push(`COALESCE((data->>'gpuRisk')::boolean, false)`);
   if (filters.risk === "upturned") {
     clauses.push(`COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) < COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)`);
@@ -802,18 +804,18 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
   }
   if (filters.minStorageDays && filters.minStorageDays > 0) {
     const cutoff = storeDateAfterDays(-Math.floor(filters.minStorageDays));
-    clauses.push(`LEFT(COALESCE(data->>'entryTime', ''), 10) <= ${bind(cutoff)}`);
+    clauses.push(`LEFT(COALESCE(op_entry_time, ''), 10) <= ${bind(cutoff)}`);
   }
   if (Number.isFinite(filters.maxStorageDays) && Number(filters.maxStorageDays) >= 0) {
     const cutoff = storeDateAfterDays(-Math.floor(Number(filters.maxStorageDays)));
-    clauses.push(`LEFT(COALESCE(data->>'entryTime', ''), 10) >= ${bind(cutoff)}`);
+    clauses.push(`LEFT(COALESCE(op_entry_time, ''), 10) >= ${bind(cutoff)}`);
   }
   if (filters.minProfitMargin && filters.minProfitMargin > 0) {
     clauses.push(`COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'estSellPrice', '')::numeric, 0) >= COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0) * ${bind(1 + filters.minProfitMargin)}`);
   }
   if (keyword) {
     const placeholder = bind(`%${keyword}%`);
-    clauses.push(`CONCAT_WS(' ', id, data->>'productId', data->>'productName', data->>'model', data->>'brand', data->>'version', data->>'vram', data->>'sn', data->>'expressNo', data->>'supplierName', data->>'warehouseLocation', data->>'remarks') ILIKE ${placeholder}`);
+    clauses.push(`CONCAT_WS(' ', id, op_product_id, data->>'productName', data->>'model', op_brand, data->>'version', data->>'vram', op_sn, data->>'expressNo', data->>'supplierName', op_warehouse, data->>'remarks') ILIKE ${placeholder}`);
   }
   const sortExpressions: Record<string, string> = {
     id: "id",
@@ -824,15 +826,15 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     costPrice: "COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
     profit: "COALESCE(NULLIF(data->>'estSellPrice', '')::numeric, 0) - COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)",
     days: inventoryStorageDaysExpression,
-    status: "data->>'status'",
-    warehouseLocation: "data->>'warehouseLocation'",
-    entryTime: "data->>'entryTime'",
+    status: "op_status",
+    warehouseLocation: "op_warehouse",
+    entryTime: "op_entry_time",
   };
   const sortExpression = filters.sortKey ? sortExpressions[filters.sortKey] : undefined;
   const sortDirection = filters.sortDirection === "asc" ? "ASC" : "DESC";
   const orderBy = sortExpression
     ? `ORDER BY ${sortExpression} ${sortDirection} NULLS LAST, id ASC`
-    : "ORDER BY data->>'entryTime' DESC NULLS LAST, id ASC";
+    : "ORDER BY op_entry_time DESC NULLS LAST, id ASC";
   return {
     page,
     pageSize,
@@ -904,7 +906,7 @@ export async function findInventoryRecord<T = unknown>(id: string): Promise<T | 
 export async function findInventoryRecordBySn<T = unknown>(sn: string): Promise<T | null> {
   await initializePostgres();
   const result = await getPool().query<{ data: T }>(
-    "SELECT data FROM gpu_inventory WHERE LOWER(data->>'sn') = LOWER($1) LIMIT 1",
+    "SELECT data FROM gpu_inventory WHERE op_sn = LOWER($1) LIMIT 1",
     [sn],
   );
   return result.rows[0]?.data || null;
