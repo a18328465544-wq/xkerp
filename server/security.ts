@@ -11,6 +11,7 @@ export type SessionStore = {
   create(tokenHash: string, session: PersistedSession): Promise<void>;
   resolve(tokenHash: string): Promise<PersistedSession | null>;
   revoke(tokenHash: string): Promise<void>;
+  cleanupExpired(expiresBefore: number): Promise<number>;
 };
 
 export function hashPassword(password: string) {
@@ -70,19 +71,35 @@ export function hashSessionToken(token: string) {
 // Sessions live in the shared database instead of a process-local Map. This keeps logins valid
 // across restarts and lets every API instance authenticate the same bearer token. Only a token
 // hash is persisted, so a database read cannot be replayed as a browser credential.
-export function createSessionManager(store: SessionStore) {
+export function createSessionManager(store: SessionStore, options: { cleanupIntervalMs?: number; now?: () => number } = {}) {
+  const requestedCleanupIntervalMs = options.cleanupIntervalMs ?? 15 * 60 * 1_000;
+  const cleanupIntervalMs = Number.isFinite(requestedCleanupIntervalMs) ? Math.max(1_000, requestedCleanupIntervalMs) : 15 * 60 * 1_000;
+  const now = options.now ?? Date.now;
+  let nextCleanupAt = 0;
+  let cleanupPromise: Promise<number> | undefined;
+  const cleanupExpired = async (force = false) => {
+    const current = now();
+    if (!force && current < nextCleanupAt) return 0;
+    if (cleanupPromise) return cleanupPromise;
+    nextCleanupAt = current + cleanupIntervalMs;
+    cleanupPromise = store.cleanupExpired(current).finally(() => {cleanupPromise = undefined;});
+    return cleanupPromise;
+  };
   return {
     async create(userId: string) {
+      await cleanupExpired().catch(() => 0);
       const token = randomBytes(32).toString("hex");
-      await store.create(hashSessionToken(token), { userId, expiresAt: Date.now() + SESSION_TTL_MS });
+      await store.create(hashSessionToken(token), { userId, expiresAt: now() + SESSION_TTL_MS });
       return token;
     },
     async resolve(token: string | null | undefined) {
       if (!token) return null;
+      await cleanupExpired().catch(() => 0);
       return store.resolve(hashSessionToken(token));
     },
     async revoke(token: string | null | undefined) {
       if (token) await store.revoke(hashSessionToken(token));
     },
+    cleanupExpired: () => cleanupExpired(true),
   };
 }

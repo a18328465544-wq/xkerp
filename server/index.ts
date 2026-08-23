@@ -56,7 +56,7 @@ import { ensureCrmCustomerAccount, upsertCrmCustomerAccount } from "./crmAccount
 import { createSerializedMutationRunner, isMutationAbortedError } from "./mutationQueue.ts";
 import { createAuthMutationRunner } from "./authMutation.ts";
 import { requiresStateSerialization } from "./mutationPolicy.ts";
-import { redactRequestPath, safeErrorMessage } from "./observability.ts";
+import { createRequestMetrics, redactRequestPath, safeErrorMessage } from "./observability.ts";
 import { syncCrmFollowUp, syncCrmQuote, syncCrmRequirement } from "./crmCommandRepository.ts";
 import {
   confirmQuickCaptureAuditInTransaction,
@@ -108,12 +108,14 @@ const OPEN_API_RATE_LIMIT_WINDOW_MS = Number(process.env.OPEN_API_RATE_LIMIT_WIN
 const OPEN_API_RATE_LIMIT_MAX = Number(process.env.OPEN_API_RATE_LIMIT_MAX || 240);
 
 export const app = express();
+const requestMetrics = createRequestMetrics();
 app.disable("x-powered-by");
 app.set("trust proxy", "loopback");
 app.use(helmet());
 // Generate the request id before parsers or route handlers so even malformed/oversized payloads
 // can be correlated with a structured error response.
 app.use(requestContext);
+app.use(requestMetrics.middleware);
 // State snapshots and analytics payloads can grow with inventory and invoice
 // history. Compress only responses large enough to benefit; compression
 // handles content negotiation and skips downloads/already encoded responses.
@@ -152,7 +154,7 @@ const openApiRateLimiter = rateLimit({
 let state!: AppState;
 let stateRevision = 0;
 let stateReady: Promise<void> | undefined;
-const sessions = createSessionManager(createDatabaseSessionStore());
+const sessions = createSessionManager(createDatabaseSessionStore(), {cleanupIntervalMs: Number(process.env.SESSION_CLEANUP_INTERVAL_MS || 15 * 60 * 1_000)});
 
 type AuthRequest = express.Request & {
   authToken?: string;
@@ -1402,6 +1404,8 @@ registerSystemRoutes(app, {
   getRevision: () => stateRevision,
   logRequestError,
   sendServiceUnavailable: (req, res, message) => sendApiError(req, res, 503, "SERVICE_NOT_READY", message),
+  requireBoss,
+  getMetricsSnapshot: requestMetrics.snapshot,
 });
 
 registerFinanceClosingRoutes(app, {

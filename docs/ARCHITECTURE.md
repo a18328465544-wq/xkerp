@@ -650,8 +650,8 @@ sudo nginx -t
 4. **统计口径需要继续后端化**  
    首页、客户等级、利润、库存价值等应逐步变成后端汇总接口或汇总表，避免前端全量计算。
 
-5. **会话已持久化，但仍需关注过期清理与多实例运维**
-   `gpu_sessions` 只保存 token 哈希，已支持 PM2 重启和多实例共享；后续可增加定期清理任务和 Redis 作为高并发场景的专用会话层。
+5. **会话已持久化并具备有界清理，未来高并发可再引入专用存储**
+   `gpu_sessions` 只保存 token 哈希，支持 PM2 重启和多实例共享；登录与会话读取会按 `SESSION_CLEANUP_INTERVAL_MS` 节流执行一次批量过期清理，维护失败不会阻断正常鉴权。只有扩展到高并发、多地域部署时才需要评估 Redis。
 
 6. **网站和小程序应复用 Open API**  
    不建议复制 ERP 业务逻辑到网站或小程序后端。网站/小程序应作为 API 消费方。
@@ -668,4 +668,5 @@ sudo nginx -t
 | 导入/导出异常 | `src/utils/csvImport.ts`、`src/utils/csv.ts`、对应页面 import utils |
 | 性能卡顿 | 是否全量渲染、是否前端全量筛选、是否 API 返回全量 state |
 | 服务器 500 | `pm2 logs gpu-erp-api`、`sudo tail -n 80 /var/log/nginx/error.log` |
+| 请求量/错误率/延迟 | 老板账号访问 `GET /api/ops/metrics`；指标只保留归一化路由，不含查询值、账号或 token |
 | 静态页面权限问题 | `/home/ubuntu/gpu-erp` 和 `dist` 文件权限 |

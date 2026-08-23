@@ -48,6 +48,12 @@ if (!/TEST_DATABASE_URL/.test(dbSource) || !/process\.env\.NODE_ENV\s*===\s*"tes
 if (!/redactRequestPath/.test(observabilitySource) || !/safeErrorMessage/.test(observabilitySource)) {
   fail("结构化日志必须通过统一的请求路径和异常信息脱敏入口。");
 }
+if (!/createRequestMetrics/.test(observabilitySource) || !/api\/ops\/metrics/.test(fs.readFileSync(systemRoutesPath, "utf8"))) {
+  fail("后端必须提供低基数请求指标，并通过老板权限的 /api/ops/metrics 暴露。");
+}
+if (!/cleanupExpired/.test(dbSource) || !/SESSION_CLEANUP_INTERVAL_MS/.test(indexSource)) {
+  fail("数据库会话必须按统一间隔清理过期 token，不能无限增长。");
+}
 if (/app\.use\(asyncRoute\(requireAuth\)\)/.test(indexSource)) {
   fail("认证不能只注册在部分路由之后。");
 }

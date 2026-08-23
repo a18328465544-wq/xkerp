@@ -763,6 +763,14 @@ export function createDatabaseSessionStore(): SessionStore {
       await initializePostgres();
       await getPool().query("DELETE FROM gpu_sessions WHERE token_hash = $1", [tokenHash]);
     },
+    async cleanupExpired(expiresBefore: number) {
+      await initializePostgres();
+      const result = await getPool().query(
+        "DELETE FROM gpu_sessions WHERE expires_at <= to_timestamp($1 / 1000.0)",
+        [expiresBefore],
+      );
+      return result.rowCount || 0;
+    },
   };
 }
 

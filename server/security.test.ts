@@ -80,10 +80,19 @@ test("initial client state strips lazy heavy collections", () => {
 
 test("session manager issues and revokes bearer tokens", async () => {
   const stored = new Map<string, { userId: string; expiresAt: number }>();
+  let cleanupCount = 0;
   const sessions = createSessionManager({
     create: async (tokenHash, session) => { stored.set(tokenHash, session); },
     resolve: async (tokenHash) => stored.get(tokenHash) || null,
     revoke: async (tokenHash) => { stored.delete(tokenHash); },
+    cleanupExpired: async (expiresBefore) => {
+      let deleted = 0;
+      for (const [tokenHash, session] of stored) {
+        if (session.expiresAt <= expiresBefore) {stored.delete(tokenHash); deleted += 1;}
+      }
+      cleanupCount += 1;
+      return deleted;
+    },
   });
   const token = await sessions.create("USR-ADMIN");
 
@@ -92,4 +101,25 @@ test("session manager issues and revokes bearer tokens", async () => {
 
   await sessions.revoke(token);
   assert.equal(await sessions.resolve(token), null);
+  assert.equal(cleanupCount, 1, "cleanup is throttled across normal session traffic");
+});
+
+test("session manager can force cleanup of expired database sessions", async () => {
+  const stored = new Map([["expired", {userId: "USR-OLD", expiresAt: 1_000}]]);
+  let current = 2_000;
+  const sessions = createSessionManager({
+    create: async (tokenHash, session) => {stored.set(tokenHash, session);},
+    resolve: async (tokenHash) => stored.get(tokenHash) || null,
+    revoke: async (tokenHash) => {stored.delete(tokenHash);},
+    cleanupExpired: async (expiresBefore) => {
+      let deleted = 0;
+      for (const [tokenHash, session] of stored) {
+        if (session.expiresAt <= expiresBefore) {stored.delete(tokenHash); deleted += 1;}
+      }
+      return deleted;
+    },
+  }, {now: () => current, cleanupIntervalMs: 1_000});
+  assert.equal(await sessions.cleanupExpired(), 1);
+  current += 1_000;
+  assert.equal(await sessions.cleanupExpired(), 0);
 });

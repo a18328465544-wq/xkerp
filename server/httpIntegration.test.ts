@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import test from "node:test";
-import { assertTestDatabaseConfigured, acquireStateWriteLock, withDatabaseTransaction } from "./db.ts";
+import { assertTestDatabaseConfigured, acquireStateWriteLock, createDatabaseSessionStore, withDatabaseTransaction } from "./db.ts";
 import { OPERATIONAL_PROJECTION_SCHEMA_VERSION } from "./operationalSchema.ts";
 
 const integrationEnabled = Boolean(
@@ -106,9 +106,38 @@ test("a configured login can reach finance only by its effective menu permission
     });
     const expectedStatus = loginPayload.data?.user?.role === "老板" ? 200 : 403;
     assert.equal(finance.status, expectedStatus);
+
+    const metrics = await fetch(`${baseUrl}/api/ops/metrics`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(metrics.status, expectedStatus);
+    if (expectedStatus === 200) {
+      const payload = await metrics.json() as {data?: {requests?: {total?: number; routes?: unknown[]}}};
+      assert.equal(typeof payload.data?.requests?.total, "number");
+      assert.ok(Array.isArray(payload.data?.requests?.routes));
+      assert.equal(metrics.headers.get("cache-control"), "no-store, private");
+    }
   } finally {
     await closeServer(server);
   }
+});
+
+test("expired PostgreSQL sessions are pruned in one bounded cleanup", {
+  skip: !integrationEnabled,
+}, async () => {
+  const tokenHash = `expired-session-${Date.now()}`;
+  await withDatabaseTransaction(async (client) => {
+    await client.query(
+      "INSERT INTO gpu_sessions (token_hash, user_id, expires_at) VALUES ($1, $2, NOW() - INTERVAL '1 day')",
+      [tokenHash, "USR-EXPIRED"],
+    );
+  });
+  const deleted = await createDatabaseSessionStore().cleanupExpired(Date.now());
+  assert.ok(deleted >= 1);
+  await withDatabaseTransaction(async (client) => {
+    const result = await client.query<{count: string}>("SELECT COUNT(*)::text AS count FROM gpu_sessions WHERE token_hash = $1", [tokenHash]);
+    assert.equal(result.rows[0]?.count, "0");
+  });
 });
 
 test("PostgreSQL advisory writes serialize independent database connections", {
