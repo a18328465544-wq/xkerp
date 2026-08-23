@@ -30,6 +30,13 @@ View your app in AI Studio: https://ai.studio/apps/453b1174-1381-468d-9087-8cb94
 4. Run the frontend:
    `npm run dev`
 
+Run the complete local PostgreSQL-backed HTTP integration gate with Docker:
+
+```bash
+npm run typecheck:server-tests
+npm run test:backend-http:docker
+```
+
 ## Production Ports
 
 The production API is fixed to port `3001`. Keep these files consistent:

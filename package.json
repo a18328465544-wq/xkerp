@@ -15,12 +15,14 @@
     "build:daily-report": "esbuild server/dailyReportCli.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=server-dist/daily-report.mjs",
     "test:crm-lead": "tsx --test server/crmCustomerLead.test.ts",
     "test:backend-http": "NODE_ENV=test RUN_BACKEND_HTTP_TESTS=1 tsx --test server/httpIntegration.test.ts",
+    "test:backend-http:docker": "node scripts/run-backend-integration.mjs",
     "test:non-operating": "tsx --test src/components/nonOperatingFinanceUtils.test.ts src/components/nonOperatingFinanceRender.test.tsx server/nonOperatingFinance.test.ts",
     "crm:migrate": "tsx server/crmMigrationCli.ts",
     "crm:migrate:apply": "tsx server/crmMigrationCli.ts --apply",
     "preview": "vite preview --host=0.0.0.0 --port=3010",
     "typecheck": "tsc --noEmit -p tsconfig.frontend.json",
     "typecheck:server": "tsc --noEmit -p tsconfig.server.json",
+    "typecheck:server-tests": "tsc --noEmit -p tsconfig.server-tests.json",
     "check:mutation-routes": "node scripts/check-mutation-routes.mjs",
     "check:release": "node scripts/check-release-state.mjs",
     "check:architecture": "node scripts/check-architecture.mjs && node scripts/check-backend-architecture.mjs && npm run check:mutation-routes",
@@ -37,7 +39,8 @@
     "components:inventory": "node scripts/component-inventory.mjs",
     "lint:components": "node scripts/component-inventory.mjs --check && node scripts/check-component-boundaries.mjs && node scripts/check-frontend-rules.mjs",
     "lint": "npm run lint:components && npm run lint:ui && npm run lint:design-system && npm run lint:analytics && npm run lint:reuse && npm run lint:architecture && npm run typecheck",
-    "test": "node scripts/run-tests.mjs"
+    "test": "node scripts/run-tests.mjs",
+    "verify:ci": "npm run typecheck && npm run typecheck:server && npm run typecheck:server-tests && npm run lint && npm test && npm run build && npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

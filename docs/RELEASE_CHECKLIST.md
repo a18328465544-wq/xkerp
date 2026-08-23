@@ -10,16 +10,20 @@
 npm ci
 npm run typecheck
 npm run typecheck:server
+npm run typecheck:server-tests
 npm run lint
 npm test
-npm run test:backend-http
+npm run test:backend-http:docker
 npm run build
-npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
 npm run check:release
 ```
 
 `test:backend-http` 必须配置独立的 `TEST_DATABASE_URL`，不能复用生产数据库；测试还要设置
-`POSTGRES_IMPORT_LEGACY_JSON=false`，避免把本地历史 JSON 导入测试库。CI 使用 PostgreSQL 服务执行这组测试。
+`POSTGRES_IMPORT_LEGACY_JSON=false`，避免把本地历史 JSON 导入测试库。本机 Docker 环境优先运行
+`test:backend-http:docker`，脚本会创建并自动清理一次性 PostgreSQL 16 容器。CI 使用独立 PostgreSQL 服务执行同一组测试。
+
+正式服务端代码继续执行严格类型检查；历史测试夹具使用兼容级类型检查，确保测试文件至少纳入 TypeScript 门禁，后续新增测试不得依赖不安全的类型断言。
 
 ## 2. 生产环境门禁
 
@@ -35,7 +39,7 @@ systemctl is-enabled gpu-erp-backup.timer
 systemctl status gpu-erp-backup.timer --no-pager
 ```
 
-预检必须确认 `DATABASE_URL`、`OPEN_API_TOKEN`、`BOOTSTRAP_ADMIN_PASSWORD`、数据库连接、最新迁移和三份构建文件均存在。
+预检必须确认 `DATABASE_URL`、`OPEN_API_TOKEN`、`BOOTSTRAP_ADMIN_PASSWORD`、数据库连接、必需迁移版本、核心业务表和三份非空构建文件均存在。生产密钥不得使用示例占位值且长度不得少于 16 位，`POSTGRES_IMPORT_LEGACY_JSON` 必须为 `false`。
 
 ## 3. 备份和恢复门禁
 
@@ -47,7 +51,8 @@ RESTORE_DRILL_CONFIRM=I_UNDERSTAND_ISOLATED_DATABASE npm run restore:drill
 ```
 
 - 生产数据库与 `RESTORE_TEST_DATABASE_URL` 相同会被脚本拒绝。
-- 记录最近一次 dump 文件、大小、`pg_restore --list` 结果和恢复演练时间。
+- 恢复脚本会校验核心业务表、必需迁移版本，并对比生产源与恢复库的核心表行数指纹。
+- 记录最近一次 dump 文件、大小、`pg_restore --list` 结果、核心表行数指纹和恢复演练时间。
 
 ## 4. 上线后验收
 

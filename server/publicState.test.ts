@@ -15,7 +15,7 @@ test("公开库存状态按入库日期实时计算库龄", () => {
   const publicCard = publicState.inventory.find((item) => item.id === card.id);
   assert.equal(publicCard?.storageDays, 11);
 
-  const publicCollection = publicCollectionForUser(state, "inventory");
+  const publicCollection = publicCollectionForUser(state, "inventory") as typeof state.inventory;
   const collectionCard = publicCollection.find((item) => item.id === card.id);
   assert.equal(collectionCard?.storageDays, 11);
 });

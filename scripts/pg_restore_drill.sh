@@ -56,4 +56,54 @@ pg_restore \
   "${DUMP_FILE}"
 
 psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT 1" >/dev/null
-echo "[restore-drill] 恢复演练通过: ${DUMP_FILE}"
+
+REQUIRED_TABLE_COUNT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
+  SELECT COUNT(*)
+  FROM information_schema.tables
+  WHERE table_schema = 'public'
+    AND table_name = ANY(ARRAY[
+      'gpu_inventory',
+      'gpu_purchase_invoices',
+      'gpu_sales_invoices',
+      'gpu_finance_ledger',
+      'gpu_system_users',
+      'gpu_sessions'
+    ]);
+")"
+if [[ "${REQUIRED_TABLE_COUNT}" != "6" ]]; then
+  echo "[restore-drill] 核心业务表校验失败: ${REQUIRED_TABLE_COUNT}/6" >&2
+  exit 1
+fi
+
+MIGRATION_COUNT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
+  SELECT COUNT(*) FROM gpu_schema_migrations WHERE version = 'crm-foundation-v2';
+")"
+if [[ "${MIGRATION_COUNT}" != "1" ]]; then
+  echo "[restore-drill] 必需迁移版本缺失: crm-foundation-v2" >&2
+  exit 1
+fi
+
+SOURCE_FINGERPRINT="$(psql --dbname="${DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
+  SELECT CONCAT_WS(':',
+    (SELECT COUNT(*) FROM gpu_inventory),
+    (SELECT COUNT(*) FROM gpu_purchase_invoices),
+    (SELECT COUNT(*) FROM gpu_sales_invoices),
+    (SELECT COUNT(*) FROM gpu_finance_ledger),
+    (SELECT COUNT(*) FROM gpu_system_users)
+  );
+")"
+TARGET_FINGERPRINT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
+  SELECT CONCAT_WS(':',
+    (SELECT COUNT(*) FROM gpu_inventory),
+    (SELECT COUNT(*) FROM gpu_purchase_invoices),
+    (SELECT COUNT(*) FROM gpu_sales_invoices),
+    (SELECT COUNT(*) FROM gpu_finance_ledger),
+    (SELECT COUNT(*) FROM gpu_system_users)
+  );
+")"
+if [[ "${SOURCE_FINGERPRINT}" != "${TARGET_FINGERPRINT}" ]]; then
+  echo "[restore-drill] 恢复后的核心表行数与备份源不一致" >&2
+  exit 1
+fi
+
+echo "[restore-drill] 恢复演练通过: ${DUMP_FILE}; core-row-counts=${TARGET_FINGERPRINT}"
