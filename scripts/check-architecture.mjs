@@ -116,8 +116,8 @@ const serviceFiles = files.filter((file) => relative(file).startsWith("src/servi
 for (const file of serviceFiles) {
   const source = fs.readFileSync(file, "utf8");
   const executableSource = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  if (file !== path.join(root, "src/services/api/state-compat.ts") && /\/api\/state\?mode=full/.test(executableSource)) {
-    fail(`${relative(file)} 仍直接使用 full state URL，必须经过 state-compat.ts。`);
+  if (/\/api\/state\?mode=full/.test(executableSource)) {
+    fail(`${relative(file)} 仍使用 full state URL；正式前端必须改用具备独立权限边界的领域读取接口。`);
   }
 }
 

@@ -5,7 +5,7 @@ import {Link, useBlocker, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
-import {ApiError, queryKeys, returnsApi, stateApi} from "@/src/services/api";
+import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {SalesReturnFormValues} from "@/src/types/returns";
@@ -19,7 +19,7 @@ export function NewSalesReturnPage() {
   const queryClient = useQueryClient();
   const {session, status, error: authError, refresh, logout} = useAuth();
   const canAccess = createCapabilities(session).menu("return_sales") || createCapabilities(session).menu("return_orders");
-  const stateQuery = useQuery({queryKey: queryKeys.state.full(), queryFn: ({signal}) => stateApi.full(signal), enabled: canAccess, retry: false});
+  const stateQuery = useQuery({queryKey: queryKeys.returns.reference(), queryFn: ({signal}) => returnsApi.reference(signal), enabled: canAccess, retry: false});
 
   if (status === "loading") return <ReturnState title="正在验证退货权限" icon={<RefreshCw className="h-5 w-5 animate-spin" />} />;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
@@ -27,7 +27,7 @@ export function NewSalesReturnPage() {
   if (!canAccess) return <ReturnState title="当前账号没有销售退货权限" description="服务器已拒绝 return_sales / return_orders 菜单访问（403）。" icon={<LockKeyhole className="h-5 w-5" />} />;
   if (stateQuery.isPending || !stateQuery.data) return <ReturnState title="正在加载销售单和库存" icon={<RefreshCw className="h-5 w-5 animate-spin" />} />;
   if (stateQuery.error) return <ErpPageError title="无法加载退货基础数据" description={stateQuery.error.message} onRetry={() => void stateQuery.refetch()} />;
-  return <SalesReturnForm session={session} invoices={stateQuery.data.salesInvoices} inventory={stateQuery.data.inventory} onAuthExpired={logout} onSuccess={() => void queryClient.invalidateQueries({queryKey: queryKeys.state.full()})} />;
+  return <SalesReturnForm session={session} invoices={stateQuery.data.salesInvoices} inventory={stateQuery.data.inventory} onAuthExpired={logout} onSuccess={() => void queryClient.invalidateQueries({queryKey: queryKeys.returns.all()})} />;
 }
 
 function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess}: {session: AuthSession; invoices: SalesInvoice[]; inventory: Array<{id: string; sn: string; salesInvoiceId?: string; status: string}>; onAuthExpired: () => void; onSuccess: () => void}) {

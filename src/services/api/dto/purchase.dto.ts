@@ -59,19 +59,19 @@ export interface PurchaseCreateResponseDto {
   meta?: unknown;
 }
 
-/** `/api/state?mode=full` response used only to build purchase reference candidates. */
+/** Feature-scoped purchase reference snapshot. */
 export interface PurchaseReferenceStateResponseDto {
   data?: unknown;
   meta?: unknown;
 }
 
-/** Existing `/api/state?mode=full` envelope used as the purchase detail fallback. */
+/** Feature-scoped purchase detail snapshot. */
 export interface PurchaseDetailStateResponseDto {
   data?: unknown;
   meta?: unknown;
 }
 
-/** Existing `/api/state?mode=full` envelope used as the purchase list fallback. */
+/** Feature-scoped purchase list snapshot. */
 export interface PurchaseListStateResponseDto {
   data?: unknown;
   meta?: unknown;

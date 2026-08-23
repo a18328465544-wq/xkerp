@@ -7,7 +7,7 @@
 当前待检测库存和历史检测记录只能通过：
 
 ```text
-GET /api/state?mode=full
+GET /api/inspections/workspace
 ```
 
 获取。
@@ -30,7 +30,7 @@ GET /api/inspections/:id
 
 状态快照由后端按现有权限裁剪。检测 Adapter 不读取也不暴露库存成本、预计售价或利润字段。
 
-仍需后端长期保证：无成本/利润权限的账号在 `/api/state?mode=full` 中不会收到对应敏感字段；前端隐藏不等于数据安全。
+仍需后端长期保证：无成本/利润权限的账号在 `/api/inspections/workspace` 中不会收到对应敏感字段；前端隐藏不等于数据安全。
 
 ## 历史检测单修改
 

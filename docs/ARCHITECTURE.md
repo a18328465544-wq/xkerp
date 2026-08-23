@@ -128,7 +128,7 @@ FastAPI/Express Response
   → Page / ERP Component
 ```
 
-页面不得直接调用 `fetch`、解析原始 API 字段或把完整 `/api/state?mode=full` 写入 Zustand。
+页面不得直接调用 `fetch`、解析原始 API 字段或读取 `/api/state?mode=full`；正式业务页只能消费领域 Endpoint 经 DTO/Adapter 投影后的 Domain Model。
 TanStack Query 是服务端数据缓存；Zustand/本地状态只保存 UI 状态、临时上传状态和用户偏好。
 Query Key 统一从 `src/services/api/query-keys/index.ts` 获取。
 
@@ -603,7 +603,7 @@ sudo nginx -t
 - 新页面使用 `useAuth` / `useCapabilities`，不得创建页面级登录表单或重复请求 auth session。
 - URL 筛选使用 `useUrlSearchState` 或 TanStack Router search schema，不直接调用 `window.history.replaceState`。
 - 表格偏好使用 `useTablePreferences`，键名必须包含 Feature 和账号作用域，并带版本号。
-- 全量状态读取只能通过 `fetchFullStateCompat`，并同步维护 [API_READ_MIGRATION.md](./API_READ_MIGRATION.md)。
+- `/api/state?mode=full` 对正式 V2 前端是禁止边界；只有登录/首页可通过 `fetchInitialStateCompat` 读取裁剪后的 `mode=initial`，其余读取必须登记在 [API_READ_MIGRATION.md](./API_READ_MIGRATION.md) 的领域接口中。
 - `src/features/legacy` 和 `src/data/demoData.ts` 仅供兼容/演示，生产页面不得新增依赖。
 
 ### 13.4 新增导入功能

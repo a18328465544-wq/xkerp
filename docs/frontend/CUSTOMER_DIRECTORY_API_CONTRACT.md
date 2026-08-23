@@ -2,7 +2,7 @@
 
 ## Current read path
 
-`GET /api/state?mode=full` is the only existing read path that preserves the `customers` menu permission model used by the customer archive page. The frontend endpoint immediately projects `data.customers` into `CustomerDirectorySnapshot`; pages and components never receive the raw state response.
+`GET /api/customers` is the only existing read path that preserves the `customers` menu permission model used by the customer archive page. The frontend endpoint immediately projects `data.customers` into `CustomerDirectorySnapshot`; pages and components never receive the raw state response.
 
 Filtering, sorting and pagination are explicitly performed on the loaded customer collection. The UI does not describe these operations as server-side.
 

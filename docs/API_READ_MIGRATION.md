@@ -1,27 +1,21 @@
 # Frontend V2 API 读取迁移清单
 
-## 统一兼容边界
+## 统一读取边界
 
-暂时没有专用分页接口的资源统一通过：
+正式 V2 页面不得调用 `/api/state?mode=full`。登录和首页首屏仅允许通过
+`fetchInitialStateCompat()` 读取服务端裁剪后的 `mode=initial` 快照；其余页面必须使用
+具备独立菜单权限和最小集合声明的领域接口。
 
-```ts
-fetchFullStateCompat<T>(signal)
-```
+## 已迁移领域接口
 
-位置：`src/services/api/state-compat.ts`。
-
-业务 Endpoint 只能在 API 层调用该兼容函数，页面和 Adapter 不得直接拼接 `/api/state?mode=full`。
-
-## 当前仍使用兼容读取的资源
-
-| 资源 | Endpoint | 原因 | 下一步 |
+| 资源 | Endpoint | 当前边界 | 下一步 |
 | --- | --- | --- | --- |
-| 采购列表、采购详情、采购参考 | `purchase.ts` | 后端暂无专用列表/详情/候选接口 | 增加服务端分页和按权限候选接口 |
-| 销售列表、销售出库池 | `sales.ts` | 后端暂无专用列表/出库池接口 | 增加分页、状态和日期筛选 |
-| 财务收入、支出、调拨 | `finance-income.ts`、`finance-expense.ts`、`finance-transfers.ts` | 当前只有写接口，缺少读列表接口 | 增加分页、排序和日期/账户筛选 |
-| 财务经营驾驶舱 | `finance.ts` | 统计口径依赖完整状态集合 | 后端提供权限裁剪后的统计快照 |
-| 检测、售后 | `inspection.ts`、`aftersales.ts` | 当前专用读接口尚未完整落地 | 按待检/状态/日期分页 |
-| 客户、供应商 | `customers.ts`、`vendors.ts` | 客户目录仍保留 V1 兼容读路径 | 统一使用 CRM/实体分页接口 |
+| 采购列表、详情、参考 | `/api/purchase-invoices`、`/reference`、`/detail` | `purchase_list` / `purchase_add` 分权并声明最小集合 | 增加服务端分页和候选搜索 |
+| 销售列表、出库池 | `/api/sales-invoices`、`/outbound` | `sales_list` / `sales_outbound` 分权 | 增加服务端筛选、排序和分页 |
+| 财务收入、支出、调拨 | `/api/gpu_erp/finance/payment-ins`、`payment-outs`、`account-transfers` | 各自菜单权限，仅返回对应记录集合 | 增加服务端筛选和分页 |
+| 财务驾驶舱、提成 | `/api/finance/dashboard`、`/api/finance/commissions` | 财务/提成菜单权限，按业务集合裁剪 | 将复杂统计下沉 SQL 聚合 |
+| 检测、售后 | `/api/inspections/workspace`、`/api/aftersales/workspace` | 独立工作台权限，返回工作流最小依赖 | 增加状态与日期分页 |
+| 客户、供应商 | `/api/customers`、`/api/vendors` | 独立目录权限且不返回审计/用户集合 | 统一到 CRM 分页实体接口 |
+| 退货参考 | `/api/returns/reference` | 任一退货菜单可访问，只返回退货建单依赖 | 拆分销售/采购退货候选搜索 |
 
-该清单是已知 API Gap，不代表前端伪装成服务端分页。页面必须标注当前为兼容读取，并且只消费 Adapter 投影后的 Domain Model。
-
+这些接口已消除浏览器端全库读取，但部分仍是领域级集合快照；页面继续明确标注前端筛选/分页，直到后端提供真正的分页查询。

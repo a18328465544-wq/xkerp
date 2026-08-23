@@ -157,6 +157,29 @@ export function getStatePatchKeysForRequest(method: string, path: string): State
 }
 
 export function getReloadKeysForRequest(method: string, path: string): StateCollectionKey[] | null {
+  if (method.toUpperCase() === "GET" && path === "/api/customers") return ["customers"];
+  if (method.toUpperCase() === "GET" && path === "/api/vendors") return ["vendors"];
+  if (method.toUpperCase() === "GET" && path === "/api/finance/dashboard") {
+    return ["settlementAccounts", "settlementLedger", "financeLedger", "salesInvoices", "purchaseInvoices", "returnOrders", "inventory"];
+  }
+  if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/account-transfers") return ["accountTransfers"];
+  if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-ins") return ["paymentInRecords"];
+  if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-outs") return ["paymentOutRecords"];
+  if (method.toUpperCase() === "GET" && path === "/api/finance/commissions") return ["purchaseCommissions"];
+  if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices") return ["purchaseInvoices", "inventory"];
+  if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices/reference") {
+    return ["products", "purchaseInvoices", "customers", "vendors", "settlementAccounts", "inventory"];
+  }
+  if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices/detail") {
+    return ["purchaseInvoices", "inventory", "inspections", "paymentOutRecords", "returnOrders"];
+  }
+  if (method.toUpperCase() === "GET" && path === "/api/sales-invoices") return ["salesInvoices", "inventory"];
+  if (method.toUpperCase() === "GET" && path === "/api/sales-invoices/outbound") return ["salesInvoices", "inventory", "products"];
+  if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return ["inventory", "inspections"];
+  if (method.toUpperCase() === "GET" && path === "/api/aftersales/workspace") return ["aftersales", "inventory", "salesInvoices"];
+  if (method.toUpperCase() === "GET" && path === "/api/returns/reference") {
+    return ["products", "purchaseInvoices", "salesInvoices", "inventory", "paymentOutRecords", "settlementAccounts"];
+  }
   // These list routes query PostgreSQL directly and must not deserialize the same collection
   // into the process cache before executing their indexed, server-side paginated query.
   if (method.toUpperCase() === "POST" && path === "/api/gpu_erp/crm/quick-capture/parse") return ["customers", "products"];

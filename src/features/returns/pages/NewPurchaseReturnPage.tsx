@@ -5,7 +5,7 @@ import {useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
-import {ApiError, queryKeys, returnsApi, stateApi} from "@/src/services/api";
+import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import {formatCurrency} from "@/src/lib/format";
@@ -24,16 +24,16 @@ export function NewPurchaseReturnPage() {
   const queryClient = useQueryClient();
   const {session, status, error: authError, refresh, logout} = useAuth();
   const allowed = createCapabilities(session).menu("return_purchase") || createCapabilities(session).menu("return_orders");
-  const stateQuery = useQuery({queryKey: queryKeys.state.full(), queryFn: ({signal}) => stateApi.full(signal), enabled: Boolean(session && allowed), retry: false});
+  const stateQuery = useQuery({queryKey: queryKeys.returns.reference(), queryFn: ({signal}) => returnsApi.reference(signal), enabled: Boolean(session && allowed), retry: false});
   if (status === "loading") return <Card><CardContent><ReturnState title="正在验证采购退货权限" icon={<RefreshCw className="h-5 w-5 animate-spin" />} /></CardContent></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
   if (!session || !allowed) return <ErpPageError title="当前账号没有采购退货权限" description="服务器已拒绝 return_purchase / return_orders 菜单访问，请联系管理员授权。" />;
   if (stateQuery.isPending || !stateQuery.data) return <Card><CardContent><ReturnState title="正在加载采购单、库存与付款关系" icon={<RefreshCw className="h-5 w-5 animate-spin" />} /></CardContent></Card>;
   if (stateQuery.error) return <ErpPageError title="无法加载采购退货基础数据" description={stateQuery.error.message} onRetry={() => void stateQuery.refetch()} />;
-  return <PurchaseReturnForm session={session} state={stateQuery.data} onAuthExpired={logout} onSuccess={() => {void queryClient.invalidateQueries({queryKey: queryKeys.returns.all()}); void queryClient.invalidateQueries({queryKey: queryKeys.state.all()});}} />;
+  return <PurchaseReturnForm session={session} state={stateQuery.data} onAuthExpired={logout} onSuccess={() => {void queryClient.invalidateQueries({queryKey: queryKeys.returns.all()}); void queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}); void queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()});}} />;
 }
 
-function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session: AuthSession; state: Awaited<ReturnType<typeof stateApi.full>>; onAuthExpired: () => void; onSuccess: () => void}) {
+function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session: AuthSession; state: Awaited<ReturnType<typeof returnsApi.reference>>; onAuthExpired: () => void; onSuccess: () => void}) {
   const navigate = useNavigate();
   const [values, setValues] = useState<PurchaseReturnFormValues>(() => ({date: storeDate(), relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementMode: "抵扣账款", settlementAccountId: "", handler: session.user.displayName, reason: "", inventoryAction: "退回供应商", remarks: ""}));
   const [error, setError] = useState("");

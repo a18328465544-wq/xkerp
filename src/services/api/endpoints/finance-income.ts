@@ -1,16 +1,15 @@
 import {apiRequest} from "../client";
-import {fetchFullStateCompat} from "../state-compat";
 import {adaptFinanceIncomeCollection, adaptFinanceIncomeMutation, adaptFinanceIncomeSnapshot, toFinanceIncomeRequest} from "../adapters/finance-income.adapter";
 import type {FinanceIncomeListResponseDto, FinanceIncomeMutationResponseDto} from "../dto/finance-income.dto";
 import type {FinanceIncomeFilters, FinanceIncomeFormValues} from "@/src/types/finance-income";
 
 export const financeIncomeApi = {
   async listAll(signal?: AbortSignal) {
-    const response = await fetchFullStateCompat<FinanceIncomeListResponseDto>(signal);
+    const response = await apiRequest<FinanceIncomeListResponseDto>("/api/gpu_erp/finance/payment-ins", {signal});
     return adaptFinanceIncomeSnapshot(response);
   },
   async list(filters: FinanceIncomeFilters, signal?: AbortSignal) {
-    const response = await fetchFullStateCompat<FinanceIncomeListResponseDto>(signal);
+    const response = await apiRequest<FinanceIncomeListResponseDto>("/api/gpu_erp/finance/payment-ins", {signal});
     return adaptFinanceIncomeCollection(response, filters);
   },
   async create(values: FinanceIncomeFormValues, handler: string, signal?: AbortSignal) {

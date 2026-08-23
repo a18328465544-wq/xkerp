@@ -2,7 +2,7 @@
 
 ## Read boundary
 
-- `GET /api/state?mode=full`
+- `GET /api/aftersales/workspace`
 - Frontend V2 immediately adapts only `aftersales` plus the minimum `inventory` and `salesInvoices` fields needed to build serviceable sold-SN candidates.
 - Pages and components never consume the raw state DTO.
 - The current API has no server pagination, filtering, sorting, or standalone detail endpoint. The UI labels this honestly as a loaded full-state collection.

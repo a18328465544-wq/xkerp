@@ -4,7 +4,7 @@
 
 | 能力 | 现有接口 | V2 适配 |
 | --- | --- | --- |
-| 读取调拨记录 | `GET /api/state?mode=full` | `financeTransfersApi.listAll()` 读取权限范围内的 `data.accountTransfers` |
+| 读取调拨记录 | `GET /api/gpu_erp/finance/account-transfers` | `financeTransfersApi.listAll()` 读取权限范围内的 `data.accountTransfers` |
 | 新增调拨 | `POST /api/gpu_erp/finance/account-transfer/create` | `toFinanceTransferRequest()` 输出现有字段 |
 | 编辑调拨 | `PUT /api/gpu_erp/finance/account-transfer/:id` | 复用同一请求适配器 |
 | 删除调拨 | `DELETE /api/gpu_erp/finance/account-transfer/:id` | 服务端反向修正账户余额和关联流水 |

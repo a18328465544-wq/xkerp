@@ -1,12 +1,11 @@
 import {adaptCustomerDirectory, adaptCustomerMutation, toCustomerCreateRequest, toCustomerUpdateRequest} from "../adapters/customer.adapter";
 import {apiRequest} from "../client";
-import {fetchFullStateCompat} from "../state-compat";
 import type {CustomerDirectoryResponseDto, CustomerMutationResponseDto} from "../dto/customer.dto";
 import type {CustomerDirectorySnapshot, CustomerRecordFormValues} from "@/src/types/customer";
 
 export const customersApi = {
   async list(permissions: {showProfit: boolean}, signal?: AbortSignal): Promise<CustomerDirectorySnapshot> {
-    const response = await fetchFullStateCompat<CustomerDirectoryResponseDto>(signal);
+    const response = await apiRequest<CustomerDirectoryResponseDto>("/api/customers", {signal});
     return adaptCustomerDirectory(response, permissions);
   },
 

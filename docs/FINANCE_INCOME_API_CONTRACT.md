@@ -2,7 +2,7 @@
 
 ## Read
 
-- `GET /api/state?mode=full`
+- `GET /api/gpu_erp/finance/payment-ins`
 - Server permission: `payment_in`
 - V2 reads only `paymentInRecords` through the finance-income Adapter.
 - Sales receipts are excluded when `businessType === 销售收款`, `relatedDocType === 销售单`, or `relatedDocNo` starts with `XS`.

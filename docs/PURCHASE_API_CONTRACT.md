@@ -6,7 +6,9 @@
 
 | 能力 | 方法与路径 | 权限 | 前端边界 |
 | --- | --- | --- | --- |
-| 采购参考数据 | `GET /api/state?mode=full` | 由服务端会话/菜单控制 | `PurchaseReferenceStateResponseDto` → `adaptPurchaseReferenceData`，只向采购域暴露商品、来源、账户和观察到的库位 |
+| 采购参考数据 | `GET /api/purchase-invoices/reference` | 由服务端会话/菜单控制 | `PurchaseReferenceStateResponseDto` → `adaptPurchaseReferenceData`，只向采购域暴露商品、来源、账户和观察到的库位 |
+| 采购列表 | `GET /api/purchase-invoices` | `purchase_list` | `PurchaseListStateResponseDto` → `adaptPurchaseListState`，只暴露采购列表领域模型 |
+| 采购详情 | `GET /api/purchase-invoices/detail?id=:id` | `purchase_list` | 详情领域快照在 Adapter 中按 ID 投影并裁剪成本/利润字段 |
 | 创建采购单 | `POST /api/purchase-invoices` | `purchase_add` | `PurchaseFormValues` → `toPurchaseRequestDto` → `PurchaseCreateRequestDto` |
 | 编辑采购单 | `PUT /api/purchase-invoices/:id` | `purchase_list` | Phase 3 适配，Phase 1 不调用 |
 | 结算账户 | `GET /api/gpu_erp/finance/settlement-accounts?page=1&pageSize=100` | `settlement_accounts` | 当前采购参考数据沿用状态快照；独立账户查询留在后续 API Gap |
@@ -61,7 +63,7 @@ Quick-create form model
 - 来源类型切换由 `purchaseSourceTypeOptions` 决定客户/供应商候选，并清空上一次的 `sourcePartnerId`、联系人和供应商抵扣；未选择来源不能提交。
 - 商品明细由 React Hook Form `useFieldArray` 管理；采购页只编辑商品、数量、价格和备注。数量为 1、2、5 等编辑态值，提交前由 Adapter 展开为每行 `quantity: 1`，不生成 SN 或库存 ID。
 - 现金付款、供应商余额抵扣、未付款由 `calculatePurchaseSettlement` 独立计算；抵扣只写入 `vendorCreditAppliedAmount`，不创建现金流水。
-- 创建成功后只失效采购、库存、完整状态和采购参考数据缓存；若实际响应包含显卡且拥有 `inspections` 权限，跳转检测流程，否则回到采购单据列表。
+- 创建成功后只失效采购、库存和采购参考数据缓存；若实际响应包含显卡且拥有 `inspections` 权限，跳转检测流程，否则回到采购单据列表。
 - 批量粘贴已在 Phase 3A 接入，图片上传已在 Phase 3B 接入；采购编辑仍保持在后续 Phase，不在本页面伪造交互。
 
 ## Phase 3C 快速新增边界

@@ -19,7 +19,7 @@ export interface SalesCreateResponseDto {
   stateDelete?: unknown;
 }
 
-/** Existing `/api/state?mode=full` envelope used as the sales list fallback. */
+/** Feature-scoped sales list/outbound snapshot. */
 export interface SalesListStateResponseDto {
   data?: unknown;
   meta?: unknown;

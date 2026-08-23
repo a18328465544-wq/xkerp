@@ -3,7 +3,7 @@
 ## 读取链路
 
 ```text
-GET /api/state?mode=full
+GET /api/finance/dashboard
   → FinanceDashboardResponseDto
   → adaptFinanceDashboardDataset(access)
   → FinanceDashboardDataset

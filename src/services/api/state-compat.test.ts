@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {fetchInitialStateCompat, fetchFullStateCompat} from "./state-compat";
+import {fetchInitialStateCompat} from "./state-compat";
 
-test("state compatibility boundary keeps initial and full modes explicit", async () => {
+test("state compatibility boundary only permits the lightweight initial mode", async () => {
   const previousFetch = globalThis.fetch;
   const paths: string[] = [];
   globalThis.fetch = async (input) => {
@@ -11,9 +11,8 @@ test("state compatibility boundary keeps initial and full modes explicit", async
   };
   try {
     await fetchInitialStateCompat();
-    await fetchFullStateCompat();
   } finally {
     globalThis.fetch = previousFetch;
   }
-  assert.deepEqual(paths, ["/api/state?mode=initial", "/api/state?mode=full"]);
+  assert.deepEqual(paths, ["/api/state?mode=initial"]);
 });

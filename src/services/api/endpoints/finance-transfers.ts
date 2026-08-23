@@ -1,12 +1,11 @@
 import {apiRequest} from "../client";
-import {fetchFullStateCompat} from "../state-compat";
 import {adaptFinanceTransferMutation, adaptFinanceTransferSnapshot, toFinanceTransferRequest} from "../adapters/finance-transfer.adapter";
 import type {FinanceTransferListResponseDto, FinanceTransferMutationResponseDto} from "../dto/finance-transfer.dto";
 import type {FinanceTransferFormValues} from "@/src/types/finance-transfer";
 
 export const financeTransfersApi = {
   async listAll(signal?: AbortSignal) {
-    const response = await fetchFullStateCompat<FinanceTransferListResponseDto>(signal);
+    const response = await apiRequest<FinanceTransferListResponseDto>("/api/gpu_erp/finance/account-transfers", {signal});
     return adaptFinanceTransferSnapshot(response);
   },
   async create(values: FinanceTransferFormValues, handler: string, signal?: AbortSignal) {

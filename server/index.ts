@@ -78,6 +78,7 @@ import {
 } from "./crmQuickCapture.ts";
 import { buildCustomerLeadPreview, normalizeCustomerLeadInput } from "./crmCustomerLead.ts";
 import { buildCustomerFundsSnapshot } from "./customerFunds.ts";
+import { registerDomainSnapshotRoutes } from "./routes/domainSnapshots.ts";
 import { syncCrmPurchaseInvoiceLink, syncCrmSalesInvoiceLink } from "./crmEntityRepository.ts";
 import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, MediaValidationError, replaceEntityImages } from "./mediaRepository.ts";
 import type {
@@ -1388,6 +1389,12 @@ function requireReturnTypeFromRecord(req: AuthRequest, res: express.Response, ne
   }
   next();
 }
+
+registerDomainSnapshotRoutes(app, {
+  requireMenu,
+  requireAnyMenu,
+  publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys),
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ data: { ok: true, dataFile: dataFilePath } });

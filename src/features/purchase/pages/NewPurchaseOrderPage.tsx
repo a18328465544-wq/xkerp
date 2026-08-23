@@ -192,7 +192,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
         queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
         queryClient.invalidateQueries({queryKey: queryKeys.purchase.referenceData()}),
         queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
-        queryClient.invalidateQueries({queryKey: queryKeys.state.full()}),
+        queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
       ]);
       void navigate({to: nextPath});
     } catch (caught) {

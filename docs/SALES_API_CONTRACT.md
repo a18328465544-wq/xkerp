@@ -8,8 +8,8 @@
 | 库存候选 | `GET /api/inventory/items` | `page`、`pageSize`、`keyword`、`activeOnly=true`、`includeSold=false`、排序参数 | `InventoryItemDto -> InventoryListItem -> SalesInventoryCandidate` | `inventory` | 页面只允许选择 `已入库`、`已上架`；真实 SN 在出库阶段绑定 |
 | 收款账户 | `GET /api/gpu_erp/finance/settlement-accounts` | `page`、`pageSize` | `SalesSettlementAccountDto -> SalesSettlementAccountOption` | `settlement_accounts` | 仅启用账户可选择 |
 | 新建销售单 | `POST /api/sales-invoices` | 销售单请求 DTO，含客户、支付、物流、售后和商品明细 | `SalesFormValues -> SalesCreateRequestDto`；响应 `data -> SalesInvoiceResult` | `sales_add` | 服务端生成单号、重算库存均价成本、金额和利润；创建后状态为待出库 |
-| 销售单据列表兼容读取 | `GET /api/state?mode=full` | 无销售专用筛选参数 | 状态快照先经过 `SalesListStateResponseDto -> adaptSalesListState -> SalesListDataset`，页面仅消费 Domain Model | `sales_list` | 当前只支持前端 URL 筛选、排序和分页，页面明确标注兼容模式 |
-| 销售出库池兼容读取 | `GET /api/state?mode=full` | 无出库专用筛选参数 | `SalesListStateResponseDto -> adaptSalesOutboundState -> SalesOutboundDataset`；仅暴露待出库单和可售库存的最小字段 | `sales_outbound` | 前端核验仅用于即时反馈，服务端仍是库存匹配的最终权威 |
+| 销售单据列表兼容读取 | `GET /api/sales-invoices` | 无销售专用筛选参数 | 状态快照先经过 `SalesListStateResponseDto -> adaptSalesListState -> SalesListDataset`，页面仅消费 Domain Model | `sales_list` | 当前只支持前端 URL 筛选、排序和分页，页面明确标注兼容模式 |
+| 销售出库池领域读取 | `GET /api/sales-invoices/outbound` | 无出库专用筛选参数 | `SalesListStateResponseDto -> adaptSalesOutboundState -> SalesOutboundDataset`；仅暴露待出库单和可售库存的最小字段 | `sales_outbound` | 前端核验仅用于即时反馈，服务端仍是库存匹配的最终权威 |
 | 确认销售出库 | `POST /api/sales-invoices/:id/outbound` | `handler`、去重后的 `codes`、`manual`、可选 `remarks` | `SalesOutboundRequest -> toSalesOutboundRequestDto`；响应 `data -> SalesOutboundResult` | `sales_outbound`；手动模式额外要求 `canManualOutbound` | 服务端原子绑定物理库存、写入 SN/成本/利润、更新库存状态、销售单、提成和日志 |
 
 ## 页面字段与接口边界
@@ -21,7 +21,7 @@
 - 当前没有独立销售单详情接口，本轮提交成功后只展示创建响应摘要，不虚构详情或编辑流程。
 - 销售出库的扫码枪、粘贴和摄像头结果只形成前端核验状态；页面不会提前修改库存或声称已经绑定。点击确认后必须由既有出库接口重新核验全部销售行。
 - 手动出库沿用现有高风险权限 `canManualOutbound`，且必须填写原因；前端隐藏/禁用只是交互保护，服务端中间件继续执行最终 403 校验。
-- 待出库池的商品、客户、物流和金额来自状态快照；适配后的出库 Domain Model不包含成本或利润字段。
+- 待出库池的商品、客户、物流和金额来自销售出库领域快照；适配后的出库 Domain Model 不包含成本或利润字段。
 
 ## 响应与错误
 

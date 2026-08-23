@@ -4,7 +4,7 @@ import {aftersalesApi} from "./aftersales";
 
 function response(payload: unknown, status = 200) {return new Response(JSON.stringify(payload), {status, headers: {"Content-Type": "application/json"}});}
 
-test("aftersales workspace reads the existing full state endpoint", async () => {const previous = globalThis.fetch; globalThis.fetch = async (input) => {assert.equal(input, "/api/state?mode=full"); return response({data: {aftersales: []}});}; try {const result = await aftersalesApi.workspace(); assert.equal(result.source, "state-snapshot");} finally {globalThis.fetch = previous;}});
+test("aftersales workspace reads its feature-scoped snapshot", async () => {const previous = globalThis.fetch; globalThis.fetch = async (input) => {assert.equal(input, "/api/aftersales/workspace"); return response({data: {aftersales: []}});}; try {const result = await aftersalesApi.workspace(); assert.equal(result.source, "state-snapshot");} finally {globalThis.fetch = previous;}});
 
 test("aftersales create and resolution use existing write endpoints", async () => {
   const previous = globalThis.fetch; const requests: Array<{url: string; method: string; body: Record<string, unknown>}> = [];

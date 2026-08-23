@@ -2,6 +2,8 @@ import {apiRequest} from "../client";
 import {adaptPurchaseReturnList, adaptSalesReturnComplete, adaptSalesReturnList, adaptSalesReturnMutation, toPurchaseReturnRequestDto, toSalesReturnUpdateRequestDto} from "../adapters/returns.adapter";
 import type {SalesReturnCompleteResponseDto, SalesReturnListResponseDto, SalesReturnMutationResponseDto} from "../dto/returns.dto";
 import type {PurchaseReturnFormValues, SalesReturnFormValues, SalesReturnListFilters, SalesReturnListItem} from "@/src/types/returns";
+import {adaptPublicState} from "../adapters/state.adapter";
+import type {PublicStateResponseDto} from "../dto/state.dto";
 
 export function toSalesReturnListQueryParams(filters: SalesReturnListFilters) {
   const params = new URLSearchParams({type: "销售退货", page: String(filters.page), pageSize: String(filters.pageSize)});
@@ -18,6 +20,9 @@ export function toPurchaseReturnListQueryParams(filters: SalesReturnListFilters)
 }
 
 export const returnsApi = {
+  async reference(signal?: AbortSignal) {
+    return adaptPublicState(await apiRequest<PublicStateResponseDto>("/api/returns/reference", {signal}));
+  },
   async listSales(filters: SalesReturnListFilters, signal?: AbortSignal) {
     const params = toSalesReturnListQueryParams(filters);
     const response = await apiRequest<SalesReturnListResponseDto>(`/api/returns?${params.toString()}`, {signal});

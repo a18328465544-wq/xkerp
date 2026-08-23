@@ -1,4 +1,4 @@
-/** Legacy market quote record kept for state-compat reads. */
+/** Market quote record shared by the dashboard initial snapshot and quote domain adapter. */
 export interface MarketQuote {
   id: string;
   date: string;

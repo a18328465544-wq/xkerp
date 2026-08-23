@@ -11,7 +11,7 @@
 后端当前没有独立同行列表接口。Frontend V2 暂时读取：
 
 ```text
-GET /api/state?mode=full
+GET /api/vendors
   → VendorDirectoryResponseDto
   → adaptVendorDirectory()
   → VendorDirectorySnapshot

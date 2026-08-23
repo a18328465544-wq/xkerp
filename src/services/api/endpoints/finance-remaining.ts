@@ -2,7 +2,7 @@ import {apiRequest} from "../client";
 import {adaptCommissionRecords, adaptCustomerFunds, adaptLogs, adaptUserMutation, adaptUsers} from "../adapters/finance-remaining.adapter";
 import type {CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
 import type {PagedCollection} from "@/src/types/finance-remaining";
-import {stateApi} from "./state";
+import type {PublicStateResponseDto} from "../dto/state.dto";
 import type {StoreRole} from "@/src/types/auth";
 
 export interface CustomerFundsFilters {startDate: string; endDate: string; trendStartDate: string; trendEndDate: string}
@@ -45,4 +45,4 @@ export const usersApi = {
   async update(id: string, input: UserMutationInput, signal?: AbortSignal) { return adaptUserMutation(await apiRequest<UserMutationResponseDto>(`/api/users/${encodeURIComponent(id)}`, {method: "PUT", body: JSON.stringify(toUserMutationRequest(input)), signal})); },
 };
 export const logsApi = { async list(filters: LogsFilters, signal?: AbortSignal): Promise<PagedCollection<import("@/src/types/finance-remaining").AuditLogItem>> { const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize)}); if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim()); return adaptLogs(await apiRequest<LogsResponseDto>(`/api/logs?${params.toString()}`, {signal})); } };
-export const financeCommissionApi = { async list(mode: "purchase" | "sales", signal?: AbortSignal) { const snapshot = await stateApi.full(signal); return adaptCommissionRecords(snapshot.purchaseCommissions, mode); } };
+export const financeCommissionApi = { async list(mode: "purchase" | "sales", signal?: AbortSignal) { const response = await apiRequest<PublicStateResponseDto>("/api/finance/commissions", {signal}); const payload = response.data && typeof response.data === "object" ? response.data as {purchaseCommissions?: unknown} : {}; return adaptCommissionRecords(Array.isArray(payload.purchaseCommissions) ? payload.purchaseCommissions : [], mode); } };

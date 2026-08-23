@@ -1,7 +1,7 @@
 # Finance Expense API Contract
 
 ## Read
-- `GET /api/state?mode=full`, guarded by `payment_out`.
+- `GET /api/gpu_erp/finance/payment-outs`, guarded by `payment_out`.
 - V2 projects only `paymentOutRecords` through the finance-expense Adapter.
 - Purchase/recycle payments are excluded when the record is a purchase document movement, its number starts with `JH`, or its type is `采购付款` / `回收付款`.
 - Search, date, category, account, handler and pagination are explicit client operations over the authorized collection because no dedicated list endpoint exists.

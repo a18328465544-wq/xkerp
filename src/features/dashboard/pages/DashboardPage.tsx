@@ -62,7 +62,7 @@ export function DashboardPage() {
   return <DashboardContent session={session} state={stateQuery.data} ai={aiQuery.data?.insights || []} aiLoading={aiEnabled && aiQuery.isPending} aiError={aiQuery.error as Error | null} onAiRetry={() => { setAiEnabled(true); void aiQuery.refetch(); }} onRefresh={() => { void stateQuery.refetch(); setAiEnabled(true); void aiQuery.refetch(); toast.success("经营数据已刷新"); }} />;
 }
 
-function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, onRefresh}: {session: AuthSession; state: ReturnType<typeof stateApi.full> extends Promise<infer T> ? T : never; ai: AiInsightItem[]; aiLoading: boolean; aiError: Error | null; onAiRetry: () => void; onRefresh: () => void}) {
+function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, onRefresh}: {session: AuthSession; state: Awaited<ReturnType<typeof stateApi.initial>>; ai: AiInsightItem[]; aiLoading: boolean; aiError: Error | null; onAiRetry: () => void; onRefresh: () => void}) {
   const navigate = useNavigate();
   const today = storeDate();
   const yesterday = storeDateAfterDays(-1);

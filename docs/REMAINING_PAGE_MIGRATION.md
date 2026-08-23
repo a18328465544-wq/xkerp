@@ -5,7 +5,7 @@
 | 路由 | V2 页面 | 数据边界 |
 | --- | --- | --- |
 | `/finance/return-reconcile` | `FinanceReturnReconcilePage` | 复用销售/进货退货列表接口，页面合并展示 |
-| `/finance/purchase-commission` | `FinanceCommissionPage mode="purchase"` | `stateApi.full` 的权限裁剪提成集合 |
+| `/finance/purchase-commission` | `FinanceCommissionPage mode="purchase"` | `/api/finance/commissions` 的权限裁剪提成集合 |
 | `/finance/sales-commission` | `FinanceCommissionPage mode="sales"` | 同上，共享提成页面骨架 |
 | `/finance/customer-funds` | `FinanceCustomerFundsPage` | 专用 customer-funds 快照接口 |
 | `/settings`、`/settings/users` | `SettingsUsersPage` | `/api/users`，老板 + permissions |

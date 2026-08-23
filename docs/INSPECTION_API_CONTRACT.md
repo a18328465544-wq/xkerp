@@ -7,7 +7,7 @@ Frontend V2 的 `/inspections` 页面只使用现有接口，不修改后端、�
 ## 读取工作台
 
 ```text
-GET /api/state?mode=full
+GET /api/inspections/workspace
 ```
 
 前端调用链：
@@ -20,7 +20,7 @@ FastAPI/ERP State Response
 → Inspection Feature
 ```
 
-页面只消费最小检测模型，不直接读取原始状态 DTO，也不向 Zustand 复制完整状态快照。
+页面只消费最小检测模型，不直接读取原始状态 DTO，也不向 Zustand 复制质检工作台快照。
 
 待检测候选沿用 V1 真实规则：
 

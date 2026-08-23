@@ -23,7 +23,6 @@ export const queryKeys = {
   state: {
     all: () => ["state"] as const,
     initial: () => ["state", "initial"] as const,
-    full: () => ["state", "full"] as const,
   },
   ai: {
     insights: () => ["ai", "insights"] as const,
@@ -40,6 +39,7 @@ export const queryKeys = {
   },
   returns: {
     all: () => ["returns"] as const,
+    reference: () => ["returns", "reference"] as const,
     salesList: (filters: SalesReturnListFilters) => ["returns", "sales", "list", filters] as const,
     purchaseList: (filters: SalesReturnListFilters) => ["returns", "purchase", "list", filters] as const,
   },

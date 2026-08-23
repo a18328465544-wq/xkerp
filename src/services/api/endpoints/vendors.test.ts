@@ -4,9 +4,9 @@ import {vendorsApi} from "./vendors";
 
 function response(payload: unknown, status = 200) {return new Response(JSON.stringify(payload), {status, headers: {"Content-Type": "application/json"}});}
 
-test("vendor directory reads the existing full state through the endpoint boundary", async () => {
+test("vendor directory reads its feature-scoped snapshot", async () => {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (input) => {assert.equal(input, "/api/state?mode=full"); return response({data: {vendors: [{id: "GY-1", name: "同行"}], inventory: [{id: "secret"}]}});};
+  globalThis.fetch = async (input) => {assert.equal(input, "/api/vendors"); return response({data: {vendors: [{id: "GY-1", name: "同行"}]}});};
   try {const result = await vendorsApi.list({showProfit: false}); assert.equal(result.vendors[0]?.id, "GY-1"); assert.equal("inventory" in result, false);} finally {globalThis.fetch = previousFetch;}
 });
 

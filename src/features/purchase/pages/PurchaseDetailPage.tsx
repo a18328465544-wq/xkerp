@@ -172,5 +172,5 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
   if (detailQuery.isPending) return <Card><ErpLoadingState title="正在加载采购详情" description="正在匹配单据、库存、检测和可见付款事实。" /></Card>;
   if (detailQuery.error) return <ErpPageError title="采购详情加载失败" description={errorText(detailQuery.error)} onRetry={() => void detailQuery.refetch()} />;
   if (!detailQuery.data) return <ErpPageError title="采购单不存在" description="该单据可能已删除，或当前账号无权查看。" />;
-  return <PurchaseDetailContent detail={detailQuery.data} session={session} refreshing={detailQuery.isFetching} onRefresh={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.state.full()})]);}} />;
+  return <PurchaseDetailContent detail={detailQuery.data} session={session} refreshing={detailQuery.isFetching} onRefresh={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()})]);}} />;
 }

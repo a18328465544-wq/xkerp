@@ -4,7 +4,6 @@ import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventor
 import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesOutboundDataset, SalesOutboundRequest, SalesOutboundResult, SalesSettlementAccountOption} from "@/src/types/sales";
 import {toCreateSalesRequest} from "../adapters/sales.adapter";
 import type {SalesApiPermissions} from "../adapters/sales.adapter";
-import {fetchFullStateCompat} from "../state-compat";
 
 export function toSalesCustomerQueryParams(keyword: string, page = 1, pageSize = 20) {
   const params = new URLSearchParams({page: String(page), pageSize: String(pageSize), role: "customer"});
@@ -20,12 +19,12 @@ export function toSalesInventoryQueryParams(keyword: string, page = 1, pageSize 
 
 export const salesApi = {
   async list(permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesListDataset> {
-    const response = await fetchFullStateCompat<SalesListStateResponseDto>(signal);
+    const response = await apiRequest<SalesListStateResponseDto>("/api/sales-invoices", {signal});
     return adaptSalesListState(response, permissions);
   },
 
   async outbound(signal?: AbortSignal): Promise<SalesOutboundDataset> {
-    const response = await fetchFullStateCompat<SalesListStateResponseDto>(signal);
+    const response = await apiRequest<SalesListStateResponseDto>("/api/sales-invoices/outbound", {signal});
     return adaptSalesOutboundState(response);
   },
 

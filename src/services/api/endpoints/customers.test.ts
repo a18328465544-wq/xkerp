@@ -4,9 +4,9 @@ import {customersApi} from "./customers";
 
 function response(payload: unknown, status = 200) {return new Response(JSON.stringify(payload), {status, headers: {"Content-Type": "application/json"}});}
 
-test("customer directory reads the existing full state through the endpoint boundary", async () => {
+test("customer directory reads its feature-scoped snapshot", async () => {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (input) => {assert.equal(input, "/api/state?mode=full"); return response({data: {customers: [{id: "KH-1", name: "张三"}], inventory: [{id: "secret"}]}});};
+  globalThis.fetch = async (input) => {assert.equal(input, "/api/customers"); return response({data: {customers: [{id: "KH-1", name: "张三"}]}});};
   try {const result = await customersApi.list({showProfit: false}); assert.equal(result.customers[0]?.id, "KH-1"); assert.equal("inventory" in result, false);} finally {globalThis.fetch = previousFetch;}
 });
 
