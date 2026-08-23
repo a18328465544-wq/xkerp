@@ -11,6 +11,9 @@ const dbSource = fs.existsSync(dbPath) ? fs.readFileSync(dbPath, "utf8") : "";
 const policySource = fs.existsSync(policyPath) ? fs.readFileSync(policyPath, "utf8") : "";
 const observabilityPath = path.join(root, "server", "observability.ts");
 const observabilitySource = fs.existsSync(observabilityPath) ? fs.readFileSync(observabilityPath, "utf8") : "";
+const financeRoutesPath = path.join(root, "server", "routes", "financeClosing.ts");
+const financeRoutesSource = fs.existsSync(financeRoutesPath) ? fs.readFileSync(financeRoutesPath, "utf8") : "";
+const systemRoutesPath = path.join(root, "server", "routes", "system.ts");
 const failures = [];
 
 function fail(message) {
@@ -53,9 +56,15 @@ if (/actions\(\)/.test(indexSource)) {
 }
 
 const authBoundary = indexSource.indexOf("app.use(requireApiAuthentication);");
-const firstFinanceRoute = indexSource.indexOf('app.get("/api/finance/daily-closing"');
-if (authBoundary < 0 || firstFinanceRoute < 0 || authBoundary > firstFinanceRoute) {
+const financeRegistration = indexSource.indexOf("registerFinanceClosingRoutes(app");
+if (authBoundary < 0 || financeRegistration < 0 || authBoundary > financeRegistration || !financeRoutesSource.includes('"/api/finance/daily-closing"')) {
   fail("财务路由必须位于统一 API 认证边界之后。");
+}
+if (!fs.existsSync(systemRoutesPath) || !indexSource.includes("registerSystemRoutes(app")) {
+  fail("健康检查必须由独立 system route module 注册。");
+}
+if (indexSource.split(/\r?\n/).length > 2920) {
+  fail("server/index.ts 超过 2920 行；新增领域路由必须进入 server/routes，禁止回流主组合文件。");
 }
 
 if (/api\/ai\/(?:copilot|insights\/refresh)/.test(policySource)) {

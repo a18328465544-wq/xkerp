@@ -5,12 +5,11 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, createManualBackup, dataFilePath, deleteAiInsightAction, findInventoryRecord, findInventoryRecordBySn, getDailyClosing, getStateRevision, listAiInsightActions, listBackups, listDailyClosings, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveDailyClosing, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
+import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, createManualBackup, dataFilePath, deleteAiInsightAction, findInventoryRecord, findInventoryRecordBySn, getStateRevision, listAiInsightActions, listBackups, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
 import { buildExport } from "./export.ts";
 import { notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
-import { buildDailyBusinessReport } from "./dailyReport.ts";
 import { getDashboardAiInsights } from "./aiInsights.ts";
 import { runCopilotTurn, type CopilotMessage } from "./aiCopilot.ts";
 import type { CopilotContext } from "../src/utils/copilotTools.ts";
@@ -79,6 +78,8 @@ import {
 import { buildCustomerLeadPreview, normalizeCustomerLeadInput } from "./crmCustomerLead.ts";
 import { buildCustomerFundsSnapshot } from "./customerFunds.ts";
 import { registerDomainSnapshotRoutes } from "./routes/domainSnapshots.ts";
+import { registerFinanceClosingRoutes } from "./routes/financeClosing.ts";
+import { registerSystemRoutes } from "./routes/system.ts";
 import { syncCrmPurchaseInvoiceLink, syncCrmSalesInvoiceLink } from "./crmEntityRepository.ts";
 import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, MediaValidationError, replaceEntityImages } from "./mediaRepository.ts";
 import type {
@@ -96,7 +97,6 @@ import type {
   ProductLedgerRow,
   ProductTemplate,
   SalesInvoice,
-  DailyClosing,
   SystemUserAccount,
 } from "../src/types.ts";
 
@@ -1396,33 +1396,19 @@ registerDomainSnapshotRoutes(app, {
   publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys),
 });
 
-app.get("/api/health", (_req, res) => {
-  res.json({ data: { ok: true, dataFile: dataFilePath } });
+registerSystemRoutes(app, {
+  dataFilePath,
+  ensureReady: ensureStateReady,
+  getRevision: () => stateRevision,
+  logRequestError,
+  sendServiceUnavailable: (req, res, message) => sendApiError(req, res, 503, "SERVICE_NOT_READY", message),
 });
 
-// Liveness and readiness are intentionally separate. The process can be alive while
-// PostgreSQL is unavailable; orchestration should only send traffic after state and
-// migrations have initialized successfully.
-app.get("/api/ready", (req, res) => {
-  void ensureStateReady()
-    .then(() => {
-      res.json({ data: { ok: true, stateRevision } });
-    })
-    .catch((error) => {
-      logRequestError(req, error, "SERVICE_NOT_READY");
-      sendApiError(req, res, 503, "SERVICE_NOT_READY", "服务尚未就绪，请稍后重试");
-    });
+registerFinanceClosingRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  sendValidationError: (req, res, message) => sendApiError(req, res, 400, "VALIDATION_ERROR", message),
 });
-
-app.get("/api/finance/daily-closing", requireMenu("finance"), asyncRoute(async (req: AuthRequest, res) => {
-  const date = String(req.query.date || storeDate());
-  // 日结查询只需要一条快照，不能随通用响应附带完整经营状态。
-  res.json({ data: await getDailyClosing(date) });
-}));
-
-app.get("/api/finance/daily-closings", requireMenu("finance"), asyncRoute(async (req: AuthRequest, res) => {
-  res.json({ data: await listDailyClosings(Number(req.query.limit || 14)) });
-}));
 
 const commissionMenuIds = ["purchase_commission", "sales_commission"];
 
@@ -1433,36 +1419,6 @@ app.get("/api/finance/commission-rules", requireAnyMenu(commissionMenuIds), (req
 app.put("/api/finance/commission-rules", requireBoss, requireAnyMenu(commissionMenuIds), asyncRoute(async (req: AuthRequest, res) => {
   const updated = await persistRequest(req, actions(req).updateCommissionRules(req.body || {}));
   res.json({ data: updated, state: { commissionRules: updated } });
-}));
-
-app.post("/api/finance/daily-closing", requireMenu("finance"), asyncRoute(async (req: AuthRequest, res) => {
-  const date = String(req.body?.date || storeDate());
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    sendApiError(req, res, 400, "VALIDATION_ERROR", "日结日期必须是 YYYY-MM-DD");
-    return;
-  }
-  const current = await loadState();
-  const report = buildDailyBusinessReport(current, date, "23:59");
-  const closing: DailyClosing = {
-    id: `RJ-${date.replace(/-/g, "")}`,
-    date,
-    closedAt: storeDateTime(),
-    closedBy: req.authUser?.displayName || req.authUser?.username || "系统",
-    remarks: String(req.body?.remarks || "").trim() || undefined,
-    snapshot: {
-      income: report.cashIncome,
-      expense: report.cashExpense,
-      netCash: report.netCashChange,
-      salesCount: report.salesOrderCount,
-      purchaseCount: report.personalRecycleCount + report.peerPurchaseCount,
-      receivable: report.receivable,
-      payable: report.payable,
-      unreviewed: current.financeLedger.filter(item => item.status === "待审核").length,
-      accountReconciliationDifferences: report.accountReconciliationDifferences,
-    },
-  };
-  const saved = await saveDailyClosing(closing);
-  res.status(201).json({ data: saved });
 }));
 
 app.post("/api/auth/login", loginRateLimiter, authMutationRoute(async (req, res) => {

@@ -102,8 +102,8 @@ src/
 └── types/                           # 按域前端类型、DTO 适配后的 Domain Model
 ```
 
-后端仍由 `server/index.ts`、`server/store.ts`、`server/db.ts`、
-`server/security.ts` 和 `server/requestStatePolicy.ts` 负责；本轮前端架构调整不得把业务事实移入浏览器。
+后端由 `server/index.ts` 组合应用，领域路由位于 `server/routes/`，业务事实与持久化分别由
+`server/store.ts`、`server/db.ts`、`server/security.ts` 和 `server/requestStatePolicy.ts` 负责；前端架构调整不得把业务事实移入浏览器。
 
 ## 5. 前端架构
 
@@ -159,7 +159,11 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 
 ### 6.1 Express 入口
 
-`server/index.ts` 负责：
+`server/index.ts` 只负责应用初始化、中间件顺序和领域路由挂载；新增路由必须进入
+`server/routes/`，架构门禁限制主组合文件继续增长。当前 `system.ts`、`financeClosing.ts`
+和 `domainSnapshots.ts` 已独立拥有各自的 HTTP 契约。
+
+组合层负责：
 
 - Express 应用初始化。
 - `helmet` 安全响应头。
