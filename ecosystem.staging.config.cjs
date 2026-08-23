@@ -3,7 +3,8 @@ module.exports = {
     {
       name: "gpu-erp-api-staging",
       cwd: __dirname,
-      script: "server-dist/index.mjs",
+      script: "npm",
+      args: "run start:api",
       env: {
         NODE_ENV: "staging",
         API_PORT: "3011",

@@ -496,6 +496,11 @@ mode: fork
 API_PORT: 3001
 ```
 
+预发布使用 `ecosystem.staging.config.cjs` 和独立的 `gpu-erp-api-staging`
+进程。生产与预发布都必须通过 `npm run start:api` 启动 bundle；不要让 PM2
+直接执行 `server-dist/index.mjs`，否则 PM2 的包装入口可能让服务进程保持在线但
+没有建立 HTTP 监听。
+
 ### 11.2 部署命令约定
 
 本地构建：
