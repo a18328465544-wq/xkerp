@@ -57,19 +57,10 @@ for (const required of [
   if (!fs.existsSync(path.join(root, required))) fail(`缺少架构边界文件：${required}`);
 }
 
-const pageFrameExceptions = new Set([
-  // This page intentionally preserves the V1 inspection workstation because
-  // its two-pane scanning workflow is not a list/dashboard frame.
-  "src/features/inspections/pages/InspectionWorkspacePage.tsx",
-]);
 const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame/;
 for (const file of pageFiles) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
-  if (pageFrameExceptions.has(fileName)) {
-    warn(`${fileName} 是保留的独立检测工作台例外，后续只在不改变扫描流程的前提下收口外层。`);
-    continue;
-  }
   if (!pageFramePattern.test(source)) {
     fail(`${fileName} 缺少统一 PageFrame；标准业务页面不得自行创建平行页面外壳。`);
   }

@@ -98,9 +98,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .erp-dialog-popup {
+  width: min(100%, calc(100vw - (var(--erp-overlay-gutter) * 2)));
+  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
   min-width: 0;
   min-height: 0;
   overscroll-behavior: contain;
+}
+
+.erp-dialog-popup > form,
+.erp-dialog-popup > form > * {
+  min-width: 0;
 }
 
 .erp-dialog-viewport:not(.erp-drawer-viewport) > .erp-dialog-popup {
@@ -300,6 +307,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
     margin-bottom: env(safe-area-inset-bottom);
   }
 
+  /* Form actions remain reachable when the soft keyboard or a short viewport
+     reduces the dialog body. Feature forms opt in with the shared class while
+     the dialog itself continues to own scrolling. */
+  .erp-dialog-popup .erp-form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--erp-layer-content-sticky, 10);
+    margin-inline: calc(var(--erp-space-4) * -1);
+    margin-bottom: calc(var(--erp-space-4) * -1);
+    padding: var(--erp-space-3) var(--erp-space-4) max(var(--erp-space-3), env(safe-area-inset-bottom));
+    background: var(--erp-color-surface);
+  }
+  .erp-form-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .erp-form-actions > button {
+    min-width: 0;
+    min-height: 44px;
+  }
+
   /* Base UI calculates option-list coordinates inline. Fixed positioning here
      gives every shared select/combobox the same usable bottom-sheet surface on
      phones while retaining the anchored desktop menu. */
@@ -407,10 +436,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
     flex: 1 1 auto;
   }
 
-  [data-erp-component="page-header"] [data-erp-region="header-actions"] {
+  [data-erp-component="page-header"] [data-erp-region="page-actions"] {
     width: 100%;
   }
-  [data-page-frame="finance"] > [data-erp-component="page-header"] [data-erp-region="header-actions"] > button {
+  [data-erp-component="page-header"] [data-erp-region="page-actions"] > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-page-frame="finance"] > [data-erp-component="page-header"] [data-erp-region="page-actions"] > button {
     flex: 1 1 auto;
   }
   [data-page-frame="finance"] [data-erp-component="dashboard-section"] {

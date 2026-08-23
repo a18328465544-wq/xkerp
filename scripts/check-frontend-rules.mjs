@@ -72,14 +72,10 @@ const productionFiles = files.filter((file) => !/\.test\.(ts|tsx)$/.test(file));
 const failures = [];
 const warnings = [];
 
-const pageFrameExceptions = new Set([
-  "src/features/inspections/pages/InspectionWorkspacePage.tsx",
-]);
 const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame/;
 for (const file of productionFiles.filter((candidate) => /\/pages\/[^/]+\.tsx$/.test(relative(candidate)) && relative(candidate).startsWith("src/features/"))) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
-  if (pageFrameExceptions.has(fileName)) continue;
   if (!pageFramePattern.test(source)) fail(file, "标准 Feature 页面必须复用统一 PageFrame，不得新增平行页面 Shell。");
   if (/\bDashboardShell\b/.test(source)) fail(file, "正式 Feature 页面不得使用 DashboardShell，请使用 ErpDashboardPageFrame。");
   const filtersOutsideToolbar = collectJsxElements(source)

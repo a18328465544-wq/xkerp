@@ -24,4 +24,7 @@ test("responsive overlay contract gives narrow windows bounded bottom-sheet surf
   assert.match(globals, /\.erp-dialog-viewport:not\(\.erp-drawer-viewport\) > \.erp-dialog-popup/);
   assert.match(globals, /\.erp-dialog-viewport:not\(\.erp-drawer-viewport\) > \.erp-dialog-popup[\s\S]*margin-block:\s*auto/);
   assert.match(globals, /\.erp-dialog-viewport:not\(\.erp-drawer-viewport\) > \.erp-dialog-popup[\s\S]*margin-block:\s*0/);
+  assert.match(globals, /\.erp-dialog-popup \.erp-form-actions[\s\S]*position:\s*sticky/);
+  assert.match(globals, /\.erp-form-actions > button[\s\S]*min-height:\s*44px/);
+  assert.match(globals, /\[data-erp-component="page-header"\] \[data-erp-region="page-actions"\][\s\S]*width:\s*100%/);
 });

@@ -5,7 +5,7 @@ import {Controller, useForm, type Path, type UseFormReturn} from "react-hook-for
 import {useCallback, useEffect, useMemo, useRef, useState, type FormEventHandler, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Badge, Button, Card, Dialog, Input, Select, Textarea} from "@/src/components/ui";
-import {ErpDatePicker, ErpEmptyState, ErpLoadingState, ErpPageError, ErpUploader, useErpDirtyGuard, useErpUnsavedChangesGuard, type ErpUploaderItem} from "@/src/components/common";
+import {ErpDatePicker, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageFrame, ErpPageHeader, ErpUploader, useErpDirtyGuard, useErpUnsavedChangesGuard, type ErpUploaderItem} from "@/src/components/common";
 import {compressImageFile, IMAGE_ACCEPTED_MIME_TYPES, IMAGE_MAX_COUNT, validateImageFile} from "@/src/lib/media/image-compression";
 import {ApiError, inspectionApi, mediaApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -226,13 +226,15 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
   const handleSnDetected = useCallback((code: string) => form.setValue("serialNumber", code, {shouldDirty: true, shouldValidate: true}), [form]);
   const mutationMessage = mutation.error instanceof Error ? mutation.error.message : "";
 
-  return <div className="erp-inspection-page space-y-4">
-    <div className="flex flex-col gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-4 py-3 md:flex-row md:items-center md:justify-between">
-      <div><h1 className="flex items-center gap-2 text-base font-bold text-[var(--erp-color-text)]"><Wrench className="h-5 w-5 text-[var(--erp-color-primary)]" />检测质检</h1><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{editingHistory ? `正在编辑入库检测单 ${editingHistory.id}，保存后回到检测归档列表。` : "显卡走完整检测流程，其他配件走简易检测流程，分别进入独立检测池。"}</p></div>
-      <div className="text-right"><span className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">当前待检数量</span><span className="text-lg font-bold text-[var(--erp-color-primary)]"><span className="font-mono">{candidates.length}</span> 件剩余</span></div>
-    </div>
-
-    {query.error ? <ErpPageError title="检测质检数据加载失败" description={query.error.message} onRetry={() => void query.refetch()} /> : <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+  return <ErpPageFrame density="compact" className="erp-inspection-page">
+    <ErpPageHeader
+      title="检测质检"
+      density="default"
+      subtitle={editingHistory ? `正在编辑入库检测单 ${editingHistory.id}，保存后回到检测归档列表。` : "显卡走完整检测流程，其他配件走简易检测流程，分别进入独立检测池。"}
+      quickStatus={[{icon: <Wrench className="h-4 w-4" />, label: "当前待检", value: `${candidates.length} 件`, tone: candidates.length ? "warning" : "success", description: "显卡与其他配件待检总数"}]}
+    />
+    <ErpPageContent>
+      {query.error ? <ErpPageError title="检测质检数据加载失败" description={query.error.message} onRetry={() => void query.refetch()} /> : <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
       <div className="space-y-3">
         <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3">
           <h2 className="flex items-center justify-between border-b border-[var(--erp-color-border)] pb-2 text-sm font-semibold tracking-normal text-[var(--erp-color-text)]"><span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-[var(--erp-color-primary)]" />显卡检测池 ({pendingGpus.length})</span><Badge className="rounded-[var(--erp-radius-xs)] px-1.5 py-0.5 text-xs" tone={pendingGpus.length ? "warning" : "success"}>待质检</Badge></h2>
@@ -251,10 +253,11 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
       </div>
 
       <div className="min-w-0">{selectedCandidate ? <InspectionFormDrawer candidate={selectedCandidate} form={form} editing={Boolean(editingHistory)} onCancel={closeInspection} onOpenCamera={() => setCameraOpen(true)} onSubmit={submit} submitting={mutation.isPending} errorMessage={mutationMessage} duplicateOwner={duplicateOwner} media={media} /> : <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-dashed border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-6 py-10 text-center lg:min-h-[210px]"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] font-mono text-xl font-bold text-[var(--erp-color-primary)]">GPU-Z</div><div><p className="text-sm font-bold text-[var(--erp-color-text)]">请从左侧选择显卡或其他配件进行检测录入</p><p className="mx-auto mt-1 max-w-[320px] text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">显卡会加载完整检测项目；其他配件只需录入 SN、成色、带盒和保修期。</p></div></div>}</div>
-    </div>}
+      </div>}
+    </ErpPageContent>
     <InspectionSnCameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onDetected={handleSnDetected} />
     {unsavedChanges.dialog}
-  </div>;
+  </ErpPageFrame>;
 }
 
 function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera, onSubmit, submitting, errorMessage, duplicateOwner, media}: {candidate: InspectionCandidate; form: UseFormReturn<InspectionFormValues>; editing: boolean; onCancel: () => void; onOpenCamera: () => void; onSubmit: FormEventHandler<HTMLFormElement>; submitting: boolean; errorMessage: string; duplicateOwner: string | null; media: ReturnType<typeof useInspectionMediaUpload>}) {
@@ -304,7 +307,7 @@ function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera,
       {validationErrorCount > 0 && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]">请补充检测表单中的 {validationErrorCount} 项必填内容，具体错误已标注在对应字段下方。</p>}
       {errorMessage && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]">{errorMessage}</p>}
       {media.blocking && <p role="status" className="text-xs text-[var(--erp-color-warning)]">仍有图片正在上传或上传失败，请完成处理后再提交检测单。</p>}
-      <div className="flex justify-end gap-3 border-t border-[var(--erp-color-border)] pt-4"><Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>取消</Button><Button type="submit" variant="primary" disabled={submitting || media.blocking}>{submitting ? "提交中…" : editing ? "保存检测单修改" : isGpu ? "提交测试报告 · 录 SN 入库" : "提交配件检测 · 录 SN 入库"}</Button></div>
+      <div className="erp-form-actions flex justify-end gap-3 border-t border-[var(--erp-color-border)] pt-4"><Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>取消</Button><Button type="submit" variant="primary" disabled={submitting || media.blocking}>{submitting ? "提交中…" : editing ? "保存检测单修改" : isGpu ? "提交测试报告 · 录 SN 入库" : "提交配件检测 · 录 SN 入库"}</Button></div>
     </form>
 
     <Dialog.Root open={Boolean(previewItem)} onOpenChange={(open) => {if (!open) setPreviewId(null);}}><Dialog.Portal><Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)] backdrop-blur-sm" /><Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-4"><Dialog.Popup className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)]"><div className="flex items-center justify-between gap-3 border-b border-[var(--erp-color-border)] px-5 py-3"><Dialog.Title className="truncate text-sm font-bold">{previewItem?.name || "检测图片预览"}</Dialog.Title><Dialog.Close render={<Button type="button" size="icon" variant="ghost" aria-label="关闭预览"><X className="h-4 w-4" /></Button>} /></div><div className="flex min-h-72 items-center justify-center bg-[var(--erp-color-surface-muted)] p-5"><img src={previewItem?.previewUrl} alt={previewItem?.name || "检测图片"} className="max-h-[75vh] max-w-full object-contain" /></div></Dialog.Popup></Dialog.Viewport></Dialog.Portal></Dialog.Root>
