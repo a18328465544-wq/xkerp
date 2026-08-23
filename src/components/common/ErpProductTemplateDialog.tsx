@@ -112,7 +112,7 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
                 {error && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p>}
               </div>
 
-              <footer className="flex flex-none flex-wrap justify-end gap-2 border-t border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-4 py-3 sm:flex-nowrap sm:px-5"><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button type="submit" variant="primary" disabled={pending || media.blocking}>{pending ? "保存中…" : media.blocking ? "等待图片处理" : product ? "保存修改" : "保存模板"}</Button></footer>
+              <footer className="erp-form-actions flex flex-none flex-wrap justify-end gap-2 border-t border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-4 py-3 sm:flex-nowrap sm:px-5"><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button type="submit" variant="primary" disabled={pending || media.blocking}>{pending ? "保存中…" : media.blocking ? "等待图片处理" : product ? "保存修改" : "保存模板"}</Button></footer>
             </form>
           </Dialog.Popup>
         </Dialog.Viewport>

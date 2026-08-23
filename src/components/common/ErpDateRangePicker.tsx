@@ -220,8 +220,8 @@ export function ErpDateRangePicker({
         </BasePopover.Trigger>
         <BasePopover.Portal>
           {open && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 sm:hidden" aria-hidden="true" onMouseDown={handleCancel} />}
-          <BasePopover.Positioner className="erp-popover-layer outline-none" sideOffset={6} align="start">
-            <BasePopover.Popup className="relative max-h-[min(90dvh,720px)] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none max-sm:!fixed max-sm:inset-x-2 max-sm:bottom-2 max-sm:top-auto max-sm:max-h-[calc(100dvh-1rem)] max-sm:w-[calc(100vw-1rem)] max-sm:max-w-none">
+          <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="start">
+            <BasePopover.Popup className="erp-popover-surface relative max-h-[min(90dvh,720px)] overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none">
               <div className="flex items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--erp-color-text)]">选择日期范围</p>

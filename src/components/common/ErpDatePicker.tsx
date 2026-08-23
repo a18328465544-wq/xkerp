@@ -68,8 +68,8 @@ export function ErpDatePicker({value, onChange, density = "default", min, max, p
     </BasePopover.Trigger>
     <BasePopover.Portal>
       {open && compactViewport && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 sm:hidden" aria-hidden="true" onMouseDown={() => setOpen(false)} />}
-      <BasePopover.Positioner className="erp-popover-layer outline-none" sideOffset={4}>
-        <BasePopover.Popup className="relative rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none max-sm:!fixed max-sm:inset-x-2 max-sm:bottom-2 max-sm:top-auto max-sm:max-h-[calc(100dvh-1rem)] max-sm:w-[calc(100vw-1rem)] max-sm:max-w-none">
+      <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={4}>
+        <BasePopover.Popup className="erp-popover-surface relative rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none">
           <div className="flex items-center justify-between border-b border-[var(--erp-color-border)] px-3 py-2.5 sm:hidden">
             <p className="text-sm font-semibold text-[var(--erp-color-text)]">选择日期</p>
             <Button type="button" size="icon" variant="ghost" aria-label="关闭日期" onClick={() => setOpen(false)}>
