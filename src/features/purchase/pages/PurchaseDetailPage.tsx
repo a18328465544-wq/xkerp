@@ -1,6 +1,6 @@
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import type {ColumnDef} from "@tanstack/react-table";
-import {ArrowLeft, Boxes, CircleDollarSign, ExternalLink, FileImage, LockKeyhole, RefreshCw, ShieldAlert, Truck, UserRound} from "lucide-react";
+import {ArrowLeft, Boxes, CircleDollarSign, ExternalLink, FileImage, LockKeyhole, Pencil, RefreshCw, ShieldAlert, ShieldCheck, Truck, UserRound} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {Link} from "@tanstack/react-router";
 import {Button, Card, CardContent, CardHeader} from "@/src/components/ui";
@@ -20,6 +20,14 @@ function errorText(error: unknown) {
 function hasMenu(session: AuthSession | null | undefined, menu: string) {
   const menus = session?.permissions.allowedMenus || [];
   return menus.includes("all") || menus.includes(menu);
+}
+
+function hasFullPurchaseRecordAccess(session: AuthSession) {
+  return hasMenu(session, "purchase_add")
+    && hasMenu(session, "payment_out")
+    && (hasMenu(session, "return_purchase") || hasMenu(session, "return_orders"))
+    && session.permissions.showCost
+    && session.permissions.showProfit;
 }
 
 function statusTone(value: string) {
@@ -99,17 +107,22 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
   const showCost = session.permissions.showCost;
   const showProfit = session.permissions.showProfit;
   const canReadPayments = hasMenu(session, "payment_out");
-  const policy = derivePurchaseEditPolicy(detail);
+  const policy = derivePurchaseEditPolicy(detail, {
+    canEditHistory: session.permissions.canEditHistory,
+    hasFullRecordAccess: hasFullPurchaseRecordAccess(session),
+  });
   const stageLabel = purchaseInventoryStageLabel(policy.inventoryStage);
+  const canEdit = policy.mode !== "read-only";
+  const editLabel = policy.mode === "full" ? "可完整编辑" : policy.mode === "limited" ? "可编辑备注" : "当前只读";
   const quickStatus: QuickStatusItemData[] = [
     {icon: <UserRound className="h-4 w-4" />, label: "采购来源", value: invoice.supplierName || "未关联", description: invoice.sourceType, tone: invoice.sourcePartnerId ? "success" : "warning"},
     {icon: <CircleDollarSign className="h-4 w-4" />, label: "付款状态", value: invoice.paymentStatus || (invoice.isPaid ? "已付款" : "未付款"), description: canReadPayments ? `${detail.paymentCount ?? 0} 笔关联流水` : "付款流水无查看权限", tone: invoice.isPaid ? "success" : "warning"},
     {icon: <Boxes className="h-4 w-4" />, label: "库存阶段", value: stageLabel, description: `${detail.inventory.length} 件实物 · ${detail.inspectionCount} 条检测`, tone: policy.inventoryStage === "pending-inspection" ? "warning" : policy.inventoryStage === "completed" ? "success" : "info"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "编辑策略", value: "当前只读", description: "等待安全编辑契约", tone: "warning"},
+    {icon: canEdit ? <ShieldCheck className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />, label: "编辑策略", value: editLabel, description: policy.mode === "full" ? "保存时重新核对业务事实" : policy.mode === "limited" ? "仅开放快递单号和备注" : "当前账号或业务阶段不允许修改", tone: policy.mode === "full" ? "success" : policy.mode === "limited" ? "warning" : "neutral"},
   ];
 
   return <ErpDetailPageFrame className="max-w-[1600px] space-y-5 pb-12">
-    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label="只读详情" tone="neutral" /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
+    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label={editLabel} tone={policy.mode === "full" ? "success" : policy.mode === "limited" ? "warning" : "neutral"} /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link>{canEdit && <Link to="/purchase/$purchaseId/edit" params={{purchaseId: invoice.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑采购单</Link>}<Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -136,7 +149,7 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
           <InfoRow label="备注" value={invoice.remarks || "—"} />
         </CardContent></Card>
 
-        <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]/35"><CardHeader><div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-[var(--erp-color-warning)]" /><h2 className="text-sm font-bold">编辑安全评估</h2></div></CardHeader><CardContent className="space-y-3"><p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">{policy.summary}</p><div className="space-y-2">{policy.reasons.map((reason) => <p key={reason} className="rounded-[var(--erp-radius-md)] bg-white/70 px-3 py-2 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{reason}</p>)}</div><div className="grid gap-2"><RiskRow tone="success" label="低风险" values={policy.fields.green} /><RiskRow tone="warning" label="需条件" values={policy.fields.yellow} /><RiskRow tone="danger" label="暂禁止" values={policy.fields.red} /></div></CardContent></Card>
+        <Card className={`border-[var(--erp-color-border-strong)] ${policy.mode === "full" ? "bg-[var(--erp-color-success-soft)]/35" : "bg-[var(--erp-color-warning-soft)]/35"}`}><CardHeader><div className="flex items-center gap-2">{policy.mode === "full" ? <ShieldCheck className="h-4 w-4 text-[var(--erp-color-success)]" /> : <ShieldAlert className="h-4 w-4 text-[var(--erp-color-warning)]" />}<h2 className="text-sm font-bold">编辑安全评估</h2></div></CardHeader><CardContent className="space-y-3"><p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">{policy.summary}</p>{policy.reasons.length > 0 && <div className="space-y-2">{policy.reasons.map((reason) => <p key={reason} className="rounded-[var(--erp-radius-md)] bg-white/70 px-3 py-2 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{reason}</p>)}</div>}<div className="grid gap-2">{policy.fields.green.length > 0 && <RiskRow tone="success" label="低风险" values={policy.fields.green} />}{policy.fields.yellow.length > 0 && <RiskRow tone="warning" label="需条件" values={policy.fields.yellow} />}{policy.fields.red.length > 0 && <RiskRow tone="danger" label="暂禁止" values={policy.fields.red} />}</div></CardContent></Card>
 
         <Card><CardHeader><div className="flex items-center gap-2"><Truck className="h-4 w-4 text-[var(--erp-color-primary)]" /><h2 className="text-sm font-bold">付款与抵扣</h2></div></CardHeader><CardContent>{canReadPayments ? <div className="space-y-3"><InfoRow label="付款方式" value={invoice.paymentMethod || "—"} /><InfoRow label="结算账户" value={invoice.settlementAccountName || "—"} /><InfoRow label="现金已付" value={formatCurrency(invoice.paidAmount)} /><InfoRow label="供应商抵扣" value={formatCurrency(invoice.vendorCreditAppliedAmount || 0)} /><InfoRow label="未付" value={formatCurrency(invoice.unpaidAmount)} /><InfoRow label="关联付款流水" value={`${detail.paymentCount ?? 0} 笔`} /></div> : <p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">当前账号没有支出流水权限，不展示金额、账户和历史流水。</p>}</CardContent></Card>
       </aside>

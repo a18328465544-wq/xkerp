@@ -1,4 +1,4 @@
-import type {PurchaseCondition, PurchaseFormValues, PurchaseLineFormValue} from "@/src/types/purchase";
+import type {PurchaseCondition, PurchaseFormValues, PurchaseInvoice, PurchaseLineFormValue} from "@/src/types/purchase";
 import {storeDate} from "@/src/utils/storeTime";
 
 export const PURCHASE_INITIAL_LINE_COUNT = 4;
@@ -54,5 +54,48 @@ export function createPurchaseDefaults(handleBy: string): PurchaseFormValues {
     handleBy,
     remarks: "",
     items: Array.from({length: PURCHASE_INITIAL_LINE_COUNT}, () => createPurchaseLineDefaults()),
+  };
+}
+
+export function createPurchaseEditValues(invoice: PurchaseInvoice): PurchaseFormValues {
+  return {
+    date: invoice.date,
+    sourceType: invoice.sourceType,
+    sourcePartnerId: invoice.sourcePartnerId || "",
+    sourcePartnerType: invoice.sourcePartnerType || (invoice.sourceType === "个人回收" ? "customer" : "vendor"),
+    supplierName: invoice.supplierName,
+    contact: invoice.contact || "",
+    expressNo: invoice.expressNo || "",
+    paymentMethod: invoice.paymentMethod || "账期欠款",
+    isPaid: invoice.isPaid,
+    settlementAccountId: invoice.settlementAccountId || "",
+    paidAmount: invoice.paidAmount,
+    vendorCreditAppliedAmount: invoice.vendorCreditAppliedAmount || 0,
+    paymentHandler: invoice.paymentHandler || invoice.handleBy,
+    handleBy: invoice.handleBy,
+    remarks: invoice.remarks || "",
+    images: [...(invoice.images || [])],
+    items: invoice.items.map((item) => ({
+      tempId: item.tempId,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category || "其他配件",
+      model: item.model,
+      brand: item.brand,
+      version: item.version,
+      vram: item.vram,
+      sn: item.sn,
+      condition: item.condition,
+      inWarranty: item.inWarranty,
+      warrantyDate: item.warrantyDate || "",
+      repaired: item.repaired,
+      gpuRisk: item.gpuRisk,
+      fullBox: item.fullBox,
+      quantity: item.quantity || 1,
+      buyPrice: item.buyPrice,
+      estSellPrice: item.estSellPrice,
+      warehouseLocation: item.warehouseLocation,
+      remarks: item.remarks || "",
+    })),
   };
 }

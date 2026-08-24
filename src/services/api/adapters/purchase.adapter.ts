@@ -6,6 +6,7 @@ import type {
   PurchaseInvoiceResponseDto,
   PurchaseLineRequestDto,
   PurchaseReferenceStateResponseDto,
+  PurchaseUpdateRequestDto,
 } from "../dto/purchase.dto";
 import type {
   PurchaseCondition,
@@ -154,6 +155,7 @@ export function adaptPurchaseInvoice(value: PurchaseInvoiceResponseDto | unknown
   return {
     id: text(dto.id),
     invoiceNo: text(dto.invoiceNo),
+    recordVersion: Math.max(1, Math.floor(numberValue(dto.recordVersion, 1))),
     date: text(dto.date, storeDate()),
     sourceType: sourceTypeValue(dto.sourceType),
     sourcePartnerId: optionalText(dto.sourcePartnerId),
@@ -475,5 +477,24 @@ export function toPurchaseRequestDto(values: PurchaseFormValues, account?: Purch
     remarks: optionalText(values.remarks),
     images: mediaReferences(values.images),
     items,
+  };
+}
+
+export function toPurchaseUpdateRequestDto(
+  values: PurchaseFormValues,
+  account: PurchaseSettlementAccountOption | undefined,
+  expectedRecordVersion: number,
+  mode: "full" | "metadata",
+): PurchaseUpdateRequestDto {
+  const metadata = {
+    expectedRecordVersion,
+    // Keep empty strings so users can explicitly clear previously stored text.
+    expressNo: values.expressNo.trim(),
+    remarks: values.remarks.trim(),
+  };
+  if (mode === "metadata") return metadata;
+  return {
+    ...toPurchaseRequestDto(values, account),
+    ...metadata,
   };
 }

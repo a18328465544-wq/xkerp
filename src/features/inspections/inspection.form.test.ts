@@ -27,6 +27,16 @@ test("GPU inspection requires SN, warehouse and actual measurements", () => {
   assert.equal(inspectionSchema.safeParse(values).success, true);
 });
 
+test("brand-new inventory only requires SN and warranty confirmation", () => {
+  const values = createInspectionDefaults({...candidate, condition: "全新"}, "检测员");
+  values.serialNumber = "NEW-SN-1";
+  assert.equal(values.furmarkResult, "");
+  assert.equal(values.threedMarkResult, "");
+  assert.equal(values.temperature, 0);
+  assert.equal(values.wattage, 0);
+  assert.equal(inspectionSchema.safeParse(values).success, true);
+});
+
 test("accessory simple inspection does not require GPU measurements", () => {
   const values = createInspectionDefaults({...candidate, id: "CPU-1", category: "CPU", productName: "i9", isGpu: false, inWarranty: false, warrantyDate: ""}, "检测员");
   values.serialNumber = "CPU-SN";

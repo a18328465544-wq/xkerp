@@ -314,7 +314,7 @@ test("non-GPU purchase waits for accessory inspection before inbound stock", () 
   assert.equal(inspectedAccessory?.sn, "CPU-SN-001");
   assert.equal(inspectedAccessory?.status, "已入库");
   assert.equal(inspectedAccessory?.warehouseLocation, "配件柜-C03");
-  assert.match(inspectedAccessory?.remarks || "", /其他配件简易检测完成/);
+  assert.match(inspectedAccessory?.remarks || "", /全新商品快速核验完成/);
 });
 
 test("purchase can register express tracking first and bind SN during inbound scan", () => {
@@ -449,6 +449,95 @@ test("inspection entry binds SN and completes inbound stock registration", () =>
   assert.equal(stockedCard?.sn, "INSPECT-SN-001");
   assert.equal(stockedCard?.status, "已入库");
   assert.equal(stockedCard?.warehouseLocation, "A区-02");
+});
+
+test("brand-new inventory is normalized to quick SN and warranty verification", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+
+  actions.createPurchaseInvoice({
+    date: "2026-06-04",
+    sourceType: "同行拿货",
+    supplierName: "全新商品供应商",
+    contact: "13800000003",
+    paymentMethod: "微信",
+    isPaid: true,
+    paidAmount: 5000,
+    unpaidAmount: 0,
+    handleBy: "采购小王",
+    items: [{
+      tempId: "tmp-brand-new",
+      productId: product.id,
+      productName: product.name,
+      category: product.category,
+      model: product.model,
+      brand: product.brand,
+      version: product.version,
+      vram: product.vram,
+      sn: "",
+      condition: "全新",
+      inWarranty: true,
+      warrantyDate: "2029-06-04",
+      repaired: false,
+      gpuRisk: false,
+      fullBox: true,
+      buyPrice: 5000,
+      estSellPrice: 5600,
+      warehouseLocation: "待检测区",
+    }],
+  });
+
+  const pendingCard = state.inventory.find((item) => item.supplierName === "全新商品供应商");
+  assert.ok(pendingCard);
+  const report = actions.submitInspection({
+    inventoryId: pendingCard.id,
+    sn: "NEW-SN-001",
+    condition: "95新",
+    inWarranty: true,
+    warrantyDate: "2029-06-04",
+    fullBox: false,
+    warehouseLocation: "A区-全新",
+    inspector: "质检小王",
+    exteriorCheck: "严重磕碰",
+    fanCheck: "风扇停转",
+    portsCheck: "物理变形",
+    gpuzCheck: "规格异常 / 假卡山寨",
+    furmarkResult: "不应保留",
+    threedMarkResult: "不应保留",
+    vramResult: "黄屏/花屏",
+    temperature: 99,
+    wattage: 999,
+    noise: "噪音明显",
+    repaired: true,
+    hiddenDefects: true,
+    resultStatus: "需要维修",
+  });
+
+  assert.equal(report.condition, "全新");
+  assert.equal(report.resultStatus, "通过");
+  assert.equal(report.temperature, 0);
+  assert.equal(report.wattage, 0);
+  assert.match(report.remarks || "", /仅核验 SN 与质保/);
+  const stockedCard = state.inventory.find((item) => item.id === pendingCard.id);
+  assert.equal(stockedCard?.status, "已入库");
+  assert.equal(stockedCard?.sn, "NEW-SN-001");
+  assert.equal(stockedCard?.condition, "全新");
+  assert.equal(stockedCard?.warrantyDate, "2029-06-04");
+  assert.doesNotMatch(stockedCard?.remarks || "", /烤机高热/);
+
+  const updated = actions.updateInspection(report.id, {
+    inWarranty: false,
+    warrantyDate: undefined,
+    temperature: 110,
+    wattage: 1200,
+    resultStatus: "需要维修",
+  });
+  assert.equal(updated.inWarranty, false);
+  assert.equal(updated.resultStatus, "通过");
+  assert.equal(updated.temperature, 0);
+  assert.equal(updated.wattage, 0);
+  assert.equal(state.inventory.find((item) => item.id === pendingCard.id)?.warrantyDate, undefined);
 });
 
 test("sales invoice records model first and outbound confirmation binds SN then completes stock out", () => {
@@ -3416,6 +3505,65 @@ test("purchase edit and delete use exact structured inventory links without pref
   actions.deletePurchaseInvoice(invoice.id);
   assert.equal(state.inventory.some((card) => card.id === linkedCard.id), false);
   assert.equal(state.inventory.some((card) => card.id === prefixCollisionCard.id), true);
+});
+
+test("purchase edits reject stale record versions and increment the accepted version", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const invoice = actions.createPurchaseInvoice(buildPurchase([
+    buildPurchaseItem(product, "PURCHASE-VERSION-SN", 6800),
+  ]));
+
+  assert.equal(invoice.recordVersion, 1);
+  const updated = actions.updatePurchaseInvoice(invoice.id, {remarks: "第一次修改"}, {expectedRecordVersion: 1});
+  assert.equal(updated.recordVersion, 2);
+  assert.throws(
+    () => actions.updatePurchaseInvoice(invoice.id, {remarks: "过期页面覆盖"}, {expectedRecordVersion: 1}),
+    /已被其他人修改/,
+  );
+  assert.equal(state.purchaseInvoices.find((item) => item.id === invoice.id)?.remarks, "第一次修改");
+});
+
+test("purchase edits become metadata-only after inspection starts", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const invoice = actions.createPurchaseInvoice(buildPurchase([
+    buildPurchaseItem(product, "PURCHASE-LOCKED-SN", 6800),
+  ]));
+  const card = state.inventory.find((item) => item.purchaseInvoiceNo === invoice.invoiceNo);
+  assert.ok(card);
+  card.status = "已入库";
+
+  const metadata = actions.updatePurchaseInvoice(invoice.id, {expressNo: "SF123", remarks: "补充凭证"}, {expectedRecordVersion: 1});
+  assert.equal(metadata.expressNo, "SF123");
+  assert.equal(metadata.recordVersion, 2);
+  assert.equal(state.inventory.find((item) => item.id === card.id)?.expressNo, "SF123");
+  assert.throws(
+    () => actions.updatePurchaseInvoice(invoice.id, {supplierName: "不允许变更"}, {expectedRecordVersion: 2}),
+    /只能修改快递单号和采购备注/,
+  );
+});
+
+test("purchase full-form saves do not rebuild an unchanged linked payment", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const account = state.settlementAccounts[0];
+  assert.ok(account);
+  const invoice = actions.createPurchaseInvoice({
+    ...buildPurchase([buildPurchaseItem(product, "PURCHASE-PAYMENT-STABLE-SN", 6800)]),
+    paidAmount: 6800,
+    settlementAccountId: account.id,
+  });
+  const paymentBefore = state.paymentOutRecords.find((item) => item.relatedDocNo === invoice.invoiceNo);
+  assert.ok(paymentBefore);
+
+  actions.updatePurchaseInvoice(invoice.id, {...invoice, remarks: "只修改备注"}, {expectedRecordVersion: 1});
+
+  const paymentAfter = state.paymentOutRecords.find((item) => item.relatedDocNo === invoice.invoiceNo);
+  assert.equal(paymentAfter?.id, paymentBefore.id);
 });
 
 test("unpaid invoices do not create finance flow until money actually moves", () => {

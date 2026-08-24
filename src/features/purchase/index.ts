@@ -1,5 +1,6 @@
 export {NewPurchaseOrderPage} from "./pages/NewPurchaseOrderPage";
 export {PurchaseDetailPage} from "./pages/PurchaseDetailPage";
+export {PurchaseEditPage} from "./pages/PurchaseEditPage";
 export {PurchaseListPage} from "./pages/PurchaseListPage";
 export {createPurchaseDefaults, createPurchaseLineDefaults} from "./purchase.defaults";
 export {purchaseOrderSchema, parsePurchaseOrderValues} from "./purchase.schema";

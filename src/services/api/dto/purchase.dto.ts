@@ -51,6 +51,10 @@ export interface PurchaseCreateRequestDto {
   items: PurchaseLineRequestDto[];
 }
 
+export type PurchaseUpdateRequestDto = Partial<PurchaseCreateRequestDto> & {
+  expectedRecordVersion: number;
+};
+
 export interface PurchaseCreateResponseDto {
   data?: unknown;
   state?: unknown;
@@ -81,6 +85,7 @@ export interface PurchaseListStateResponseDto {
 export interface PurchaseInvoiceResponseDto {
   id?: unknown;
   invoiceNo?: unknown;
+  recordVersion?: unknown;
   date?: unknown;
   sourceType?: unknown;
   sourcePartnerId?: unknown;

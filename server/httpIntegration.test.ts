@@ -124,6 +124,53 @@ test("a configured login can reach finance only by its effective menu permission
   }
 });
 
+test("purchase history edits require a fresh record version over authenticated HTTP", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const { createApp } = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({username: process.env.BACKEND_TEST_USERNAME, password: process.env.BACKEND_TEST_PASSWORD}),
+    });
+    assert.equal(login.status, 200);
+    const loginPayload = await login.json() as {data?: {csrfToken?: string}};
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    const csrfToken = loginPayload.data?.csrfToken;
+    assert.ok(sessionCookie);
+    assert.ok(csrfToken);
+
+    const list = await fetch(`${baseUrl}/api/purchase-invoices?page=1&pageSize=1`, {headers: {cookie: sessionCookie}});
+    assert.equal(list.status, 200);
+    const listPayload = await list.json() as {data?: {purchaseInvoices?: Array<{id?: string; recordVersion?: number}>}};
+    const invoice = listPayload.data?.purchaseInvoices?.[0];
+    assert.ok(invoice?.id);
+    const version = invoice.recordVersion || 1;
+    const updateBody = {expectedRecordVersion: version, expressNo: `HTTP-EDIT-${Date.now()}`, remarks: "HTTP 版本保护验收"};
+    const headers = {cookie: sessionCookie, "content-type": "application/json", "x-csrf-token": csrfToken};
+
+    const updated = await fetch(`${baseUrl}/api/purchase-invoices/${encodeURIComponent(invoice.id)}`, {
+      method: "PUT", headers, body: JSON.stringify(updateBody),
+    });
+    assert.equal(updated.status, 200);
+    const updatedPayload = await updated.json() as {data?: {recordVersion?: number}};
+    assert.equal(updatedPayload.data?.recordVersion, version + 1);
+
+    const stale = await fetch(`${baseUrl}/api/purchase-invoices/${encodeURIComponent(invoice.id)}`, {
+      method: "PUT", headers, body: JSON.stringify({...updateBody, remarks: "不应覆盖"}),
+    });
+    assert.equal(stale.status, 409);
+    const stalePayload = await stale.json() as {error?: {code?: string; message?: string}};
+    assert.equal(stalePayload.error?.code, "CONFLICT");
+    assert.match(stalePayload.error?.message || "", /已被其他人修改/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("expired PostgreSQL sessions are pruned in one bounded cleanup", {
   skip: !integrationEnabled,
 }, async () => {

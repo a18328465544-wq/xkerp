@@ -191,7 +191,9 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
   const mutation = useMutation({
     mutationFn: ({values, inspectionId}: {values: InspectionFormValues; inspectionId?: string}) => inspectionId ? inspectionApi.update(inspectionId, values) : inspectionApi.create(values),
     onSuccess: (result) => {
-      toast.success(`${result.id || "检测记录"} 已提交，SN、成色、带盒、保修期和最终库位已同步`);
+      toast.success(selectedCandidate?.condition === "全新"
+        ? `${result.id || "检测记录"} 已完成全新快速入库，SN 与质保已同步`
+        : `${result.id || "检测记录"} 已提交，SN、成色、带盒、保修期和最终库位已同步`);
       setSelectedId("");
       setEditingHistory(null);
       media.reset([]);
@@ -230,7 +232,7 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
     <ErpPageHeader
       title="检测质检"
       density="default"
-      subtitle={editingHistory ? `正在编辑入库检测单 ${editingHistory.id}，保存后回到检测归档列表。` : "显卡走完整检测流程，其他配件走简易检测流程，分别进入独立检测池。"}
+      subtitle={editingHistory ? `正在编辑入库检测单 ${editingHistory.id}，保存后回到检测归档列表。` : "全新商品只核验 SN 与质保；二手显卡走完整检测，其他配件走简易检测。"}
       quickStatus={[{icon: <Wrench className="h-4 w-4" />, label: "当前待检", value: `${candidates.length} 件`, tone: candidates.length ? "warning" : "success", description: "显卡与其他配件待检总数"}]}
     />
     <ErpPageContent>
@@ -252,7 +254,7 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
         </div>
       </div>
 
-      <div className="min-w-0">{selectedCandidate ? <InspectionFormDrawer candidate={selectedCandidate} form={form} editing={Boolean(editingHistory)} onCancel={closeInspection} onOpenCamera={() => setCameraOpen(true)} onSubmit={submit} submitting={mutation.isPending} errorMessage={mutationMessage} duplicateOwner={duplicateOwner} media={media} /> : <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-dashed border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-6 py-10 text-center lg:min-h-[210px]"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] font-mono text-xl font-bold text-[var(--erp-color-primary)]">GPU-Z</div><div><p className="text-sm font-bold text-[var(--erp-color-text)]">请从左侧选择显卡或其他配件进行检测录入</p><p className="mx-auto mt-1 max-w-[320px] text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">显卡会加载完整检测项目；其他配件只需录入 SN、成色、带盒和保修期。</p></div></div>}</div>
+      <div className="min-w-0">{selectedCandidate ? <InspectionFormDrawer candidate={selectedCandidate} form={form} editing={Boolean(editingHistory)} onCancel={closeInspection} onOpenCamera={() => setCameraOpen(true)} onSubmit={submit} submitting={mutation.isPending} errorMessage={mutationMessage} duplicateOwner={duplicateOwner} media={media} /> : <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-dashed border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-6 py-10 text-center lg:min-h-[210px]"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] font-mono text-xl font-bold text-[var(--erp-color-primary)]">GPU-Z</div><div><p className="text-sm font-bold text-[var(--erp-color-text)]">请从左侧选择显卡或其他配件进行检测录入</p><p className="mx-auto mt-1 max-w-[320px] text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">全新商品只需录入 SN 与质保；二手显卡会加载完整检测项目。</p></div></div>}</div>
       </div>}
     </ErpPageContent>
     <InspectionSnCameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onDetected={handleSnDetected} />
@@ -262,6 +264,7 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
 
 function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera, onSubmit, submitting, errorMessage, duplicateOwner, media}: {candidate: InspectionCandidate; form: UseFormReturn<InspectionFormValues>; editing: boolean; onCancel: () => void; onOpenCamera: () => void; onSubmit: FormEventHandler<HTMLFormElement>; submitting: boolean; errorMessage: string; duplicateOwner: string | null; media: ReturnType<typeof useInspectionMediaUpload>}) {
   const isGpu = form.watch("isGpu");
+  const isBrandNew = candidate.condition === "全新";
   const inWarranty = form.watch("inWarranty");
   const temperature = form.watch("temperature");
   const validationErrorCount = Object.keys(form.formState.errors).length;
@@ -276,17 +279,23 @@ function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera,
   return <>
     <form onSubmit={onSubmit} className="relative space-y-4 overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4">
       <div className="relative rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-4">
-        <span className="absolute right-3 top-3"><Badge className="rounded-[var(--erp-radius-xs)] px-2 py-0.5 text-xs font-semibold" tone="info">{isGpu ? "显卡完整检测" : "其他配件简易检测"}</Badge></span>
+        <span className="absolute right-3 top-3"><Badge className="rounded-[var(--erp-radius-xs)] px-2 py-0.5 text-xs font-semibold" tone={isBrandNew ? "success" : "info"}>{isBrandNew ? "全新快速入库" : isGpu ? "显卡完整检测" : "其他配件简易检测"}</Badge></span>
         <h3 className="pr-32 text-sm font-bold text-[var(--erp-color-text)]">{candidate.productName}</h3>
-        <div className="mt-2.5 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3"><div><span className="block text-[var(--erp-color-text-muted)]">独立库存编号</span><span className="font-mono font-bold text-[var(--erp-color-text-secondary)]">{candidate.id}</span></div><div><span className="block text-[var(--erp-color-text-muted)]">PCB物理序列号</span><span className="font-bold text-[var(--erp-color-primary)]">{candidate.serialNumber ? <span className="font-mono">{candidate.serialNumber}</span> : "待检测录入"}</span></div><div><span className="block text-[var(--erp-color-text-muted)]">检测类型</span><span className="text-[var(--erp-color-text-secondary)]">{isGpu ? "显卡检测入库" : "其他配件检测"}</span></div></div>
+        <div className="mt-2.5 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3"><div><span className="block text-[var(--erp-color-text-muted)]">独立库存编号</span><span className="font-mono font-bold text-[var(--erp-color-text-secondary)]">{candidate.id}</span></div><div><span className="block text-[var(--erp-color-text-muted)]">PCB物理序列号</span><span className="font-bold text-[var(--erp-color-primary)]">{candidate.serialNumber ? <span className="font-mono">{candidate.serialNumber}</span> : "待检测录入"}</span></div><div><span className="block text-[var(--erp-color-text-muted)]">检测类型</span><span className="text-[var(--erp-color-text-secondary)]">{isBrandNew ? "全新快速入库" : isGpu ? "显卡检测入库" : "其他配件检测"}</span></div></div>
       </div>
 
       <div className="grid grid-cols-1 items-end gap-4 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] p-4 md:grid-cols-[1fr_1.2fr]">
         <Field label="入库 SN 录入" error={form.formState.errors.serialNumber?.message}><div className="flex gap-2"><Input {...serialRegistration} ref={(element) => {serialRegistration.ref(element); serialInputRef.current = element;}} className={`font-mono placeholder:font-sans ${duplicateOwner ? "border-[var(--erp-color-danger)]" : ""}`} placeholder={candidate.expressNo ? `快递 ${candidate.expressNo} 到货后录入实物SN` : "扫描或输入实物 SN"} /><Button type="button" size="icon" variant="primary" onClick={onOpenCamera} aria-label="调用摄像头扫码录入 SN"><Camera className="h-4 w-4" /></Button></div></Field>
-        <div className="text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">{isGpu ? "显卡检测录入会写入 SN，并按检测结论更新为已入库、维修中或已退货。" : "其他配件只做简易检测：SN、成色、是否带盒、保修期，提交后写入库存档案。"}{candidate.expressNo && <span className="mt-1 block text-[var(--erp-color-primary)]">关联快递单号：<span className="font-mono">{candidate.expressNo}</span></span>}{duplicateOwner && <span className="mt-1 block font-bold text-[var(--erp-color-danger)]">SN 已被 {duplicateOwner} 占用，请重新扫码或核对标签。</span>}</div>
+        <div className="text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">{isBrandNew ? "全新商品无需烤机、跑分或填写其他检测数据；确认 SN 与质保后直接入库。" : isGpu ? "显卡检测录入会写入 SN，并按检测结论更新为已入库、维修中或已退货。" : "其他配件只做简易检测：SN、成色、是否带盒、保修期，提交后写入库存档案。"}{candidate.expressNo && <span className="mt-1 block text-[var(--erp-color-primary)]">关联快递单号：<span className="font-mono">{candidate.expressNo}</span></span>}{duplicateOwner && <span className="mt-1 block font-bold text-[var(--erp-color-danger)]">SN 已被 {duplicateOwner} 占用，请重新扫码或核对标签。</span>}</div>
       </div>
 
-      <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4">
+      {isBrandNew ? <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-success)] bg-[var(--erp-color-success-soft)] p-4">
+        <div><h3 className="text-sm font-semibold text-[var(--erp-color-text)]">质保确认</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">全新商品只需确认是否在保；选择“在保”时填写质保截止日期。</p></div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
+          <CheckField label={inWarranty ? "在保" : "无保"} checked={inWarranty} onChange={(checked) => form.setValue("inWarranty", checked, {shouldDirty: true, shouldValidate: true})} />
+          <Field label="质保截止日期" error={form.formState.errors.warrantyDate?.message}><Controller control={form.control} name="warrantyDate" render={({field}) => <ErpDatePicker value={field.value} onChange={field.onChange} disabled={!inWarranty} placeholder={inWarranty ? "选择质保截止日期" : "无保，无需填写"} aria-label="保修截止日期" />} /></Field>
+        </div>
+      </div> : <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4">
         <div><h3 className="text-sm font-semibold text-[var(--erp-color-text)]">入库属性确认</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{isGpu ? "成色、保修、拆修、带盒和最终存放位置以检测录入为准，提交后写入库存档案。" : "其他配件只确认 SN、成色、带盒、保修期和最终存放位置。"}</p></div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <Field label="最终存放位置" error={form.formState.errors.warehouseLocation?.message}><Input {...form.register("warehouseLocation")} placeholder="A区货架-01" /></Field>
@@ -294,20 +303,20 @@ function InspectionFormDrawer({candidate, form, editing, onCancel, onOpenCamera,
           <div className="md:col-span-2 xl:col-span-2"><Field label="保修期" error={form.formState.errors.warrantyDate?.message}><div className="flex flex-col gap-2 sm:flex-row"><CheckField label="在保" checked={inWarranty} onChange={(checked) => form.setValue("inWarranty", checked, {shouldDirty: true, shouldValidate: true})} className="sm:w-24" /><Controller control={form.control} name="warrantyDate" render={({field}) => <ErpDatePicker value={field.value} onChange={field.onChange} disabled={!inWarranty} placeholder="选择保修截止日期" aria-label="保修截止日期" className="min-w-0 flex-1" />} /></div></Field></div>
           <Field label={isGpu ? "拆修 / 带盒" : "是否带盒"}><div className="flex min-h-10 flex-wrap items-center gap-x-5 gap-y-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3 py-2">{isGpu && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm font-bold text-[var(--erp-color-text-secondary)]"><input type="checkbox" checked={form.watch("repaired")} onChange={(event) => form.setValue("repaired", event.target.checked, {shouldDirty: true})} className="h-4 w-4 accent-[var(--erp-color-primary)]" />曾拆修</label>}<label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm font-bold text-[var(--erp-color-text-secondary)]"><input type="checkbox" checked={form.watch("fullBox")} onChange={(event) => form.setValue("fullBox", event.target.checked, {shouldDirty: true})} className="h-4 w-4 accent-[var(--erp-color-primary)]" />{form.watch("fullBox") ? "带盒" : "无盒"}</label></div></Field>
         </div>
-      </div>
+      </div>}
 
-      {!isGpu && <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] p-4"><h3 className="text-sm font-semibold text-[var(--erp-color-primary)]">其他配件检测池子</h3><p className="mt-1 text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">当前为配件简易检测，不需要录入烤机、跑分、显存和功耗。确认 SN、成色、带盒、保修期后即可完成检测归档。</p></div>}
+      {!isBrandNew && !isGpu && <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] p-4"><h3 className="text-sm font-semibold text-[var(--erp-color-primary)]">其他配件检测池子</h3><p className="mt-1 text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">当前为配件简易检测，不需要录入烤机、跑分、显存和功耗。确认 SN、成色、带盒、保修期后即可完成检测归档。</p></div>}
 
-      {isGpu && <GpuInspectionFields form={form} temperature={temperature} />}
+      {!isBrandNew && isGpu && <GpuInspectionFields form={form} temperature={temperature} />}
 
-      <Field label={isGpu ? "物理测试总体批注 (最终出张随存)" : "配件检测备注"} error={form.formState.errors.remarks?.message}><Textarea {...form.register("remarks")} className="min-h-16 resize-none" placeholder={isGpu ? "请输入该卡的风扇物理清灰建议、挡板翻新指导或者后续保修的核销条码说明..." : "可记录外观、附件、保修来源或包装情况..."} /></Field>
+      {!isBrandNew && <Field label={isGpu ? "物理测试总体批注 (最终出张随存)" : "配件检测备注"} error={form.formState.errors.remarks?.message}><Textarea {...form.register("remarks")} className="min-h-16 resize-none" placeholder={isGpu ? "请输入该卡的风扇物理清灰建议、挡板翻新指导或者后续保修的核销条码说明..." : "可记录外观、附件、保修来源或包装情况..."} /></Field>}
 
-      <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-4"><ErpUploader items={media.items} maxCount={IMAGE_MAX_COUNT} accept={media.accept} disabled={submitting} description="可上传外观、SN 标签、测试结果或附件图片；提交前自动压缩到约 100KB/张" uploadedDescription="图片已上传，等待随检测单保存" error={media.error} onFilesSelected={media.addFiles} onRetry={media.retry} onRemove={media.remove} onPreview={(item) => setPreviewId(item.id)} /></div>
+      {!isBrandNew && <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-4"><ErpUploader items={media.items} maxCount={IMAGE_MAX_COUNT} accept={media.accept} disabled={submitting} description="可上传外观、SN 标签、测试结果或附件图片；提交前自动压缩到约 100KB/张" uploadedDescription="图片已上传，等待随检测单保存" error={media.error} onFilesSelected={media.addFiles} onRetry={media.retry} onRemove={media.remove} onPreview={(item) => setPreviewId(item.id)} /></div>}
 
       {validationErrorCount > 0 && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]">请补充检测表单中的 {validationErrorCount} 项必填内容，具体错误已标注在对应字段下方。</p>}
       {errorMessage && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]">{errorMessage}</p>}
       {media.blocking && <p role="status" className="text-xs text-[var(--erp-color-warning)]">仍有图片正在上传或上传失败，请完成处理后再提交检测单。</p>}
-      <div className="erp-form-actions flex justify-end gap-3 border-t border-[var(--erp-color-border)] pt-4"><Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>取消</Button><Button type="submit" variant="primary" disabled={submitting || media.blocking}>{submitting ? "提交中…" : editing ? "保存检测单修改" : isGpu ? "提交测试报告 · 录 SN 入库" : "提交配件检测 · 录 SN 入库"}</Button></div>
+      <div className="erp-form-actions flex justify-end gap-3 border-t border-[var(--erp-color-border)] pt-4"><Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>取消</Button><Button type="submit" variant="primary" disabled={submitting || media.blocking}>{submitting ? "提交中…" : editing ? "保存检测单修改" : isBrandNew ? "确认全新入库" : isGpu ? "提交测试报告 · 录 SN 入库" : "提交配件检测 · 录 SN 入库"}</Button></div>
     </form>
 
     <Dialog.Root open={Boolean(previewItem)} onOpenChange={(open) => {if (!open) setPreviewId(null);}}><Dialog.Portal><Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)] backdrop-blur-sm" /><Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-4"><Dialog.Popup className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)]"><div className="flex items-center justify-between gap-3 border-b border-[var(--erp-color-border)] px-5 py-3"><Dialog.Title className="truncate text-sm font-bold">{previewItem?.name || "检测图片预览"}</Dialog.Title><Dialog.Close render={<Button type="button" size="icon" variant="ghost" aria-label="关闭预览"><X className="h-4 w-4" /></Button>} /></div><div className="flex min-h-72 items-center justify-center bg-[var(--erp-color-surface-muted)] p-5"><img src={previewItem?.previewUrl} alt={previewItem?.name || "检测图片"} className="max-h-[75vh] max-w-full object-contain" /></div></Dialog.Popup></Dialog.Viewport></Dialog.Portal></Dialog.Root>

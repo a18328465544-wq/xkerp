@@ -97,7 +97,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
   return <ErpListPageFrame>
     <ErpPageHeader
       title="采购单据"
-      subtitle="查看采购来源、商品数量、付款状态与已生成库存，点击任意行进入只读详情。"
+      subtitle="查看采购来源、商品数量、付款状态与已生成库存；具备历史编辑权限时，可在详情页按业务阶段修改。"
       quickStatus={quickStatus}
       actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>{canCreate && <Button type="button" size="sm" variant="primary" onClick={onCreate}><Plus className="h-4 w-4" />新建采购单</Button>}</>}
     />

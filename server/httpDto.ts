@@ -108,7 +108,9 @@ const purchaseFields = {
 };
 
 export const purchaseInvoiceCreateDto = z.object(purchaseFields).strict();
-export const purchaseInvoiceUpdateDto = z.object(purchaseFields).partial().strict();
+export const purchaseInvoiceUpdateDto = z.object(purchaseFields).partial().extend({
+  expectedRecordVersion: z.number().int().positive("采购单版本号无效"),
+}).strict();
 
 const inspectionFields = {
   inventoryId: requiredText("库存档案", 120),

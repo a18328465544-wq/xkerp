@@ -1,5 +1,5 @@
 import {apiRequest} from "../client";
-import {adaptPurchaseCreateResponse, adaptPurchaseDetailState, adaptPurchaseListState, adaptPurchaseReferenceData, toPurchaseRequestDto} from "../adapters/purchase.adapter";
+import {adaptPurchaseCreateResponse, adaptPurchaseDetailState, adaptPurchaseListState, adaptPurchaseReferenceData, toPurchaseRequestDto, toPurchaseUpdateRequestDto} from "../adapters/purchase.adapter";
 import type {PurchaseCreateResponseDto, PurchaseDetailStateResponseDto, PurchaseListStateResponseDto, PurchaseReferenceStateResponseDto} from "../dto/purchase.dto";
 import type {PurchaseDetail, PurchaseFormValues, PurchaseListDataset, PurchaseListFilters, PurchaseReferenceData, PurchaseSettlementAccountOption, PurchaseCreateResult} from "@/src/types/purchase";
 import type {PurchaseDetailPermissions, PurchaseListPermissions, PurchaseReferencePermissions} from "../adapters/purchase.adapter";
@@ -20,6 +20,12 @@ export const purchaseApi = {
   async create(values: PurchaseFormValues, account?: PurchaseSettlementAccountOption, signal?: AbortSignal): Promise<PurchaseCreateResult> {
     const request = toPurchaseRequestDto(values, account);
     const response = await apiRequest<PurchaseCreateResponseDto>("/api/purchase-invoices", {method: "POST", body: JSON.stringify(request), signal});
+    return adaptPurchaseCreateResponse(response);
+  },
+
+  async update(id: string, values: PurchaseFormValues, account: PurchaseSettlementAccountOption | undefined, expectedRecordVersion: number, mode: "full" | "metadata", signal?: AbortSignal): Promise<PurchaseCreateResult> {
+    const request = toPurchaseUpdateRequestDto(values, account, expectedRecordVersion, mode);
+    const response = await apiRequest<PurchaseCreateResponseDto>(`/api/purchase-invoices/${encodeURIComponent(id)}`, {method: "PUT", body: JSON.stringify(request), signal});
     return adaptPurchaseCreateResponse(response);
   },
 

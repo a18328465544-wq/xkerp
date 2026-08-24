@@ -3144,6 +3144,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       ...resolvedSource,
       id: genId("CG"),
       invoiceNo,
+      recordVersion: 1,
       items,
       totalCount,
       totalCost,
@@ -3228,9 +3229,17 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return newInvoice;
   };
 
-  const updatePurchaseInvoice = (id: string, updates: Partial<PurchaseInvoice>) => {
+  const updatePurchaseInvoice = (
+    id: string,
+    updates: Partial<PurchaseInvoice>,
+    options: {expectedRecordVersion?: number} = {},
+  ) => {
     const existing = state.purchaseInvoices.find((item) => item.id === id || item.invoiceNo === id);
     if (!existing) throw new NotFoundError(`进货单不存在: ${id}`);
+    const currentRecordVersion = Math.max(1, Number(existing.recordVersion || 1));
+    if (options.expectedRecordVersion !== undefined && options.expectedRecordVersion !== currentRecordVersion) {
+      throw new ConflictError("该采购单已被其他人修改，请刷新后重新编辑");
+    }
     const hasCompletedReturn = state.returnOrders.some((order) =>
       order.type === "进货退货" && order.status === "已完成" && (order.relatedDocNo === existing.invoiceNo || order.relatedDocNo === existing.id),
     );
@@ -3249,6 +3258,14 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const relatedCards = state.inventory.filter((card) => isInventoryLinkedToPurchase(card, existing));
     const hasInboundOrInspection = relatedCards.some((card) => card.status !== "待检测") ||
       state.inspections.some((inspection) => relatedCards.some((card) => card.id === inspection.inventoryId));
+    const changedKeys = Object.keys(updates).filter((key) =>
+      JSON.stringify(updates[key as keyof PurchaseInvoice]) !== JSON.stringify(existing[key as keyof PurchaseInvoice]),
+    );
+    const metadataOnly = hasInboundOrInspection || hasCompletedReturn || linkedPayments.length > 1;
+    const metadataFields = new Set<keyof PurchaseInvoice>(["expressNo", "remarks"]);
+    if (metadataOnly && changedKeys.some((key) => !metadataFields.has(key as keyof PurchaseInvoice))) {
+      throw new ConflictError("该采购单已进入质检、退货或多笔付款阶段，只能修改快递单号和采购备注");
+    }
     const isChangingItems = !!updates.items && JSON.stringify(updates.items) !== JSON.stringify(existing.items);
     if (hasInboundOrInspection && isChangingItems) {
       throw new ConflictError("该进货单已有商品检测或入库，只能修改备注、付款等非库存字段");
@@ -3267,7 +3284,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const paymentFieldsChanged = [
       "paidAmount", "unpaidAmount", "settlementAccountId", "paymentMethod", "paymentHandler",
       "vendorCreditAppliedAmount", "supplierName", "sourcePartnerId", "sourcePartnerType", "sourceType", "date",
-    ].some((key) => key in updates);
+    ].some((key) => changedKeys.includes(key));
     if (linkedPayments.length > 1 && paymentFieldsChanged) {
       throw new ConflictError("该采购单已有多笔付款，请先在付款流水中完成冲销或调整，避免覆盖历史资金明细");
     }
@@ -3277,6 +3294,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       ...updates,
       id: existing.id,
       invoiceNo: existing.invoiceNo,
+      recordVersion: currentRecordVersion + 1,
       items,
       totalCount,
       totalCost,
@@ -3379,6 +3397,11 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       });
       const relatedIds = new Set(relatedCards.map((card) => card.id));
       state.inventory = [...newStockItems, ...state.inventory.filter((card) => !relatedIds.has(card.id))];
+    } else if (changedKeys.includes("expressNo")) {
+      const relatedIds = new Set(relatedCards.map((card) => card.id));
+      state.inventory = state.inventory.map((card) => relatedIds.has(card.id)
+        ? {...card, expressNo: updated.expressNo?.trim() || undefined}
+        : card);
     }
     addLog(systemActor(), "采购回收", "编辑进货单", existing.invoiceNo, `${existing.totalCost}元`, `${updated.totalCost}元`);
     return updated;
@@ -3418,8 +3441,27 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       throw new NotFoundError(`库存档案不存在: ${report.inventoryId}`);
     }
     const isGpuInspection = (targetCard.category || "显卡") === "显卡";
+    const isBrandNewInspection = targetCard.condition === "全新";
+    const normalizedReport = isBrandNewInspection ? {
+      ...report,
+      condition: "全新" as const,
+      exteriorCheck: "完美无瑕" as const,
+      fanCheck: "静音顺畅" as const,
+      portsCheck: "全部正常" as const,
+      gpuzCheck: "核对一致" as const,
+      furmarkResult: "全新商品快速核验，不拆封烤机",
+      threedMarkResult: "全新商品快速核验，不做跑分",
+      vramResult: "全显存测试通过" as const,
+      temperature: 0,
+      wattage: 0,
+      noise: "静音" as const,
+      repaired: false,
+      hiddenDefects: false,
+      resultStatus: "通过" as const,
+      remarks: report.remarks?.trim() || "全新商品快速入库：仅核验 SN 与质保。",
+    } : report;
     assertSnUnique(sn, report.inventoryId);
-    const newReport: InspectionRecord = { ...report, sn, id: genId("JC"), inspectTime: nowStamp() };
+    const newReport: InspectionRecord = { ...normalizedReport, sn, id: genId("JC"), inspectTime: nowStamp() };
     state.inspections = [newReport, ...state.inspections];
     state.inventory = state.inventory.map((card) => {
       if (card.id !== report.inventoryId) return card;
@@ -3433,15 +3475,15 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       return {
         ...card,
         sn,
-        status: statusMap[report.resultStatus],
-        condition: report.condition || card.condition,
-        inWarranty: report.inWarranty ?? card.inWarranty,
-        warrantyDate: report.inWarranty ? report.warrantyDate : undefined,
-        repaired: report.repaired,
-        fullBox: report.fullBox ?? card.fullBox,
-        warehouseLocation: report.warehouseLocation?.trim() || card.warehouseLocation,
-        costPrice: report.resultStatus === "降价入库" ? Math.round(card.costPrice * 0.9) : card.costPrice,
-        remarks: `${card.remarks || ""} (${isGpuInspection ? `质检结果: ${report.resultStatus}. 烤机高热: ${report.temperature}℃.` : "其他配件简易检测完成."} ${report.remarks || ""})`,
+        status: statusMap[normalizedReport.resultStatus],
+        condition: normalizedReport.condition || card.condition,
+        inWarranty: normalizedReport.inWarranty ?? card.inWarranty,
+        warrantyDate: normalizedReport.inWarranty ? normalizedReport.warrantyDate : undefined,
+        repaired: normalizedReport.repaired,
+        fullBox: normalizedReport.fullBox ?? card.fullBox,
+        warehouseLocation: normalizedReport.warehouseLocation?.trim() || card.warehouseLocation,
+        costPrice: normalizedReport.resultStatus === "降价入库" ? Math.round(card.costPrice * 0.9) : card.costPrice,
+        remarks: `${card.remarks || ""} (${isBrandNewInspection ? "全新商品快速核验完成，SN 与质保已确认。" : isGpuInspection ? `质检结果: ${normalizedReport.resultStatus}. 烤机高热: ${normalizedReport.temperature}℃.` : "其他配件简易检测完成."} ${normalizedReport.remarks || ""})`,
       };
     });
     addLog(
@@ -3450,7 +3492,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       "提交检测单",
       `序列号: ${report.sn}`,
       "状态: 待检测",
-      isGpuInspection ? `质检状态: ${report.resultStatus}` : `其他配件简易检测完成，成色: ${report.condition || targetCard.condition}`,
+      isBrandNewInspection ? "全新商品快速入库：SN 与质保已确认" : isGpuInspection ? `质检状态: ${normalizedReport.resultStatus}` : `其他配件简易检测完成，成色: ${normalizedReport.condition || targetCard.condition}`,
     );
     return newReport;
   };
@@ -3464,15 +3506,34 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (!targetCard) {
       throw new NotFoundError(`库存档案不存在: ${existing.inventoryId}`);
     }
+    const isBrandNewInspection = targetCard.condition === "全新" || existing.condition === "全新";
     const sn = String(updates.sn ?? existing.sn).trim();
     if (!sn) {
       throw new ValidationError("入库检测单必须保留SN");
     }
     assertSnUnique(sn, existing.inventoryId);
 
+    const normalizedUpdates: Partial<InspectionRecord> = isBrandNewInspection ? {
+      ...updates,
+      condition: "全新",
+      exteriorCheck: "完美无瑕",
+      fanCheck: "静音顺畅",
+      portsCheck: "全部正常",
+      gpuzCheck: "核对一致",
+      furmarkResult: "全新商品快速核验，不拆封烤机",
+      threedMarkResult: "全新商品快速核验，不做跑分",
+      vramResult: "全显存测试通过",
+      temperature: 0,
+      wattage: 0,
+      noise: "静音",
+      repaired: false,
+      hiddenDefects: false,
+      resultStatus: "通过",
+      remarks: updates.remarks?.trim() || existing.remarks || "全新商品快速入库：仅核验 SN 与质保。",
+    } : updates;
     const updated: InspectionRecord = {
       ...existing,
-      ...updates,
+      ...normalizedUpdates,
       id: existing.id,
       inventoryId: existing.inventoryId,
       inspectTime: existing.inspectTime,
@@ -3500,7 +3561,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         repaired: updated.repaired,
         fullBox: updated.fullBox ?? card.fullBox,
         warehouseLocation: updated.warehouseLocation?.trim() || card.warehouseLocation,
-        remarks: `${card.remarks || ""} (检测单${id}已编辑: ${isGpuInspection ? updated.resultStatus : "配件简易检测"}. ${updated.remarks || ""})`,
+        remarks: `${card.remarks || ""} (检测单${id}已编辑: ${isBrandNewInspection ? "全新快速入库" : isGpuInspection ? updated.resultStatus : "配件简易检测"}. ${updated.remarks || ""})`,
       };
     });
     addLog(systemActor(), "测试质检", "编辑入库检测单", id, existing.sn, sn);

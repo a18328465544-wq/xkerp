@@ -14,6 +14,7 @@ import { getDashboardAiInsights } from "./aiInsights.ts";
 import { runCopilotTurn, type CopilotMessage } from "./aiCopilot.ts";
 import type { CopilotContext } from "../src/utils/copilotTools.ts";
 import { createSessionManager, sanitizeUserAccount } from "./security.ts";
+import { assertPurchaseUpdateScope } from "./purchaseEditAccess.ts";
 import { createRequireAuth, createRequireCsrf, createRequireOpenApiToken } from "./httpAuth.ts";
 import { AppError, NotFoundError, toDomainError, UnauthorizedError } from "./errors.ts";
 import {
@@ -112,7 +113,6 @@ import type {
   SalesInvoice,
   SystemUserAccount,
 } from "../src/types.ts";
-
 const PORT = Number(process.env.API_PORT || process.env.PORT || 3001);
 const LOGIN_RATE_LIMIT_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const LOGIN_RATE_LIMIT_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX || 8);
@@ -1340,7 +1340,7 @@ function requireHistoryEditPermission(req: AuthRequest, res: express.Response, n
   if (!requireAuthenticatedUser(req, res)) return;
   const permissions = getPermissionsForUser(req.authUser);
   if (req.authUser?.role !== "老板" && !permissions.canEditHistory) {
-    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有日志管理权限", true);
+    sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有历史单据编辑权限", true);
     return;
   }
   next();
@@ -2378,14 +2378,14 @@ app.post("/api/purchase-invoices", requireMenu("purchase_add"), asyncRoute(async
   );
   res.status(201).json(okMerge(created, stateMerge));
 }));
-
-app.put("/api/purchase-invoices/:id", requireMenu("purchase_list"), asyncRoute(async (req, res) => {
-  const command = parseHttpDto(purchaseInvoiceUpdateDto, withoutImagePayload(req.body));
+app.put("/api/purchase-invoices/:id", requireMenu("purchase_list"), requireHistoryEditPermission, asyncRoute(async (req, res) => {
+  const { expectedRecordVersion, ...updates } = parseHttpDto(purchaseInvoiceUpdateDto, withoutImagePayload(req.body));
+  assertPurchaseUpdateScope(getPermissionsForUser((req as AuthRequest).authUser), updates);
   const existing = state.purchaseInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
   const paymentsBeforeUpdate = existing ? relatedPurchasePayments(existing) : [];
   const financeBeforeUpdate = existing ? relatedPurchaseFinanceLedger(existing) : [];
   const { data: updated, stateMerge, stateDelete } = await runStateCommand(
-    () => actions(req).updatePurchaseInvoice(req.params.id!, command),
+    () => actions(req).updatePurchaseInvoice(req.params.id!, updates, { expectedRecordVersion }),
     (invoice) => purchaseInvoiceUpdatePatch(invoice, paymentsBeforeUpdate, financeBeforeUpdate),
     async (invoice) => {
       const urls = await persistEntityImages(req, "purchase_invoice", invoice.id, "purchase-evidence");

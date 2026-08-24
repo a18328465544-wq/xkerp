@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {adaptPurchaseCreateResponse, adaptPurchaseReferenceData, toPurchaseRequestDto} from "./purchase.adapter";
+import {adaptPurchaseCreateResponse, adaptPurchaseReferenceData, toPurchaseRequestDto, toPurchaseUpdateRequestDto} from "./purchase.adapter";
 import {createPurchaseDefaults} from "@/src/features/purchase/purchase.defaults";
 import {storeDate} from "@/src/utils/storeTime";
 
@@ -93,6 +93,23 @@ test("purchase request adapter sends only uploaded media URLs and keeps quantity
   assert.equal(request.items.length, 2);
   assert.ok(request.items.every((item) => item.quantity === 1));
   assert.equal(request.images?.some((image) => image.startsWith("data:")), false);
+});
+
+test("purchase update adapter preserves explicit text clearing and supports metadata-only edits", () => {
+  const values = createPurchaseDefaults("测试员");
+  values.expressNo = "";
+  values.remarks = "  修正备注  ";
+  const metadata = toPurchaseUpdateRequestDto(values, undefined, 3, "metadata");
+  assert.deepEqual(metadata, {expectedRecordVersion: 3, expressNo: "", remarks: "修正备注"});
+
+  values.sourcePartnerId = "V-1";
+  values.sourcePartnerType = "vendor";
+  values.supplierName = "同行供应商";
+  values.items[0] = {...values.items[0]!, productId: "P-1", productName: "RTX", buyPrice: 100};
+  const full = toPurchaseUpdateRequestDto(values, undefined, 4, "full");
+  assert.equal(full.expectedRecordVersion, 4);
+  assert.equal(full.items?.length, 1);
+  assert.equal(full.expressNo, "");
 });
 
 test("purchase reference adapter exposes only minimum candidates and respects permission gates", () => {

@@ -157,6 +157,37 @@ export function adaptInspectionWorkspace(response: {data?: unknown}): Inspection
 }
 
 export function toInspectionCreateRequestDto(values: InspectionFormValues): InspectionCreateRequestDto {
+  if (values.condition === "全新") {
+    const existingRemarks = values.remarks.trim();
+    const quickInboundRemarks = existingRemarks.includes("全新商品快速入库")
+      ? existingRemarks
+      : `全新商品快速入库：仅核验 SN 与质保。${existingRemarks ? ` ${existingRemarks}` : ""}`;
+    return {
+      inventoryId: values.inventoryId,
+      sn: values.serialNumber.trim(),
+      condition: "全新",
+      inWarranty: values.inWarranty,
+      warrantyDate: values.inWarranty ? values.warrantyDate || undefined : undefined,
+      fullBox: values.fullBox,
+      warehouseLocation: values.warehouseLocation.trim(),
+      inspector: values.inspector.trim(),
+      exteriorCheck: "完美无瑕",
+      fanCheck: "静音顺畅",
+      portsCheck: "全部正常",
+      gpuzCheck: "核对一致",
+      furmarkResult: "全新商品快速核验，不拆封烤机",
+      threedMarkResult: "全新商品快速核验，不做跑分",
+      vramResult: "全显存测试通过",
+      temperature: 0,
+      wattage: 0,
+      noise: "静音",
+      repaired: false,
+      hiddenDefects: false,
+      resultStatus: "通过",
+      remarks: quickInboundRemarks,
+      images: stringArray(values.images),
+    };
+  }
   if (!values.isGpu) {
     return {
       inventoryId: values.inventoryId,

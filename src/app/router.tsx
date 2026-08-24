@@ -17,6 +17,7 @@ const AssemblyWorkspacePage = lazyRouteComponent(() => import("@/src/features/as
 const PurchaseListPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/PurchaseListPage"), "PurchaseListPage");
 const NewPurchaseOrderPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/NewPurchaseOrderPage"), "NewPurchaseOrderPage");
 const PurchaseDetailPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/PurchaseDetailPage"), "PurchaseDetailPage");
+const PurchaseEditPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/PurchaseEditPage"), "PurchaseEditPage");
 const InspectionWorkspacePage = lazyRouteComponent(() => import("@/src/features/inspections/pages/InspectionWorkspacePage"), "InspectionWorkspacePage");
 const PurchaseReturnListPage = lazyRouteComponent(() => import("@/src/features/returns/pages/PurchaseReturnListPage"), "PurchaseReturnListPage");
 const NewPurchaseReturnPage = lazyRouteComponent(() => import("@/src/features/returns/pages/NewPurchaseReturnPage"), "NewPurchaseReturnPage");
@@ -76,6 +77,11 @@ function PurchaseDetailRouteComponent() {
   return <PurchaseDetailPage purchaseId={purchaseId} />;
 }
 const purchaseDetailRoute = createRoute({getParentRoute: () => rootRoute, path: "/purchase/$purchaseId", component: PurchaseDetailRouteComponent});
+function PurchaseEditRouteComponent() {
+  const {purchaseId} = useParams({strict: false}) as {purchaseId: string};
+  return <PurchaseEditPage purchaseId={purchaseId} />;
+}
+const purchaseEditRoute = createRoute({getParentRoute: () => rootRoute, path: "/purchase/$purchaseId/edit", component: PurchaseEditRouteComponent});
 const inspectionsRoute = createRoute({getParentRoute: () => rootRoute, path: "/inspections", component: InspectionWorkspacePage});
 const purchaseReturnsRoute = createRoute({getParentRoute: () => rootRoute, path: "/purchase/returns", component: PurchaseReturnListPage});
 const purchaseReturnsNewRoute = createRoute({getParentRoute: () => rootRoute, path: "/purchase/returns/new", component: NewPurchaseReturnPage});
@@ -107,7 +113,7 @@ const designSystemRoute = createRoute({getParentRoute: () => rootRoute, path: "/
 
 const routeTree = rootRoute.addChildren([
   dashboardRoute, aiInsightsRoute, quotesRoute, inventoryRoute, productsRoute, assemblyRoute,
-  purchaseRoute, purchaseNewRoute, purchaseDetailRoute, inspectionsRoute, purchaseReturnsRoute, purchaseReturnsNewRoute,
+  purchaseRoute, purchaseNewRoute, purchaseDetailRoute, purchaseEditRoute, inspectionsRoute, purchaseReturnsRoute, purchaseReturnsNewRoute,
   salesNewRoute, salesRoute, salesOutboundRoute, salesReturnsNewRoute, salesReturnsRoute,
   crmRoute, crmCustomersRoute, crmCustomerNewRoute, crmVendorsRoute, aftersalesRoute,
   financeRoute, financeAccountsRoute, financeLedgerRoute, financeIncomeRoute, financeExpenseRoute, financeTransfersRoute,

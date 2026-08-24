@@ -3,7 +3,7 @@ export {adaptSalesCustomer, adaptSalesCustomers, adaptSalesInventoryCandidate, a
 export {adaptPermissions} from "../endpoints/auth";
 export {adaptPublicState} from "./state.adapter";
 export type {ErpStateSnapshot} from "./state.adapter";
-export {adaptPurchaseCreateResponse, adaptPurchaseInvoice, adaptPurchaseReferenceData, toPurchaseRequestDto} from "./purchase.adapter";
+export {adaptPurchaseCreateResponse, adaptPurchaseInvoice, adaptPurchaseReferenceData, toPurchaseRequestDto, toPurchaseUpdateRequestDto} from "./purchase.adapter";
 export type {PurchaseReferencePermissions} from "./purchase.adapter";
 export {adaptMediaUploadResponse, toMediaUploadRequest} from "./media.adapter";
 export type {MediaUploadInput, MediaUploadResult} from "./media.adapter";

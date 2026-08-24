@@ -49,6 +49,26 @@ test("GPU inspection request preserves measured values and trims identifiers", (
   assert.deepEqual(request.images, ["/api/media/assets/IMG-1"]);
 });
 
+test("brand-new inspection request records a quick SN and warranty verification", () => {
+  const request = toInspectionCreateRequestDto({
+    ...gpuValues(),
+    condition: "全新",
+    serialNumber: " NEW-SN-1 ",
+    furmarkResult: "",
+    threedMarkResult: "",
+    temperature: 0,
+    wattage: 0,
+  });
+  assert.equal(request.sn, "NEW-SN-1");
+  assert.equal(request.condition, "全新");
+  assert.equal(request.resultStatus, "通过");
+  assert.equal(request.temperature, 0);
+  assert.equal(request.wattage, 0);
+  assert.equal(request.furmarkResult, "全新商品快速核验，不拆封烤机");
+  assert.equal(request.threedMarkResult, "全新商品快速核验，不做跑分");
+  assert.match(request.remarks || "", /仅核验 SN 与质保/);
+});
+
 test("accessory inspection request uses the existing simple inspection contract", () => {
   const values = {...gpuValues(), isGpu: false, inventoryId: "CPU-1", resultStatus: "需要维修" as const, temperature: 91, wattage: 999, hiddenDefects: true, repaired: true};
   const request = toInspectionCreateRequestDto(values);

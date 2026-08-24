@@ -1,7 +1,7 @@
 export type * from "./inventory.dto";
 export type {SalesCreateItemDto, SalesCreateRequestDto, SalesCreateResponseDto, SalesCustomerDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesSettlementAccountDto, SalesSettlementAccountsResponseDto} from "./sales.dto";
 export type {PublicStateResponseDto} from "./state.dto";
-export type {PurchaseCreateRequestDto, PurchaseCreateResponseDto, PurchaseInvoiceResponseDto, PurchaseLineRequestDto, PurchaseReferenceStateResponseDto} from "./purchase.dto";
+export type {PurchaseCreateRequestDto, PurchaseCreateResponseDto, PurchaseInvoiceResponseDto, PurchaseLineRequestDto, PurchaseReferenceStateResponseDto, PurchaseUpdateRequestDto} from "./purchase.dto";
 export type {CustomerCreateRequestDto, EntityCreateResponseDto, ProductTemplateCreateRequestDto, VendorCreateRequestDto} from "./entity-create.dto";
 export type {MediaUploadRequestDto, MediaUploadPayloadDto, MediaUploadResponseDto, MediaRelationDto} from "./media.dto";
 export type {PurchaseReturnCreateRequestDto, SalesReturnCompleteResponseDto, SalesReturnListResponseDto, SalesReturnMutationResponseDto, SalesReturnUpdateRequestDto} from "./returns.dto";

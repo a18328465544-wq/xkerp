@@ -32,7 +32,7 @@ export const inspectionSchema = z.object({
   if (values.inWarranty && !values.warrantyDate) {
     context.addIssue({code: "custom", path: ["warrantyDate"], message: "在保商品必须填写保修日期"});
   }
-  if (!values.isGpu) return;
+  if (!values.isGpu || values.condition === "全新") return;
   if (!values.furmarkResult.trim()) context.addIssue({code: "custom", path: ["furmarkResult"], message: "必须填写实际 FurMark 检测结果"});
   if (!values.threedMarkResult.trim()) context.addIssue({code: "custom", path: ["threedMarkResult"], message: "必须填写实际 3DMark 检测结果"});
   if (values.temperature <= 0) context.addIssue({code: "custom", path: ["temperature"], message: "必须填写实际核心温度"});

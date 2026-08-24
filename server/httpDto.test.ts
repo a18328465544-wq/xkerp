@@ -7,6 +7,7 @@ import {
   paymentInCreateDto,
   paymentOutCreateDto,
   purchaseInvoiceCreateDto,
+  purchaseInvoiceUpdateDto,
 } from "./httpDto.ts";
 
 test("payment DTOs normalize allowed text and reject unknown or invalid fields", () => {
@@ -32,6 +33,8 @@ test("purchase DTO validates nested lines before entering the domain store", () 
   assert.equal(parsed.items[0]?.tempId, "");
   assert.throws(() => parseHttpDto(purchaseInvoiceCreateDto, {...base, items: []}), /至少需要一条/);
   assert.throws(() => parseHttpDto(purchaseInvoiceCreateDto, {...base, totalCost: 100}), /Unrecognized key/);
+  assert.equal(parseHttpDto(purchaseInvoiceUpdateDto, {remarks: "补充说明", expectedRecordVersion: 2}).expectedRecordVersion, 2);
+  assert.throws(() => parseHttpDto(purchaseInvoiceUpdateDto, {remarks: "缺少版本"}), /采购单版本号无效|Invalid input/);
 });
 
 test("inspection DTO enforces bounded metrics and domain enums", () => {

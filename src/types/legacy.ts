@@ -314,6 +314,8 @@ export interface PurchaseItem {
 export interface PurchaseInvoice {
   id: string;
   invoiceNo: string;
+  /** Optimistic-lock version for safe historical edits; legacy records start at 1. */
+  recordVersion?: number;
   date: string;
   sourceType: SourceType;
   sourcePartnerId?: string;
