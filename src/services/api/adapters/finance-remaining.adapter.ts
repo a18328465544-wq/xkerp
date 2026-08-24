@@ -1,10 +1,12 @@
+import type {CommissionAdjustment, CommissionMode} from "@/src/types/commission";
 import type {PurchaseCommissionRecord} from "@/src/types/finance-remaining";
-import type {AuditLogItem, CustomerFundsRow, CustomerFundsSnapshot, FinanceCommissionItem, PagedCollection, SettingsUserItem} from "@/src/types/finance-remaining";
-import type {CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
+import type {AuditLogItem, CustomerFundsRow, CustomerFundsSnapshot, FinanceCommissionItem, FinanceCommissionPage, PagedCollection, SettingsUserItem} from "@/src/types/finance-remaining";
+import type {CommissionPageResponseDto, CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" ? value as Record<string, unknown> : {}; }
 function text(value: unknown, fallback = "") { return typeof value === "string" ? value : value === null || value === undefined ? fallback : String(value); }
 function number(value: unknown, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+function optionalNumber(value: unknown) { return value === undefined || value === null || value === "" ? undefined : number(value); }
 function array(value: unknown) { return Array.isArray(value) ? value : []; }
 
 function adaptFundsRow(value: unknown): CustomerFundsRow {
@@ -25,11 +27,92 @@ export function adaptCustomerFunds(response: CustomerFundsResponseDto): Customer
   return {rows: array(raw.rows).map(adaptFundsRow), counts: {all: number(countsRaw.all), payable: number(countsRaw.payable), receivable: number(countsRaw.receivable), balanced: number(countsRaw.balanced)}, currentBalance: balances("currentBalance"), previousBalance: balances("previousBalance"), cashTotals: cash("cashTotals"), previousCashTotals: cash("previousCashTotals"), trend: array(raw.trend).map((item) => { const row = record(item); return {key: text(row.key), label: text(row.label), payable: number(row.payable), receivable: number(row.receivable), net: number(row.net)}; }), generatedAt: text(raw.generatedAt) };
 }
 
-export function adaptCommissionRecords(records: PurchaseCommissionRecord[], mode: "purchase" | "sales"): FinanceCommissionItem[] {
-  return records.map((item) => {
-    const purchase = mode === "purchase";
-    return {id: item.id, inventoryId: item.inventoryId, sn: item.sn, productName: item.productName, handler: purchase ? item.purchaseHandler : item.salesHandler || "未记录", handlerType: purchase ? "采购经办人" : "销售经办人", documentNo: purchase ? item.purchaseInvoiceNo || item.id : item.salesInvoiceNo || item.id, baseAmount: purchase ? item.costPrice : item.salesPrice, salesPrice: item.salesPrice, grossProfit: item.grossProfit, rate: purchase ? item.purchaseRate ?? item.rate : item.salesRate ?? item.rate, commissionAmount: purchase ? item.purchaseCommissionAmount ?? item.commissionAmount : item.salesCommissionAmount ?? item.commissionAmount, status: item.status, createdAt: item.createdAt, settledAt: item.settledAt, remarks: item.remarks};
-  });
+function adaptAdjustment(value: unknown): CommissionAdjustment | null {
+  const raw = record(value);
+  if (raw.mode !== "purchase" && raw.mode !== "sales") return null;
+  return {
+    id: text(raw.id),
+    mode: raw.mode,
+    amount: number(raw.amount),
+    reason: raw.reason === "手工调整" ? "手工调整" : "销售退货",
+    documentNo: text(raw.documentNo) || undefined,
+    note: text(raw.note) || undefined,
+    createdAt: text(raw.createdAt),
+    createdBy: text(raw.createdBy, "系统"),
+  };
+}
+
+function adaptCommissionItem(value: unknown, mode: CommissionMode): FinanceCommissionItem {
+  const raw = record(value);
+  const adjustments = array(raw.adjustments).map(adaptAdjustment).filter((item): item is CommissionAdjustment => Boolean(item));
+  return {
+    id: text(raw.id),
+    inventoryId: text(raw.inventoryId),
+    sn: text(raw.sn),
+    productName: text(raw.productName, "未命名商品"),
+    handler: text(raw.handler, "未记录"),
+    handlerType: raw.handlerType === "销售经办人" ? "销售经办人" : mode === "sales" ? "销售经办人" : "采购经办人",
+    documentNo: text(raw.documentNo, text(raw.id)),
+    baseAmount: optionalNumber(raw.baseAmount),
+    salesPrice: optionalNumber(raw.salesPrice),
+    grossProfit: optionalNumber(raw.grossProfit),
+    rate: optionalNumber(raw.rate),
+    commissionAmount: optionalNumber(raw.commissionAmount),
+    originalCommissionAmount: optionalNumber(raw.originalCommissionAmount),
+    adjustmentAmount: optionalNumber(raw.adjustmentAmount),
+    adjustments,
+    calculationMethod: raw.calculationMethod === "fixed" || raw.calculationMethod === "tiered" || raw.calculationMethod === "amount_range" ? raw.calculationMethod : undefined,
+    status: text(raw.status, "待结算"),
+    createdAt: text(raw.createdAt),
+    settledAt: text(raw.settledAt) || undefined,
+    settledBy: text(raw.settledBy) || undefined,
+    settlementBatchId: text(raw.settlementBatchId) || undefined,
+    remarks: text(raw.remarks) || undefined,
+  };
+}
+
+export function adaptCommissionRecords(records: PurchaseCommissionRecord[], mode: CommissionMode): FinanceCommissionItem[] {
+  return records.map((item) => adaptCommissionItem({
+    ...item,
+    handler: mode === "purchase" ? item.purchaseHandler : item.salesHandler || "未记录",
+    handlerType: mode === "purchase" ? "采购经办人" : "销售经办人",
+    documentNo: mode === "purchase" ? item.purchaseInvoiceNo || item.id : item.salesInvoiceNo || item.id,
+    baseAmount: mode === "purchase" ? item.costPrice : item.salesPrice,
+    salesPrice: item.salesPrice,
+    grossProfit: item.grossProfit,
+    rate: mode === "purchase" ? item.purchaseRate ?? item.rate : item.salesRate ?? item.rate,
+    commissionAmount: mode === "purchase" ? item.purchaseCommissionAmount ?? item.commissionAmount : item.salesCommissionAmount ?? item.commissionAmount,
+    originalCommissionAmount: mode === "purchase" ? item.purchaseCommissionAmount ?? item.commissionAmount : item.salesCommissionAmount ?? item.commissionAmount,
+    adjustments: (item.commissionAdjustments || []).filter((adjustment) => adjustment.mode === mode),
+    settledAt: mode === "purchase" ? item.purchaseSettledAt || item.settledAt : item.salesSettledAt || item.settledAt,
+    settledBy: mode === "purchase" ? item.purchaseSettledBy : item.salesSettledBy,
+    settlementBatchId: mode === "purchase" ? item.purchaseSettlementBatchId : item.salesSettlementBatchId,
+    calculationMethod: mode === "purchase" ? item.purchaseCalculationMethod : item.salesCalculationMethod,
+    status: mode === "purchase" ? item.purchaseStatus || item.status : item.salesStatus || item.status,
+  }, mode));
+}
+
+export function adaptCommissionPage(response: CommissionPageResponseDto, mode: CommissionMode): FinanceCommissionPage {
+  const meta = record(response.meta);
+  const payload = record(response.data);
+  const items = array(payload.commissions).map((item) => adaptCommissionItem(item, mode));
+  const summary = record(meta.summary);
+  const page = Math.max(1, number(meta.page, 1));
+  const pageSize = Math.max(1, number(meta.pageSize, items.length || 20));
+  const total = Math.max(items.length, number(meta.total, items.length));
+  return {
+    items,
+    meta: {page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize))},
+    summary: {
+      pendingCount: number(summary.pendingCount),
+      settledCount: number(summary.settledCount),
+      voidedCount: number(summary.voidedCount),
+      handlerCount: number(summary.handlerCount),
+      originalCommission: optionalNumber(summary.originalCommission),
+      adjustmentAmount: optionalNumber(summary.adjustmentAmount),
+      totalCommission: optionalNumber(summary.totalCommission),
+    },
+  };
 }
 
 function adaptPermissionOverrides(value: unknown): SettingsUserItem["permissionOverrides"] {

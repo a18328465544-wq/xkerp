@@ -1,4 +1,5 @@
 import type {SalesListItem} from "@/src/types/sales";
+import type {FinanceProfitOtherFlow} from "@/src/types/finance";
 import {readDateRange} from "@/src/lib/dateRangePickerUtils";
 
 export type FinanceProfitDimension = "product" | "customer" | "channel" | "handler";
@@ -29,6 +30,9 @@ export interface FinanceProfitTrendPoint {
   label: string;
   revenue: number;
   profit?: number;
+  otherIncome?: number;
+  otherExpense?: number;
+  netProfit?: number;
 }
 
 export interface FinanceProfitReport {
@@ -43,6 +47,9 @@ export interface FinanceProfitReport {
     cost?: number;
     profit?: number;
     margin?: number;
+    otherIncome?: number;
+    otherExpense?: number;
+    netProfit?: number;
     profitableGroups: number;
     lossGroups: number;
   };
@@ -185,20 +192,39 @@ function createInvoiceGroups(items: readonly SalesListItem[], dimension: Exclude
   });
 }
 
-function createTrend(items: readonly SalesListItem[]) {
-  const points = new Map<string, {revenue: number; profits: number[]}>();
+function createTrend(items: readonly SalesListItem[], otherFlows?: readonly FinanceProfitOtherFlow[]) {
+  const points = new Map<string, {revenue: number; profits: number[]; profitUnknown: boolean; otherIncome: number; otherExpense: number}>();
   for (const item of items) {
-    const existing = points.get(item.date) || {revenue: 0, profits: []};
+    const existing = points.get(item.date) || {revenue: 0, profits: [], profitUnknown: false, otherIncome: 0, otherExpense: 0};
     existing.revenue += item.totalAmount;
     if (item.totalProfit !== undefined) existing.profits.push(item.totalProfit);
+    else existing.profitUnknown = true;
     points.set(item.date, existing);
   }
-  return Array.from(points.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([date, point]) => ({date, label: dateLabel(date), revenue: point.revenue, profit: point.profits.length ? point.profits.reduce((sum, value) => sum + value, 0) : undefined}));
+  for (const flow of otherFlows || []) {
+    const existing = points.get(flow.date) || {revenue: 0, profits: [], profitUnknown: false, otherIncome: 0, otherExpense: 0};
+    existing.otherIncome += flow.income;
+    existing.otherExpense += flow.expense;
+    points.set(flow.date, existing);
+  }
+  const flowsLoaded = otherFlows !== undefined;
+  return Array.from(points.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([date, point]) => {
+    const profit = point.profitUnknown ? undefined : point.profits.reduce((sum, value) => sum + value, 0);
+    const netProfit = flowsLoaded && profit !== undefined ? profit + point.otherIncome - point.otherExpense : undefined;
+    return {
+      date,
+      label: dateLabel(date),
+      revenue: point.revenue,
+      profit,
+      ...(flowsLoaded ? {otherIncome: point.otherIncome, otherExpense: point.otherExpense, netProfit} : {}),
+    };
+  });
 }
 
-export function selectFinanceProfitReport(items: readonly SalesListItem[], filters: FinanceProfitFilters): FinanceProfitReport {
+export function selectFinanceProfitReport(items: readonly SalesListItem[], filters: FinanceProfitFilters, otherFlows?: readonly FinanceProfitOtherFlow[]): FinanceProfitReport {
   const keyword = normalized(filters.keyword);
   const sourceItems = items.filter((item) => matchesFilters(item, filters, keyword));
+  const periodOtherFlows = otherFlows?.filter((flow) => (!filters.dateStart || flow.date >= filters.dateStart) && (!filters.dateEnd || flow.date <= filters.dateEnd)) || otherFlows;
   const rows = filters.dimension === "product" ? createProductGroups(sourceItems, keyword) : createInvoiceGroups(sourceItems, filters.dimension);
   rows.sort((left, right) => (right.profit ?? right.revenue) - (left.profit ?? left.revenue) || right.revenue - left.revenue || left.label.localeCompare(right.label, "zh-CN"));
   const totalPages = Math.max(1, Math.ceil(rows.length / filters.pageSize));
@@ -207,12 +233,15 @@ export function selectFinanceProfitReport(items: readonly SalesListItem[], filte
   const invoiceCosts = sourceItems.map((item) => item.totalCost);
   const invoiceProfits = sourceItems.map((item) => item.totalProfit);
   const revenue = sourceItems.reduce((sum, item) => sum + item.totalAmount, 0);
-  const profit = optionalSum(invoiceProfits);
+  const profit = sourceItems.length === 0 ? 0 : optionalSum(invoiceProfits);
+  const otherIncome = periodOtherFlows === undefined ? undefined : periodOtherFlows.reduce((sum, flow) => sum + flow.income, 0);
+  const otherExpense = periodOtherFlows === undefined ? undefined : periodOtherFlows.reduce((sum, flow) => sum + flow.expense, 0);
+  const netProfit = profit !== undefined && otherIncome !== undefined && otherExpense !== undefined ? profit + otherIncome - otherExpense : undefined;
   return {
     sourceItems,
     rows,
     pageRows: rows.slice(start, start + filters.pageSize),
-    trend: createTrend(sourceItems),
+    trend: createTrend(sourceItems, periodOtherFlows),
     summary: {
       orderCount: sourceItems.length,
       quantity: sourceItems.reduce((sum, item) => sum + item.totalCount, 0),
@@ -220,6 +249,9 @@ export function selectFinanceProfitReport(items: readonly SalesListItem[], filte
       cost: optionalSum(invoiceCosts),
       profit,
       margin: margin(profit, revenue),
+      otherIncome,
+      otherExpense,
+      netProfit,
       profitableGroups: rows.filter((row) => (row.profit ?? 0) > 0).length,
       lossGroups: rows.filter((row) => (row.profit ?? 0) < 0).length,
     },

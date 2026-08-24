@@ -1,4 +1,4 @@
-import {flexRender, getCoreRowModel, type Cell, type ColumnDef, type OnChangeFn, type RowSelectionState, type SortingState, type Updater, type VisibilityState, useReactTable} from "@tanstack/react-table";
+import {flexRender, getCoreRowModel, getSortedRowModel, type Cell, type ColumnDef, type OnChangeFn, type RowSelectionState, type SortingState, type Updater, type VisibilityState, useReactTable} from "@tanstack/react-table";
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {ArrowDown, ArrowUp, ChevronsUpDown, ChevronLeft, ChevronRight, GripVertical} from "lucide-react";
 import {useEffect, useRef, useState, type ReactNode} from "react";
@@ -110,6 +110,7 @@ export function ErpDataTable<TData>({
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getRowId,
     manualSorting,
     enableRowSelection: enableSelection,

@@ -8,6 +8,8 @@ import type {
   CardInventory,
   CommissionRules,
   CardStatus,
+  CommissionMode,
+  CommissionAdjustment,
   CrmFollowUpRecord,
   CrmQuote,
   CrmRequirement,
@@ -67,6 +69,7 @@ import { hashPassword, isPasswordHash, sanitizeUserAccount, verifyPassword } fro
 import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from "./errors.ts";
 import { generateEntityId, nextDailyDocumentSequence, nextProductTemplateId } from "./storeIdentifiers.ts";
 import { calculateCommission, DEFAULT_COMMISSION_RULES, normalizeCommissionRules, type CommissionRulesPatch } from "../src/utils/commissionRules.ts";
+import { appendCommissionAdjustment, commissionStatus, effectiveCommissionAmount } from "./commissionRecords.ts";
 
 export interface AppState {
   products: ProductTemplate[];
@@ -909,11 +912,32 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (!shouldAdjustPurchase && !shouldAdjustSales) return;
     state.purchaseCommissions = state.purchaseCommissions.map((record) => {
       if (record.salesInvoiceNo !== invoiceNo || record.inventoryId !== inventoryId) return record;
+      let updated = record;
+      const adjustments: CommissionAdjustment[] = [];
+      const actor = systemActor();
+      for (const mode of (["purchase", "sales"] as CommissionMode[])) {
+        if ((mode === "purchase" ? shouldAdjustPurchase : shouldAdjustSales) && effectiveCommissionAmount(record, mode) > 0) {
+          adjustments.push({
+            id: genId("TCA"),
+            mode,
+            amount: -effectiveCommissionAmount(record, mode),
+            reason: "销售退货",
+            documentNo: returnNo,
+            note: `关联销售单 ${invoiceNo}`,
+            createdAt: nowStamp(),
+            createdBy: actor,
+          });
+        }
+      }
+      for (const adjustment of adjustments) updated = appendCommissionAdjustment(updated, adjustment);
+      const purchaseChanged = updated !== record && adjustments.some((item) => item.mode === "purchase");
+      const salesChanged = updated !== record && adjustments.some((item) => item.mode === "sales");
+      if (!purchaseChanged && !salesChanged) return record;
       return {
-        ...record,
-        ...(shouldAdjustPurchase ? { commissionAmount: 0, purchaseCommissionAmount: 0 } : {}),
-        ...(shouldAdjustSales ? { salesCommissionAmount: 0 } : {}),
-        remarks: `${record.remarks || ""}${record.remarks ? "；" : ""}销售退货 ${returnNo} 已自动冲减提成`,
+        ...updated,
+        ...(purchaseChanged && commissionStatus(record, "purchase") !== "已结算" ? {purchaseStatus: "已冲销" as const} : {}),
+        ...(salesChanged && commissionStatus(record, "sales") !== "已结算" ? {salesStatus: "已冲销" as const} : {}),
+        remarks: `${record.remarks || ""}${record.remarks ? "；" : ""}销售退货 ${returnNo} 已追加提成冲减记录`,
       };
     });
   };
@@ -5464,6 +5488,52 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return structuredClone(next);
   };
 
+  const settleCommissionRecords = (mode: CommissionMode, ids: string[], note?: string) => {
+    const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+    if (!uniqueIds.length) throw new ValidationError("至少选择一条提成记录");
+    const records = uniqueIds.map((id) => {
+      const record = state.purchaseCommissions.find((item) => item.id === id);
+      if (!record) throw new NotFoundError(`提成记录不存在: ${id}`);
+      return record;
+    });
+    const invalid = records.find((record) => commissionStatus(record, mode) === "已结算");
+    if (invalid) throw new ConflictError(`提成记录 ${invalid.id} 已结算，不能重复结算`);
+    const voided = records.find((record) => commissionStatus(record, mode) === "已冲销" || effectiveCommissionAmount(record, mode) <= 0);
+    if (voided) throw new ConflictError(`提成记录 ${voided.id} 当前没有可结算金额`);
+
+    const settledAt = nowStamp();
+    const settlementBatchId = genId("TJB");
+    const settledBy = getActiveActor();
+    const recordIds = new Set(uniqueIds);
+    const updatedRecords = state.purchaseCommissions
+      .filter((record) => recordIds.has(record.id))
+      .map((record) => {
+        const next = mode === "purchase"
+          ? { ...record, purchaseStatus: "已结算" as const, purchaseSettledAt: settledAt, purchaseSettledBy: settledBy, purchaseSettlementBatchId: settlementBatchId }
+          : { ...record, salesStatus: "已结算" as const, salesSettledAt: settledAt, salesSettledBy: settledBy, salesSettlementBatchId: settlementBatchId };
+        const purchaseStatus = next.purchaseStatus || next.status;
+        const salesStatus = next.salesStatus || next.status;
+        return {
+          ...next,
+          status: purchaseStatus === "已结算" && salesStatus === "已结算"
+            ? "已结算" as const
+            : purchaseStatus === "已冲销" && salesStatus === "已冲销"
+              ? "已冲销" as const
+              : "待结算" as const,
+        };
+      });
+    state.purchaseCommissions = state.purchaseCommissions.map((record) => updatedRecords.find((item) => item.id === record.id) || record);
+    const log = addLog(
+      `${settledBy} (系统)`,
+      "员工提成",
+      "标记结算",
+      `${mode === "purchase" ? "进货" : "销售"}提成 ${settlementBatchId}`,
+      undefined,
+      `${uniqueIds.length} 条；${note?.trim() || "未填写备注"}；仅更新提成结算状态，不自动生成账户出账`,
+    );
+    return {mode, settlementBatchId, settledAt, settledBy, count: updatedRecords.length, records: updatedRecords, log};
+  };
+
   const getPermissions = () => {
     const base = state.customPermissions.find((item) => item.role === getActiveRole()) || defaultPermissions[0]!;
     const currentUser = state.systemUsers.find((user) => user.id === getActiveUserId());
@@ -5800,6 +5870,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     updateUser,
     getCommissionRules,
     updateCommissionRules,
+    settleCommissionRecords,
     addLog,
     getPermissions,
     clearAllLogs,

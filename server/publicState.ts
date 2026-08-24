@@ -5,6 +5,7 @@ import type { StateCollectionKey } from "./db.ts";
 import { sanitizeAppStateForClient, sanitizeUserAccount, stripLazyStateCollections } from "./security.ts";
 import type { AppState } from "./store.ts";
 import { storeDateDiffDays } from "../src/utils/storeTime.ts";
+import { sanitizeCommissionRecord } from "./commissionRecords.ts";
 
 export type PublicStateMode = "full" | "initial";
 
@@ -112,16 +113,11 @@ export function publicStateForUser(state: AppState, user?: SystemUserAccount, mo
       totalProfit: 0,
       items: invoice.items.map((item) => ({ ...item, costPrice: 0, profit: 0 })),
     }));
-    scopedState.purchaseCommissions = scopedState.purchaseCommissions.map((record) => ({
-      ...record,
-      costPrice: 0,
-      grossProfit: 0,
-      commissionAmount: 0,
-    }));
   }
 
   if (!canAccessMenu(permissions, "finance")) scopedState.financeLedger = [];
   if (!canAccessCommissions) scopedState.purchaseCommissions = [];
+  else scopedState.purchaseCommissions = scopedState.purchaseCommissions.map((record) => sanitizeCommissionRecord(record, permissions) as unknown as typeof record);
   if (!canAccessMenu(permissions, "settlement_ledger")) scopedState.settlementLedger = [];
   if (!canAccessMenu(permissions, "payment_in")) scopedState.paymentInRecords = [];
   if (!canAccessMenu(permissions, "payment_out")) scopedState.paymentOutRecords = [];
@@ -192,12 +188,7 @@ export function publicCollectionForUser(
   }
   if (key === "purchaseCommissions") {
     if (!canAccessCommissions) return [];
-    return permissions.showCost ? state.purchaseCommissions : state.purchaseCommissions.map((record) => ({
-      ...record,
-      costPrice: 0,
-      grossProfit: 0,
-      commissionAmount: 0,
-    }));
+    return state.purchaseCommissions.map((record) => sanitizeCommissionRecord(record, permissions));
   }
   if (key === "financeLedger" && !canAccessMenu(permissions, "finance")) return [];
   if (key === "settlementLedger" && !canAccessMenu(permissions, "settlement_ledger")) return [];

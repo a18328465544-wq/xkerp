@@ -89,6 +89,50 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return payload as T;
 }
 
+/**
+ * Open a streaming API response while keeping the same request-id, CSRF,
+ * auth-expiry and observability contract as apiRequest. Consumers own the
+ * response body because streaming endpoints cannot be parsed as JSON first.
+ */
+export async function apiStreamRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const requestId = headers.get("X-Request-ID") || createRequestId();
+  headers.set("X-Request-ID", requestId);
+  headers.set("Accept", "text/event-stream");
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const method = init.method || "GET";
+  if (csrfToken && isUnsafeMethod(method)) headers.set("X-CSRF-Token", csrfToken);
+  reportClientRequest({phase: "start", requestId, method, path: requestPath(path)});
+
+  let response: Response;
+  try {
+    response = await fetch(path, {...init, headers, credentials: init.credentials ?? "same-origin"});
+  } catch (error) {
+    const normalized = normalizeApiError(error, 0, requestId);
+    reportClientRequest({phase: "error", requestId, method, path: requestPath(path)});
+    reportApiFailure(normalized, path, method, requestId);
+    throw normalized;
+  }
+
+  if (!response.ok) {
+    const payload = await response.clone().json().catch(() => undefined);
+    const error = normalizeApiError(payload, response.status, requestId);
+    if (error instanceof ApiError && error.isUnauthorized) {
+      clearBrowserAuthState();
+      notifyAuthExpired();
+    }
+    const responseRequestId = response.headers.get("X-Request-ID") || requestId;
+    reportClientRequest({phase: "error", requestId: responseRequestId, method, path: requestPath(path), status: response.status});
+    reportApiFailure(error, path, method, responseRequestId);
+    throw error;
+  }
+
+  reportClientRequest({phase: "success", requestId: response.headers.get("X-Request-ID") || requestId, method, path: requestPath(path), status: response.status});
+  return response;
+}
+
 export async function apiDownload(path: string, init: RequestInit = {}): Promise<Blob> {
   const headers = new Headers(init.headers);
   const requestId = headers.get("X-Request-ID") || createRequestId();

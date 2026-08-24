@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PoolClient } from "pg";
-import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildFinanceRecordPageQuery, buildInventoryPageQuery, buildInvoicePageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
+import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildFinanceProfitFlowQuery, buildFinanceRecordPageQuery, buildInventoryPageQuery, buildInvoicePageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
 
 test("production bootstrap password is required only when initializing an empty database", () => {
   assert.doesNotThrow(() => assertProductionBootstrapPasswordConfigured({ NODE_ENV: "development" }));
@@ -101,6 +101,17 @@ test("inventory page query keeps active, brand, risk, and aging filters inside P
   assert.equal(query.values.length, 2);
 });
 
+test("inventory page query lets explicit sold filters override active-only defaults", () => {
+  const includeSold = buildInventoryPageQuery({activeOnly: true, includeSold: true});
+  assert.match(includeSold.where, /NOT IN \('已退货', '已报废', '已拆卸', '已组装'\)/);
+  assert.doesNotMatch(includeSold.where, /已售出/);
+
+  const soldStatus = buildInventoryPageQuery({activeOnly: true, status: "已售出"});
+  assert.match(soldStatus.where, /op_status = \$1/);
+  assert.doesNotMatch(soldStatus.where, /已售出.*<>|NOT IN .*已售出/);
+  assert.deepEqual(soldStatus.values, ["已售出"]);
+});
+
 test("inventory page sorting uses an allowlist and never interpolates arbitrary SQL", () => {
   const sorted = buildInventoryPageQuery({ sortKey: "profit", sortDirection: "asc" });
   assert.match(sorted.orderBy, /estSellPrice/);
@@ -129,6 +140,20 @@ test("finance record pages keep filtering and pagination inside PostgreSQL", () 
   assert.match(query.where, /ILIKE/);
   assert.match(query.where, /销售收款/);
   assert.ok(query.values.every((value) => typeof value === "string"));
+});
+
+test("profit flow query keeps other income and actual expenses separate from business settlement", () => {
+  const income = buildFinanceProfitFlowQuery("income", {dateStart: "2026-08-01", dateEnd: "2026-08-31"});
+  assert.equal(income.table, "gpu_payment_in_records");
+  assert.match(income.where, /businessType/);
+  assert.match(income.where, /销售单/);
+  assert.deepEqual(income.values.slice(1), ["2026-08-01", "2026-08-31"]);
+
+  const expense = buildFinanceProfitFlowQuery("expense", {dateStart: "2026-08-01"});
+  assert.equal(expense.table, "gpu_payment_out_records");
+  assert.match(expense.where, /采购付款/);
+  assert.match(expense.where, /relatedDocNo/);
+  assert.equal(expense.values[1], "2026-08-01");
 });
 
 test("invoice page sorting uses an allowlist and keeps business filters parameterized", () => {

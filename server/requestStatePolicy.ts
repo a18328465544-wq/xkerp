@@ -57,6 +57,7 @@ const RETURN_KEYS: StateCollectionKey[] = [
   "financeLedger",
   "paymentInRecords",
   "paymentOutRecords",
+  "purchaseCommissions",
   "logs",
 ];
 const AFTERSALES_KEYS: StateCollectionKey[] = [
@@ -166,7 +167,8 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/settlement-ledger") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-ins") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-outs") return [];
-  if (method.toUpperCase() === "GET" && path === "/api/finance/commissions") return ["purchaseCommissions"];
+  if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/profit-flows") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/finance/commissions") return [];
   if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices") return [];
   if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices/reference") {
     return ["products", "purchaseInvoices", "customers", "vendors", "settlementAccounts", "inventory"];

@@ -116,7 +116,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
         <Select className="w-36" value={filters.channel} options={channelOptions} onValueChange={(value) => updateFilters({channel: value as SalesListFilters["channel"]})} aria-label="销售渠道筛选" />
         <Select className="w-36" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as SalesListFilters["paymentStatus"]})} aria-label="收款状态筛选" />
         <Select className="w-36" value={filters.outboundStatus} options={outboundOptions} onValueChange={(value) => updateFilters({outboundStatus: value as SalesListFilters["outboundStatus"]})} aria-label="出库状态筛选" />
-        <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} fieldClassName="sm:w-36" startAriaLabel="销售开始日期" endAriaLabel="销售结束日期" ariaLabel="销售日期范围" />
+        <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-36" startAriaLabel="销售开始日期" endAriaLabel="销售结束日期" ariaLabel="销售日期范围" />
       </ErpFilterBar></ErpPageToolbar>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

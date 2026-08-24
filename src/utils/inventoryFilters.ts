@@ -34,8 +34,16 @@ export function matchesInventoryListFilters(
   filters: InventoryListFilters = {},
   referenceDate = storeDate(),
 ) {
-  if (filters.activeOnly && inactiveStatuses.has(card.status)) return false;
-  if (!filters.activeOnly && !filters.includeSold && card.status === "已售出") return false;
+  const selectedStatus = filters.status?.trim();
+  const selectedSoldStatus = selectedStatus === "已售出";
+  if (!selectedStatus && filters.activeOnly) {
+    const excludedStatuses = filters.includeSold
+      ? new Set([...inactiveStatuses].filter((status) => status !== "已售出"))
+      : inactiveStatuses;
+    if (excludedStatuses.has(card.status)) return false;
+  } else if (!selectedSoldStatus && !filters.includeSold && card.status === "已售出") {
+    return false;
+  }
   if (filters.status && filters.status !== "all" && card.status !== filters.status) return false;
   if (filters.category && filters.category !== "all" && (card.category || "显卡") !== filters.category) return false;
   if (filters.brand && filters.brand !== "all" && card.brand !== filters.brand) return false;

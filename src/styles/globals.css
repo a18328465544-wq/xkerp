@@ -98,8 +98,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .erp-dialog-popup {
+  /* Keep the viewport guard here, but let each dialog's own max-w-* class
+     control its intended width. A global max-width would override those
+     component-level constraints and stretch short dialogs to the viewport. */
   width: min(100%, calc(100vw - (var(--erp-overlay-gutter) * 2)));
-  max-width: calc(100vw - (var(--erp-overlay-gutter) * 2));
   min-width: 0;
   min-height: 0;
   overscroll-behavior: contain;
@@ -375,6 +377,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
     background: rgb(15 23 42 / 0.3);
     content: "";
   }
+  /* Date controls render one explicit closeable backdrop from the shared
+     overlay shell; avoid stacking the generic pseudo backdrop a second time. */
+  .erp-date-popover-positioner::before { display: none; }
   .erp-popover-surface {
     width: 100% !important;
     max-width: none;

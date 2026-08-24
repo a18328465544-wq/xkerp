@@ -4,7 +4,7 @@ import path from "node:path";
 import { Pool, type PoolClient } from "pg";
 import { createInitialState, normalizeStateConditions, type AppState } from "./store.ts";
 import { hashPassword, isPasswordHash, type PersistedSession, type SessionStore } from "./security.ts";
-import type { DailyClosing, SystemUserAccount } from "../src/types.ts";
+import type { CommissionMode, DailyClosing, SystemUserAccount } from "../src/types.ts";
 import { storeDateAfterDays } from "../src/utils/storeTime.ts";
 import { applyCrmFoundationSchema } from "./crmSchema.ts";
 import { applyOperationalProjectionSchema } from "./operationalSchema.ts";
@@ -62,6 +62,8 @@ export type FinanceRecordPageFilters = {
   dateEnd?: string;
 };
 export type FinanceRecordPage<T> = CollectionPage<T> & { meta: CollectionPage<T>["meta"] & { totalAmount?: number } };
+export type FinanceProfitFlowFilters = {dateStart?: string; dateEnd?: string};
+export type FinanceProfitFlowRow = {date: string; income: number; expense: number; net: number};
 export type InvoicePageKind = "purchase" | "sales";
 export type InvoicePageFilters = {
   page?: number;
@@ -77,6 +79,19 @@ export type InvoicePageFilters = {
   sortDirection?: "asc" | "desc";
 };
 export type InvoicePage<T> = CollectionPage<T> & {meta: CollectionPage<T>["meta"] & {summary: Record<string, number>}};
+export type CommissionPageFilters = {
+  mode: CommissionMode;
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: string;
+  handler?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  sortKey?: string;
+  sortDirection?: "asc" | "desc";
+};
+export type CommissionPage<T> = CollectionPage<T> & {meta: CollectionPage<T>["meta"] & {summary: Record<string, number>}};
 export type AiInsightsCacheRecord = {
   scope: string;
   sourceHash: string;
@@ -833,9 +848,15 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     return `$${values.length}`;
   };
   const keyword = filters.keyword?.trim();
-  if (filters.activeOnly) {
-    clauses.push(`COALESCE(op_status, '') NOT IN ('已售出', '已退货', '已报废', '已拆卸', '已组装')`);
-  } else if (!filters.includeSold) {
+  const selectedStatus = filters.status?.trim();
+  const selectedSoldStatus = selectedStatus === "已售出";
+  if (!selectedStatus && filters.activeOnly) {
+    if (filters.includeSold) {
+      clauses.push(`COALESCE(op_status, '') NOT IN ('已退货', '已报废', '已拆卸', '已组装')`);
+    } else {
+      clauses.push(`COALESCE(op_status, '') NOT IN ('已售出', '已退货', '已报废', '已拆卸', '已组装')`);
+    }
+  } else if (!selectedSoldStatus && !filters.includeSold) {
     clauses.push(`COALESCE(op_status, '') <> '已售出'`);
   }
   if (filters.status) clauses.push(`op_status = ${bind(filters.status)}`);
@@ -944,6 +965,116 @@ export async function queryLogsPage<T = unknown>(filters: LogPageFilters = {}): 
   };
 }
 
+function commissionExpressions(mode: CommissionMode) {
+  const purchase = mode === "purchase";
+  const role = purchase ? "purchase" : "sales";
+  const handler = purchase ? "COALESCE(data->>'purchaseHandler', '')" : "COALESCE(data->>'salesHandler', '')";
+  const documentNo = purchase
+    ? "COALESCE(NULLIF(data->>'purchaseInvoiceNo', ''), id)"
+    : "COALESCE(NULLIF(data->>'salesInvoiceNo', ''), id)";
+  const originalAmount = purchase
+    ? "COALESCE(NULLIF(data->>'purchaseCommissionAmount', '')::numeric, NULLIF(data->>'commissionAmount', '')::numeric, 0)"
+    : "COALESCE(NULLIF(data->>'salesCommissionAmount', '')::numeric, NULLIF(data->>'commissionAmount', '')::numeric, 0)";
+  const adjustmentAmount = `(SELECT COALESCE(SUM(COALESCE(NULLIF(adjustment->>'amount', '')::numeric, 0)), 0) FROM jsonb_array_elements(COALESCE(data->'commissionAdjustments', '[]'::jsonb)) AS adjustment WHERE adjustment->>'mode' = '${role}')`;
+  return {
+    handler,
+    documentNo,
+    status: `COALESCE(NULLIF(data->>'${role}Status', ''), NULLIF(data->>'status', ''), '待结算')`,
+    originalAmount,
+    adjustmentAmount,
+    amount: `GREATEST(${originalAmount} + ${adjustmentAmount}, 0)`,
+    baseAmount: purchase
+      ? "COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)"
+      : "COALESCE(NULLIF(data->>'salesPrice', '')::numeric, 0)",
+  };
+}
+
+export function buildCommissionPageQuery(filters: CommissionPageFilters) {
+  const page = normalizedPage(filters.page, 1);
+  const pageSize = Math.min(200, normalizedPage(filters.pageSize, 20));
+  const values: unknown[] = [];
+  const clauses: string[] = [];
+  const bind = (value: unknown) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  const expressions = commissionExpressions(filters.mode);
+  const keyword = filters.keyword?.trim();
+  if (keyword) {
+    clauses.push(`CONCAT_WS(' ', id, data->>'sn', data->>'productName', ${expressions.handler}, ${expressions.documentNo}, data->>'purchaseInvoiceNo', data->>'salesInvoiceNo') ILIKE ${bind(`%${keyword}%`)}`);
+  }
+  if (filters.status) clauses.push(`${expressions.status} = ${bind(filters.status)}`);
+  if (filters.handler) clauses.push(`${expressions.handler} = ${bind(filters.handler)}`);
+  if (filters.dateStart) clauses.push(`LEFT(COALESCE(data->>'createdAt', ''), 10) >= ${bind(filters.dateStart)}`);
+  if (filters.dateEnd) clauses.push(`LEFT(COALESCE(data->>'createdAt', ''), 10) <= ${bind(filters.dateEnd)}`);
+  const sortExpressions: Record<string, string> = {
+    id: "id",
+    sn: "data->>'sn'",
+    productName: "data->>'productName'",
+    handler: expressions.handler,
+    documentNo: expressions.documentNo,
+    baseAmount: expressions.baseAmount,
+    grossProfit: "COALESCE(NULLIF(data->>'grossProfit', '')::numeric, 0)",
+    commissionAmount: expressions.amount,
+    status: expressions.status,
+    createdAt: "data->>'createdAt'",
+  };
+  const sortExpression = sortExpressions[filters.sortKey || "createdAt"] || sortExpressions.createdAt;
+  const sortDirection = filters.sortDirection === "asc" ? "ASC" : "DESC";
+  return {
+    table: "gpu_purchase_commissions",
+    page,
+    pageSize,
+    offset: (page - 1) * pageSize,
+    values,
+    where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+    orderBy: `ORDER BY ${sortExpression} ${sortDirection} NULLS LAST, id DESC`,
+    expressions,
+  };
+}
+
+export async function queryCommissionPage<T = unknown>(filters: CommissionPageFilters): Promise<CommissionPage<T>> {
+  await initializePostgres();
+  const {table, page, pageSize, offset, values, where, orderBy, expressions} = buildCommissionPageQuery(filters);
+  const [rows, aggregate] = await Promise.all([
+    getPool().query<{data: T}>(
+      `SELECT data FROM ${table} ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, pageSize, offset],
+    ),
+    getPool().query<Record<string, string>>(
+      `SELECT
+        COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE ${expressions.status} = '待结算')::text AS pending_count,
+        COUNT(*) FILTER (WHERE ${expressions.status} = '已结算')::text AS settled_count,
+        COUNT(*) FILTER (WHERE ${expressions.status} = '已冲销')::text AS voided_count,
+        COUNT(DISTINCT NULLIF(${expressions.handler}, ''))::text AS handler_count,
+        COALESCE(SUM(${expressions.originalAmount}), 0)::text AS original_commission,
+        COALESCE(SUM(${expressions.adjustmentAmount}), 0)::text AS adjustment_amount,
+        COALESCE(SUM(${expressions.amount}), 0)::text AS total_commission
+       FROM ${table} ${where}`,
+      values,
+    ),
+  ]);
+  const summary = aggregate.rows[0] || {};
+  return {
+    data: rows.rows.map((row) => row.data),
+    meta: {
+      page,
+      pageSize,
+      total: Number(summary.total || 0),
+      summary: {
+        pendingCount: Number(summary.pending_count || 0),
+        settledCount: Number(summary.settled_count || 0),
+        voidedCount: Number(summary.voided_count || 0),
+        handlerCount: Number(summary.handler_count || 0),
+        originalCommission: Number(summary.original_commission || 0),
+        adjustmentAmount: Number(summary.adjustment_amount || 0),
+        totalCommission: Number(summary.total_commission || 0),
+      },
+    },
+  };
+}
+
 type FinanceRecordKind = "settlement" | "income" | "expense";
 
 const financeRecordTables: Record<FinanceRecordKind, string> = {
@@ -951,6 +1082,71 @@ const financeRecordTables: Record<FinanceRecordKind, string> = {
   income: "gpu_payment_in_records",
   expense: "gpu_payment_out_records",
 };
+
+const PROFIT_OTHER_INCOME_TYPES = ["赔偿收入", "返点收入", "配件销售", "利息收入", "其他收入"] as const;
+const PROFIT_OTHER_EXPENSE_TYPES = ["员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待", "其他支出", "员工提成", "运费", "维修费", "平台手续费"] as const;
+const PROFIT_EXPLICIT_EXPENSE_TYPES = ["员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待", "其他支出"] as const;
+
+export type FinanceProfitFlowKind = "income" | "expense";
+
+/**
+ * Builds the indexed query used by the profit report's non-operating aggregate.
+ * Business settlement records are intentionally excluded here; only standalone
+ * other income and actual operating expenses can affect net profit.
+ */
+export function buildFinanceProfitFlowQuery(kind: FinanceProfitFlowKind, filters: FinanceProfitFlowFilters = {}) {
+  const table = kind === "income" ? "gpu_payment_in_records" : "gpu_payment_out_records";
+  const values: unknown[] = [];
+  const clauses = ["LEFT(COALESCE(data->>'time', ''), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'"];
+  const bind = (value: unknown) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  const types = kind === "income" ? PROFIT_OTHER_INCOME_TYPES : PROFIT_OTHER_EXPENSE_TYPES;
+  clauses.push(`COALESCE(data->>'businessType', '') = ANY(${bind([...types])}::text[])`);
+  if (filters.dateStart) clauses.push(`LEFT(data->>'time', 10) >= ${bind(filters.dateStart)}`);
+  if (filters.dateEnd) clauses.push(`LEFT(data->>'time', 10) <= ${bind(filters.dateEnd)}`);
+
+  if (kind === "income") {
+    clauses.push("COALESCE(data->>'relatedDocType', '') <> '销售单'");
+    clauses.push("COALESCE(data->>'relatedDocNo', '') NOT LIKE 'XS%'");
+    clauses.push("COALESCE(data->>'businessType', '') <> '销售收款'");
+  } else {
+    clauses.push("COALESCE(data->>'businessType', '') NOT IN ('采购付款', '回收付款', '客户退款', '采购退款', '账户调拨')");
+    // Explicit expense registrations are standalone by contract. If old data has
+    // a business document attached, exclude it to avoid charging the same event twice.
+    clauses.push(`NOT (COALESCE(data->>'businessType', '') = ANY(${bind([...PROFIT_EXPLICIT_EXPENSE_TYPES])}::text[]) AND COALESCE(data->>'relatedDocNo', '') <> '')`);
+  }
+  return {table, values, where: `WHERE ${clauses.join(" AND ")}`};
+}
+
+async function queryFinanceProfitFlowRows(kind: FinanceProfitFlowKind, filters: FinanceProfitFlowFilters) {
+  const query = buildFinanceProfitFlowQuery(kind, filters);
+  const result = await getPool().query<{date: string; amount: string}>(
+    `SELECT LEFT(data->>'time', 10) AS date,
+            COALESCE(SUM(COALESCE(NULLIF(data->>'amount', '')::numeric, 0)), 0)::text AS amount
+       FROM ${query.table}
+      ${query.where}
+      GROUP BY LEFT(data->>'time', 10)
+      ORDER BY LEFT(data->>'time', 10) ASC`,
+    query.values,
+  );
+  return result.rows.map((row) => ({date: row.date, amount: Number(row.amount || 0)}));
+}
+
+/** Returns date-level other income/expense only; sales gross profit remains a separate measure. */
+export async function queryFinanceProfitOtherFlows(filters: FinanceProfitFlowFilters = {}) {
+  await initializePostgres();
+  const [incomeRows, expenseRows] = await Promise.all([
+    queryFinanceProfitFlowRows("income", filters),
+    queryFinanceProfitFlowRows("expense", filters),
+  ]);
+  const byDate = new Map<string, {income: number; expense: number}>();
+  for (const row of incomeRows) byDate.set(row.date, {...(byDate.get(row.date) || {income: 0, expense: 0}), income: row.amount});
+  for (const row of expenseRows) byDate.set(row.date, {...(byDate.get(row.date) || {income: 0, expense: 0}), expense: row.amount});
+  const flows: FinanceProfitFlowRow[] = Array.from(byDate.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([date, row]) => ({date, income: row.income, expense: row.expense, net: row.income - row.expense}));
+  return {data: {flows}};
+}
 
 export function buildFinanceRecordPageQuery(kind: FinanceRecordKind, filters: FinanceRecordPageFilters = {}) {
   const page = normalizedPage(filters.page, 1);

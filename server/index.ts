@@ -82,6 +82,7 @@ import { registerDomainSnapshotRoutes } from "./routes/domainSnapshots.ts";
 import { registerFinanceClosingRoutes } from "./routes/financeClosing.ts";
 import {registerPagedRecordRoutes} from "./routes/pagedRecords.ts";
 import { registerSystemRoutes } from "./routes/system.ts";
+import { registerFinanceCommissionRoutes } from "./routes/financeCommissions.ts";
 import { syncCrmPurchaseInvoiceLink, syncCrmSalesInvoiceLink } from "./crmEntityRepository.ts";
 import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, MediaValidationError, replaceEntityImages } from "./mediaRepository.ts";
 import {clearSessionCookie, createCsrfToken, setSessionCookie} from "./authCookies.ts";
@@ -799,6 +800,7 @@ function returnOrderMerge(record: { id: string; returnNo: string; relatedDocNo: 
     inventory: recordsByIds(state.inventory, [record.sourceInventoryId]),
     salesInvoices: state.salesInvoices.filter((item) => relatedDocNos.has(item.id) || relatedDocNos.has(item.invoiceNo)),
     purchaseInvoices: state.purchaseInvoices.filter((item) => relatedDocNos.has(item.id) || relatedDocNos.has(item.invoiceNo)),
+    purchaseCommissions: state.purchaseCommissions.filter((item) => relatedDocNos.has(item.salesInvoiceNo) || relatedDocNos.has(item.purchaseInvoiceNo || "")),
     // Legacy return orders may not have a party ID. Persist their name-matched partner as well;
     // otherwise a valid balance update is lost when the process reloads from PostgreSQL.
     customers: record.partyType !== "vendor" ? recordsByIdOrLegacyName(state.customers, record.partyId, record.partyName) : [],
@@ -1429,17 +1431,14 @@ registerFinanceClosingRoutes(app, {
   asyncRoute,
   sendValidationError: (req, res, message) => sendApiError(req, res, 400, "VALIDATION_ERROR", message),
 });
-
-const commissionMenuIds = ["purchase_commission", "sales_commission"];
-
-app.get("/api/finance/commission-rules", requireAnyMenu(commissionMenuIds), (req: AuthRequest, res) => {
-  res.json({ data: actions(req).getCommissionRules() });
+registerFinanceCommissionRoutes(app, {
+  requireBoss,
+  requireAnyMenu,
+  asyncRoute,
+  actions: (req) => actions(req as AuthRequest),
+  persist: (req, result) => persistRequest(req as AuthRequest, result),
+  permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser),
 });
-
-app.put("/api/finance/commission-rules", requireBoss, requireAnyMenu(commissionMenuIds), asyncRoute(async (req: AuthRequest, res) => {
-  const updated = await persistRequest(req, actions(req).updateCommissionRules(req.body || {}));
-  res.json({ data: updated, state: { commissionRules: updated } });
-}));
 
 app.post("/api/auth/login", loginRateLimiter, authMutationRoute(async (req, res) => {
   try {

@@ -1,12 +1,13 @@
 import {apiRequest} from "../client";
-import {adaptCommissionRecords, adaptCustomerFunds, adaptLogs, adaptUserMutation, adaptUsers} from "../adapters/finance-remaining.adapter";
-import type {CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
-import type {PagedCollection} from "@/src/types/finance-remaining";
-import type {PublicStateResponseDto} from "../dto/state.dto";
+import {adaptCommissionPage, adaptCustomerFunds, adaptLogs, adaptUserMutation, adaptUsers} from "../adapters/finance-remaining.adapter";
+import type {CommissionPageResponseDto, CommissionSettlementResponseDto, CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
+import type {CommissionMode} from "@/src/types/commission";
+import type {FinanceCommissionPage, PagedCollection} from "@/src/types/finance-remaining";
 import type {StoreRole} from "@/src/types/auth";
 
 export interface CustomerFundsFilters {startDate: string; endDate: string; trendStartDate: string; trendEndDate: string}
 export interface LogsFilters {page: number; pageSize: number; keyword: string}
+export interface FinanceCommissionFilters {mode: CommissionMode; page: number; pageSize: number; keyword: string; status: string; handler: string; dateStart: string; dateEnd: string; sortKey: string; sortDirection: "asc" | "desc"}
 export type PermissionOverridePatch = {
   allowedMenus?: string[] | null;
   showCost?: boolean | null;
@@ -45,4 +46,17 @@ export const usersApi = {
   async update(id: string, input: UserMutationInput, signal?: AbortSignal) { return adaptUserMutation(await apiRequest<UserMutationResponseDto>(`/api/users/${encodeURIComponent(id)}`, {method: "PUT", body: JSON.stringify(toUserMutationRequest(input)), signal})); },
 };
 export const logsApi = { async list(filters: LogsFilters, signal?: AbortSignal): Promise<PagedCollection<import("@/src/types/finance-remaining").AuditLogItem>> { const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize)}); if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim()); return adaptLogs(await apiRequest<LogsResponseDto>(`/api/logs?${params.toString()}`, {signal})); } };
-export const financeCommissionApi = { async list(mode: "purchase" | "sales", signal?: AbortSignal) { const response = await apiRequest<PublicStateResponseDto>("/api/finance/commissions", {signal}); const payload = response.data && typeof response.data === "object" ? response.data as {purchaseCommissions?: unknown} : {}; return adaptCommissionRecords(Array.isArray(payload.purchaseCommissions) ? payload.purchaseCommissions : [], mode); } };
+export const financeCommissionApi = {
+  async list(filters: FinanceCommissionFilters, signal?: AbortSignal): Promise<FinanceCommissionPage> {
+    const params = new URLSearchParams({mode: filters.mode, page: String(filters.page), pageSize: String(filters.pageSize), sortKey: filters.sortKey, sortDirection: filters.sortDirection});
+    if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+    if (filters.status) params.set("status", filters.status);
+    if (filters.handler.trim()) params.set("handler", filters.handler.trim());
+    if (filters.dateStart) params.set("dateStart", filters.dateStart);
+    if (filters.dateEnd) params.set("dateEnd", filters.dateEnd);
+    return adaptCommissionPage(await apiRequest<CommissionPageResponseDto>(`/api/finance/commissions?${params.toString()}`, {signal}), filters.mode);
+  },
+  async settle(mode: CommissionMode, ids: string[], note?: string, signal?: AbortSignal) {
+    return apiRequest<CommissionSettlementResponseDto>("/api/finance/commissions/settle", {method: "POST", body: JSON.stringify({mode, ids, note: note?.trim() || undefined}), signal});
+  },
+};

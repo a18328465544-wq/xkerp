@@ -100,7 +100,10 @@ export interface CardInventory {
   buyerName?: string;
 }
 
-export type PurchaseCommissionStatus = "待结算" | "已结算";
+import type { CommissionAdjustment, CommissionSettlementStatus } from "./commission";
+export type { CommissionAdjustment, CommissionMode, CommissionSettlementStatus } from "./commission";
+
+export type PurchaseCommissionStatus = CommissionSettlementStatus;
 
 export type CommissionRuleCalculation = "fixed" | "tiered" | "amount_range";
 export type CommissionRuleBase = "purchase_amount_incl_tax" | "purchase_amount_excl_tax" | "sales_amount_incl_tax" | "sales_amount_excl_tax" | "profit";
@@ -171,8 +174,17 @@ export interface PurchaseCommissionRecord {
   salesCommissionAmount?: number;
   salesCalculationMethod?: CommissionRuleCalculation;
   status: PurchaseCommissionStatus;
+  purchaseStatus?: PurchaseCommissionStatus;
+  salesStatus?: PurchaseCommissionStatus;
   createdAt: string;
   settledAt?: string;
+  purchaseSettledAt?: string;
+  salesSettledAt?: string;
+  purchaseSettledBy?: string;
+  salesSettledBy?: string;
+  purchaseSettlementBatchId?: string;
+  salesSettlementBatchId?: string;
+  commissionAdjustments?: CommissionAdjustment[];
   remarks?: string;
 }
 

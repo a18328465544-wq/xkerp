@@ -54,6 +54,19 @@ test("finance profit groups product lines and multiplies per-unit profit by quan
   assert.equal(report.rows[0]?.profit, 600);
 });
 
+test("finance profit keeps sales gross profit separate and adds other flows only to net profit", () => {
+  const report = selectFinanceProfitReport([invoice()], defaultFinanceProfitFilters, [
+    {date: "2026-08-10", income: 200, expense: 80, net: 120},
+  ]);
+  assert.equal(report.summary.profit, 600);
+  assert.equal(report.summary.otherIncome, 200);
+  assert.equal(report.summary.otherExpense, 80);
+  assert.equal(report.summary.netProfit, 720);
+  assert.equal(report.rows[0]?.profit, 600);
+  assert.equal(report.trend[0]?.profit, 600);
+  assert.equal(report.trend[0]?.netProfit, 720);
+});
+
 test("finance profit supports customer grouping, keyword/date filters and pagination", () => {
   const second = invoice({id: "S-2", invoiceNo: "XS-002", date: "2026-08-09", customerName: "李四", totalCount: 1, totalAmount: 1800, totalCost: 1400, totalProfit: 400, searchText: "xs-002 李四 闲鱼 销售乙 rtx 3070", channel: "闲鱼", handleBy: "销售乙", productSummary: "RTX 3070", lines: [{id: "L-2", productName: "RTX 3070", sn: "SN-2", condition: "99新", quantity: 1, sellPrice: 1800, costPrice: 1400, profit: 400, aftersalesTerms: "", remarks: ""}]});
   const report = selectFinanceProfitReport([invoice(), second], {...defaultFinanceProfitFilters, dimension: "customer", keyword: "李四", dateStart: "2026-08-09", dateEnd: "2026-08-09", pageSize: 20});

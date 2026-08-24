@@ -1,10 +1,10 @@
-import {Popover as BasePopover} from "@base-ui/react/popover";
-import {CalendarRange, X} from "lucide-react";
-import {useEffect, useState} from "react";
+import {CalendarRange} from "lucide-react";
+import {useState} from "react";
 import {Button, Input} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
 import {formatDateKey, getDateRangePreset, isDateKey, parseDateKey, validateDateRange, type DateRangePreset, type DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {ErpCalendar} from "./ErpCalendar";
+import {ErpDateOverlay} from "./ErpDateOverlay";
 
 export interface DateRangePresetOption {
   label: string;
@@ -33,6 +33,10 @@ export interface ErpDateRangePickerProps {
   startAriaLabel?: string;
   endAriaLabel?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  /** CSS for the actual trigger. */
+  triggerClassName?: string;
+  /** @deprecated Use triggerClassName. Kept for compatibility with external callers. */
   fieldClassName?: string;
   className?: string;
   min?: string;
@@ -74,20 +78,6 @@ function completeRangeError(value: DateRangeValue, requireComplete?: boolean) {
   return requireComplete && (!value.startDate || !value.endDate) ? "请选择完整日期范围" : null;
 }
 
-function useCompactViewport() {
-  const [compact, setCompact] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 639px)");
-    const update = () => setCompact(media.matches);
-    update();
-    media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
-  }, []);
-
-  return compact;
-}
-
 /** A single-entry range picker with presets, direct input, atomic apply, and a mobile sheet layout. */
 export function ErpDateRangePicker({
   value,
@@ -98,6 +88,8 @@ export function ErpDateRangePicker({
   startAriaLabel = "开始日期",
   endAriaLabel = "结束日期",
   ariaLabel = "日期范围",
+  ariaDescribedBy,
+  triggerClassName,
   fieldClassName,
   className,
   min,
@@ -112,7 +104,6 @@ export function ErpDateRangePicker({
   const [draftRange, setDraftRange] = useState<DateRangeValue>(() => safeRange(value));
   const [startInput, setStartInput] = useState(() => safeRange(value).startDate);
   const [endInput, setEndInput] = useState(() => safeRange(value).endDate);
-  const compactViewport = useCompactViewport();
   const minDate = parseDateKey(min || "");
   const maxDate = parseDateKey(max || "");
 
@@ -195,42 +186,35 @@ export function ErpDateRangePicker({
       : displayEnd
         ? `${startPlaceholder} 至 ${displayEnd}`
         : "选择日期范围";
-  const hasCustomWidth = Boolean(fieldClassName?.match(/(?:^|\s)!?w-/));
+  const resolvedTriggerClassName = triggerClassName || fieldClassName;
+  const hasCustomWidth = Boolean(resolvedTriggerClassName?.match(/(?:^|\s)!?w-/));
   const controlHeight = density === "compact" ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
+  const trigger = (
+    <button
+      type="button"
+      className={cn(
+        "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)] sm:min-w-56",
+        controlHeight,
+        visibleError && "border-[var(--erp-color-danger)]",
+        hasCustomWidth ? undefined : "w-full",
+        resolvedTriggerClassName,
+      )}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      aria-invalid={Boolean(visibleError) || undefined}
+      aria-describedby={ariaDescribedBy}
+    >
+      <span className={cn("truncate font-mono", !displayStart && !displayEnd && "font-sans text-[var(--erp-color-text-muted)]")}>
+        {displayValue}
+      </span>
+      <CalendarRange className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
+    </button>
+  );
 
   return (
     <div className={cn("min-w-0 w-full sm:w-auto", className)} role="group" aria-label={ariaLabel}>
-      <BasePopover.Root open={open} onOpenChange={handleOpenChange}>
-        <BasePopover.Trigger
-          className={cn(
-            "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)] data-disabled:text-[var(--erp-color-text-muted)] sm:min-w-56",
-            controlHeight,
-            visibleError && "border-[var(--erp-color-danger)]",
-            hasCustomWidth ? undefined : "w-full",
-            fieldClassName,
-          )}
-          disabled={disabled}
-          aria-label={ariaLabel}
-          aria-invalid={Boolean(visibleError) || undefined}
-        >
-          <span className={cn("truncate font-mono", !displayStart && !displayEnd && "font-sans text-[var(--erp-color-text-muted)]")}>
-            {displayValue}
-          </span>
-          <CalendarRange className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
-        </BasePopover.Trigger>
-        <BasePopover.Portal>
-          {open && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 sm:hidden" aria-hidden="true" onMouseDown={handleCancel} />}
-          <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="start">
-            <BasePopover.Popup className="erp-popover-surface relative max-h-[min(90dvh,720px)] overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none">
-              <div className="flex items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--erp-color-text)]">选择日期范围</p>
-                  <p className="mt-0.5 truncate text-xs text-[var(--erp-color-text-muted)]">支持快捷选择，也可以直接输入日期</p>
-                </div>
-                <Button type="button" size="icon" variant="ghost" className="-mr-1 -mt-1" aria-label="关闭日期范围" onClick={handleCancel}>
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
+      <ErpDateOverlay open={open} onOpenChange={handleOpenChange} trigger={trigger} title="选择日期范围" description="支持快捷选择，也可以直接输入日期" closeLabel="关闭日期范围" sideOffset={6} panelClassName="max-h-[min(90dvh,720px)] overflow-y-auto rounded-[var(--erp-radius-xl)]">
+      {({compactViewport}) => <>
               <div className="flex flex-col sm:flex-row">
                 <div className="erp-horizontal-scroll flex gap-1 overflow-x-auto border-b border-[var(--erp-color-border)] p-2 sm:w-32 sm:shrink-0 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3">
                   {presets.map((preset) => (
@@ -304,10 +288,8 @@ export function ErpDateRangePicker({
                   </div>
                 </div>
               </div>
-            </BasePopover.Popup>
-          </BasePopover.Positioner>
-        </BasePopover.Portal>
-      </BasePopover.Root>
+      </>}
+      </ErpDateOverlay>
       {visibleError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]" role="alert">{visibleError}</p>}
     </div>
   );

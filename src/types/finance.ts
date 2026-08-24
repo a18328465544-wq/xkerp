@@ -28,6 +28,14 @@ export interface FinanceFlowItem {
   relatedDocNo?: string;
 }
 
+/** Date-level standalone income/expense used by the profit report. */
+export interface FinanceProfitOtherFlow {
+  date: string;
+  income: number;
+  expense: number;
+  net: number;
+}
+
 export interface FinanceDashboardDataset {
   accounts: FinanceAccountSummary[];
   flows: FinanceFlowItem[];

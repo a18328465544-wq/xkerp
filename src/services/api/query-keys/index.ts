@@ -2,6 +2,7 @@ import type {InventoryFilters} from "@/src/types/inventory";
 import type {SalesReturnListFilters} from "@/src/types/returns";
 import type {CrmAccountFilters} from "@/src/types/crm";
 import type {FinanceDashboardAccess} from "@/src/types/finance";
+import type {FinanceCommissionFilters} from "../endpoints/finance-remaining";
 
 export const queryKeys = {
   auth: {session: () => ["auth", "session"] as const},
@@ -87,9 +88,11 @@ export const queryKeys = {
     income: (filters: unknown) => ["finance", "income", filters] as const,
     expense: (filters: unknown) => ["finance", "expense", filters] as const,
     profitSales: (access: {userId: string; showCost: boolean; showProfit: boolean}) => ["finance", "profit", "sales", access] as const,
+    profitFlows: (access: {userId: string}, range: {startDate: string; endDate: string}) => ["finance", "profit", "other-flows", access, range] as const,
     transfers: (filters: unknown) => ["finance", "transfers", filters] as const,
     customerFunds: (filters: unknown) => ["finance", "customer-funds", filters] as const,
-    commissions: (mode: "purchase" | "sales") => ["finance", "commissions", mode] as const,
+    commissionsRoot: () => ["finance", "commissions"] as const,
+    commissions: (filters: FinanceCommissionFilters) => ["finance", "commissions", filters] as const,
     dailyClosings: {
       list: (limit: number) => ["finance", "daily-closings", "list", limit] as const,
       detail: (date: string) => ["finance", "daily-closings", "detail", date] as const,

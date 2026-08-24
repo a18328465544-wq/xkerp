@@ -10,6 +10,7 @@ const serverRoot = path.join(projectRoot, "server");
 // path outside the serialization boundary.
 const protectedPatterns = [
   /^\/api\/finance\/(?:commission-rules|daily-closing)$/,
+  /^\/api\/finance\/commissions\/settle$/,
   /^\/api\/ai\/insights\/refresh$/,
   /^\/api\/ai\/insight-actions\/[^/]+$/,
   /^\/api\/users(?:\/[^/]+)?$/,

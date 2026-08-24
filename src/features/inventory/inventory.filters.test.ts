@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {defaultInventoryFilters, inventoryFiltersToSearch, parseInventoryFilters} from "./inventory.filters";
 import {toInventoryQueryParams} from "@/src/services/api/endpoints/inventory";
+import {matchesInventoryListFilters} from "@/src/utils/inventoryFilters";
+import type {CardInventory} from "@/src/types";
 
 test("inventory URL filters round-trip without losing supported state", () => {
   const next = {...defaultInventoryFilters, keyword: "SN4090", brand: "华硕", status: "待检测", page: 3, pageSize: 50, includeSold: true, sortKey: "days" as const, sortDirection: "asc" as const};
@@ -25,4 +27,11 @@ test("inventory API query only sends capabilities supported by FastAPI", () => {
   assert.equal(params.get("model"), null);
   assert.equal(params.get("condition"), null);
   assert.equal(params.get("entryStart"), null);
+});
+
+test("inventory filters keep sold cards visible when explicitly requested", () => {
+  const soldCard = {id: "KC-SOLD", status: "已售出"} as CardInventory;
+  assert.equal(matchesInventoryListFilters(soldCard, {activeOnly: true, includeSold: false}), false);
+  assert.equal(matchesInventoryListFilters(soldCard, {activeOnly: true, includeSold: true}), true);
+  assert.equal(matchesInventoryListFilters(soldCard, {activeOnly: true, status: "已售出"}), true);
 });

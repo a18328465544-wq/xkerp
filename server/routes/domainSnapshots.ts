@@ -22,7 +22,6 @@ const routes: SnapshotRoute[] = [
     keys: ["settlementAccounts", "settlementLedger", "financeLedger", "salesInvoices", "purchaseInvoices", "returnOrders", "inventory"],
   },
   { path: "/api/gpu_erp/finance/account-transfers", menus: ["account_transfer"], keys: ["accountTransfers"] },
-  { path: "/api/finance/commissions", menus: ["purchase_commission", "sales_commission"], keys: ["purchaseCommissions"] },
   {
     path: "/api/purchase-invoices/reference",
     menus: ["purchase_add"],

@@ -2,14 +2,18 @@ import type {Express, Request, RequestHandler} from "express";
 import {
   queryPaymentInPage,
   queryPaymentOutPage,
+  queryCommissionPage,
+  queryFinanceProfitOtherFlows,
   queryPurchaseInvoicePage,
   querySalesInvoicePage,
   querySettlementLedgerPage,
 } from "../db.ts";
 import {AppError} from "../errors.ts";
-import type {PurchaseInvoice, SalesInvoice} from "../../src/types.ts";
+import type {CommissionMode, PurchaseCommissionRecord, PurchaseInvoice, SalesInvoice} from "../../src/types.ts";
+import {canAccessCommissionMode, projectCommissionRecord} from "../commissionRecords.ts";
+import {commissionListQueryDto, parseHttpDto} from "../httpDto.ts";
 
-type VisibilityPermissions = {showCost?: boolean; showProfit?: boolean};
+type VisibilityPermissions = {showCost?: boolean; showProfit?: boolean; allowedMenus: string[]};
 
 type PagedRecordDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -82,6 +86,53 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
     } catch (error) { next(error); }
   });
 
+  app.get("/api/finance/commissions", dependencies.requireAnyMenu(["purchase_commission", "sales_commission"]), async (req, res, next) => {
+    try {
+      const query = parseHttpDto(commissionListQueryDto, {
+        mode: req.query.mode,
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+        keyword: req.query.keyword,
+        status: req.query.status,
+        handler: req.query.handler,
+        dateStart: req.query.dateStart,
+        dateEnd: req.query.dateEnd,
+        sortKey: req.query.sortKey,
+        sortDirection: req.query.sortDirection,
+      });
+      if (query.dateStart && query.dateEnd && query.dateStart > query.dateEnd) {
+        throw new AppError("提成日期范围无效", 400, "VALIDATION_ERROR");
+      }
+      const permissions = dependencies.permissionsForRequest(req);
+      if (!canAccessCommissionMode(permissions, query.mode as CommissionMode)) {
+        throw new AppError("当前账号没有该类型的提成权限", 403, "FORBIDDEN");
+      }
+      const requestedSortKey = query.sortKey;
+      const protectedSortKey = ["baseAmount", "grossProfit", "commissionAmount"].includes(requestedSortKey);
+      const sortKey = !permissions.showProfit && protectedSortKey
+        ? "createdAt"
+        : !permissions.showCost && query.mode === "purchase" && requestedSortKey === "baseAmount"
+          ? "createdAt"
+          : requestedSortKey;
+      const page = await queryCommissionPage<PurchaseCommissionRecord>({
+        ...query,
+        sortKey,
+        status: query.status || undefined,
+        handler: query.handler || undefined,
+        dateStart: query.dateStart || undefined,
+        dateEnd: query.dateEnd || undefined,
+      });
+      const summary = {...page.meta.summary};
+      if (!permissions.showProfit) {
+        delete summary.originalCommission;
+        delete summary.adjustmentAmount;
+        delete summary.totalCommission;
+      }
+      const data = page.data.map((record) => projectCommissionRecord(record, query.mode, permissions));
+      res.json({data: {commissions: data}, meta: {...page.meta, summary}});
+    } catch (error) { next(error); }
+  });
+
   app.get("/api/gpu_erp/finance/settlement-ledger", dependencies.requireMenu("settlement_ledger"), async (req, res, next) => {
     try {
       const dateStart = String(req.query.dateStart || "");
@@ -109,6 +160,15 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
       const filters = paymentPageFilters(req);
       assertDateRange(filters.dateStart, filters.dateEnd, "支出");
       res.json(await queryPaymentOutPage(filters));
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/gpu_erp/finance/profit-flows", dependencies.requireMenu("finance_reports"), async (req, res, next) => {
+    try {
+      const dateStart = String(req.query.dateStart || req.query.startDate || "");
+      const dateEnd = String(req.query.dateEnd || req.query.endDate || "");
+      assertDateRange(dateStart, dateEnd, "利润");
+      res.json(await queryFinanceProfitOtherFlows({dateStart, dateEnd}));
     } catch (error) { next(error); }
   });
 }

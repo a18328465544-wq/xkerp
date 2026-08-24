@@ -1,7 +1,8 @@
 import type {SystemUserAccount} from "./auth";
+import type {CommissionAdjustment, CommissionMode, CommissionSettlementStatus} from "./commission";
 import type {SalesReturnListItem} from "@/src/types/returns";
 
-export type PurchaseCommissionStatus = "待结算" | "已结算";
+export type PurchaseCommissionStatus = CommissionSettlementStatus;
 export type CommissionRuleCalculation = "fixed" | "tiered" | "amount_range";
 
 export interface PurchaseCommissionRecord {
@@ -27,8 +28,17 @@ export interface PurchaseCommissionRecord {
   salesCommissionAmount?: number;
   salesCalculationMethod?: CommissionRuleCalculation;
   status: PurchaseCommissionStatus;
+  purchaseStatus?: PurchaseCommissionStatus;
+  salesStatus?: PurchaseCommissionStatus;
   createdAt: string;
   settledAt?: string;
+  purchaseSettledAt?: string;
+  salesSettledAt?: string;
+  purchaseSettledBy?: string;
+  salesSettledBy?: string;
+  purchaseSettlementBatchId?: string;
+  salesSettlementBatchId?: string;
+  commissionAdjustments?: CommissionAdjustment[];
   remarks?: string;
 }
 
@@ -47,11 +57,33 @@ export interface FinanceCommissionItem {
   grossProfit?: number;
   rate?: number;
   commissionAmount?: number;
+  originalCommissionAmount?: number;
+  adjustmentAmount?: number;
+  adjustments?: CommissionAdjustment[];
+  calculationMethod?: CommissionRuleCalculation;
   status: string;
   createdAt: string;
   settledAt?: string;
+  settledBy?: string;
+  settlementBatchId?: string;
   remarks?: string;
 }
+
+export interface FinanceCommissionSummary {
+  pendingCount: number;
+  settledCount: number;
+  voidedCount: number;
+  handlerCount: number;
+  originalCommission?: number;
+  adjustmentAmount?: number;
+  totalCommission?: number;
+}
+
+export interface FinanceCommissionPage extends PagedCollection<FinanceCommissionItem> {
+  summary: FinanceCommissionSummary;
+}
+
+export type {CommissionAdjustment, CommissionMode, CommissionSettlementStatus};
 
 export interface CustomerFundsTransaction {
   id: string;

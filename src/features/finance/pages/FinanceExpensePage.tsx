@@ -423,7 +423,7 @@ function FinanceExpenseContent({
           value={{startDate: filters.startDate, endDate: filters.endDate}}
           onChange={({startDate, endDate}) => update({startDate, endDate})}
           density="compact"
-          fieldClassName="sm:w-36"
+          triggerClassName="sm:w-36"
           startAriaLabel="开始日期"
           endAriaLabel="结束日期"
           ariaLabel="支出日期范围"

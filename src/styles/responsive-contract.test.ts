@@ -20,10 +20,12 @@ test("responsive overlay contract gives narrow windows bounded bottom-sheet surf
   assert.match(globals, /@media \(max-width: 639px\)/);
   assert.match(globals, /\.erp-option-positioner[\s\S]*position:\s*fixed !important/);
   assert.match(globals, /\.erp-popover-positioner[\s\S]*position:\s*fixed !important/);
+  const dateOverlay = readFileSync(new URL("../components/common/ErpDateOverlay.tsx", import.meta.url), "utf8");
+  assert.match(dateOverlay, /erp-popover-positioner/);
+  assert.match(dateOverlay, /erp-popover-surface/);
   for (const picker of ["ErpDatePicker.tsx", "ErpDateTimePicker.tsx", "ErpDateRangePicker.tsx"]) {
     const source = readFileSync(new URL(`../components/common/${picker}`, import.meta.url), "utf8");
-    assert.match(source, /erp-popover-positioner/);
-    assert.match(source, /erp-popover-surface/);
+    assert.match(source, /ErpDateOverlay/);
     assert.doesNotMatch(source, /max-sm:!fixed/);
   }
   assert.match(globals, /\.erp-picker-listbox[\s\S]*max-height:\s*var\(--erp-overlay-mobile-height\) !important/);
@@ -34,4 +36,13 @@ test("responsive overlay contract gives narrow windows bounded bottom-sheet surf
   assert.match(globals, /\.erp-form-actions > button[\s\S]*min-height:\s*44px/);
   assert.match(globals, /\.erp-form-actions\[data-erp-single-action="true"\][\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(globals, /\[data-erp-component="page-header"\] \[data-erp-region="page-actions"\][\s\S]*width:\s*100%/);
+});
+
+test("dialog viewport guard does not override component-level dialog widths", () => {
+  const popupRule = globals.match(/\.erp-dialog-popup\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+  assert.match(popupRule, /width:\s*min\(100%,\s*calc\(100vw - \(var\(--erp-overlay-gutter\) \* 2\)\)\)/);
+  assert.doesNotMatch(popupRule, /max-width\s*:/);
+
+  const unsavedDialog = readFileSync(new URL("../components/common/ErpUnsavedChangesDialog.tsx", import.meta.url), "utf8");
+  assert.match(unsavedDialog, /w-full\s+max-w-md/);
 });

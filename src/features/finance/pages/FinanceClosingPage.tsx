@@ -360,7 +360,7 @@ function FinanceClosingContent({
           value={{startDate: filters.dateStart, endDate: filters.dateEnd}}
           onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})}
           density="compact"
-          fieldClassName="sm:w-36"
+          triggerClassName="sm:w-36"
           startAriaLabel="日结开始日期"
           endAriaLabel="日结结束日期"
           ariaLabel="日结日期范围"

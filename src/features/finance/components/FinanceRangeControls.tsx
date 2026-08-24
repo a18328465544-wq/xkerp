@@ -21,7 +21,7 @@ export function FinanceRangeControls({range, error, onChange, onApply}: FinanceR
         error={error}
         maxDays={366}
         requireComplete
-        fieldClassName="sm:w-32"
+        triggerClassName="sm:w-32"
         startAriaLabel="资金趋势开始日期"
         endAriaLabel="资金趋势结束日期"
         ariaLabel="资金趋势日期范围"

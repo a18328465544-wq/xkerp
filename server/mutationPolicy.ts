@@ -1,5 +1,6 @@
 const stateMutationRoutePatterns = [
   /^\/api\/finance\/(?:commission-rules|daily-closing)$/,
+  /^\/api\/finance\/commissions\/settle$/,
   /^\/api\/ai\/insights\/refresh$/,
   /^\/api\/ai\/insight-actions\/[^/]+$/,
   /^\/api\/open\/inventory\/(?:scan-in|scan-out|relocate)$/,

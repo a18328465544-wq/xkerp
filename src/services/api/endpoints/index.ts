@@ -6,7 +6,7 @@ export {salesApi, toSalesCustomerQueryParams, toSalesInventoryQueryParams} from 
 export type {SalesApiPermissions} from "./sales";
 export {stateApi} from "./state";
 export {aiApi} from "./ai";
-export type {AiInsightItem, AiInsightsResult} from "./ai";
+export type {AiInsightItem, AiInsightsResult, CopilotRequest, CopilotStreamEvent, CopilotContext, CopilotMessage, CopilotCardAction, CopilotToolResult} from "./ai";
 export {purchaseApi} from "./purchase";
 export type {PurchaseReferencePermissions} from "../adapters/purchase.adapter";
 export {backupApi} from "./backup";
@@ -31,4 +31,4 @@ export {financeLedgerApi, toFinanceLedgerQueryParams} from "./finance-ledger";
 export {financeClosingApi} from "./finance-closing";
 export {customerFundsApi, usersApi, logsApi, financeCommissionApi} from "./finance-remaining";
 export type {PermissionOverridePatch, UserMutationInput} from "./finance-remaining";
-export type {CustomerFundsFilters, LogsFilters} from "./finance-remaining";
+export type {CustomerFundsFilters, FinanceCommissionFilters, LogsFilters} from "./finance-remaining";

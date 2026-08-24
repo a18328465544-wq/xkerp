@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
-import {ErpDateTimePicker} from "./ErpDateTimePicker";
+import {ErpDateTimePicker, isDateTimeWithinBounds} from "./ErpDateTimePicker";
 
 test("ErpDateTimePicker keeps the existing local date-time value contract", () => {
   const markup = renderToStaticMarkup(
@@ -15,4 +15,11 @@ test("ErpDateTimePicker keeps the existing local date-time value contract", () =
 test("ErpDateTimePicker supports the shared compact height token", () => {
   const markup = renderToStaticMarkup(<ErpDateTimePicker density="compact" value="" onChange={() => undefined} />);
   assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
+});
+
+test("ErpDateTimePicker respects time-level bounds on the same date", () => {
+  assert.equal(isDateTimeWithinBounds("2026-08-19T10:00", "2026-08-19T10:00", "2026-08-19T18:00"), true);
+  assert.equal(isDateTimeWithinBounds("2026-08-19T09:59", "2026-08-19T10:00", "2026-08-19T18:00"), false);
+  assert.equal(isDateTimeWithinBounds("2026-08-19T23:59", undefined, "2026-08-19"), true);
+  assert.equal(isDateTimeWithinBounds("2026-08-20T00:00", undefined, "2026-08-19"), false);
 });

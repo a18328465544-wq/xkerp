@@ -140,6 +140,34 @@ const inspectionFields = {
 export const inspectionCreateDto = z.object(inspectionFields).strict();
 export const inspectionUpdateDto = z.object(inspectionFields).partial().strict();
 
+const queryText = (max: number) => z.preprocess(
+  (value) => Array.isArray(value) ? "" : value ?? "",
+  z.string().trim().max(max),
+);
+const queryNumber = (fallback: number, max: number) => z.preprocess(
+  (value) => Array.isArray(value) || value === undefined || value === "" ? fallback : Number(value),
+  z.number().int().min(1).max(max),
+);
+
+export const commissionListQueryDto = z.object({
+  mode: z.enum(["purchase", "sales"]),
+  page: queryNumber(1, 10_000),
+  pageSize: queryNumber(20, 200),
+  keyword: queryText(120),
+  status: z.preprocess((value) => Array.isArray(value) ? "" : value ?? "", z.enum(["", "待结算", "已结算", "已冲销"])),
+  handler: queryText(80),
+  dateStart: z.preprocess((value) => Array.isArray(value) ? "" : value ?? "", z.union([z.literal(""), dateText])),
+  dateEnd: z.preprocess((value) => Array.isArray(value) ? "" : value ?? "", z.union([z.literal(""), dateText])),
+  sortKey: z.preprocess((value) => Array.isArray(value) || !value ? "createdAt" : value, z.enum(["id", "sn", "productName", "handler", "documentNo", "baseAmount", "grossProfit", "commissionAmount", "status", "createdAt"])),
+  sortDirection: z.preprocess((value) => value === "asc" ? "asc" : "desc", z.enum(["asc", "desc"])),
+}).strict();
+
+export const commissionSettlementDto = z.object({
+  mode: z.enum(["purchase", "sales"]),
+  ids: z.array(requiredText("提成记录", 120)).min(1, "至少选择一条提成记录").max(500, "单次最多结算 500 条提成记录"),
+  note: optionalText(500),
+}).strict();
+
 export function parseHttpDto<Schema extends z.ZodType>(schema: Schema, input: unknown): z.output<Schema> {
   const result = schema.safeParse(input);
   if (result.success) return result.data;
