@@ -1,4 +1,4 @@
-import {apiRequest, clearAccessToken, setAccessToken} from "../client";
+import {apiRequest, clearBrowserAuthState, setCsrfToken} from "../client";
 import type {AuthLoginResponseDto, AuthMeResponseDto, AuthUserDto, PublicStateResponseDto} from "../dto/inventory.dto";
 import {adaptPublicState, type ErpStateSnapshot} from "../adapters/state.adapter";
 import {defaultPermissions} from "@/src/data/systemDefaults";
@@ -92,10 +92,10 @@ export const authApi = {
   async login(username: string, password: string): Promise<AuthSession> {
     const response = await apiRequest<AuthLoginResponseDto>("/api/auth/login", {method: "POST", body: JSON.stringify({username, password})});
     const data = record(response.data);
-    const token = text(data.token);
     const user = adaptUser(data.user);
-    if (!token) throw new Error("登录响应缺少会话令牌");
-    setAccessToken(token);
+    const csrfToken = text(data.csrfToken);
+    if (!csrfToken) throw new Error("登录响应缺少安全校验令牌");
+    setCsrfToken(csrfToken);
     return {user, permissions: adaptPermissions(user, response.state), initialState: adaptPublicState({data: response.state})};
   },
 
@@ -104,11 +104,14 @@ export const authApi = {
       apiRequest<AuthMeResponseDto>("/api/auth/me", {signal}),
       apiRequest<PublicStateResponseDto>("/api/state?mode=initial", {signal}),
     ]);
-    const user = adaptUser(meResponse.data);
+    const me = record(meResponse.data);
+    const user = adaptUser(me);
+    setCsrfToken(me.csrfToken);
     return {user, permissions: adaptPermissions(user, stateResponse.data), initialState: adaptPublicState(stateResponse)};
   },
 
   logout() {
-    clearAccessToken();
+    void apiRequest("/api/auth/logout", {method: "POST"}).catch(() => undefined);
+    clearBrowserAuthState();
   },
 };

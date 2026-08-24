@@ -4956,10 +4956,10 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       handler: followUp.handler,
       followTime: followUp.followTime || nowStamp(),
       nextFollowTime: followUp.nextFollowTime,
-      nextAction: (followUp as any).nextAction,
-      dealProbability: Number((followUp as any).dealProbability ?? 0),
-      estimatedAmount: Number((followUp as any).estimatedAmount ?? 0),
-      lostReason: (followUp as any).lostReason,
+      nextAction: followUp.nextAction,
+      dealProbability: Number(followUp.dealProbability ?? 0),
+      estimatedAmount: Number(followUp.estimatedAmount ?? 0),
+      lostReason: followUp.lostReason,
       remarks: followUp.remarks,
     };
     state.crmFollowUps = [record, ...state.crmFollowUps];
@@ -4973,11 +4973,11 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         lastFollowTime: record.followTime,
         lastContactAt: record.followTime,
         nextFollowTime: record.nextFollowTime,
-        nextFollowUpAt: (followUp as any).nextFollowUpAt || record.nextFollowTime || item.nextFollowUpAt,
-        nextAction: (followUp as any).nextAction || item.nextAction,
-        dealProbability: Number((followUp as any).dealProbability ?? item.dealProbability ?? 0),
-        estimatedAmount: Number((followUp as any).estimatedAmount ?? item.estimatedAmount ?? item.budget ?? 0),
-        lostReason: record.result === "无效线索" ? ((followUp as any).lostReason || item.lostReason || "跟进无效") : item.lostReason,
+        nextFollowUpAt: followUp.nextFollowUpAt || record.nextFollowTime || item.nextFollowUpAt,
+        nextAction: followUp.nextAction || item.nextAction,
+        dealProbability: Number(followUp.dealProbability ?? item.dealProbability ?? 0),
+        estimatedAmount: Number(followUp.estimatedAmount ?? item.estimatedAmount ?? item.budget ?? 0),
+        lostReason: record.result === "无效线索" ? (followUp.lostReason || item.lostReason || "跟进无效") : item.lostReason,
       };
     });
     addLog(systemActor(), "CRM客户管理", "新增客户跟进", customer.name);
@@ -4998,9 +4998,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       source: requirement.source || customer.firstChannel || customer.source || "CRM",
       handler: requirement.handler,
       createTime: requirement.createTime || nowStamp(),
-      estimatedAmount: Number((requirement as any).estimatedAmount ?? requirement.budget ?? 0),
-      dealProbability: Number((requirement as any).dealProbability ?? 0),
-      nextAction: (requirement as any).nextAction,
+      estimatedAmount: Number(requirement.estimatedAmount ?? requirement.budget ?? 0),
+      dealProbability: Number(requirement.dealProbability ?? 0),
+      nextAction: requirement.nextAction,
       expectedDealTime: requirement.expectedDealTime,
       remarks: requirement.remarks,
     };
@@ -5014,9 +5014,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         owner: record.handler || item.owner,
         intent: record.intent,
         budget: record.budget,
-        estimatedAmount: Number((requirement as any).estimatedAmount ?? record.budget ?? item.estimatedAmount ?? 0),
-        dealProbability: Number((requirement as any).dealProbability ?? item.dealProbability ?? 0),
-        nextAction: (requirement as any).nextAction || item.nextAction || (record.stage === "报价中" ? "发送报价并确认预算" : "继续确认需求"),
+        estimatedAmount: Number(requirement.estimatedAmount ?? record.budget ?? item.estimatedAmount ?? 0),
+        dealProbability: Number(requirement.dealProbability ?? item.dealProbability ?? 0),
+        nextAction: requirement.nextAction || item.nextAction || (record.stage === "报价中" ? "发送报价并确认预算" : "继续确认需求"),
         tags: Array.from(new Set([...(item.tags || []), "CRM需求"])),
       };
     });

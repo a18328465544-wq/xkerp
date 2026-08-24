@@ -47,7 +47,6 @@ import {
 } from "@/src/services/api";
 import { createCapabilities, useAuth } from "@/src/app/auth";
 import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
-import { filterFinanceExpenseCollection } from "@/src/services/api/adapters/finance-expense.adapter";
 import { formatCurrency } from "@/src/lib/format";
 import {
   financeExpenseCategories,
@@ -80,8 +79,8 @@ export function FinanceExpensePage() {
   const canAccess = createCapabilities(session).menu("payment_out");
   const canReadAccounts = createCapabilities(session).menu("settlement_accounts");
   const expenseQuery = useQuery({
-    queryKey: queryKeys.finance.expense("all"),
-    queryFn: ({ signal }) => financeExpenseApi.listAll(signal),
+    queryKey: queryKeys.finance.expense(filters),
+    queryFn: ({ signal }) => financeExpenseApi.list(filters, signal),
     enabled: Boolean(session && canAccess),
     placeholderData: keepPreviousData,
     retry: false,
@@ -108,7 +107,7 @@ export function FinanceExpensePage() {
       onAuthExpired={logout}
       filters={filters}
       onFiltersChange={commit}
-      snapshot={expenseQuery.data || []}
+      collection={expenseQuery.data}
       expenseQuery={expenseQuery}
       accounts={accountsQuery.data?.accounts || []}
       canReadAccounts={canReadAccounts && !accountsQuery.error}
@@ -121,7 +120,7 @@ function FinanceExpenseContent({
   onAuthExpired,
   filters,
   onFiltersChange,
-  snapshot,
+  collection: loadedCollection,
   expenseQuery,
   accounts,
   canReadAccounts,
@@ -130,9 +129,9 @@ function FinanceExpenseContent({
   onAuthExpired: () => void;
   filters: FinanceExpenseFilters;
   onFiltersChange: (filters: FinanceExpenseFilters) => void;
-  snapshot: FinanceExpenseItem[];
+  collection: Awaited<ReturnType<typeof financeExpenseApi.list>> | undefined;
   expenseQuery: ReturnType<
-    typeof useQuery<Awaited<ReturnType<typeof financeExpenseApi.listAll>>>
+    typeof useQuery<Awaited<ReturnType<typeof financeExpenseApi.list>>>
   >;
   accounts: Awaited<ReturnType<typeof financeAccountsApi.listAll>>["accounts"];
   canReadAccounts: boolean;
@@ -142,10 +141,7 @@ function FinanceExpenseContent({
   const [editing, setEditing] = useState<FinanceExpenseItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<FinanceExpenseItem | null>(null);
-  const collection = useMemo(
-    () => filterFinanceExpenseCollection(snapshot, filters),
-    [filters, snapshot],
-  );
+  const collection = loadedCollection || {items: [], total: 0, totalAmount: 0, page: filters.page, pageSize: filters.pageSize, source: "database-page" as const};
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.finance.all() });
   const mutationError = (caught: Error) => {
@@ -207,7 +203,7 @@ function FinanceExpenseContent({
   const update = (partial: Partial<FinanceExpenseFilters>) =>
     onFiltersChange({ ...filters, ...partial, page: partial.page ?? 1 });
   const currentMonth = storeDate().slice(0, 7);
-  const monthItems = snapshot.filter((item) =>
+  const monthItems = collection.items.filter((item) =>
     item.time.startsWith(currentMonth),
   );
   const topCategory = Object.entries(
@@ -330,7 +326,7 @@ function FinanceExpenseContent({
           tone="danger"
         />
         <Metric
-          label="本月支出"
+          label="当前页本月支出"
           value={formatCurrency(
             monthItems.reduce((sum, item) => sum + item.amount, 0),
           )}
@@ -347,7 +343,7 @@ function FinanceExpenseContent({
         />
         <Metric
           label="受限历史记录"
-          value={`${snapshot.filter((item) => !item.editable).length} 笔`}
+          value={`${collection.items.filter((item) => !item.editable).length} 笔`}
           detail="必须从原业务流程调整"
           icon={<ShieldCheck className="h-4 w-4" />}
           tone="warning"

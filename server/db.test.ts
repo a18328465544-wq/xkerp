@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PoolClient } from "pg";
-import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildInventoryPageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
+import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildFinanceRecordPageQuery, buildInventoryPageQuery, buildInvoicePageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
 
 test("production bootstrap password is required only when initializing an empty database", () => {
   assert.doesNotThrow(() => assertProductionBootstrapPasswordConfigured({ NODE_ENV: "development" }));
@@ -118,6 +118,28 @@ test("audit log page query caps page size and keeps keyword filtering in Postgre
   assert.deepEqual(query.values, ["%采购 JH-001%"]);
   assert.match(query.where, /CONCAT_WS/);
   assert.match(query.where, /ILIKE \$1/);
+});
+
+test("finance record pages keep filtering and pagination inside PostgreSQL", () => {
+  const query = buildFinanceRecordPageQuery("income", {page: 2, pageSize: 999, keyword: "返点", accountId: "ACC-1", dateStart: "2026-08-01", dateEnd: "2026-08-31"});
+  assert.equal(query.table, "gpu_payment_in_records");
+  assert.equal(query.pageSize, 200);
+  assert.equal(query.offset, 200);
+  assert.match(query.where, /accountId/);
+  assert.match(query.where, /ILIKE/);
+  assert.match(query.where, /销售收款/);
+  assert.ok(query.values.every((value) => typeof value === "string"));
+});
+
+test("invoice page sorting uses an allowlist and keeps business filters parameterized", () => {
+  const purchase = buildInvoicePageQuery("purchase", {sourceType: "同行拿货", paymentStatus: "未付款", sortKey: "totalCost", sortDirection: "asc"});
+  assert.equal(purchase.table, "gpu_purchase_invoices");
+  assert.match(purchase.where, /sourceType/);
+  assert.match(purchase.orderBy, /totalCost/);
+  assert.deepEqual(purchase.values, ["同行拿货", "未付款"]);
+  const rejected = buildInvoicePageQuery("sales", {sortKey: "id; DROP TABLE gpu_sales_invoices"});
+  assert.match(rejected.orderBy, /data->>'date' DESC/);
+  assert.doesNotMatch(rejected.orderBy, /DROP TABLE/);
 });
 
 test("bulk upsert dedupes duplicate ids (last write wins) into a single multi-row insert", async () => {

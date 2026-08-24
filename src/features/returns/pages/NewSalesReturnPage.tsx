@@ -72,6 +72,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
     }
   };
   const dirty = Boolean(values.relatedDocNo || values.reason || values.remarks);
+  const canSubmit = Boolean(selectedInvoice && selectedItem && selectedCard && values.reason.trim());
   useErpDirtyGuard(dirty);
   const blocker = useBlocker({withResolver: true, shouldBlockFn: () => dirty, enableBeforeUnload: false, disabled: !dirty});
 
@@ -98,7 +99,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
         <label className="text-sm font-semibold md:col-span-2">退货原因<Textarea className="mt-2" value={values.reason} onChange={(event) => setValues((current) => ({...current, reason: event.target.value}))} placeholder="例如：到货后发现风扇异响、客户拒收、包装破损" required /></label>
         <label className="text-sm font-semibold md:col-span-2">备注<Textarea className="mt-2" value={values.remarks} onChange={(event) => setValues((current) => ({...current, remarks: event.target.value}))} placeholder="补充检测、物流或客户沟通记录" /></label>
       </div></ErpFormSection>
-      <ErpSubmitBar dirty={dirty} submitting={mutation.isPending} onCancel={() => void navigate({to: "/sales/returns"})} submitLabel="提交销售退货"><span>退款方式：原路退款</span></ErpSubmitBar>
+      <ErpSubmitBar dirty={dirty} canSubmit={canSubmit} blockedReason="请选择已出库销售单、原商品并填写退货原因" submitting={mutation.isPending} onCancel={() => void navigate({to: "/sales/returns"})} submitLabel="提交销售退货"><span>退款方式：原路退款</span></ErpSubmitBar>
     </form>
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
     </ErpPageContent>

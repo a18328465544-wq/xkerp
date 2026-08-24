@@ -1,13 +1,14 @@
 import {apiRequest} from "../client";
 import {adaptPurchaseCreateResponse, adaptPurchaseDetailState, adaptPurchaseListState, adaptPurchaseReferenceData, toPurchaseRequestDto} from "../adapters/purchase.adapter";
 import type {PurchaseCreateResponseDto, PurchaseDetailStateResponseDto, PurchaseListStateResponseDto, PurchaseReferenceStateResponseDto} from "../dto/purchase.dto";
-import type {PurchaseDetail, PurchaseFormValues, PurchaseListDataset, PurchaseReferenceData, PurchaseSettlementAccountOption, PurchaseCreateResult} from "@/src/types/purchase";
+import type {PurchaseDetail, PurchaseFormValues, PurchaseListDataset, PurchaseListFilters, PurchaseReferenceData, PurchaseSettlementAccountOption, PurchaseCreateResult} from "@/src/types/purchase";
 import type {PurchaseDetailPermissions, PurchaseListPermissions, PurchaseReferencePermissions} from "../adapters/purchase.adapter";
 import {ApiError} from "../errors";
 
 export const purchaseApi = {
-  async list(permissions: PurchaseListPermissions, signal?: AbortSignal): Promise<PurchaseListDataset> {
-    const response = await apiRequest<PurchaseListStateResponseDto>("/api/purchase-invoices", {signal});
+  async list(filters: PurchaseListFilters, permissions: PurchaseListPermissions, signal?: AbortSignal): Promise<PurchaseListDataset> {
+    const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => {if (value !== "") params.set(key, String(value));});
+    const response = await apiRequest<PurchaseListStateResponseDto>(`/api/purchase-invoices?${params.toString()}`, {signal});
     return adaptPurchaseListState(response, permissions);
   },
 

@@ -4,12 +4,15 @@ import type {FinanceIncomeListResponseDto, FinanceIncomeMutationResponseDto} fro
 import type {FinanceIncomeFilters, FinanceIncomeFormValues} from "@/src/types/finance-income";
 
 export const financeIncomeApi = {
-  async listAll(signal?: AbortSignal) {
-    const response = await apiRequest<FinanceIncomeListResponseDto>("/api/gpu_erp/finance/payment-ins", {signal});
-    return adaptFinanceIncomeSnapshot(response);
-  },
   async list(filters: FinanceIncomeFilters, signal?: AbortSignal) {
-    const response = await apiRequest<FinanceIncomeListResponseDto>("/api/gpu_erp/finance/payment-ins", {signal});
+    const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize)});
+    if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+    if (filters.businessType !== "all") params.set("businessType", filters.businessType);
+    if (filters.accountId !== "all") params.set("accountId", filters.accountId);
+    if (filters.handler) params.set("handler", filters.handler);
+    if (filters.startDate) params.set("startDate", filters.startDate);
+    if (filters.endDate) params.set("endDate", filters.endDate);
+    const response = await apiRequest<FinanceIncomeListResponseDto>(`/api/gpu_erp/finance/payment-ins?${params.toString()}`, {signal});
     return adaptFinanceIncomeCollection(response, filters);
   },
   async create(values: FinanceIncomeFormValues, handler: string, signal?: AbortSignal) {

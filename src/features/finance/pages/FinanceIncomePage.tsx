@@ -47,7 +47,6 @@ import {
 } from "@/src/services/api";
 import { createCapabilities, useAuth } from "@/src/app/auth";
 import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
-import { filterFinanceIncomeCollection } from "@/src/services/api/adapters/finance-income.adapter";
 import { formatCurrency } from "@/src/lib/format";
 import {
   financeIncomeCategories,
@@ -80,8 +79,8 @@ export function FinanceIncomePage() {
   const canAccess = createCapabilities(session).menu("payment_in");
   const canReadAccounts = createCapabilities(session).menu("settlement_accounts");
   const incomeQuery = useQuery({
-    queryKey: queryKeys.finance.income("all"),
-    queryFn: ({ signal }) => financeIncomeApi.listAll(signal),
+    queryKey: queryKeys.finance.income(filters),
+    queryFn: ({ signal }) => financeIncomeApi.list(filters, signal),
     enabled: Boolean(session && canAccess),
     placeholderData: keepPreviousData,
     retry: false,
@@ -108,7 +107,7 @@ export function FinanceIncomePage() {
       onAuthExpired={logout}
       filters={filters}
       onFiltersChange={commit}
-      snapshot={incomeQuery.data || []}
+      collection={incomeQuery.data}
       incomeQuery={incomeQuery}
       accounts={accountsQuery.data?.accounts || []}
       canReadAccounts={canReadAccounts && !accountsQuery.error}
@@ -121,7 +120,7 @@ function FinanceIncomeContent({
   onAuthExpired,
   filters,
   onFiltersChange,
-  snapshot,
+  collection: loadedCollection,
   incomeQuery,
   accounts,
   canReadAccounts,
@@ -130,9 +129,9 @@ function FinanceIncomeContent({
   onAuthExpired: () => void;
   filters: FinanceIncomeFilters;
   onFiltersChange: (filters: FinanceIncomeFilters) => void;
-  snapshot: FinanceIncomeItem[];
+  collection: Awaited<ReturnType<typeof financeIncomeApi.list>> | undefined;
   incomeQuery: ReturnType<
-    typeof useQuery<Awaited<ReturnType<typeof financeIncomeApi.listAll>>>
+    typeof useQuery<Awaited<ReturnType<typeof financeIncomeApi.list>>>
   >;
   accounts: Awaited<ReturnType<typeof financeAccountsApi.listAll>>["accounts"];
   canReadAccounts: boolean;
@@ -142,10 +141,7 @@ function FinanceIncomeContent({
   const [editing, setEditing] = useState<FinanceIncomeItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<FinanceIncomeItem | null>(null);
-  const collection = useMemo(
-    () => filterFinanceIncomeCollection(snapshot, filters),
-    [filters, snapshot],
-  );
+  const collection = loadedCollection || {items: [], total: 0, totalAmount: 0, page: filters.page, pageSize: filters.pageSize, source: "database-page" as const};
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.finance.all() });
   const mutationError = (caught: Error) => {
@@ -207,7 +203,7 @@ function FinanceIncomeContent({
   const update = (partial: Partial<FinanceIncomeFilters>) =>
     onFiltersChange({ ...filters, ...partial, page: partial.page ?? 1 });
   const currentMonth = storeDate().slice(0, 7);
-  const monthItems = snapshot.filter((item) =>
+  const monthItems = collection.items.filter((item) =>
     item.time.startsWith(currentMonth),
   );
   const topCategory = Object.entries(
@@ -330,7 +326,7 @@ function FinanceIncomeContent({
           tone="success"
         />
         <Metric
-          label="本月收入"
+          label="当前页本月收入"
           value={formatCurrency(
             monthItems.reduce((sum, item) => sum + item.amount, 0),
           )}
@@ -347,7 +343,7 @@ function FinanceIncomeContent({
         />
         <Metric
           label="受限历史记录"
-          value={`${snapshot.filter((item) => !item.editable).length} 笔`}
+          value={`${collection.items.filter((item) => !item.editable).length} 笔`}
           detail="必须从原业务流程调整"
           icon={<ShieldCheck className="h-4 w-4" />}
           tone="warning"

@@ -1,8 +1,10 @@
 import type express from "express";
 import { timingSafeEqual } from "node:crypto";
+import {clearSessionCookie, csrfTokenMatches, CSRF_HEADER_NAME, getSessionCookie} from "./authCookies.ts";
 
 export type AuthenticatedRequest<TUser> = express.Request & {
   authToken?: string;
+  authMode?: "bearer" | "cookie";
   authUser?: TUser;
   requestId?: string;
 };
@@ -77,22 +79,50 @@ export function createRequireAuth<TUser extends { id: string }>(
   return (req, res, next) => {
     void (async () => {
       const authRequest = req as AuthenticatedRequest<TUser>;
-      const token = getBearerToken(req);
+      const bearerToken = getBearerToken(req);
+      const cookieToken = bearerToken ? null : getSessionCookie(req);
+      const token = bearerToken || cookieToken;
       const session = await sessions.resolve(token);
       if (!session) {
+        if (cookieToken) clearSessionCookie(res);
         deny(req, res, { status: 401, code: "UNAUTHORIZED" }, "请先登录系统", options);
         return;
       }
       const user = resolveUser(session.userId);
       if (!user) {
         await sessions.revoke(token);
+        if (cookieToken) clearSessionCookie(res);
         deny(req, res, { status: 401, code: "UNAUTHORIZED" }, "账号已停用或不存在", options);
         return;
       }
       authRequest.authToken = token || undefined;
+      authRequest.authMode = bearerToken ? "bearer" : "cookie";
       authRequest.authUser = user;
       next();
     })().catch(next);
+  };
+}
+
+export function createRequireCsrf(options?: AuthMiddlewareOptions): express.RequestHandler {
+  return (req, res, next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+      next();
+      return;
+    }
+    const authRequest = req as AuthenticatedRequest<unknown>;
+    // Non-browser API clients continue to use Bearer authentication. CSRF applies only when
+    // ambient browser cookies authorize the mutation.
+    if (authRequest.authMode !== "cookie") {
+      next();
+      return;
+    }
+    const header = req.headers[CSRF_HEADER_NAME];
+    const candidate = Array.isArray(header) ? header[0] : header;
+    if (!authRequest.authToken || !csrfTokenMatches(authRequest.authToken, candidate)) {
+      deny(req, res, {status: 403, code: "CSRF_INVALID"}, "安全校验已失效，请刷新页面后重试", options);
+      return;
+    }
+    next();
   };
 }
 

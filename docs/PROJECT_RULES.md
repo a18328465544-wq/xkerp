@@ -17,7 +17,7 @@
 | 前端 | React 19 + TypeScript + Vite + Tailwind CSS + lucide-react |
 | 后端 | Node.js + Express + TypeScript，使用 esbuild 构建 |
 | 持久化 | PostgreSQL 为主库；集合数据以 JSONB 文档保存，并按查询热点建立索引 |
-| 登录 | 网页 Bearer 会话；会话只保存 token 哈希，权限由角色和账号覆盖共同决定 |
+| 登录 | 网页使用 HttpOnly + SameSite Cookie 会话，生产环境必须启用 Secure；服务端只保存 token 哈希，Cookie 写操作同时校验 CSRF，权限由角色和账号覆盖共同决定 |
 | 外部接口 | 只能走 /api/open/...，使用 OPEN_API_TOKEN，不得直连数据库 |
 | 生产 | Nginx 提供 HTTPS 和静态文件，/api 反代至本机 127.0.0.1:3001，PM2 进程名 gpu-erp-api |
 | 时间 | 门店时区固定为 Asia/Shanghai |

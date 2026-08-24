@@ -207,16 +207,16 @@ function redactPurchaseInvoice(invoice: PurchaseInvoice, permissions: PurchaseDe
 }
 
 export function adaptPurchaseListState(
-  response: {data?: unknown},
+  response: {data?: unknown; meta?: unknown},
   permissions: PurchaseListPermissions,
 ): PurchaseListDataset {
   const state = record(response.data);
   const inventory = collection(state, "inventory");
   const items: PurchaseListItem[] = collection(state, "purchaseInvoices")
-    .map((value) => adaptPurchaseInvoice(value))
-    .filter((invoice) => Boolean(invoice.id || invoice.invoiceNo))
-    .map((invoice) => {
-      const inventoryCount = inventory.filter((item) => isInventoryLinkedToPurchase({
+    .map((value) => ({invoice: adaptPurchaseInvoice(value), annotatedCount: optionalNumber(value.__inventoryCount)}))
+    .filter(({invoice}) => Boolean(invoice.id || invoice.invoiceNo))
+    .map(({invoice, annotatedCount}) => {
+      const inventoryCount = annotatedCount ?? inventory.filter((item) => isInventoryLinkedToPurchase({
         purchaseInvoiceNo: optionalText(item.purchaseInvoiceNo),
         salesInvoiceId: undefined,
         remarks: optionalText(item.remarks),
@@ -244,6 +244,11 @@ export function adaptPurchaseListState(
           .toLocaleLowerCase("zh-CN"),
       };
     });
+  const meta = record(response.meta); const summary = record(meta.summary); const total = optionalNumber(meta.total);
+  if (total !== undefined) {
+    const page = Math.max(1, numberValue(meta.page, 1)); const pageSize = Math.max(1, numberValue(meta.pageSize, 20));
+    return {items, source: "database-page", selection: {data: items, filteredItems: items, meta: {total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize))}, summary: {orderCount: numberValue(summary.orderCount, total), unitCount: numberValue(summary.unitCount), pendingPaymentCount: numberValue(summary.pendingPaymentCount), totalCost: permissions.showCost ? optionalNumber(summary.totalCost) : undefined, estimatedProfit: permissions.showCost && permissions.showProfit ? optionalNumber(summary.estimatedProfit) : undefined}}};
+  }
   return {items, source: "state-snapshot"};
 }
 

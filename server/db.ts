@@ -47,6 +47,36 @@ export type InventoryPageFilters = {
 };
 export type CollectionPage<T> = { data: T[]; meta: { page: number; pageSize: number; total: number } };
 export type LogPageFilters = { page?: number; pageSize?: number; keyword?: string };
+export type FinanceRecordPageFilters = {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  accountId?: string;
+  handler?: string;
+  businessType?: string;
+  direction?: string;
+  relatedDocNo?: string;
+  customerName?: string;
+  supplierName?: string;
+  dateStart?: string;
+  dateEnd?: string;
+};
+export type FinanceRecordPage<T> = CollectionPage<T> & { meta: CollectionPage<T>["meta"] & { totalAmount?: number } };
+export type InvoicePageKind = "purchase" | "sales";
+export type InvoicePageFilters = {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  sourceType?: string;
+  channel?: string;
+  paymentStatus?: string;
+  outboundStatus?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  sortKey?: string;
+  sortDirection?: "asc" | "desc";
+};
+export type InvoicePage<T> = CollectionPage<T> & {meta: CollectionPage<T>["meta"] & {summary: Record<string, number>}};
 export type AiInsightsCacheRecord = {
   scope: string;
   sourceHash: string;
@@ -521,13 +551,22 @@ async function initializePostgres() {
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_brand_entry_time_idx ON gpu_inventory ((data->>'brand'), (data->>'entryTime') DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_warehouse_entry_time_idx ON gpu_inventory ((data->>'warehouseLocation'), (data->>'entryTime') DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_purchase_invoice_no_idx ON gpu_purchase_invoices ((data->>'invoiceNo'))`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_purchase_date_id_idx ON gpu_purchase_invoices ((data->>'date') DESC, id DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_purchase_source_payment_idx ON gpu_purchase_invoices ((data->>'sourceType'), (data->>'paymentStatus'))`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_sales_invoice_no_idx ON gpu_sales_invoices ((data->>'invoiceNo'))`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_sales_status_idx ON gpu_sales_invoices ((data->>'status'))`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_sales_date_id_idx ON gpu_sales_invoices ((data->>'date') DESC, id DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_sales_channel_payment_outbound_idx ON gpu_sales_invoices ((data->>'channel'), (data->>'paymentStatus'), (data->>'outboundStatus'))`);
     // Pair the deterministic id tie-breaker with time so a log page can stop after LIMIT rows
     // instead of sorting the entire audit history.
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_logs_time_id_idx ON gpu_logs ((data->>'time') DESC, id DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_finance_ledger_time_idx ON gpu_finance_ledger ((data->>'time') DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_settlement_ledger_account_time_idx ON gpu_settlement_ledger ((data->>'accountId'), (data->>'time') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_settlement_ledger_time_id_idx ON gpu_settlement_ledger ((data->>'time') DESC, id DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_payment_in_records_time_id_idx ON gpu_payment_in_records ((data->>'time') DESC, id DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_payment_in_records_account_time_idx ON gpu_payment_in_records ((data->>'accountId'), (data->>'time') DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_payment_out_records_time_id_idx ON gpu_payment_out_records ((data->>'time') DESC, id DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS gpu_payment_out_records_account_time_idx ON gpu_payment_out_records ((data->>'accountId'), (data->>'time') DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_sessions_expires_at_idx ON gpu_sessions (expires_at)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_ai_insights_expires_at_idx ON gpu_ai_insights (expires_at)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_ai_insight_actions_status_updated_at_idx ON gpu_ai_insight_actions (status, updated_at DESC)`);
@@ -904,6 +943,153 @@ export async function queryLogsPage<T = unknown>(filters: LogPageFilters = {}): 
     meta: { page, pageSize, total: Number(count.rows[0]?.total || 0) },
   };
 }
+
+type FinanceRecordKind = "settlement" | "income" | "expense";
+
+const financeRecordTables: Record<FinanceRecordKind, string> = {
+  settlement: "gpu_settlement_ledger",
+  income: "gpu_payment_in_records",
+  expense: "gpu_payment_out_records",
+};
+
+export function buildFinanceRecordPageQuery(kind: FinanceRecordKind, filters: FinanceRecordPageFilters = {}) {
+  const page = normalizedPage(filters.page, 1);
+  const pageSize = Math.min(200, normalizedPage(filters.pageSize, 20));
+  const values: unknown[] = [];
+  const clauses: string[] = [];
+  const bind = (value: unknown) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  const exactFilters: Array<[keyof FinanceRecordPageFilters, string]> = [
+    ["accountId", "accountId"], ["handler", "handler"], ["businessType", "businessType"],
+    ["direction", "direction"], ["relatedDocNo", "relatedDocNo"], ["customerName", "customerName"], ["supplierName", "supplierName"],
+  ];
+  for (const [filterKey, jsonKey] of exactFilters) {
+    const value = filters[filterKey];
+    if (typeof value === "string" && value.trim() && value !== "all") clauses.push(`data->>'${jsonKey}' = ${bind(value.trim())}`);
+  }
+  if (filters.dateStart) clauses.push(`LEFT(COALESCE(data->>'time', ''), 10) >= ${bind(filters.dateStart)}`);
+  if (filters.dateEnd) clauses.push(`LEFT(COALESCE(data->>'time', ''), 10) <= ${bind(filters.dateEnd)}`);
+  const keyword = filters.keyword?.trim();
+  if (keyword) {
+    clauses.push(`CONCAT_WS(' ', id, data->>'remarks', data->>'customerName', data->>'supplierName', data->>'relatedDocNo', data->>'referenceNo', data->>'accountName', data->>'businessType', data->>'handler') ILIKE ${bind(`%${keyword}%`)}`);
+  }
+  if (kind === "income") {
+    clauses.push(`COALESCE(data->>'relatedDocType', '') <> '销售单'`);
+    clauses.push(`COALESCE(data->>'relatedDocNo', '') NOT LIKE 'XS%'`);
+    clauses.push(`COALESCE(data->>'businessType', '') <> '销售收款'`);
+  }
+  if (kind === "expense") {
+    clauses.push(`COALESCE(data->>'relatedDocType', '') <> '采购单'`);
+    clauses.push(`COALESCE(data->>'relatedDocNo', '') NOT LIKE 'JH%'`);
+    clauses.push(`COALESCE(data->>'businessType', '') NOT IN ('采购付款', '回收付款')`);
+  }
+  return {
+    table: financeRecordTables[kind],
+    page,
+    pageSize,
+    offset: (page - 1) * pageSize,
+    values,
+    where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+  };
+}
+
+async function queryFinanceRecordPage<T>(kind: FinanceRecordKind, filters: FinanceRecordPageFilters): Promise<FinanceRecordPage<T>> {
+  await initializePostgres();
+  const {table, page, pageSize, offset, values, where} = buildFinanceRecordPageQuery(kind, filters);
+  const [rows, aggregate] = await Promise.all([
+    getPool().query<{data: T}>(
+      `SELECT data FROM ${table} ${where} ORDER BY data->>'time' DESC NULLS LAST, id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, pageSize, offset],
+    ),
+    getPool().query<{total: string; total_amount: string}>(
+      `SELECT COUNT(*)::text AS total, COALESCE(SUM(COALESCE(NULLIF(data->>'amount', '')::numeric, 0)), 0)::text AS total_amount FROM ${table} ${where}`,
+      values,
+    ),
+  ]);
+  const summary = aggregate.rows[0];
+  return {
+    data: rows.rows.map((row) => row.data),
+    meta: {page, pageSize, total: Number(summary?.total || 0), ...(kind === "settlement" ? {} : {totalAmount: Number(summary?.total_amount || 0)})},
+  };
+}
+
+export function querySettlementLedgerPage<T = unknown>(filters: FinanceRecordPageFilters = {}) {
+  return queryFinanceRecordPage<T>("settlement", filters);
+}
+
+export function queryPaymentInPage<T = unknown>(filters: FinanceRecordPageFilters = {}) {
+  return queryFinanceRecordPage<T>("income", filters);
+}
+
+export function queryPaymentOutPage<T = unknown>(filters: FinanceRecordPageFilters = {}) {
+  return queryFinanceRecordPage<T>("expense", filters);
+}
+
+const purchasePaymentStatusExpression = `COALESCE(NULLIF(data->>'paymentStatus', ''), CASE WHEN COALESCE((data->>'isPaid')::boolean, false) THEN '已付款' WHEN COALESCE(NULLIF(data->>'paidAmount', '')::numeric, 0) > 0 THEN '部分付款' ELSE '未付款' END)`;
+const salesPaymentStatusExpression = `COALESCE(NULLIF(data->>'paymentStatus', ''), CASE WHEN COALESCE(NULLIF(data->>'unpaidAmount', '')::numeric, 0) <= 0 AND COALESCE(NULLIF(data->>'paidAmount', '')::numeric, 0) > 0 THEN '已收款' WHEN COALESCE(NULLIF(data->>'paidAmount', '')::numeric, 0) > 0 THEN '部分收款' ELSE '未收款' END)`;
+
+export function buildInvoicePageQuery(kind: InvoicePageKind, filters: InvoicePageFilters = {}) {
+  const page = normalizedPage(filters.page, 1);
+  const pageSize = Math.min(200, normalizedPage(filters.pageSize, 20));
+  const values: unknown[] = [];
+  const clauses: string[] = [];
+  const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
+  if (filters.dateStart) clauses.push(`COALESCE(data->>'date', '') >= ${bind(filters.dateStart)}`);
+  if (filters.dateEnd) clauses.push(`COALESCE(data->>'date', '') <= ${bind(filters.dateEnd)}`);
+  if (kind === "purchase" && filters.sourceType) clauses.push(`data->>'sourceType' = ${bind(filters.sourceType)}`);
+  if (kind === "sales" && filters.channel) clauses.push(`data->>'channel' = ${bind(filters.channel)}`);
+  if (filters.paymentStatus) clauses.push(`${kind === "purchase" ? purchasePaymentStatusExpression : salesPaymentStatusExpression} = ${bind(filters.paymentStatus)}`);
+  if (kind === "sales" && filters.outboundStatus) clauses.push(`COALESCE(NULLIF(data->>'outboundStatus', ''), '待出库') = ${bind(filters.outboundStatus)}`);
+  const keyword = filters.keyword?.trim();
+  if (keyword) {
+    const party = kind === "purchase" ? "supplierName" : "customerName";
+    clauses.push(`CONCAT_WS(' ', id, data->>'invoiceNo', data->>'${party}', data->>'sourceType', data->>'channel', data->>'handleBy', data->'items') ILIKE ${bind(`%${keyword}%`)}`);
+  }
+  const commonSort: Record<string, string> = {
+    date: "data->>'date'", invoiceNo: "data->>'invoiceNo'", totalCount: "COALESCE(NULLIF(data->>'totalCount', '')::numeric, 0)",
+    paymentStatus: kind === "purchase" ? purchasePaymentStatusExpression : salesPaymentStatusExpression, handleBy: "data->>'handleBy'",
+  };
+  const sortExpressions: Record<string, string> = kind === "purchase" ? {
+    ...commonSort, supplierName: "data->>'supplierName'", totalCost: "COALESCE(NULLIF(data->>'totalCost', '')::numeric, 0)",
+  } : {
+    ...commonSort, customerName: "data->>'customerName'", totalAmount: "COALESCE(NULLIF(data->>'totalAmount', '')::numeric, 0)",
+    totalProfit: "COALESCE(NULLIF(data->>'totalProfit', '')::numeric, 0)", outboundStatus: "COALESCE(NULLIF(data->>'outboundStatus', ''), '待出库')",
+  };
+  const sortExpression = sortExpressions[filters.sortKey || "date"] || sortExpressions.date;
+  const sortDirection = filters.sortDirection === "asc" ? "ASC" : "DESC";
+  return {table: kind === "purchase" ? "gpu_purchase_invoices" : "gpu_sales_invoices", page, pageSize, offset: (page - 1) * pageSize, values, where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", orderBy: `ORDER BY ${sortExpression} ${sortDirection} NULLS LAST, id DESC`};
+}
+
+async function queryInvoicePage<T>(kind: InvoicePageKind, filters: InvoicePageFilters): Promise<InvoicePage<T>> {
+  await initializePostgres();
+  const {table, page, pageSize, offset, values, where, orderBy} = buildInvoicePageQuery(kind, filters);
+  const invoiceNo = `COALESCE(NULLIF(document.data->>'invoiceNo', ''), document.id)`;
+  const legacyLabel = kind === "purchase" ? "进货单" : "销售单";
+  const structuredField = kind === "purchase" ? "purchaseInvoiceNo" : "salesInvoiceId";
+  const countKey = kind === "purchase" ? "__inventoryCount" : "__linkedInventoryCount";
+  const inventoryCount = `(SELECT COUNT(*) FROM gpu_inventory inventory WHERE inventory.data->>'${structuredField}' IN (document.id, ${invoiceNo}) OR SUBSTRING(COALESCE(inventory.data->>'remarks', '') FROM '${legacyLabel}\\s*[:：]\\s*([^；;\\s]+)') IN (document.id, ${invoiceNo}))`;
+  const pendingPayment = kind === "purchase" ? `${purchasePaymentStatusExpression.replaceAll("data", "document.data")} IN ('未付款', '部分付款')` : `${salesPaymentStatusExpression.replaceAll("data", "document.data")} IN ('未收款', '部分收款')`;
+  const summarySql = kind === "purchase"
+    ? `COUNT(*)::text AS total, COALESCE(SUM(COALESCE(NULLIF(data->>'totalCount', '')::numeric, 0)), 0)::text AS unit_count, COUNT(*) FILTER (WHERE ${pendingPayment.replaceAll("document.data", "data")})::text AS pending_payment_count, COALESCE(SUM(COALESCE(NULLIF(data->>'totalCost', '')::numeric, 0)), 0)::text AS total_cost, COALESCE(SUM(COALESCE(NULLIF(data->>'estTotalProfit', '')::numeric, 0)), 0)::text AS estimated_profit`
+    : `COUNT(*)::text AS total, COALESCE(SUM(COALESCE(NULLIF(data->>'totalCount', '')::numeric, 0)), 0)::text AS unit_count, COUNT(*) FILTER (WHERE ${pendingPayment.replaceAll("document.data", "data")})::text AS pending_payment_count, COUNT(*) FILTER (WHERE COALESCE(NULLIF(data->>'outboundStatus', ''), '待出库') = '待出库')::text AS pending_outbound_count, COALESCE(SUM(COALESCE(NULLIF(data->>'totalAmount', '')::numeric, 0)), 0)::text AS total_amount, COALESCE(SUM(COALESCE(NULLIF(data->>'totalProfit', '')::numeric, 0)), 0)::text AS total_profit`;
+  const [rows, aggregate] = await Promise.all([
+    getPool().query<{data: T}>(`SELECT document.data || jsonb_build_object('${countKey}', ${inventoryCount}) AS data FROM ${table} document ${where.replaceAll("data", "document.data")} ${orderBy.replaceAll("data", "document.data")} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, pageSize, offset]),
+    getPool().query<Record<string, string>>(`SELECT ${summarySql} FROM ${table} ${where}`, values),
+  ]);
+  const totals = aggregate.rows[0] || {};
+  const total = Number(totals.total || 0);
+  const summary: Record<string, number> = kind === "purchase" ? {
+    orderCount: total, unitCount: Number(totals.unit_count || 0), pendingPaymentCount: Number(totals.pending_payment_count || 0), totalCost: Number(totals.total_cost || 0), estimatedProfit: Number(totals.estimated_profit || 0),
+  } : {
+    orderCount: total, unitCount: Number(totals.unit_count || 0), pendingPaymentCount: Number(totals.pending_payment_count || 0), pendingOutboundCount: Number(totals.pending_outbound_count || 0), totalAmount: Number(totals.total_amount || 0), totalProfit: Number(totals.total_profit || 0),
+  };
+  return {data: rows.rows.map((row) => row.data), meta: {page, pageSize, total, summary}};
+}
+
+export function queryPurchaseInvoicePage<T = unknown>(filters: InvoicePageFilters = {}) { return queryInvoicePage<T>("purchase", filters); }
+export function querySalesInvoicePage<T = unknown>(filters: InvoicePageFilters = {}) { return queryInvoicePage<T>("sales", filters); }
 
 export async function findInventoryRecord<T = unknown>(id: string): Promise<T | null> {
   await initializePostgres();

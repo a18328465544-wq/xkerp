@@ -42,7 +42,12 @@ export function filterFinanceIncomeCollection(snapshot: FinanceIncomeItem[], fil
   return {items: items.slice(start, start + filters.pageSize), total: items.length, totalAmount: items.reduce((sum, item) => sum + item.amount, 0), page: filters.page, pageSize: filters.pageSize, source: "authorized-full-state"};
 }
 
-export function adaptFinanceIncomeCollection(response: FinanceIncomeListResponseDto, filters: FinanceIncomeFilters) {return filterFinanceIncomeCollection(adaptFinanceIncomeSnapshot(response), filters);}
+export function adaptFinanceIncomeCollection(response: FinanceIncomeListResponseDto, filters: FinanceIncomeFilters): FinanceIncomeCollection {
+  if (!Array.isArray(response.data)) return filterFinanceIncomeCollection(adaptFinanceIncomeSnapshot(response), filters);
+  const meta = record(response.meta);
+  const items = response.data.map(adaptFinanceIncome).filter((item) => Boolean(item.id));
+  return {items, total: Math.max(items.length, amount(meta.total)), totalAmount: amount(meta.totalAmount), page: Math.max(1, amount(meta.page) || filters.page), pageSize: Math.max(1, amount(meta.pageSize) || filters.pageSize), source: "database-page"};
+}
 
 export function toFinanceIncomeRequest(values: FinanceIncomeFormValues, handler: string): FinanceIncomeRequestDto {
   const dateTime = `${values.date} 12:00:00`;

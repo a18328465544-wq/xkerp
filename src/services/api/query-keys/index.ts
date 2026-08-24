@@ -14,7 +14,7 @@ export const queryKeys = {
   },
   sales: {
     all: () => ["sales"] as const,
-    list: (access: {userId: string; showCost: boolean; showProfit: boolean}) => ["sales", "list", access] as const,
+    list: (access: {userId: string; showCost: boolean; showProfit: boolean}, filters?: unknown) => ["sales", "list", access, filters] as const,
     outbound: (userId: string) => ["sales", "outbound", userId] as const,
     customers: (keyword: string) => ["sales", "customers", keyword] as const,
     inventoryCandidates: (keyword: string) => ["sales", "inventory-candidates", keyword] as const,
@@ -29,7 +29,7 @@ export const queryKeys = {
   },
   purchase: {
     all: () => ["purchase"] as const,
-    list: (access: {userId: string; showCost: boolean; showProfit: boolean}) => ["purchase", "list", access] as const,
+    list: (access: {userId: string; showCost: boolean; showProfit: boolean}, filters?: unknown) => ["purchase", "list", access, filters] as const,
     referenceData: () => ["purchase", "reference-data"] as const,
     detail: (id: string) => ["purchase", "detail", id] as const,
   },
@@ -86,6 +86,7 @@ export const queryKeys = {
     ledger: (filters: unknown) => ["finance", "ledger", filters] as const,
     income: (filters: unknown) => ["finance", "income", filters] as const,
     expense: (filters: unknown) => ["finance", "expense", filters] as const,
+    profitSales: (access: {userId: string; showCost: boolean; showProfit: boolean}) => ["finance", "profit", "sales", access] as const,
     transfers: (filters: unknown) => ["finance", "transfers", filters] as const,
     customerFunds: (filters: unknown) => ["finance", "customer-funds", filters] as const,
     commissions: (mode: "purchase" | "sales") => ["finance", "commissions", mode] as const,

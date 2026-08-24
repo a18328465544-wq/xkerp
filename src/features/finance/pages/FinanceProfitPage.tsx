@@ -41,8 +41,8 @@ export function FinanceProfitPage() {
   const allowed = createCapabilities(session).menu("finance_reports");
   const permissions = session?.permissions || {showCost: false, showProfit: false};
   const salesQuery = useQuery({
-    queryKey: queryKeys.sales.list({userId: session?.user.id || "anonymous", showCost: permissions.showCost, showProfit: permissions.showProfit}),
-    queryFn: ({signal}) => salesApi.list({showCost: permissions.showCost, showProfit: permissions.showProfit}, signal),
+    queryKey: queryKeys.finance.profitSales({userId: session?.user.id || "anonymous", showCost: permissions.showCost, showProfit: permissions.showProfit}),
+    queryFn: ({signal}) => salesApi.listAllForReport({showCost: permissions.showCost, showProfit: permissions.showProfit}, signal),
     enabled: Boolean(session && allowed),
     placeholderData: keepPreviousData,
     retry: false,

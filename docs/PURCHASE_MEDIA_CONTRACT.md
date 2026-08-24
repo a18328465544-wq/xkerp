@@ -6,7 +6,8 @@
 
 ```http
 POST /api/media
-Authorization: Bearer <session-token>
+Cookie: gpu_erp_session=<http-only-session>
+X-CSRF-Token: <session-bound-csrf-token>
 Content-Type: application/json
 ```
 

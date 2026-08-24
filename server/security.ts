@@ -69,7 +69,7 @@ export function hashSessionToken(token: string) {
 }
 
 // Sessions live in the shared database instead of a process-local Map. This keeps logins valid
-// across restarts and lets every API instance authenticate the same bearer token. Only a token
+// across restarts and lets every API instance authenticate the same session. Only a token
 // hash is persisted, so a database read cannot be replayed as a browser credential.
 export function createSessionManager(store: SessionStore, options: { cleanupIntervalMs?: number; now?: () => number } = {}) {
   const requestedCleanupIntervalMs = options.cleanupIntervalMs ?? 15 * 60 * 1_000;

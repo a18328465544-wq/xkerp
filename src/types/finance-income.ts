@@ -50,5 +50,5 @@ export interface FinanceIncomeCollection {
   totalAmount: number;
   page: number;
   pageSize: number;
-  source: "authorized-full-state";
+  source: "authorized-full-state" | "database-page";
 }

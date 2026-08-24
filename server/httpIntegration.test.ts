@@ -97,18 +97,20 @@ test("a configured login can reach finance only by its effective menu permission
       }),
     });
     assert.equal(login.status, 200);
-    const loginPayload = await login.json() as { data?: { token?: string; user?: { role?: string } } };
-    const token = loginPayload.data?.token;
-    assert.ok(token);
+    const loginPayload = await login.json() as { data?: { csrfToken?: string; user?: { role?: string } } };
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(sessionCookie);
+    assert.ok(loginPayload.data?.csrfToken);
+    assert.equal("token" in (loginPayload.data || {}), false);
 
     const finance = await fetch(`${baseUrl}/api/finance/commission-rules`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { cookie: sessionCookie },
     });
     const expectedStatus = loginPayload.data?.user?.role === "老板" ? 200 : 403;
     assert.equal(finance.status, expectedStatus);
 
     const metrics = await fetch(`${baseUrl}/api/ops/metrics`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { cookie: sessionCookie },
     });
     assert.equal(metrics.status, expectedStatus);
     if (expectedStatus === 200) {

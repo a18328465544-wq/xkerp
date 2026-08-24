@@ -68,6 +68,11 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const vendorCreditAvailable = selectedSource?.partnerType === "vendor" ? selectedSource.returnCreditBalance || 0 : 0;
   const sourcePartnerType = values.sourcePartnerType;
   const selectedAccount = referenceData?.settlementAccounts.find((account) => account.id === values.settlementAccountId);
+  const canSubmit = useMemo(() => parsePurchaseOrderValues(values, vendorCreditAvailable).success
+    && Boolean(selectedSource)
+    && !mediaState.pending
+    && !mediaState.failed
+    && (values.paidAmount <= 0 || canReadSettlementAccounts), [canReadSettlementAccounts, mediaState.failed, mediaState.pending, selectedSource, values, vendorCreditAvailable]);
   const createMutation = useMutation({mutationFn: (payload: PurchaseFormValues) => purchaseApi.create(payload, selectedAccount)});
   const productCreateMutation = useMutation({mutationFn: (payload: ProductTemplateFormValues) => productsApi.createTemplate(payload, permissions.showCost, permissions.showProfit)});
 
@@ -244,7 +249,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           </ErpFormSection>
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
-          <Card><CardContent className="space-y-4 p-4"><PurchasePaymentSection embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} /><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">进货财务汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpSubmitBar embedded compact showCancel={false} dirty={formState.isDirty} submitting={createMutation.isPending} onCancel={leave} submitLabel="确认提交 · 等待检测入库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
+          <Card><CardContent className="space-y-4 p-4"><PurchasePaymentSection embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} /><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">进货财务汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpSubmitBar embedded compact showCancel={false} dirty={formState.isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : "请选择来源、商品并完善结算信息"} submitting={createMutation.isPending} onCancel={leave} submitLabel="确认提交 · 等待检测入库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
         </ErpTransactionSecondary>
       </ErpTransactionColumns>
     </form>

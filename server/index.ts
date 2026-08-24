@@ -14,7 +14,7 @@ import { getDashboardAiInsights } from "./aiInsights.ts";
 import { runCopilotTurn, type CopilotMessage } from "./aiCopilot.ts";
 import type { CopilotContext } from "../src/utils/copilotTools.ts";
 import { createSessionManager, sanitizeUserAccount } from "./security.ts";
-import { createRequireAuth, createRequireOpenApiToken } from "./httpAuth.ts";
+import { createRequireAuth, createRequireCsrf, createRequireOpenApiToken } from "./httpAuth.ts";
 import { AppError, NotFoundError, toDomainError, UnauthorizedError } from "./errors.ts";
 import {
   getPermissionsForUser as getScopedPermissions,
@@ -79,9 +79,22 @@ import { buildCustomerLeadPreview, normalizeCustomerLeadInput } from "./crmCusto
 import { buildCustomerFundsSnapshot } from "./customerFunds.ts";
 import { registerDomainSnapshotRoutes } from "./routes/domainSnapshots.ts";
 import { registerFinanceClosingRoutes } from "./routes/financeClosing.ts";
+import {registerPagedRecordRoutes} from "./routes/pagedRecords.ts";
 import { registerSystemRoutes } from "./routes/system.ts";
 import { syncCrmPurchaseInvoiceLink, syncCrmSalesInvoiceLink } from "./crmEntityRepository.ts";
 import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, MediaValidationError, replaceEntityImages } from "./mediaRepository.ts";
+import {clearSessionCookie, createCsrfToken, setSessionCookie} from "./authCookies.ts";
+import {
+  inspectionCreateDto,
+  inspectionUpdateDto,
+  parseHttpDto,
+  paymentInCreateDto,
+  paymentInUpdateDto,
+  paymentOutCreateDto,
+  paymentOutUpdateDto,
+  purchaseInvoiceCreateDto,
+  purchaseInvoiceUpdateDto,
+} from "./httpDto.ts";
 import type {
   AccountTransferRecord,
   AssemblyOperationRecord,
@@ -158,6 +171,7 @@ const sessions = createSessionManager(createDatabaseSessionStore(), {cleanupInte
 
 type AuthRequest = express.Request & {
   authToken?: string;
+  authMode?: "bearer" | "cookie";
   authUser?: SystemUserAccount;
   requestId?: string;
   requestStartedAt?: number;
@@ -336,6 +350,7 @@ function requireApiAuthentication(req: express.Request, res: express.Response, n
 }
 
 app.use(requireApiAuthentication);
+app.use(createRequireCsrf({onDenied: logSecurityDenial}));
 
 function actions(req?: AuthRequest, context?: StoreActionContext) {
   const storeActions = createStoreActions(
@@ -1397,6 +1412,7 @@ registerDomainSnapshotRoutes(app, {
   requireAnyMenu,
   publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys),
 });
+registerPagedRecordRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getScopedPermissions(state, (req as AuthRequest).authUser)});
 
 registerSystemRoutes(app, {
   dataFilePath,
@@ -1432,13 +1448,14 @@ app.post("/api/auth/login", loginRateLimiter, authMutationRoute(async (req, res)
 	    state = await loadStateCollections(state, ["systemUsers"]);
 	    const user = actions(req).login(req.body);
 	    const token = await sessions.create(user.id);
+	    setSessionCookie(res, token);
 	    const savedUser = state.systemUsers.find((item) => item.id === user.id);
 	    await saveStateRecords([
 	      ...(savedUser ? [{ key: "systemUsers" as const, items: [savedUser] }] : []),
 	      { key: "logs", items: state.logs.slice(0, 1) },
 	    ]);
     res.json({
-      ...ok({ user, token }, savedUser, "initial"),
+      ...ok({ user, csrfToken: createCsrfToken(token) }, savedUser, "initial"),
       meta: { stateMode: "initial", stateRevision: await getStateRevision() },
     });
   } catch (error) {
@@ -1633,7 +1650,8 @@ app.get("/api/state", (req: AuthRequest, res) => {
 });
 
 app.get("/api/auth/me", (req: AuthRequest, res) => {
-  res.json({ data: req.authUser ? actions(req).getCurrentUser() : null });
+  const user = req.authUser ? actions(req).getCurrentUser() : null;
+  res.json({ data: user && req.authToken ? {...user, csrfToken: createCsrfToken(req.authToken)} : user });
 });
 
 // AI only receives a compact, anonymized business snapshot. The endpoint remains read-only:
@@ -1716,6 +1734,7 @@ app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), 
 app.post("/api/auth/logout", authMutationRoute(async (req: AuthRequest, res) => {
   try {
     await sessions.revoke(req.authToken);
+    clearSessionCookie(res);
     const result = actions(req).logout();
     await saveStateRecords([{ key: "logs", items: state.logs.slice(0, 1) }]);
     await reloadStateFromDatabase();
@@ -1766,32 +1785,6 @@ app.delete("/api/gpu_erp/finance/settlement-account/:id", requireMenu("settlemen
   res.status(deleted ? 200 : 404).json(okMerge(deleted, stateMerge, stateDelete));
 }));
 
-app.get("/api/gpu_erp/finance/settlement-ledger", requireMenu("settlement_ledger"), (req, res) => {
-  const dateStart = String(req.query.dateStart || "");
-  const dateEnd = String(req.query.dateEnd || "");
-  const keyword = String(req.query.keyword || "").trim().toLocaleLowerCase();
-  if ((dateStart && !validDateKey(dateStart)) || (dateEnd && !validDateKey(dateEnd)) || (dateStart && dateEnd && dateStart > dateEnd)) {
-    sendApiError(req, res, 400, "VALIDATION_ERROR", "账户流水日期范围无效");
-    return;
-  }
-  const filtered = state.settlementLedger.filter((item) => {
-    const itemDate = String(item.time || "").slice(0, 10);
-    const searchCorpus = [item.remarks, item.customerName, item.supplierName, item.relatedDocNo, item.accountName, item.businessType, item.handler].filter(Boolean).join(" ").toLocaleLowerCase();
-    const matchAccount = !req.query.accountId || item.accountId === req.query.accountId;
-    const matchHandler = !req.query.handler || item.handler === req.query.handler;
-    const matchBusinessType = !req.query.businessType || item.businessType === req.query.businessType;
-    const matchDirection = !req.query.direction || item.direction === req.query.direction;
-    const matchDoc = !req.query.relatedDocNo || item.relatedDocNo === req.query.relatedDocNo;
-    const matchCustomer = !req.query.customerName || item.customerName === req.query.customerName;
-    const matchSupplier = !req.query.supplierName || item.supplierName === req.query.supplierName;
-    const matchKeyword = !keyword || searchCorpus.includes(keyword);
-    const matchDateStart = !dateStart || (itemDate && itemDate >= dateStart);
-    const matchDateEnd = !dateEnd || (itemDate && itemDate <= dateEnd);
-    return matchKeyword && matchAccount && matchHandler && matchBusinessType && matchDirection && matchDoc && matchCustomer && matchSupplier && matchDateStart && matchDateEnd;
-  });
-  res.json(paginated(filtered, req));
-});
-
 // Lazy full-collection load for the settlement ledger (stripped from the initial state payload).
 app.get("/api/settlement-ledger", requireMenu("settlement_ledger"), (req: AuthRequest, res) => {
   res.json(ok({
@@ -1821,8 +1814,9 @@ app.get("/api/gpu_erp/finance/customer-funds", requireMenu("customer_funds"), (r
 });
 
 app.post("/api/gpu_erp/finance/payment-in/create", requireMenu("payment_in"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(paymentInCreateDto, withoutImagePayload(req.body));
   const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createPaymentIn(withoutImagePayload(req.body) as any),
+    () => actions(req).createPaymentIn(command),
     paymentInMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "payment_in", record.id, "payment-evidence");
@@ -1833,8 +1827,9 @@ app.post("/api/gpu_erp/finance/payment-in/create", requireMenu("payment_in"), as
 }));
 
 app.put("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(paymentInUpdateDto, withoutImagePayload(req.body));
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updatePaymentIn(req.params.id!, withoutImagePayload(req.body) as any),
+    () => actions(req).updatePaymentIn(req.params.id!, command),
     paymentInMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "payment_in", record.id, "payment-evidence");
@@ -1864,8 +1859,9 @@ app.delete("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), req
 }));
 
 app.post("/api/gpu_erp/finance/payment-out/create", requireMenu("payment_out"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(paymentOutCreateDto, withoutImagePayload(req.body));
   const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createPaymentOut(withoutImagePayload(req.body) as any),
+    () => actions(req).createPaymentOut(command),
     paymentOutMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "payment_out", record.id, "payment-evidence");
@@ -1876,8 +1872,9 @@ app.post("/api/gpu_erp/finance/payment-out/create", requireMenu("payment_out"), 
 }));
 
 app.put("/api/gpu_erp/finance/payment-out/:id", requireMenu("payment_out"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(paymentOutUpdateDto, withoutImagePayload(req.body));
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updatePaymentOut(req.params.id!, withoutImagePayload(req.body) as any),
+    () => actions(req).updatePaymentOut(req.params.id!, command),
     paymentOutMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "payment_out", record.id, "payment-evidence");
@@ -2369,8 +2366,9 @@ app.get("/api/media/assets/:id", requireAnyMenu(mediaMenuIds), asyncRoute(async 
 }));
 
 app.post("/api/purchase-invoices", requireMenu("purchase_add"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(purchaseInvoiceCreateDto, withoutImagePayload(req.body));
   const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createPurchaseInvoice(withoutImagePayload(req.body) as any),
+    () => actions(req).createPurchaseInvoice(command),
     purchaseInvoiceCreateMerge,
     async (invoice) => {
       const urls = await persistEntityImages(req, "purchase_invoice", invoice.id, "purchase-evidence");
@@ -2382,11 +2380,12 @@ app.post("/api/purchase-invoices", requireMenu("purchase_add"), asyncRoute(async
 }));
 
 app.put("/api/purchase-invoices/:id", requireMenu("purchase_list"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(purchaseInvoiceUpdateDto, withoutImagePayload(req.body));
   const existing = state.purchaseInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
   const paymentsBeforeUpdate = existing ? relatedPurchasePayments(existing) : [];
   const financeBeforeUpdate = existing ? relatedPurchaseFinanceLedger(existing) : [];
   const { data: updated, stateMerge, stateDelete } = await runStateCommand(
-    () => actions(req).updatePurchaseInvoice(req.params.id!, withoutImagePayload(req.body) as any),
+    () => actions(req).updatePurchaseInvoice(req.params.id!, command),
     (invoice) => purchaseInvoiceUpdatePatch(invoice, paymentsBeforeUpdate, financeBeforeUpdate),
     async (invoice) => {
       const urls = await persistEntityImages(req, "purchase_invoice", invoice.id, "purchase-evidence");
@@ -2426,8 +2425,9 @@ app.delete("/api/purchase-invoices/:id", requireMenu("purchase_list"), requireDe
 }));
 
 app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(inspectionCreateDto, withoutImagePayload(req.body));
   const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).submitInspection(withoutImagePayload(req.body) as any),
+    () => actions(req).submitInspection(command),
     inspectionMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
@@ -2438,8 +2438,9 @@ app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req, 
 }));
 
 app.put("/api/inspections/:id", requireMenu("inspections"), asyncRoute(async (req, res) => {
+  const command = parseHttpDto(inspectionUpdateDto, withoutImagePayload(req.body));
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updateInspection(req.params.id!, withoutImagePayload(req.body) as any),
+    () => actions(req).updateInspection(req.params.id!, command),
     inspectionMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");

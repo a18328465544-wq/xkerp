@@ -3,19 +3,23 @@ import {reportClientError, reportClientRequest} from "../observability/clientTel
 
 export {ApiError};
 
-export const ACCESS_TOKEN_KEY = "gpu-erp-v2-access-token";
+const LEGACY_ACCESS_TOKEN_KEY = "gpu-erp-v2-access-token";
+let csrfToken = "";
 
-export function getAccessToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+
+export function setCsrfToken(value: unknown) {
+  csrfToken = typeof value === "string" ? value : "";
 }
 
-export function setAccessToken(token: string) {
-  if (typeof window !== "undefined") window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+export function clearBrowserAuthState() {
+  csrfToken = "";
+  // One-time cleanup for sessions created before the HttpOnly-cookie migration.
+  if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
 }
 
-export function clearAccessToken() {
-  if (typeof window !== "undefined") window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+function isUnsafeMethod(method: string) {
+  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
 }
 
 function notifyAuthExpired() {
@@ -48,7 +52,6 @@ function reportApiFailure(error: ApiError, path: string, method: string, request
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
   const headers = new Headers(init.headers);
   const requestId = headers.get("X-Request-ID") || createRequestId();
   headers.set("X-Request-ID", requestId);
@@ -56,13 +59,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (token) headers.set("Authorization", `Bearer ${token}`);
   const method = init.method || "GET";
+  if (csrfToken && isUnsafeMethod(method)) headers.set("X-CSRF-Token", csrfToken);
   reportClientRequest({phase: "start", requestId, method, path: requestPath(path)});
 
   let response: Response;
   try {
-    response = await fetch(path, {...init, headers});
+    response = await fetch(path, {...init, headers, credentials: init.credentials ?? "same-origin"});
   } catch (error) {
     const normalized = normalizeApiError(error, 0, requestId);
     reportClientRequest({phase: "error", requestId, method, path: requestPath(path)});
@@ -74,7 +77,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (!response.ok) {
     const error = normalizeApiError(payload, response.status, requestId);
     if (error instanceof ApiError && error.isUnauthorized) {
-      clearAccessToken();
+      clearBrowserAuthState();
       notifyAuthExpired();
     }
     const responseRequestId = response.headers.get("X-Request-ID") || requestId;
@@ -87,16 +90,15 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 }
 
 export async function apiDownload(path: string, init: RequestInit = {}): Promise<Blob> {
-  const token = getAccessToken();
   const headers = new Headers(init.headers);
   const requestId = headers.get("X-Request-ID") || createRequestId();
   headers.set("X-Request-ID", requestId);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
   const method = init.method || "GET";
+  if (csrfToken && isUnsafeMethod(method)) headers.set("X-CSRF-Token", csrfToken);
   reportClientRequest({phase: "start", requestId, method, path: requestPath(path)});
   let response: Response;
   try {
-    response = await fetch(path, {...init, headers});
+    response = await fetch(path, {...init, headers, credentials: init.credentials ?? "same-origin"});
   } catch (error) {
     const normalized = normalizeApiError(error, 0, requestId);
     reportClientRequest({phase: "error", requestId, method, path: requestPath(path)});
@@ -107,7 +109,7 @@ export async function apiDownload(path: string, init: RequestInit = {}): Promise
     const payload = await response.json().catch(() => undefined);
     const error = normalizeApiError(payload, response.status, requestId);
     if (error instanceof ApiError && error.isUnauthorized) {
-      clearAccessToken();
+      clearBrowserAuthState();
       notifyAuthExpired();
     }
     const responseRequestId = response.headers.get("X-Request-ID") || requestId;

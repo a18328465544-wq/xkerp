@@ -91,7 +91,8 @@ export interface PurchaseListItem {
 
 export interface PurchaseListDataset {
   items: PurchaseListItem[];
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-page";
+  selection?: PurchaseListSelection;
 }
 
 export interface PurchaseListSelection {

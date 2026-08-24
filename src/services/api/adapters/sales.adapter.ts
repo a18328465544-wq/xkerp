@@ -62,7 +62,7 @@ function adaptSalesListLine(value: unknown, index: number, permissions: SalesApi
     quantity: Math.max(1, Math.floor(numberValue(dto.quantity, 1))),
     sellPrice: numberValue(dto.sellPrice),
     costPrice: permissions.showCost ? optionalNumber(dto.costPrice) : undefined,
-    profit: permissions.showProfit ? optionalNumber(dto.profit) : undefined,
+    profit: permissions.showCost && permissions.showProfit ? optionalNumber(dto.profit) : undefined,
     aftersalesTerms: text(dto.aftersalesTerms),
     remarks: text(dto.remarks),
   };
@@ -73,7 +73,7 @@ export interface SalesApiPermissions {
   showProfit: boolean;
 }
 
-export function adaptSalesListState(response: {data?: unknown}, permissions: SalesApiPermissions): SalesListDataset {
+export function adaptSalesListState(response: {data?: unknown; meta?: unknown}, permissions: SalesApiPermissions): SalesListDataset {
   const state = record(response.data);
   const inventory = collection(state, "inventory");
   const items: SalesListItem[] = collection(state, "salesInvoices")
@@ -85,7 +85,8 @@ export function adaptSalesListState(response: {data?: unknown}, permissions: Sal
       const lines = (Array.isArray(dto.items) ? dto.items : []).map((line, index) => adaptSalesListLine(line, index, permissions));
       const productSummary = Array.from(new Set(lines.map((line) => line.productName).filter(Boolean))).slice(0, 3).join("、");
       const document = {id, invoiceNo};
-      const linkedInventoryCount = inventory.filter((item) => isInventoryLinkedToSales({
+      const annotatedCount = optionalNumber(dto.__linkedInventoryCount);
+      const linkedInventoryCount = annotatedCount ?? inventory.filter((item) => isInventoryLinkedToSales({
         purchaseInvoiceNo: undefined,
         salesInvoiceId: text(item.salesInvoiceId) || undefined,
         remarks: text(item.remarks) || undefined,
@@ -108,7 +109,7 @@ export function adaptSalesListState(response: {data?: unknown}, permissions: Sal
         totalCount: numberValue(dto.totalCount, lines.reduce((sum, line) => sum + line.quantity, 0)),
         totalAmount: numberValue(dto.totalAmount, lines.reduce((sum, line) => sum + line.sellPrice * line.quantity, 0)),
         totalCost: permissions.showCost ? optionalNumber(dto.totalCost) : undefined,
-        totalProfit: permissions.showProfit ? optionalNumber(dto.totalProfit) : undefined,
+        totalProfit: permissions.showCost && permissions.showProfit ? optionalNumber(dto.totalProfit) : undefined,
         paidAmount,
         unpaidAmount,
         linkedInventoryCount,
@@ -128,6 +129,11 @@ export function adaptSalesListState(response: {data?: unknown}, permissions: Sal
       };
     })
     .filter((item) => Boolean(item.id || item.invoiceNo));
+  const meta = record(response.meta); const summary = record(meta.summary); const total = optionalNumber(meta.total);
+  if (total !== undefined) {
+    const page = Math.max(1, numberValue(meta.page, 1)); const pageSize = Math.max(1, numberValue(meta.pageSize, 20));
+    return {items, source: "database-page", selection: {data: items, filteredItems: items, meta: {total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize))}, summary: {orderCount: numberValue(summary.orderCount, total), unitCount: numberValue(summary.unitCount), pendingPaymentCount: numberValue(summary.pendingPaymentCount), pendingOutboundCount: numberValue(summary.pendingOutboundCount), totalAmount: numberValue(summary.totalAmount), totalProfit: permissions.showCost && permissions.showProfit ? optionalNumber(summary.totalProfit) : undefined}}};
+  }
   return {items, source: "state-snapshot"};
 }
 

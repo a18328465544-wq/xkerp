@@ -275,7 +275,7 @@ POSTGRES_IMPORT_LEGACY_JSON=false
 | `assemblyOperations` | `gpu_assembly_operations` | 组装拆卸 |
 | `returnOrders` | `gpu_return_orders` | 退货单 |
 | `systemUsers` | `gpu_system_users` | 系统账号 |
-| `sessions` | `gpu_sessions` | 网页 Bearer 会话（仅保存 token 哈希） |
+| `sessions` | `gpu_sessions` | 网页 Cookie 会话（仅保存 token 哈希） |
 
 每张集合表通常包含：
 
@@ -310,7 +310,7 @@ updated_at timestamptz not null
 
 ### 8.1 网页登录权限
 
-系统账号存在 `gpu_system_users`，返回前端前会脱敏密码哈希。网页 Bearer 会话保存在 `gpu_sessions`，仅持久化 SHA-256 token 哈希，因此 API 重启和多实例部署不会让已登录会话失效。
+系统账号存在 `gpu_system_users`，返回前端前会脱敏密码哈希。网页会话通过 `HttpOnly + SameSite=Lax` Cookie 传递，生产环境 Cookie 启用 `Secure`；浏览器不再把会话 Token 存入 `localStorage`。`gpu_sessions` 仅持久化 SHA-256 token 哈希，因此 API 重启和多实例部署不会让已登录会话失效。Cookie 鉴权的写请求还必须携带会话绑定的 `X-CSRF-Token`；开放 API 和受控非浏览器客户端继续使用独立的 Bearer Token。
 
 权限由两部分组成：
 

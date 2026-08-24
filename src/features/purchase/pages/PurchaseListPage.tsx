@@ -42,8 +42,8 @@ export function PurchaseListPage() {
   const permissions = session?.permissions || permissionDefaults;
   const allowed = createCapabilities(session).menu("purchase_list");
   const listQuery = useQuery({
-    queryKey: queryKeys.purchase.list({userId: session?.user.id || "anonymous", showCost: permissions.showCost, showProfit: permissions.showProfit}),
-    queryFn: ({signal}) => purchaseApi.list({showCost: permissions.showCost, showProfit: permissions.showProfit}, signal),
+    queryKey: queryKeys.purchase.list({userId: session?.user.id || "anonymous", showCost: permissions.showCost, showProfit: permissions.showProfit}, filters),
+    queryFn: ({signal}) => purchaseApi.list(filters, {showCost: permissions.showCost, showProfit: permissions.showProfit}, signal),
     enabled: Boolean(session && allowed),
     placeholderData: keepPreviousData,
     retry: false,
@@ -74,7 +74,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
   onRefresh: () => void;
 }) {
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "purchase-list", userId: session.user.id, defaultVisibility: emptyVisibility});
-  const selection = useMemo(() => selectPurchaseList(query.data?.items || [], filters), [filters, query.data?.items]);
+  const selection = useMemo(() => query.data?.selection || selectPurchaseList(query.data?.items || [], filters), [filters, query.data]);
   const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, onDetail}), [onDetail, session.permissions.showCost, session.permissions.showProfit]);
   const activeFilterCount = countActivePurchaseListFilters(filters);
   const canCreate = createCapabilities(session).menu("purchase_add");

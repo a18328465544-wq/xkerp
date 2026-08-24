@@ -116,7 +116,8 @@ export interface SalesListItem {
 
 export interface SalesListDataset {
   items: SalesListItem[];
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-page";
+  selection?: SalesListSelection;
 }
 
 export interface SalesListSelection {

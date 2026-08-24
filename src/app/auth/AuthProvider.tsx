@@ -2,7 +2,7 @@ import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {ArrowUpRight, Boxes, Eye, EyeOff, LockKeyhole, ShieldAlert, ShieldCheck, Store, UserRound, WalletCards} from "lucide-react";
 import {authApi, type AuthSession} from "@/src/services/api/endpoints/auth";
-import {ApiError, getAccessToken} from "@/src/services/api/client";
+import {ApiError, clearBrowserAuthState} from "@/src/services/api/client";
 import {queryKeys} from "@/src/services/api/query-keys";
 import {Button, Card, Input} from "@/src/components/ui";
 import {ErpLoadingState, ErpPageError} from "@/src/components/common";
@@ -20,7 +20,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({children}: {children: ReactNode}) {
   const queryClient = useQueryClient();
-  const [token, setToken] = useState<string | null>(() => getAccessToken());
+  const [signedOut, setSignedOut] = useState(false);
   const sessionQuery = useQuery({
     queryKey: queryKeys.auth.session(),
     queryFn: async ({signal}) => {
@@ -29,7 +29,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
       return session;
     },
     select: ({initialState: _initialState, ...session}) => session,
-    enabled: Boolean(token),
+    enabled: !signedOut,
     retry: false,
     staleTime: 30_000,
   });
@@ -37,7 +37,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
   useEffect(() => {
     const onExpired = () => {
       authApi.logout();
-      setToken(null);
+      setSignedOut(true);
       queryClient.removeQueries({queryKey: queryKeys.auth.session()});
     };
     window.addEventListener("gpu-erp:auth-expired", onExpired);
@@ -47,13 +47,13 @@ export function AuthProvider({children}: {children: ReactNode}) {
   useEffect(() => {
     if (sessionQuery.error instanceof ApiError && sessionQuery.error.isUnauthorized) {
       authApi.logout();
-      setToken(null);
+      setSignedOut(true);
     }
   }, [sessionQuery.error]);
 
   const value = useMemo<AuthContextValue>(() => ({
     session: sessionQuery.data || null,
-    status: !token
+    status: signedOut || (sessionQuery.error instanceof ApiError && sessionQuery.error.isUnauthorized)
       ? "unauthenticated"
       : sessionQuery.isPending
         ? "loading"
@@ -66,18 +66,19 @@ export function AuthProvider({children}: {children: ReactNode}) {
       if (session.initialState) queryClient.setQueryData(queryKeys.state.initial(), session.initialState);
       const {initialState: _initialState, ...sessionForContext} = session;
       queryClient.setQueryData(queryKeys.auth.session(), sessionForContext);
-      setToken(getAccessToken());
+      setSignedOut(false);
       return sessionForContext;
     },
     logout() {
       authApi.logout();
-      setToken(null);
+      clearBrowserAuthState();
+      setSignedOut(true);
       queryClient.clear();
     },
     refresh() {
       return queryClient.invalidateQueries({queryKey: queryKeys.auth.session()});
     },
-  }), [queryClient, sessionQuery.data, sessionQuery.error, sessionQuery.isPending, token]);
+  }), [queryClient, sessionQuery.data, sessionQuery.error, sessionQuery.isPending, signedOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

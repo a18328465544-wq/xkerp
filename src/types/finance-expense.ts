@@ -8,4 +8,4 @@ export interface FinanceExpenseItem {
 }
 export interface FinanceExpenseFormValues {party: string; accountId: string; amount: number; paymentMethod: string; businessType: FinanceExpenseCategory; referenceNo: string; date: string; remarks: string; images: string[];}
 export interface FinanceExpenseFilters {keyword: string; businessType: string; accountId: string; handler: string; startDate: string; endDate: string; page: number; pageSize: number;}
-export interface FinanceExpenseCollection {items: FinanceExpenseItem[]; total: number; totalAmount: number; page: number; pageSize: number; source: "authorized-full-state";}
+export interface FinanceExpenseCollection {items: FinanceExpenseItem[]; total: number; totalAmount: number; page: number; pageSize: number; source: "authorized-full-state" | "database-page";}

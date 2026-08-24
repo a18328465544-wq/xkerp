@@ -22,10 +22,7 @@ const routes: SnapshotRoute[] = [
     keys: ["settlementAccounts", "settlementLedger", "financeLedger", "salesInvoices", "purchaseInvoices", "returnOrders", "inventory"],
   },
   { path: "/api/gpu_erp/finance/account-transfers", menus: ["account_transfer"], keys: ["accountTransfers"] },
-  { path: "/api/gpu_erp/finance/payment-ins", menus: ["payment_in"], keys: ["paymentInRecords"] },
-  { path: "/api/gpu_erp/finance/payment-outs", menus: ["payment_out"], keys: ["paymentOutRecords"] },
   { path: "/api/finance/commissions", menus: ["purchase_commission", "sales_commission"], keys: ["purchaseCommissions"] },
-  { path: "/api/purchase-invoices", menus: ["purchase_list"], keys: ["purchaseInvoices", "inventory"] },
   {
     path: "/api/purchase-invoices/reference",
     menus: ["purchase_add"],
@@ -36,7 +33,6 @@ const routes: SnapshotRoute[] = [
     menus: ["purchase_list"],
     keys: ["purchaseInvoices", "inventory", "inspections", "paymentOutRecords", "returnOrders"],
   },
-  { path: "/api/sales-invoices", menus: ["sales_list"], keys: ["salesInvoices", "inventory"] },
   { path: "/api/sales-invoices/outbound", menus: ["sales_outbound"], keys: ["salesInvoices", "inventory", "products"] },
   { path: "/api/inspections/workspace", menus: ["inspections"], keys: ["inventory", "inspections"] },
   { path: "/api/aftersales/workspace", menus: ["aftersales"], keys: ["aftersales", "inventory", "salesInvoices"] },

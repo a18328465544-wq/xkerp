@@ -43,8 +43,8 @@ export function SalesListPage() {
   const permissions = session?.permissions || permissionDefaults;
   const allowed = createCapabilities(session).menu("sales_list");
   const listQuery = useQuery({
-    queryKey: queryKeys.sales.list({userId: session?.user.id || "anonymous", showCost: permissions.showCost, showProfit: permissions.showProfit}),
-    queryFn: ({signal}) => salesApi.list({showCost: permissions.showCost, showProfit: permissions.showProfit}, signal),
+    queryKey: queryKeys.sales.list({userId: session?.user.id || "anonymous", showCost: permissions.showCost, showProfit: permissions.showProfit}, filters),
+    queryFn: ({signal}) => salesApi.list(filters, {showCost: permissions.showCost, showProfit: permissions.showProfit}, signal),
     enabled: Boolean(session && allowed),
     placeholderData: keepPreviousData,
     retry: false,
@@ -76,7 +76,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   onRefresh: () => void;
 }) {
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "sales-list", userId: session.user.id, defaultVisibility: emptyVisibility});
-  const selection = useMemo(() => selectSalesList(query.data?.items || [], filters), [filters, query.data?.items]);
+  const selection = useMemo(() => query.data?.selection || selectSalesList(query.data?.items || [], filters), [filters, query.data]);
   const selectedDetail = useMemo(() => query.data?.items.find((item) => item.id === detailId || item.invoiceNo === detailId) || null, [detailId, query.data?.items]);
   const openDetail = useCallback((item: SalesListItem) => commitDetail(item.id), [commitDetail]);
   const columns = useMemo(() => createSalesListColumns({showProfit: session.permissions.showProfit, onDetail: openDetail}), [openDetail, session.permissions.showProfit]);
