@@ -1,5 +1,4 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {useBlocker} from "@tanstack/react-router";
 import {ArrowLeft, RefreshCw} from "lucide-react";
 import {useMemo, useRef, useState, type FormEvent} from "react";
 import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
@@ -14,6 +13,7 @@ import type {AuthSession} from "@/src/services/api";
 import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate} from "@/src/types/sales";
 import type {PartnerQuickCreateValues} from "@/src/lib/partnerQuickCreate";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 import {createSalesDefaults, createSalesLineDefaults} from "@/src/features/sales/sales.defaults";
 import {calculateSalesAmounts} from "@/src/features/sales/sales.calculations";
 import {salesOrderSchema} from "@/src/features/sales/sales.schema";
@@ -84,6 +84,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const submitLock = useRef(false);
   useErpDirtyGuard(formState.isDirty);
+  useWorkspaceTabDirty("sales_add", formState.isDirty);
 
   const createMutation = useMutation({mutationFn: (payload: {values: SalesFormValues}) => {
     const account = accountQuery.data?.find((item) => item.id === payload.values.settlementAccountId);
@@ -216,12 +217,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     toast.error(message);
   };
   const leave = () => { window.history.back(); };
-  const blocker = useBlocker({
-    withResolver: true,
-    shouldBlockFn: () => formState.isDirty,
-    enableBeforeUnload: false,
-    disabled: !formState.isDirty,
-  });
+  const blocker = useWorkspaceTabBlocker(formState.isDirty);
   const customerError = !canReadCustomers ? "当前账号没有客户搜索权限" : customerQuery.error ? (customerQuery.error instanceof ApiError && customerQuery.error.isForbidden ? "当前账号没有客户搜索权限" : errorText(customerQuery.error)) : undefined;
   const customerOptions = useMemo(() => {
     const recentRank = new Map(recentCustomerIds.map((id, index) => [id, index]));

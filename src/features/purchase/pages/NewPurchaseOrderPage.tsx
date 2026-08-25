@@ -1,5 +1,5 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {useBlocker, useNavigate} from "@tanstack/react-router";
+import {useNavigate} from "@tanstack/react-router";
 import {ArrowLeft, ClipboardList} from "lucide-react";
 import {useMemo, useRef, useState, type FormEvent} from "react";
 import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
@@ -20,6 +20,7 @@ import {PurchaseAmountSummary, PurchaseImageSection, PurchaseLineItemsTable, Pur
 import {addPurchaseProductToReferenceData, addPurchaseSourceToReferenceData} from "@/src/features/purchase/quick-create/quick-create.cache";
 import {quickCreateError} from "@/src/features/purchase/quick-create/quick-create.errors";
 import type {PurchaseMediaStateChange} from "@/src/features/purchase/hooks/usePurchaseMediaUpload";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 import {derivePurchaseCapabilities} from "../purchase.permissions";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -63,6 +64,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const submitLock = useRef(false);
   const clearMediaRef = useRef<(() => void) | null>(null);
   useErpDirtyGuard(formState.isDirty);
+  useWorkspaceTabDirty("purchase_add", formState.isDirty);
 
   const referenceData = referenceQuery.data;
   const vendorCreditAvailable = selectedSource?.partnerType === "vendor" ? selectedSource.returnCreditBalance || 0 : 0;
@@ -212,12 +214,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   };
 
   const leave = () => { void navigate({to: "/purchase"}); };
-  const blocker = useBlocker({
-    withResolver: true,
-    shouldBlockFn: () => formState.isDirty,
-    enableBeforeUnload: false,
-    disabled: !formState.isDirty,
-  });
+  const blocker = useWorkspaceTabBlocker(formState.isDirty);
 
   if (referenceQuery.isPending || !referenceData) return <Card><ErpLoadingState title="正在加载采购基础数据" description="正在读取商品、来源、结算账户和现有仓位候选。" /></Card>;
   if (referenceQuery.error) return <ErpPageError title="无法加载采购基础数据" description={errorText(referenceQuery.error)} onRetry={() => void referenceQuery.refetch()} />;

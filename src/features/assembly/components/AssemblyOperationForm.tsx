@@ -3,8 +3,9 @@ import {useEffect, useMemo, useState} from "react";
 import {useForm} from "react-hook-form";
 import {Camera, CircleDollarSign, Combine, PackageOpen, Unplug} from "lucide-react";
 import {Button, Input, Select, Textarea} from "@/src/components/ui";
-import {DashboardSection, ErpBarcodeScannerDialog, ErpFormSection, ErpStatusBadge, ErpSubmitBar, useErpDirtyGuard, useErpUnsavedChangesGuard} from "@/src/components/common";
+import {DashboardSection, ErpBarcodeScannerDialog, ErpFormSection, ErpStatusBadge, ErpSubmitBar, ErpUnsavedChangesDialog, useErpDirtyGuard, useErpUnsavedChangesGuard} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ProductCategory} from "@/src/types/core";
 import type {AssemblyFormValues, AssemblyReferenceData} from "@/src/types/assembly";
 import {assemblyFormSchema} from "../assembly.schema";
@@ -23,6 +24,8 @@ export function AssemblyOperationForm({handler, references, showCost, showProfit
   const formValues = form.watch();
   const [scanTarget, setScanTarget] = useState<{kind: "beforeSn" | "afterSn" | "beforeParts" | "afterParts"; index?: number} | null>(null);
   useErpDirtyGuard(form.formState.isDirty);
+  useWorkspaceTabDirty("assembly", form.formState.isDirty);
+  const blocker = useWorkspaceTabBlocker(form.formState.isDirty);
   useEffect(() => {form.setValue("handler", handler);}, [form, handler]);
   const source = references.inventory.find((item) => item.sn.toLowerCase() === beforeSn.trim().toLowerCase() || item.id.toLowerCase() === beforeSn.trim().toLowerCase());
   const activeParts = mode === "拆卸" ? afterParts : beforeParts;
@@ -45,6 +48,7 @@ export function AssemblyOperationForm({handler, references, showCost, showProfit
     {error && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-sm text-[var(--erp-color-danger)]">{error}</p>}
     <ErpSubmitBar dirty={form.formState.isDirty} canSubmit={assemblyFormSchema.safeParse(formValues).success} blockedReason={`请完善${mode}来源、SN 和配件信息`} submitting={submitting} submitLabel={`保存${mode}单`} onCancel={() => unsavedChanges.requestLeave(resetForm)} />
     <ErpBarcodeScannerDialog open={Boolean(scanTarget)} onOpenChange={(open) => {if (!open) setScanTarget(null);}} onDetected={applyScan} title="扫描库存 SN" description="识别库存条码或二维码，只回填当前拆装字段。" />
+    <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
     {unsavedChanges.dialog}
   </form>;
 }

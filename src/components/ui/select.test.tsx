@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
-import {normalizeSelectSearchText, Select, selectOptionLabelText, selectOptionMatches} from "./select";
+import {normalizeSelectSearchText, Select, selectOptionLabelText, selectOptionMatches, shouldShowQuickCreateAction} from "./select";
 
 test("Select uses full width by default", () => {
   const markup = renderToStaticMarkup(<Select value="all" options={[{value: "all", label: "全部"}]} onValueChange={() => undefined} />);
@@ -42,4 +42,13 @@ test("Select search normalization supports full-width text, compact models and s
   assert.equal(selectOptionMatches(option, "rtx4090"), true);
   assert.equal(selectOptionMatches(option, "asus 24gb"), true);
   assert.equal(selectOptionMatches(option, "4080"), false);
+});
+
+test("Select only shows quick create when the catalog is empty or the query has no match", () => {
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "", optionCount: 5, matchingOptionCount: 5, searchLoading: false}), false);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "RTX 5090", optionCount: 5, matchingOptionCount: 2, searchLoading: false}), false);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "新商品", optionCount: 5, matchingOptionCount: 0, searchLoading: false}), true);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "", optionCount: 0, matchingOptionCount: 0, searchLoading: false}), true);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: true, searchText: "新商品", optionCount: 5, matchingOptionCount: 0, searchLoading: false}), false);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "新商品", optionCount: 0, matchingOptionCount: 0, searchLoading: true}), false);
 });

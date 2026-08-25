@@ -2,6 +2,7 @@ import {Check, ClipboardPaste, AlertTriangle, XCircle} from "lucide-react";
 import {useMemo, useState} from "react";
 import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpAmountInput, ErpDetailDrawer, ErpEmptyState, ErpPageError, ErpStatusBadge} from "@/src/components/common";
+import {productDisplayName} from "@/src/lib/productName";
 import type {PurchaseLineFormValue, PurchaseProductOption} from "@/src/types/purchase";
 import {
   parsePurchasePaste,
@@ -58,7 +59,7 @@ function eligible(row: PurchasePasteRow): boolean {
 }
 
 function rowOptions(products: readonly PurchaseProductOption[]) {
-  return products.map((product) => ({value: product.id, label: `${product.brand || "未标品牌"} ${product.model || product.name}${product.vram ? ` · ${product.vram}` : ""}`}));
+  return products.map((product) => ({value: product.id, label: productDisplayName(product)}));
 }
 
 export function PurchasePasteDrawer({open, onOpenChange, products, defaults, existingItems, canEnterCost, canEnterEstimatedSell, onConfirm}: PurchasePasteDrawerProps) {

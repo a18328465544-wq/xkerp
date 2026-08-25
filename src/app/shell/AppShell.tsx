@@ -2,6 +2,8 @@ import {lazy, Suspense, useEffect, useRef, type ReactNode} from "react";
 import {useRouterState} from "@tanstack/react-router";
 import {AppHeader} from "./AppHeader";
 import {AppSidebar} from "./AppSidebar";
+import {WorkspaceKeepAliveOutlet} from "./WorkspaceKeepAlive";
+import {WorkspaceTabRuntimeProvider, useWorkspaceTabRuntime} from "@/src/hooks/useWorkspaceTabRuntime";
 import {reportClientError} from "@/src/services/observability";
 
 const ErpAiDrawer = lazy(() =>
@@ -9,15 +11,21 @@ const ErpAiDrawer = lazy(() =>
 );
 
 export function AppShell({children}: {children: ReactNode}) {
+  return <WorkspaceTabRuntimeProvider><AppShellContent>{children}</AppShellContent></WorkspaceTabRuntimeProvider>;
+}
+
+function AppShellContent({children}: {children: ReactNode}) {
   const pathname = useRouterState({select: (state) => state.location.pathname});
   const mainRef = useRef<HTMLElement>(null);
+  const {clearNavigationIntent} = useWorkspaceTabRuntime();
 
   // Give keyboard and screen-reader users a predictable reading position after
   // workspace navigation. Dialogs and form controls retain focus when they
   // change without changing the route.
   useEffect(() => {
+    clearNavigationIntent();
     mainRef.current?.focus({preventScroll: true});
-  }, [pathname]);
+  }, [clearNavigationIntent, pathname]);
 
   useEffect(() => {
     const handleRuntimeError = (event: ErrorEvent) => {
@@ -37,7 +45,7 @@ export function AppShell({children}: {children: ReactNode}) {
   return <div className="flex h-[100dvh] min-w-0 overflow-hidden bg-[var(--erp-color-canvas)]">
     <a href="#main-content" className="erp-skip-link">跳到主要内容</a>
     <AppSidebar />
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader /><main id="main-content" ref={mainRef} tabIndex={-1} aria-label="主要内容" className="erp-main-content erp-scrollbar min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 outline-none sm:p-4 lg:p-6">{children}</main></div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader /><main id="main-content" ref={mainRef} tabIndex={-1} aria-label="主要内容" className="erp-main-content erp-scrollbar min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 outline-none sm:p-4 lg:p-6"><WorkspaceKeepAliveOutlet pathname={pathname} scrollContainerRef={mainRef}>{children}</WorkspaceKeepAliveOutlet></main></div>
     <Suspense fallback={null}><ErpAiDrawer /></Suspense>
   </div>;
 }

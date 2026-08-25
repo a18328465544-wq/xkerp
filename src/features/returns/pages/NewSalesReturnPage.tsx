@@ -1,7 +1,7 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
 import {useMemo, useState, type FormEvent, type ReactNode} from "react";
-import {Link, useBlocker, useNavigate} from "@tanstack/react-router";
+import {Link, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
@@ -11,6 +11,7 @@ import type {AuthSession} from "@/src/services/api";
 import type {SalesReturnFormValues} from "@/src/types/returns";
 import type {SalesInvoice} from "@/src/types/sales";
 import {storeDate} from "@/src/utils/storeTime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 
 const actionOptions = [{value: "退回待检测", label: "退回待检测"}, {value: "直接报废", label: "直接报废"}] as const;
 const responsibilityOptions = ["客户", "供应商", "平台", "本店", "其他"].map((value) => ({value, label: value}));
@@ -74,7 +75,8 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
   const dirty = Boolean(values.relatedDocNo || values.reason || values.remarks);
   const canSubmit = Boolean(selectedInvoice && selectedItem && selectedCard && values.reason.trim());
   useErpDirtyGuard(dirty);
-  const blocker = useBlocker({withResolver: true, shouldBlockFn: () => dirty, enableBeforeUnload: false, disabled: !dirty});
+  useWorkspaceTabDirty("return_sales", dirty);
+  const blocker = useWorkspaceTabBlocker(dirty);
 
   return <ErpTransactionPageFrame className="max-w-[1300px]">
     <ErpPageHeader title="新建销售退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联已出库销售单和原库存卡片，退款沿用原路退款规则。</span><ErpStatusBadge label="原路退款" tone="info" /></span>} actions={<Link to="/sales/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><ArrowLeft className="h-4 w-4" />返回销售退货</Link>} />

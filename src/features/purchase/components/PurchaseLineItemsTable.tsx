@@ -4,11 +4,8 @@ import {useMemo, useState} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
 import {ErpAmountInput, ErpEmptyState} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
+import {productDisplayName} from "@/src/lib/productName";
 import type {PurchaseFormValues, PurchaseLineFormValue, PurchaseProductOption} from "@/src/types/purchase";
-
-function productLabel(product: PurchaseProductOption) {
-  return `${product.brand || "未标品牌"} ${product.model || product.name}${product.vram ? ` · ${product.vram}` : ""}`;
-}
 
 export function PurchaseLineItemsTable({control, fields, items, products, canEnterCost, showProfit, canCreateProduct, disabled, onProductSelect, onProductClear, onAdd, onRemove, onOpenCreateProduct}: {
   control: Control<PurchaseFormValues>;
@@ -35,7 +32,7 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
     if (rightIndex === -1) return -1;
     return leftIndex - rightIndex;
   }), [products, recentProductIds]);
-  const productOptions = useMemo(() => orderedProducts.map((product) => ({value: product.id, label: productLabel(product), labelText: productLabel(product), description: [product.category, product.version, product.vram].filter(Boolean).join(" · "), searchText: `${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`})), [orderedProducts]);
+  const productOptions = useMemo(() => orderedProducts.map((product) => { const label = productDisplayName(product); return {value: product.id, label, labelText: label, searchText: `${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`}; }), [orderedProducts]);
   const handleProductSelect = (index: number, productId: string) => {
     setRecentProductIds((current) => [productId, ...current.filter((id) => id !== productId)].slice(0, 6));
     onProductSelect(index, productId);

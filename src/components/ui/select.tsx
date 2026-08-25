@@ -41,7 +41,7 @@ export interface SelectProps {
   searchResultLimit?: number;
   /** Optional explicit clear behavior for entity fields with dependent form data. */
   onClear?: () => void;
-  /** Optional create action rendered inside the searchable popup, never beside the field. */
+  /** Optional create action rendered inside the searchable popup when there is no matching option. */
   quickCreateAction?: {label: string; onClick: (searchText: string) => void; disabled?: boolean};
 }
 
@@ -68,6 +68,18 @@ export function selectOptionMatches(option: SelectOption, query: string): boolea
   return tokensMatch || compactMatch;
 }
 
+export function shouldShowQuickCreateAction({hasSelection, searchText, optionCount, matchingOptionCount, searchLoading}: {
+  hasSelection: boolean;
+  searchText: string;
+  optionCount: number;
+  matchingOptionCount: number;
+  searchLoading: boolean;
+}): boolean {
+  if (hasSelection || searchLoading) return false;
+  if (optionCount === 0) return true;
+  return Boolean(searchText.trim()) && matchingOptionCount === 0;
+}
+
 /**
  * The shared option control for V2 forms.
  *
@@ -81,6 +93,8 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
   if (searchable) {
     const selected = options.find((option) => option.value === value) || null;
     const inputPlaceholder = searchPlaceholder || (typeof placeholder === "string" ? placeholder : "搜索并选择");
+    const matchingOptionCount = shouldFilter ? options.filter((option) => selectOptionMatches(option, searchText)).length : options.length;
+    const showQuickCreateAction = Boolean(quickCreateAction && shouldShowQuickCreateAction({hasSelection: Boolean(selected), searchText, optionCount: options.length, matchingOptionCount, searchLoading}));
     return <BaseCombobox.Root<SelectOption>
       items={options}
       limit={searchResultLimit}
@@ -127,7 +141,7 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
       <BaseCombobox.Portal>
         <BaseCombobox.Positioner className="erp-popover-layer erp-option-positioner max-w-[calc(100vw-2rem)] outline-none" sideOffset={4} align="start">
           <BaseCombobox.Popup className="erp-option-popup w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
-            {quickCreateAction ? <div className="mb-0.5 flex min-h-8 items-center justify-between gap-2 border-b border-[var(--erp-color-border)] px-2 py-1"><span className="text-[11px] font-semibold text-[var(--erp-color-text-muted)]">快捷新建</span><Button type="button" size="sm" variant="ghost" disabled={quickCreateAction.disabled} className="h-7 px-2" onClick={() => {const query = searchText.trim(); setSearchOpen(false); setSearchText(""); onSearchValueChange?.(""); quickCreateAction.onClick(query);}}><Plus className="h-3.5 w-3.5" />{quickCreateAction.label}</Button></div> : null}
+            {showQuickCreateAction && quickCreateAction ? <div className="mb-0.5 flex min-h-8 items-center justify-between gap-2 border-b border-[var(--erp-color-border)] px-2 py-1"><span className="text-[11px] font-semibold text-[var(--erp-color-text-muted)]">快捷新建</span><Button type="button" size="sm" variant="ghost" disabled={quickCreateAction.disabled} className="h-7 px-2" onClick={() => {const query = searchText.trim(); setSearchOpen(false); setSearchText(""); onSearchValueChange?.(""); quickCreateAction.onClick(query);}}><Plus className="h-3.5 w-3.5" />{quickCreateAction.label}</Button></div> : null}
             {searchLoading ? <div className="px-3 py-4 text-center text-xs text-[var(--erp-color-text-muted)]" role="status">正在搜索…</div> : null}
             {!searchLoading ? <BaseCombobox.Empty>
               <div className="px-3 py-5 text-center text-xs text-[var(--erp-color-text-muted)]">{emptyText}</div>
@@ -143,8 +157,8 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
                   <Check className="h-4 w-4" aria-hidden="true" />
                 </BaseCombobox.ItemIndicator>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate leading-5">{option.label}</span>
-                  <span className="erp-annotation-slot mt-0.5 text-[11px] text-[var(--erp-color-text-muted)]" data-empty={!option.description || undefined} aria-hidden={!option.description || undefined}>{option.description || "\u00a0"}</span>
+                  <span className={cn("block truncate leading-5", !option.description && "leading-6")}>{option.label}</span>
+                  {option.description ? <span className="erp-annotation-slot mt-0.5 text-[11px] text-[var(--erp-color-text-muted)]">{option.description}</span> : null}
                 </span>
               </BaseCombobox.Item>}
             </BaseCombobox.List>

@@ -1,5 +1,5 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {Link, useBlocker, useNavigate} from "@tanstack/react-router";
+import {Link, useNavigate} from "@tanstack/react-router";
 import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
 import {useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {toast} from "sonner";
@@ -15,6 +15,7 @@ import type {PurchaseReturnFormValues} from "@/src/types/returns";
 import {isInventoryLinkedToPurchase} from "@/src/utils/inventoryRelations";
 import {createProductIdentityIndex, sameProductIdentity} from "@/src/utils/productIdentity";
 import {storeDate} from "@/src/utils/storeTime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 import {calculatePurchaseReturnPreview, canDirectWriteOffPurchase} from "../purchase-return.calculations";
 
 const settlementOptions = [{value: "原路退款", label: "原路退款"}, {value: "抵扣账款", label: "转为供应商抵扣"}, {value: "直接冲销", label: "直接冲销误录付款"}];
@@ -83,7 +84,8 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
     && (values.settlementMode !== "直接冲销" || directWriteOffAllowed)
     && !(["个人回收", "客户置换"].includes(selectedInvoice?.sourceType || "") && values.settlementMode === "抵扣账款" && (preview?.cashRefundAmount || 0) > 0));
   useErpDirtyGuard(dirty);
-  const blocker = useBlocker({withResolver: true, shouldBlockFn: () => dirty, enableBeforeUnload: false, disabled: !dirty});
+  useWorkspaceTabDirty("return_purchase", dirty);
+  const blocker = useWorkspaceTabBlocker(dirty);
 
   return <ErpTransactionPageFrame className="max-w-[1400px]">
     <ErpPageHeader title="新建采购退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联原采购单和真实库存卡片，最终金额与结算由服务端再次校验。</span><ErpStatusBadge label="待完成处理" tone="warning" /></span>} actions={<Link to="/purchase/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><ArrowLeft className="h-4 w-4" />返回采购退货</Link>} />
