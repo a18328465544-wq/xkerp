@@ -1,6 +1,6 @@
 import type {SalesListItem} from "@/src/types/sales";
 import type {FinanceProfitOtherFlow} from "@/src/types/finance";
-import {readDateRange} from "@/src/lib/dateRangePickerUtils";
+import {getDateRangePreset, readDateRange} from "@/src/lib/dateRangePickerUtils";
 
 export type FinanceProfitDimension = "product" | "customer" | "channel" | "handler";
 
@@ -68,10 +68,12 @@ export interface FinanceProfitInsight {
   tone: FinanceProfitInsightTone;
 }
 
+const currentMonthRange = getDateRangePreset("thisMonth");
+
 export const defaultFinanceProfitFilters: FinanceProfitFilters = {
   keyword: "",
-  dateStart: "",
-  dateEnd: "",
+  dateStart: currentMonthRange.startDate,
+  dateEnd: currentMonthRange.endDate,
   dimension: "product",
   page: 1,
   pageSize: 20,
@@ -92,8 +94,8 @@ export function parseFinanceProfitFilters(search: string): FinanceProfitFilters 
   return {
     ...defaultFinanceProfitFilters,
     keyword: (params.get("keyword") || "").trim(),
-    dateStart: dateRange.startDate,
-    dateEnd: dateRange.endDate,
+    dateStart: dateRange.startDate || defaultFinanceProfitFilters.dateStart,
+    dateEnd: dateRange.endDate || defaultFinanceProfitFilters.dateEnd,
     dimension: dimensions.includes(dimension as FinanceProfitDimension) ? dimension as FinanceProfitDimension : "product",
     page: positiveInteger(params.get("page"), 1),
     pageSize: [20, 50, 100].includes(pageSize) ? pageSize : 20,

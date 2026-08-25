@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {SalesListItem} from "@/src/types/sales";
+import {getDateRangePreset} from "@/src/lib/dateRangePickerUtils";
 import {defaultFinanceProfitFilters, financeProfitFiltersToSearch, parseFinanceProfitFilters, selectFinanceProfitInsights, selectFinanceProfitReport} from "./finance-profit";
 
 function invoice(overrides: Partial<SalesListItem> = {}): SalesListItem {
@@ -37,6 +38,16 @@ function invoice(overrides: Partial<SalesListItem> = {}): SalesListItem {
   return {...item, ...overrides};
 }
 
+const unfilteredFinanceProfitFilters = {...defaultFinanceProfitFilters, dateStart: "", dateEnd: ""};
+
+test("finance profit defaults to the current store month", () => {
+  assert.deepEqual(
+    {startDate: defaultFinanceProfitFilters.dateStart, endDate: defaultFinanceProfitFilters.dateEnd},
+    getDateRangePreset("thisMonth"),
+  );
+  assert.deepEqual(parseFinanceProfitFilters(""), defaultFinanceProfitFilters);
+});
+
 test("finance profit filters round-trip and reject unsupported values", () => {
   const filters = {...defaultFinanceProfitFilters, keyword: "RTX", dateStart: "2026-08-01", dateEnd: "2026-08-11", dimension: "customer" as const, page: 2, pageSize: 50};
   assert.deepEqual(parseFinanceProfitFilters(`?${financeProfitFiltersToSearch(filters)}`), filters);
@@ -44,7 +55,7 @@ test("finance profit filters round-trip and reject unsupported values", () => {
 });
 
 test("finance profit groups product lines and multiplies per-unit profit by quantity", () => {
-  const report = selectFinanceProfitReport([invoice()], defaultFinanceProfitFilters);
+  const report = selectFinanceProfitReport([invoice()], unfilteredFinanceProfitFilters);
   assert.equal(report.summary.orderCount, 1);
   assert.equal(report.summary.quantity, 2);
   assert.equal(report.summary.revenue, 3000);
@@ -55,7 +66,7 @@ test("finance profit groups product lines and multiplies per-unit profit by quan
 });
 
 test("finance profit keeps sales gross profit separate and adds other flows only to net profit", () => {
-  const report = selectFinanceProfitReport([invoice()], defaultFinanceProfitFilters, [
+  const report = selectFinanceProfitReport([invoice()], unfilteredFinanceProfitFilters, [
     {date: "2026-08-10", income: 200, expense: 80, net: 120},
   ]);
   assert.equal(report.summary.profit, 600);
@@ -80,7 +91,7 @@ test("finance profit supports customer grouping, keyword/date filters and pagina
 
 test("finance profit does not infer hidden profit or cost", () => {
   const hidden = invoice({totalCost: undefined, totalProfit: undefined, lines: [{id: "L-1", productName: "RTX 4070", sn: "", condition: "95新", quantity: 2, sellPrice: 1500, aftersalesTerms: "", remarks: ""}]});
-  const report = selectFinanceProfitReport([hidden], defaultFinanceProfitFilters);
+  const report = selectFinanceProfitReport([hidden], unfilteredFinanceProfitFilters);
   assert.equal(report.summary.cost, undefined);
   assert.equal(report.summary.profit, undefined);
   assert.equal(report.rows[0]?.cost, undefined);
@@ -90,7 +101,7 @@ test("finance profit does not infer hidden profit or cost", () => {
 
 test("finance profit insights expose decision facts without inventing hidden values", () => {
   const loss = invoice({id: "S-loss", invoiceNo: "XS-loss", totalAmount: 2000, totalCost: 2400, totalProfit: -400, searchText: "xs-loss 亏损商品", productSummary: "亏损商品", lines: [{id: "L-loss", productName: "亏损商品", sn: "SN-loss", condition: "95新", quantity: 1, sellPrice: 2000, costPrice: 2400, profit: -400, aftersalesTerms: "", remarks: ""}]});
-  const report = selectFinanceProfitReport([invoice(), loss], defaultFinanceProfitFilters);
+  const report = selectFinanceProfitReport([invoice(), loss], unfilteredFinanceProfitFilters);
   const insights = selectFinanceProfitInsights(report, true);
   assert.equal(insights[0]?.id, "top-profit");
   assert.equal(insights.find((item) => item.id === "loss-group")?.value, -400);
