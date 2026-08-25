@@ -1,7 +1,7 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import {ArrowLeft, ClipboardList} from "lucide-react";
-import {useMemo, useRef, useState, type FormEvent} from "react";
+import {useEffect, useMemo, useRef, useState, type FormEvent} from "react";
 import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
@@ -20,7 +20,7 @@ import {PurchaseAmountSummary, PurchaseImageSection, PurchaseLineItemsTable, Pur
 import {addPurchaseProductToReferenceData, addPurchaseSourceToReferenceData} from "@/src/features/purchase/quick-create/quick-create.cache";
 import {quickCreateError} from "@/src/features/purchase/quick-create/quick-create.errors";
 import type {PurchaseMediaStateChange} from "@/src/features/purchase/hooks/usePurchaseMediaUpload";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 import {derivePurchaseCapabilities} from "../purchase.permissions";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -28,6 +28,11 @@ const permissionDefaults = {showCost: false, showProfit: false, canDelete: false
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : "请求失败，请稍后重试";
 }
+
+type PurchaseOrderDraft = {
+  values: PurchaseFormValues;
+  selectedSource: PurchaseSourceOption | null;
+};
 
 export function NewPurchaseOrderPage() {
   const {session, logout} = useAuth();
@@ -46,14 +51,16 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const {canReadCustomers, canReadVendors, canReadProducts, canCreateCustomer, canCreateVendor, canCreateProduct, canReadSettlementAccounts, canInspect, canEnterPurchaseCost} = capabilities;
   const referencePermissions = useMemo(() => ({showCost: permissions.showCost, showProfit: permissions.showProfit, canReadSettlementAccounts, canReadCustomers, canReadVendors, canReadProducts}), [canReadCustomers, canReadProducts, canReadSettlementAccounts, canReadVendors, permissions.showCost, permissions.showProfit]);
   const referenceQuery = useQuery({queryKey: queryKeys.purchase.referenceData(), queryFn: ({signal}) => purchaseApi.referenceData(referencePermissions, signal), enabled: Boolean(session), retry: false, staleTime: 30_000});
-  const form = useForm<PurchaseFormValues>({defaultValues: createPurchaseDefaults(operatorName), mode: "onBlur", resolver: zodResolver(purchaseOrderSchema)});
+  const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<PurchaseOrderDraft>("purchase_add");
+  const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
+  const form = useForm<PurchaseFormValues>({defaultValues: restoredDraft?.values || createPurchaseDefaults(operatorName), mode: "onBlur", resolver: zodResolver(purchaseOrderSchema)});
   const {control, register, handleSubmit, setValue, setError, clearErrors, reset, getValues, formState} = form;
   const {fields, append, remove} = useFieldArray({control, name: "items"});
   const watchedValues = useWatch({control});
   const values = watchedValues as PurchaseFormValues;
   const summary = useMemo(() => calculatePurchaseSummary(values.items || []), [values.items]);
   const settlement = useMemo(() => calculatePurchaseSettlement(summary.totalCost, values.paidAmount || 0, values.vendorCreditAppliedAmount || 0), [summary.totalCost, values.paidAmount, values.vendorCreditAppliedAmount]);
-  const [selectedSource, setSelectedSource] = useState<PurchaseSourceOption | null>(null);
+  const [selectedSource, setSelectedSource] = useState<PurchaseSourceOption | null>(() => restoredDraft?.selectedSource || null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -63,8 +70,21 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const productCreateInitialValues = useMemo(() => productCreate ? {model: productCreate.initialName} : undefined, [productCreate]);
   const submitLock = useRef(false);
   const clearMediaRef = useRef<(() => void) | null>(null);
-  useErpDirtyGuard(formState.isDirty);
-  useWorkspaceTabDirty("purchase_add", formState.isDirty);
+  const isDirty = formState.isDirty || restoredDraftActive;
+  useEffect(() => {
+    const persist = () => {
+      if (!formState.isDirty && !restoredDraftActive) {
+        discardDraft();
+        return;
+      }
+      saveDraft({values: form.getValues(), selectedSource});
+    };
+    persist();
+    const subscription = form.watch(persist);
+    return () => subscription.unsubscribe();
+  }, [discardDraft, form, formState.isDirty, restoredDraftActive, saveDraft, selectedSource]);
+  useErpDirtyGuard(isDirty);
+  useWorkspaceTabDirty("purchase_add", isDirty);
 
   const referenceData = referenceQuery.data;
   const vendorCreditAvailable = selectedSource?.partnerType === "vendor" ? selectedSource.returnCreditBalance || 0 : 0;
@@ -193,6 +213,8 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
       const nextPath = hasGpu && canInspect ? "/inspections" : "/purchase";
       toast.success(`采购单 ${result.invoice.invoiceNo || "已创建"} 已提交`, {description: hasGpu ? "已进入检测质检流程，SN、成色、库位和最终状态在该阶段确认。" : hasAccessory ? "已按后端现有规则进入后续检测与入库流程。" : "采购单已创建。"});
       clearMediaRef.current?.();
+      discardDraft();
+      setRestoredDraftActive(false);
       reset(createPurchaseDefaults(operatorName));
       setSelectedSource(null);
       await Promise.all([
@@ -214,7 +236,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   };
 
   const leave = () => { void navigate({to: "/purchase"}); };
-  const blocker = useWorkspaceTabBlocker(formState.isDirty);
+  const blocker = useWorkspaceTabBlocker(isDirty);
 
   if (referenceQuery.isPending || !referenceData) return <Card><ErpLoadingState title="正在加载采购基础数据" description="正在读取商品、来源、结算账户和现有仓位候选。" /></Card>;
   if (referenceQuery.error) return <ErpPageError title="无法加载采购基础数据" description={errorText(referenceQuery.error)} onRetry={() => void referenceQuery.refetch()} />;
@@ -246,7 +268,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           </ErpFormSection>
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
-          <Card><CardContent className="space-y-4 p-4"><PurchasePaymentSection embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} /><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">进货财务汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpSubmitBar embedded compact showCancel={false} dirty={formState.isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : "请选择来源、商品并完善结算信息"} submitting={createMutation.isPending} onCancel={leave} submitLabel="确认提交 · 等待检测入库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
+          <Card><CardContent className="space-y-4 p-4"><PurchasePaymentSection embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} /><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">进货财务汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : "请选择来源、商品并完善结算信息"} submitting={createMutation.isPending} onCancel={leave} submitLabel="确认提交 · 等待检测入库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
         </ErpTransactionSecondary>
       </ErpTransactionColumns>
     </form>

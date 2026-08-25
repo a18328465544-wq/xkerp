@@ -5,7 +5,7 @@ import {Camera, CircleDollarSign, Combine, PackageOpen, Unplug} from "lucide-rea
 import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import {DashboardSection, ErpBarcodeScannerDialog, ErpFormSection, ErpStatusBadge, ErpSubmitBar, ErpUnsavedChangesDialog, useErpDirtyGuard, useErpUnsavedChangesGuard} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ProductCategory} from "@/src/types/core";
 import type {AssemblyFormValues, AssemblyReferenceData} from "@/src/types/assembly";
 import {assemblyFormSchema} from "../assembly.schema";
@@ -16,22 +16,41 @@ import {AssemblyPartEditor} from "./AssemblyPartEditor";
 const categories: ProductCategory[] = ["整机", "显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "显示器", "其他配件"];
 
 export function AssemblyOperationForm({handler, references, showCost, showProfit, submitting, error, onSubmit}: {handler: string; references: AssemblyReferenceData; showCost: boolean; showProfit: boolean; submitting: boolean; error?: string; onSubmit: (values: AssemblyFormValues, reset: () => void) => void}) {
-  const form = useForm<AssemblyFormValues>({resolver: zodResolver(assemblyFormSchema), defaultValues: createAssemblyFormDefaults(handler), mode: "onBlur"});
+  const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: AssemblyFormValues}>("assembly");
+  const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
+  const form = useForm<AssemblyFormValues>({resolver: zodResolver(assemblyFormSchema), defaultValues: restoredDraft?.values || createAssemblyFormDefaults(handler), mode: "onBlur"});
   const mode = form.watch("type");
   const beforeSn = form.watch("beforeSn");
   const afterParts = form.watch("afterParts");
   const beforeParts = form.watch("beforeParts");
   const formValues = form.watch();
   const [scanTarget, setScanTarget] = useState<{kind: "beforeSn" | "afterSn" | "beforeParts" | "afterParts"; index?: number} | null>(null);
-  useErpDirtyGuard(form.formState.isDirty);
-  useWorkspaceTabDirty("assembly", form.formState.isDirty);
-  const blocker = useWorkspaceTabBlocker(form.formState.isDirty);
+  const isDirty = form.formState.isDirty || restoredDraftActive;
+  useEffect(() => {
+    const persist = () => {
+      if (!form.formState.isDirty && !restoredDraftActive) {
+        discardDraft();
+        return;
+      }
+      saveDraft({values: form.getValues()});
+    };
+    persist();
+    const subscription = form.watch(persist);
+    return () => subscription.unsubscribe();
+  }, [discardDraft, form, restoredDraftActive, saveDraft]);
+  useErpDirtyGuard(isDirty);
+  useWorkspaceTabDirty("assembly", isDirty);
+  const blocker = useWorkspaceTabBlocker(isDirty);
   useEffect(() => {form.setValue("handler", handler);}, [form, handler]);
   const source = references.inventory.find((item) => item.sn.toLowerCase() === beforeSn.trim().toLowerCase() || item.id.toLowerCase() === beforeSn.trim().toLowerCase());
   const activeParts = mode === "拆卸" ? afterParts : beforeParts;
   const totals = useMemo(() => ({cost: activeParts.reduce((sum, part) => sum + part.costPrice, 0), sell: activeParts.reduce((sum, part) => sum + part.estSellPrice, 0)}), [activeParts]);
-  const resetForm = () => form.reset(createAssemblyFormDefaults(handler));
-  const unsavedChanges = useErpUnsavedChangesGuard(form.formState.isDirty);
+  const resetForm = () => {
+    discardDraft();
+    setRestoredDraftActive(false);
+    form.reset(createAssemblyFormDefaults(handler));
+  };
+  const unsavedChanges = useErpUnsavedChangesGuard(isDirty);
   const applyScan = (code: string) => {
     if (!scanTarget) return;
     if (scanTarget.kind === "beforeSn") form.setValue("beforeSn", code, {shouldDirty: true, shouldValidate: true});
@@ -46,7 +65,7 @@ export function AssemblyOperationForm({handler, references, showCost, showProfit
     <ErpFormSection title="经办与备注"><div className="grid gap-3 md:grid-cols-[240px_minmax(0,1fr)]"><label className="text-sm font-semibold">经办人<Input className="mt-2" value={handler} disabled /></label><label className="text-sm font-semibold">操作备注<Textarea className="mt-2 min-h-20" {...form.register("remarks")} placeholder="记录拆装原因、测试说明或后续处理要求" disabled={submitting} /></label></div></ErpFormSection>
     <DashboardSection title="操作摘要"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Summary icon={<PackageOpen className="h-4 w-4" />} label="配件数量" value={`${activeParts.length} 件`} /><Summary icon={<CircleDollarSign className="h-4 w-4" />} label="成本合计" value={showCost ? formatCurrency(totals.cost) : "无权限"} /><Summary icon={<CircleDollarSign className="h-4 w-4" />} label="预计价值" value={showProfit ? formatCurrency(totals.sell) : "无权限"} /><Summary icon={<Combine className="h-4 w-4" />} label="预计差额" value={showCost && showProfit ? formatCurrency(totals.sell - totals.cost) : "无权限"} /></div></DashboardSection>
     {error && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-sm text-[var(--erp-color-danger)]">{error}</p>}
-    <ErpSubmitBar dirty={form.formState.isDirty} canSubmit={assemblyFormSchema.safeParse(formValues).success} blockedReason={`请完善${mode}来源、SN 和配件信息`} submitting={submitting} submitLabel={`保存${mode}单`} onCancel={() => unsavedChanges.requestLeave(resetForm)} />
+    <ErpSubmitBar dirty={isDirty} canSubmit={assemblyFormSchema.safeParse(formValues).success} blockedReason={`请完善${mode}来源、SN 和配件信息`} submitting={submitting} submitLabel={`保存${mode}单`} onCancel={() => unsavedChanges.requestLeave(resetForm)} />
     <ErpBarcodeScannerDialog open={Boolean(scanTarget)} onOpenChange={(open) => {if (!open) setScanTarget(null);}} onDetected={applyScan} title="扫描库存 SN" description="识别库存条码或二维码，只回填当前拆装字段。" />
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
     {unsavedChanges.dialog}

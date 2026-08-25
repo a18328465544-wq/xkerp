@@ -1,7 +1,7 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
-import {useMemo, useState, type FormEvent, type ReactNode} from "react";
+import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
@@ -15,7 +15,7 @@ import type {PurchaseReturnFormValues} from "@/src/types/returns";
 import {isInventoryLinkedToPurchase} from "@/src/utils/inventoryRelations";
 import {createProductIdentityIndex, sameProductIdentity} from "@/src/utils/productIdentity";
 import {storeDate} from "@/src/utils/storeTime";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 import {calculatePurchaseReturnPreview, canDirectWriteOffPurchase} from "../purchase-return.calculations";
 
 const settlementOptions = [{value: "原路退款", label: "原路退款"}, {value: "抵扣账款", label: "转为供应商抵扣"}, {value: "直接冲销", label: "直接冲销误录付款"}];
@@ -36,7 +36,10 @@ export function NewPurchaseReturnPage() {
 
 function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session: AuthSession; state: Awaited<ReturnType<typeof returnsApi.reference>>; onAuthExpired: () => void; onSuccess: () => void}) {
   const navigate = useNavigate();
-  const [values, setValues] = useState<PurchaseReturnFormValues>(() => ({date: storeDate(), relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementMode: "抵扣账款", settlementAccountId: "", handler: session.user.displayName, reason: "", inventoryAction: "退回供应商", remarks: ""}));
+  const defaultValues: PurchaseReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementMode: "抵扣账款", settlementAccountId: "", handler: session.user.displayName, reason: "", inventoryAction: "退回供应商", remarks: ""};
+  const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: PurchaseReturnFormValues}>("return_purchase");
+  const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
+  const [values, setValues] = useState<PurchaseReturnFormValues>(() => restoredDraft?.values || defaultValues);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const productIndex = useMemo(() => createProductIdentityIndex(state.products), [state.products]);
@@ -71,6 +74,8 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
       const payload = result.data && typeof result.data === "object" ? result.data as Record<string, unknown> : {};
       setSuccess(`采购退货单 ${String(payload.returnNo || "已创建")} 已提交，等待完成处理。`);
       toast.success("采购退货单已提交");
+      discardDraft();
+      setRestoredDraftActive(false);
       setValues((current) => ({...current, relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementAccountId: "", reason: "", remarks: ""}));
       onSuccess();
     } catch (caught) {
@@ -78,7 +83,14 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
       setError(caught instanceof Error ? caught.message : "采购退货提交失败");
     }
   };
-  const dirty = Boolean(values.relatedDocNo || values.sourceInventoryId || values.reason || values.remarks);
+  const dirty = restoredDraftActive || Boolean(values.relatedDocNo || values.sourceInventoryId || values.reason || values.remarks);
+  useEffect(() => {
+    if (!dirty) {
+      discardDraft();
+      return;
+    }
+    saveDraft({values});
+  }, [discardDraft, dirty, saveDraft, values]);
   const canSubmit = Boolean(selectedInvoice && selectedCard && selectedLine && values.reason.trim()
     && (!needsLegacyAccount || values.settlementAccountId)
     && (values.settlementMode !== "直接冲销" || directWriteOffAllowed)

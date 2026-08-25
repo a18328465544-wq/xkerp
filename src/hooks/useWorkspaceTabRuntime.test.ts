@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {keepAliveKeysForTab, resolveWorkspaceKeepAliveKey, shouldBlockWorkspaceNavigation} from "./useWorkspaceTabRuntime";
+import {createWorkspaceDraftStore, keepAliveKeysForTab, resolveWorkspaceKeepAliveKey, shouldBlockWorkspaceNavigation} from "./useWorkspaceTabRuntime";
 
 test("workspace keep-alive routes use stable entry keys", () => {
   assert.equal(resolveWorkspaceKeepAliveKey("/sales/new"), "sales-create");
@@ -19,4 +19,19 @@ test("tab switching preserves dirty forms while ordinary navigation remains guar
   assert.equal(shouldBlockWorkspaceNavigation(true, "close"), true);
   assert.equal(shouldBlockWorkspaceNavigation(true, null), true);
   assert.equal(shouldBlockWorkspaceNavigation(false, "close"), false);
+});
+
+test("workspace drafts stay isolated by tab and clear when a tab is released", () => {
+  const drafts = createWorkspaceDraftStore();
+  const salesDraft = {values: {customerName: "客户 A"}};
+  const purchaseDraft = {values: {supplierName: "供应商 B"}};
+  drafts.setDraft("sales_add", salesDraft);
+  drafts.setDraft("purchase_add", purchaseDraft);
+
+  assert.deepEqual(drafts.getDraft("sales_add"), salesDraft);
+  assert.deepEqual(drafts.getDraft("purchase_add"), purchaseDraft);
+
+  drafts.clearDraft("sales_add");
+  assert.equal(drafts.getDraft("sales_add"), undefined);
+  assert.deepEqual(drafts.getDraft("purchase_add"), purchaseDraft);
 });

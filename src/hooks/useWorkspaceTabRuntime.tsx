@@ -7,6 +7,12 @@ export type {WorkspaceKeepAliveKey} from "./workspaceTabRuntimeConfig";
 
 type ReleaseRequests = Record<string, number>;
 type DirtyTabs = Record<string, boolean>;
+type WorkspaceDrafts = Record<string, unknown>;
+type WorkspaceDraftStore = {
+  getDraft: <T>(tabId: string) => T | undefined;
+  setDraft: (tabId: string, draft: unknown) => void;
+  clearDraft: (tabId: string) => void;
+};
 
 interface WorkspaceTabRuntimeValue {
   navigationIntentRef: {current: WorkspaceNavigationIntent};
@@ -14,23 +20,40 @@ interface WorkspaceTabRuntimeValue {
   clearNavigationIntent: () => void;
   releaseTab: (tabId: string) => void;
   releaseRequests: ReleaseRequests;
+  getDraft: <T>(tabId: string) => T | undefined;
+  setDraft: (tabId: string, draft: unknown) => void;
+  clearDraft: (tabId: string) => void;
   setTabDirty: (tabId: string, dirty: boolean) => void;
   isTabDirty: (tabId: string) => boolean;
 }
 
 const WorkspaceTabRuntimeContext = createContext<WorkspaceTabRuntimeValue | null>(null);
 
+export function createWorkspaceDraftStore(): WorkspaceDraftStore {
+  const drafts: WorkspaceDrafts = {};
+  return {
+    getDraft: <T,>(tabId: string) => drafts[tabId] as T | undefined,
+    setDraft: (tabId: string, draft: unknown) => { drafts[tabId] = draft; },
+    clearDraft: (tabId: string) => { delete drafts[tabId]; },
+  };
+}
+
 export function WorkspaceTabRuntimeProvider({children}: {children: ReactNode}) {
   const navigationIntentRef = useRef<WorkspaceNavigationIntent>(null);
   const [releaseRequests, setReleaseRequests] = useState<ReleaseRequests>({});
   const [dirtyTabs, setDirtyTabs] = useState<DirtyTabs>({});
+  const draftsRef = useRef(createWorkspaceDraftStore());
 
   const updateNavigationIntent = useCallback((intent: WorkspaceNavigationIntent) => {
     navigationIntentRef.current = intent;
   }, []);
   const clearNavigationIntent = useCallback(() => updateNavigationIntent(null), [updateNavigationIntent]);
+  const getDraft = useCallback(<T,>(tabId: string) => draftsRef.current.getDraft<T>(tabId), []);
+  const setDraft = useCallback((tabId: string, draft: unknown) => draftsRef.current.setDraft(tabId, draft), []);
+  const clearDraft = useCallback((tabId: string) => draftsRef.current.clearDraft(tabId), []);
   const releaseTab = useCallback((tabId: string) => {
     setReleaseRequests((current) => ({...current, [tabId]: (current[tabId] || 0) + 1}));
+    draftsRef.current.clearDraft(tabId);
     setDirtyTabs((current) => {
       if (!current[tabId]) return current;
       const next = {...current};
@@ -57,9 +80,12 @@ export function WorkspaceTabRuntimeProvider({children}: {children: ReactNode}) {
     clearNavigationIntent,
     releaseTab,
     releaseRequests,
+    getDraft,
+    setDraft,
+    clearDraft,
     setTabDirty,
     isTabDirty,
-  }), [clearNavigationIntent, dirtyTabs, isTabDirty, navigationIntentRef, releaseRequests, releaseTab, setTabDirty, updateNavigationIntent]);
+  }), [clearDraft, clearNavigationIntent, dirtyTabs, getDraft, isTabDirty, navigationIntentRef, releaseRequests, releaseTab, setDraft, setTabDirty, updateNavigationIntent]);
 
   return <WorkspaceTabRuntimeContext.Provider value={value}>{children}</WorkspaceTabRuntimeContext.Provider>;
 }
@@ -68,6 +94,13 @@ export function useWorkspaceTabRuntime() {
   const context = useContext(WorkspaceTabRuntimeContext);
   if (!context) throw new Error("useWorkspaceTabRuntime 必须在 WorkspaceTabRuntimeProvider 内使用");
   return context;
+}
+
+export function useWorkspaceTabDraft<T>(tabId: string) {
+  const {getDraft, setDraft, clearDraft} = useWorkspaceTabRuntime();
+  const saveDraft = useCallback((draft: T) => setDraft(tabId, draft), [setDraft, tabId]);
+  const discardDraft = useCallback(() => clearDraft(tabId), [clearDraft, tabId]);
+  return {draft: getDraft<T>(tabId), saveDraft, discardDraft};
 }
 
 export function shouldBlockWorkspaceNavigation(dirty: boolean, navigationIntent: WorkspaceNavigationIntent) {

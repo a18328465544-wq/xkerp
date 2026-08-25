@@ -1,6 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
-import {useMemo, useState, type FormEvent, type ReactNode} from "react";
+import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
@@ -11,7 +11,7 @@ import type {AuthSession} from "@/src/services/api";
 import type {SalesReturnFormValues} from "@/src/types/returns";
 import type {SalesInvoice} from "@/src/types/sales";
 import {storeDate} from "@/src/utils/storeTime";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 
 const actionOptions = [{value: "退回待检测", label: "退回待检测"}, {value: "直接报废", label: "直接报废"}] as const;
 const responsibilityOptions = ["客户", "供应商", "平台", "本店", "其他"].map((value) => ({value, label: value}));
@@ -34,7 +34,10 @@ export function NewSalesReturnPage() {
 function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess}: {session: AuthSession; invoices: SalesInvoice[]; inventory: Array<{id: string; sn: string; salesInvoiceId?: string; status: string}>; onAuthExpired: () => void; onSuccess: () => void}) {
   const navigate = useNavigate();
   const eligibleInvoices = useMemo(() => invoices.filter((invoice) => invoice.outboundStatus === "已出库"), [invoices]);
-  const [values, setValues] = useState<SalesReturnFormValues>(() => ({date: storeDate(), relatedDocNo: "", sourceInventoryId: "", sourceSalesItemIndex: -1, productId: "", productName: "", sn: "", partyName: "", partyId: "", contact: "", amount: 0, inventoryAction: "退回待检测", reason: "", responsibility: "客户", handler: session.user.displayName, remarks: ""}));
+  const defaultValues: SalesReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", sourceSalesItemIndex: -1, productId: "", productName: "", sn: "", partyName: "", partyId: "", contact: "", amount: 0, inventoryAction: "退回待检测", reason: "", responsibility: "客户", handler: session.user.displayName, remarks: ""};
+  const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: SalesReturnFormValues}>("return_sales");
+  const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
+  const [values, setValues] = useState<SalesReturnFormValues>(() => restoredDraft?.values || defaultValues);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const selectedInvoice = eligibleInvoices.find((invoice) => invoice.invoiceNo === values.relatedDocNo);
@@ -65,6 +68,8 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
       const data = result.data && typeof result.data === "object" ? result.data as Record<string, unknown> : {};
       setSuccess(`销售退货单 ${String(data.returnNo || "已创建")} 已提交，等待处理。`);
       toast.success("销售退货单已提交");
+      discardDraft();
+      setRestoredDraftActive(false);
       setValues((current) => ({...current, relatedDocNo: "", sourceInventoryId: "", sourceSalesItemIndex: -1, productId: "", productName: "", sn: "", partyName: "", partyId: "", contact: "", amount: 0, reason: "", remarks: ""}));
       onSuccess();
     } catch (caught) {
@@ -72,7 +77,14 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
       setError(caught instanceof Error ? caught.message : "退货单提交失败");
     }
   };
-  const dirty = Boolean(values.relatedDocNo || values.reason || values.remarks);
+  const dirty = restoredDraftActive || Boolean(values.relatedDocNo || values.sourceInventoryId || values.reason || values.remarks);
+  useEffect(() => {
+    if (!dirty) {
+      discardDraft();
+      return;
+    }
+    saveDraft({values});
+  }, [discardDraft, dirty, saveDraft, values]);
   const canSubmit = Boolean(selectedInvoice && selectedItem && selectedCard && values.reason.trim());
   useErpDirtyGuard(dirty);
   useWorkspaceTabDirty("return_sales", dirty);

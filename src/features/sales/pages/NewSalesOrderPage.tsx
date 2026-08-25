@@ -1,6 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {ArrowLeft, RefreshCw} from "lucide-react";
-import {useMemo, useRef, useState, type FormEvent} from "react";
+import {useEffect, useMemo, useRef, useState, type FormEvent} from "react";
 import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
@@ -13,7 +13,7 @@ import type {AuthSession} from "@/src/services/api";
 import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate} from "@/src/types/sales";
 import type {PartnerQuickCreateValues} from "@/src/lib/partnerQuickCreate";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 import {createSalesDefaults, createSalesLineDefaults} from "@/src/features/sales/sales.defaults";
 import {calculateSalesAmounts} from "@/src/features/sales/sales.calculations";
 import {salesOrderSchema} from "@/src/features/sales/sales.schema";
@@ -24,6 +24,12 @@ import {salesFieldErrors, salesFormValidationMessage, salesSubmitErrorMessage} f
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 const salesChannels: SalesChannel[] = ["到店", "闲鱼", "抖音", "小红书", "B站", "微信私域", "同行网店"];
+
+type SalesOrderDraft = {
+  values: SalesFormValues;
+  selectedCustomer: SalesCustomerOption | null;
+  selectedCandidatesByIndex?: Array<SalesInventoryCandidate | null>;
+};
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : "请求失败，请稍后重试";
@@ -59,17 +65,19 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const canReadSettlementAccounts = hasAllPermissions || allowedMenus.includes("settlement_accounts");
   const showCost = permissions.showCost;
   const defaultValues = useMemo(() => createSalesDefaults(operatorName), [operatorName]);
-  const form = useForm<SalesFormValues>({defaultValues, mode: "onBlur", resolver: zodResolver(salesOrderSchema)});
+  const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<SalesOrderDraft>("sales_add");
+  const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
+  const form = useForm<SalesFormValues>({defaultValues: restoredDraft?.values || defaultValues, mode: "onBlur", resolver: zodResolver(salesOrderSchema)});
   const {control, register, handleSubmit, setValue, setError, clearErrors, reset, getValues, formState} = form;
   const {fields, append, remove} = useFieldArray({control, name: "items"});
   const watchedValues = useWatch({control});
   const values = watchedValues as SalesFormValues;
   const canSubmit = useMemo(() => salesOrderSchema.safeParse(values).success, [values]);
   const amounts = useMemo(() => calculateSalesAmounts({items: values.items || [], paidAmount: values.paidAmount || 0}, showCost && permissions.showProfit), [permissions.showProfit, showCost, values.items, values.paidAmount]);
-  const [selectedCustomer, setSelectedCustomer] = useState<SalesCustomerOption | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<SalesCustomerOption | null>(() => restoredDraft?.selectedCustomer || null);
   const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
   const [customerCreate, setCustomerCreate] = useState<{initialName: string} | null>(null);
-  const [selectedCandidates, setSelectedCandidates] = useState<Record<string, SalesInventoryCandidate | null>>({});
+  const [selectedCandidates, setSelectedCandidates] = useState<Record<string, SalesInventoryCandidate | null>>(() => Object.fromEntries(fields.map((field, index) => [field.id, restoredDraft?.selectedCandidatesByIndex?.[index] || null])) as Record<string, SalesInventoryCandidate | null>);
   const [customerKeyword, setCustomerKeyword] = useState("");
   const [inventoryKeywords, setInventoryKeywords] = useState<Record<string, string>>({});
   const [activeInventoryFieldId, setActiveInventoryFieldId] = useState<string | null>(null);
@@ -83,8 +91,21 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const [conflictError, setConflictError] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const submitLock = useRef(false);
-  useErpDirtyGuard(formState.isDirty);
-  useWorkspaceTabDirty("sales_add", formState.isDirty);
+  const isDirty = formState.isDirty || restoredDraftActive;
+  useEffect(() => {
+    const persist = () => {
+      if (!formState.isDirty && !restoredDraftActive) {
+        discardDraft();
+        return;
+      }
+      saveDraft({values: form.getValues(), selectedCustomer, selectedCandidatesByIndex: fields.map((field) => selectedCandidates[field.id] || null)});
+    };
+    persist();
+    const subscription = form.watch(persist);
+    return () => subscription.unsubscribe();
+  }, [discardDraft, fields, form, formState.isDirty, restoredDraftActive, saveDraft, selectedCandidates, selectedCustomer]);
+  useErpDirtyGuard(isDirty);
+  useWorkspaceTabDirty("sales_add", isDirty);
 
   const createMutation = useMutation({mutationFn: (payload: {values: SalesFormValues}) => {
     const account = accountQuery.data?.find((item) => item.id === payload.values.settlementAccountId);
@@ -190,6 +211,8 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       const result = await createMutation.mutateAsync({values: submitted});
       setSuccessMessage(`销售单 ${result.invoiceNo || "已创建"} 已提交，当前状态：${result.outboundStatus || "待出库"}`);
       toast.success("销售单已提交，等待出库绑定 SN");
+      discardDraft();
+      setRestoredDraftActive(false);
       reset(createSalesDefaults(operatorName));
       setSelectedCustomer(null);
       setSelectedCandidates({});
@@ -217,7 +240,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     toast.error(message);
   };
   const leave = () => { window.history.back(); };
-  const blocker = useWorkspaceTabBlocker(formState.isDirty);
+  const blocker = useWorkspaceTabBlocker(isDirty);
   const customerError = !canReadCustomers ? "当前账号没有客户搜索权限" : customerQuery.error ? (customerQuery.error instanceof ApiError && customerQuery.error.isForbidden ? "当前账号没有客户搜索权限" : errorText(customerQuery.error)) : undefined;
   const customerOptions = useMemo(() => {
     const recentRank = new Map(recentCustomerIds.map((id, index) => [id, index]));
@@ -246,7 +269,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
           <ErpFormSection title="销售备注" description="记录交付、售后和客户特殊要求。"><Textarea {...register("remarks")} className="min-h-24" placeholder="销售单备注、交付说明或客户特殊要求" /></ErpFormSection>
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
-          <Card><CardContent className="space-y-4 p-4"><div><h2 className="text-sm font-bold">收款信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">选择账户并确认全款或挂账状态。</p></div><SalesPaymentSection embedded compact control={control} setValue={setValue} accounts={accountQuery.data || []} accountsLoading={accountQuery.isPending || accountQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void accountQuery.refetch()} paidAmount={values.paidAmount || 0} totalAmount={amounts.subtotal} salesperson={values.handleBy} /><div className="grid grid-cols-2 gap-2"><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("needInvoice")} />{values.needInvoice ? "普通发票" : "不开票"}</label><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("freeShipping")} />{values.freeShipping ? "顺丰包邮" : "到付自理"}</label></div><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">销售结算汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{amounts.quantity} 件</span></div><SalesAmountSummary embedded amounts={amounts} showCost={showCost && permissions.showProfit} /></div><ErpSubmitBar embedded compact showCancel={false} dirty={formState.isDirty} canSubmit={canSubmit} blockedReason="请选择客户、商品和有效收款状态" submitting={createMutation.isPending} onCancel={leave} submitLabel="确认开单 · 待出库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
+          <Card><CardContent className="space-y-4 p-4"><div><h2 className="text-sm font-bold">收款信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">选择账户并确认全款或挂账状态。</p></div><SalesPaymentSection embedded compact control={control} setValue={setValue} accounts={accountQuery.data || []} accountsLoading={accountQuery.isPending || accountQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void accountQuery.refetch()} paidAmount={values.paidAmount || 0} totalAmount={amounts.subtotal} salesperson={values.handleBy} /><div className="grid grid-cols-2 gap-2"><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("needInvoice")} />{values.needInvoice ? "普通发票" : "不开票"}</label><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("freeShipping")} />{values.freeShipping ? "顺丰包邮" : "到付自理"}</label></div><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">销售结算汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{amounts.quantity} 件</span></div><SalesAmountSummary embedded amounts={amounts} showCost={showCost && permissions.showProfit} /></div><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason="请选择客户、商品和有效收款状态" submitting={createMutation.isPending} onCancel={leave} submitLabel="确认开单 · 待出库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
         </ErpTransactionSecondary>
       </ErpTransactionColumns>
     </form>
