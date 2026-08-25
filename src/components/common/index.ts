@@ -4,6 +4,7 @@ export {ErpCalendar} from "./ErpCalendar";
 export {ErpDataTable, type ErpDataTableProps} from "./ErpDataTable";
 export {ErpColumnVisibilityMenu, type ErpColumnVisibilityMenuProps} from "./ErpColumnVisibilityMenu";
 export {ErpDetailDrawer} from "./ErpDetailDrawer";
+export {ErpDocumentDeleteDialog, type ErpDocumentDeleteDialogProps} from "./ErpDocumentDeleteDialog";
 export {ErpDatePicker} from "./ErpDatePicker";
 export {ErpDateTimePicker, type ErpDateTimePickerProps} from "./ErpDateTimePicker";
 export {defaultDateRangePresets, ErpDateRangePicker, type DateRangePresetOption, type ErpDateRangePickerProps} from "./ErpDateRangePicker";

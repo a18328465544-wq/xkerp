@@ -1,11 +1,12 @@
-import {keepPreviousData, useQuery} from "@tanstack/react-query";
+import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {SortingState, VisibilityState} from "@tanstack/react-table";
 import {CircleDollarSign, ClipboardList, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search} from "lucide-react";
-import {useMemo, type ReactNode} from "react";
+import {useMemo, useState, type ReactNode} from "react";
+import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
-import {purchaseApi, queryKeys} from "@/src/services/api";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ApiError, purchaseApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -37,7 +38,7 @@ function usePurchaseListUrlState() {
 
 export function PurchaseListPage() {
   const navigate = useNavigate();
-  const {session} = useAuth();
+  const {session, logout} = useAuth();
   const {filters, commitFilters} = usePurchaseListUrlState();
   const permissions = session?.permissions || permissionDefaults;
   const allowed = createCapabilities(session).menu("purchase_list");
@@ -61,10 +62,11 @@ export function PurchaseListPage() {
     onDetail={openDetail}
     onCreate={() => void navigate({to: "/purchase/new"})}
     onRefresh={() => void listQuery.refetch()}
+    onAuthExpired={logout}
   />;
 }
 
-function PurchaseListContent({filters, commitFilters, session, query, onDetail, onCreate, onRefresh}: {
+function PurchaseListContent({filters, commitFilters, session, query, onDetail, onCreate, onRefresh, onAuthExpired}: {
   filters: PurchaseListFilters;
   commitFilters: (filters: PurchaseListFilters) => void;
   session: AuthSession;
@@ -72,10 +74,23 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
   onDetail: (item: PurchaseListItem) => void;
   onCreate: () => void;
   onRefresh: () => void;
+  onAuthExpired: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState<PurchaseListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "purchase-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectPurchaseList(query.data?.items || [], filters), [filters, query.data]);
-  const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, onDetail}), [onDetail, session.permissions.showCost, session.permissions.showProfit]);
+  const invalidate = async () => {await Promise.all([
+    queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.customers.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.crm.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.state.all()}),
+  ]);};
+  const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
+  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); toast.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
+  const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail, onDelete: setDeleting}), [onDetail, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
   const activeFilterCount = countActivePurchaseListFilters(filters);
   const canCreate = createCapabilities(session).menu("purchase_add");
   const sorting: SortingState = [{id: filters.sortKey, desc: filters.sortDirection === "desc"}];
@@ -151,6 +166,16 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
       enableColumnResizing
       density={density}
       stickyHeader
+    />
+    <ErpDocumentDeleteDialog
+      open={Boolean(deleting)}
+      title="删除采购单"
+      documentName={deleting?.invoiceNo || "当前采购单"}
+      description="仅尚未入库且未开始检测的采购单允许删除；删除会清理待检测库存、付款流水和财务关联，服务端会再次核验业务状态。"
+      pending={deleteMutation.isPending}
+      error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
+      onOpenChange={(open) => {if (!open) {setDeleting(null); deleteMutation.reset();}}}
+      onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}}
     />
     </ErpPageContent>
   </ErpListPageFrame>;

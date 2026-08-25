@@ -72,6 +72,11 @@ export const salesApi = {
     const response = await apiRequest<SalesCreateResponseDto>("/api/sales-invoices", {method: "POST", body: JSON.stringify(request), signal});
     return adaptSalesInvoice(response.data);
   },
+
+  async remove(id: string, signal?: AbortSignal): Promise<SalesInvoiceResult> {
+    const response = await apiRequest<SalesCreateResponseDto>(`/api/sales-invoices/${encodeURIComponent(id)}`, {method: "DELETE", signal});
+    return adaptSalesInvoice(response.data);
+  },
 };
 
 export type {SalesApiPermissions, SalesCreateResponseDto};

@@ -29,6 +29,11 @@ export const purchaseApi = {
     return adaptPurchaseCreateResponse(response);
   },
 
+  async remove(id: string, signal?: AbortSignal): Promise<PurchaseCreateResult> {
+    const response = await apiRequest<PurchaseCreateResponseDto>(`/api/purchase-invoices/${encodeURIComponent(id)}`, {method: "DELETE", signal});
+    return adaptPurchaseCreateResponse(response);
+  },
+
   async detail(id: string, permissions: PurchaseDetailPermissions, signal?: AbortSignal): Promise<PurchaseDetail> {
     const response = await apiRequest<PurchaseDetailStateResponseDto>(`/api/purchase-invoices/detail?id=${encodeURIComponent(id)}`, {signal});
     const detail = adaptPurchaseDetailState(response, id, permissions);

@@ -1,11 +1,12 @@
-import {keepPreviousData, useQuery} from "@tanstack/react-query";
+import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-table";
 import {Banknote, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search, ShoppingCart, Truck} from "lucide-react";
-import {useCallback, useMemo, type ReactNode} from "react";
+import {useCallback, useMemo, useState, type ReactNode} from "react";
+import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
-import {queryKeys, salesApi} from "@/src/services/api";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ApiError, queryKeys, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -38,7 +39,7 @@ function useSalesListUrlState() {
 
 export function SalesListPage() {
   const navigate = useNavigate();
-  const {session} = useAuth();
+  const {session, logout} = useAuth();
   const {filters, commitFilters, detailId, commitDetail} = useSalesListUrlState();
   const permissions = session?.permissions || permissionDefaults;
   const allowed = createCapabilities(session).menu("sales_list");
@@ -62,10 +63,11 @@ export function SalesListPage() {
     query={listQuery}
     onCreate={() => void navigate({to: "/sales/new"})}
     onRefresh={() => void listQuery.refetch()}
+    onAuthExpired={logout}
   />;
 }
 
-function SalesListContent({filters, commitFilters, detailId, commitDetail, session, query, onCreate, onRefresh}: {
+function SalesListContent({filters, commitFilters, detailId, commitDetail, session, query, onCreate, onRefresh, onAuthExpired}: {
   filters: SalesListFilters;
   commitFilters: (filters: SalesListFilters) => void;
   detailId: string | null;
@@ -74,12 +76,25 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof salesApi.list>>>>;
   onCreate: () => void;
   onRefresh: () => void;
+  onAuthExpired: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState<SalesListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "sales-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectSalesList(query.data?.items || [], filters), [filters, query.data]);
   const selectedDetail = useMemo(() => query.data?.items.find((item) => item.id === detailId || item.invoiceNo === detailId) || null, [detailId, query.data?.items]);
   const openDetail = useCallback((item: SalesListItem) => commitDetail(item.id), [commitDetail]);
-  const columns = useMemo(() => createSalesListColumns({showProfit: session.permissions.showProfit, onDetail: openDetail}), [openDetail, session.permissions.showProfit]);
+  const invalidate = async () => {await Promise.all([
+    queryClient.invalidateQueries({queryKey: queryKeys.sales.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.customers.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.crm.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.state.all()}),
+  ]);};
+  const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
+  const deleteMutation = useMutation({mutationFn: (id: string) => salesApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); commitDetail(null); toast.success(`销售单 ${result.invoiceNo || id} 已删除`, {description: "关联待出库占用、收款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
+  const columns = useMemo(() => createSalesListColumns({showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail: openDetail, onDelete: setDeleting}), [openDetail, session.permissions.canDelete, session.permissions.showProfit]);
   const activeFilterCount = countActiveSalesListFilters(filters);
   const canCreate = createCapabilities(session).menu("sales_add");
   const sorting: SortingState = [{id: filters.sortKey, desc: filters.sortDirection === "desc"}];
@@ -128,9 +143,19 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
       </ErpPageContent>
     </ErpListPageFrame>
 
-    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要">
+    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要" footer={selectedDetail && session.permissions.canDelete ? <div className="flex flex-wrap items-center justify-end gap-2">{selectedDetail.outboundStatus === "已出库" ? <span className="text-xs text-[var(--erp-color-text-muted)]">已出库销售单不能删除</span> : <Button type="button" size="sm" variant="danger" onClick={() => setDeleting(selectedDetail)}>删除销售单</Button>}</div> : undefined}>
       {selectedDetail ? <SalesSnapshotDetail item={selectedDetail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前快照中未找到该销售单，可能已删除或当前账号无权查看。</div>}
     </ErpDetailDrawer>
+    <ErpDocumentDeleteDialog
+      open={Boolean(deleting)}
+      title="删除销售单"
+      documentName={deleting?.invoiceNo || "当前销售单"}
+      description="仅待出库销售单允许删除；服务端会再次检查出库状态，并同步恢复关联库存、收款流水和财务记录。"
+      pending={deleteMutation.isPending}
+      error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
+      onOpenChange={(open) => {if (!open) {setDeleting(null); deleteMutation.reset();}}}
+      onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}}
+    />
   </>;
 }
 

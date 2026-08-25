@@ -1,10 +1,11 @@
-import {useQuery, useQueryClient} from "@tanstack/react-query";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import type {ColumnDef} from "@tanstack/react-table";
-import {ArrowLeft, Boxes, CircleDollarSign, ExternalLink, FileImage, LockKeyhole, Pencil, RefreshCw, ShieldAlert, ShieldCheck, Truck, UserRound} from "lucide-react";
+import {ArrowLeft, Boxes, CircleDollarSign, ExternalLink, FileImage, LockKeyhole, Pencil, RefreshCw, ShieldAlert, ShieldCheck, Trash2, Truck, UserRound} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
-import {Link} from "@tanstack/react-router";
+import {toast} from "sonner";
+import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, CardHeader} from "@/src/components/ui";
-import {ErpDataTable, ErpDetailPageFrame, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {ErpDataTable, ErpDetailPageFrame, ErpDocumentDeleteDialog, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, apiDownload, purchaseApi, queryKeys} from "@/src/services/api";
 import {useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -35,6 +36,11 @@ function statusTone(value: string) {
   if (/待|部分|检测中|处理中/.test(value)) return "warning" as const;
   if (/退|拒|失败|异常|报废|欠款/.test(value)) return "danger" as const;
   return "neutral" as const;
+}
+
+function purchaseDeleteBlockedReason(detail: PurchaseDetail) {
+  const hasProcessedInventory = detail.inventory.some((item) => item.status !== "待检测") || detail.inspectionCount > 0;
+  return hasProcessedInventory ? "已入库或已检测，不能删除" : undefined;
 }
 
 function DetailMetric({label, value, detail, tone = "neutral"}: {label: string; value: string; detail: string; tone?: "neutral" | "success" | "warning"}) {
@@ -102,7 +108,7 @@ function InventoryFacts({items}: {items: readonly PurchaseDetailInventoryItem[]}
   </div>;
 }
 
-function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail: PurchaseDetail; session: AuthSession; onRefresh: () => void; refreshing: boolean}) {
+function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete}: {detail: PurchaseDetail; session: AuthSession; onRefresh: () => void; refreshing: boolean; onDelete: () => void}) {
   const invoice = detail.invoice;
   const showCost = session.permissions.showCost;
   const showProfit = session.permissions.showProfit;
@@ -111,6 +117,7 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
     canEditHistory: session.permissions.canEditHistory,
     hasFullRecordAccess: hasFullPurchaseRecordAccess(session),
   });
+  const deleteBlockedReason = purchaseDeleteBlockedReason(detail);
   const stageLabel = purchaseInventoryStageLabel(policy.inventoryStage);
   const canEdit = policy.mode !== "read-only";
   const editLabel = policy.mode === "full" ? "可完整编辑" : policy.mode === "limited" ? "可编辑备注" : "当前只读";
@@ -122,7 +129,7 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing}: {detail
   ];
 
   return <ErpDetailPageFrame className="max-w-[1600px] space-y-5 pb-12">
-    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label={editLabel} tone={policy.mode === "full" ? "success" : policy.mode === "limited" ? "warning" : "neutral"} /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link>{canEdit && <Link to="/purchase/$purchaseId/edit" params={{purchaseId: invoice.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑采购单</Link>}<Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
+    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label={editLabel} tone={policy.mode === "full" ? "success" : policy.mode === "limited" ? "warning" : "neutral"} /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link>{canEdit && <Link to="/purchase/$purchaseId/edit" params={{purchaseId: invoice.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑采购单</Link>}{session.permissions.canDelete && <Button type="button" size="sm" variant="danger" onClick={onDelete} disabled={Boolean(deleteBlockedReason)} title={deleteBlockedReason}><Trash2 className="h-4 w-4" />{deleteBlockedReason ? "不可删除" : "删除采购单"}</Button>}<Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -168,7 +175,9 @@ function RiskRow({tone, label, values}: {tone: "success" | "warning" | "danger";
 
 export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const {session, status, error: authError, refresh, logout} = useAuth();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const allowed = hasMenu(session, "purchase_list");
   const detailPermissions = useMemo(() => ({
     showCost: Boolean(session?.permissions.showCost),
@@ -177,6 +186,14 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
     canReadPurchaseReturns: hasMenu(session, "return_purchase") || hasMenu(session, "return_orders"),
   }), [session]);
   const detailQuery = useQuery({queryKey: queryKeys.purchase.detail(purchaseId), queryFn: ({signal}) => purchaseApi.detail(purchaseId, detailPermissions, signal), enabled: Boolean(session && allowed), retry: false});
+  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleteOpen(false); toast.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await Promise.all([
+    queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.customers.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.crm.all()}),
+    queryClient.invalidateQueries({queryKey: queryKeys.state.all()}),
+  ]); void navigate({to: "/purchase"});}, onError: (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) logout();}});
 
   useEffect(() => {if (detailQuery.error instanceof ApiError && detailQuery.error.isUnauthorized) logout();}, [detailQuery.error, logout]);
   if (status === "loading") return <Card><ErpLoadingState title="正在验证采购权限" /></Card>;
@@ -185,5 +202,17 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
   if (detailQuery.isPending) return <Card><ErpLoadingState title="正在加载采购详情" description="正在匹配单据、库存、检测和可见付款事实。" /></Card>;
   if (detailQuery.error) return <ErpPageError title="采购详情加载失败" description={errorText(detailQuery.error)} onRetry={() => void detailQuery.refetch()} />;
   if (!detailQuery.data) return <ErpPageError title="采购单不存在" description="该单据可能已删除，或当前账号无权查看。" />;
-  return <PurchaseDetailContent detail={detailQuery.data} session={session} refreshing={detailQuery.isFetching} onRefresh={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()})]);}} />;
+  return <>
+    <PurchaseDetailContent detail={detailQuery.data} session={session} refreshing={detailQuery.isFetching} onDelete={() => {deleteMutation.reset(); setDeleteOpen(true);}} onRefresh={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()})]);}} />
+    <ErpDocumentDeleteDialog
+      open={deleteOpen}
+      title="删除采购单"
+      documentName={detailQuery.data.invoice.invoiceNo || purchaseId}
+      description="仅尚未入库且未开始检测的采购单允许删除；删除会清理待检测库存、付款流水和财务关联，服务端会再次核验业务状态。"
+      pending={deleteMutation.isPending}
+      error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
+      onOpenChange={(open) => {if (!open) {setDeleteOpen(false); deleteMutation.reset();}}}
+      onConfirm={() => deleteMutation.mutate(purchaseId)}
+    />
+  </>;
 }
