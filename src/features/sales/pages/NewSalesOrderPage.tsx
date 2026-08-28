@@ -188,7 +188,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     if (id) setSelectedCandidates((current) => { const next = {...current}; delete next[id]; return next; });
     remove(index);
   };
-  const addLine = () => append({...createSalesLineDefaults(values.aftersalesTerms || "店保三个月"), costPrice: showCost ? 0 : undefined});
+  const addLine = () => append({...createSalesLineDefaults(values.aftersalesTerms || ""), costPrice: showCost ? 0 : undefined});
   const focusInventoryPicker = (fieldId: string) => setActiveInventoryFieldId(fieldId);
   const updateInventoryKeyword = (fieldId: string, keyword: string) => {
     setActiveInventoryFieldId(fieldId);

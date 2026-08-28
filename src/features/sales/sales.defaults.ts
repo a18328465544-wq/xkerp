@@ -3,7 +3,7 @@ import {storeDate} from "@/src/utils/storeTime";
 
 export const SALES_INITIAL_LINE_COUNT = 4;
 
-export function createSalesLineDefaults(aftersalesTerms = "店保三个月"): SalesLineFormValue {
+export function createSalesLineDefaults(aftersalesTerms = ""): SalesLineFormValue {
   return {inventoryId: "", productId: "", productName: "", brand: "", model: "", vram: "", condition: "出库核验", quantity: 1, sellPrice: 0, costPrice: undefined, remarks: "", aftersalesTerms};
 }
 
@@ -22,7 +22,7 @@ export function createSalesDefaults(handleBy: string): SalesFormValues {
     freeShipping: false,
     expressCompany: "顺丰速运",
     expressNo: "",
-    aftersalesTerms: "店保三个月",
+    aftersalesTerms: "",
     handleBy,
     paymentHandler: handleBy,
     remarks: "",

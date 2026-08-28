@@ -12,6 +12,7 @@ function validValues() {
   values.customerName = "张三";
   values.contact = "13800000000";
   values.settlementAccountId = "ACC-1";
+  values.aftersalesTerms = "店保三个月";
   values.items = [{inventoryId: "KC-1", productId: "P-1", productName: "RTX 4090", brand: "", model: "", vram: "", condition: "99新", quantity: 1, sellPrice: 1000, costPrice: 800, remarks: "", aftersalesTerms: "店保三个月"}];
   return values;
 }
@@ -33,7 +34,9 @@ test("sales form rejects duplicate inventory candidates", () => {
 test("sales defaults expose four independent clean line-item editors", () => {
   const values = createSalesDefaults("测试员");
   assert.equal(values.items.length, 4);
+  assert.equal(values.aftersalesTerms, "");
   assert.ok(values.items.every((item) => item.productId === "" && item.costPrice === undefined));
+  assert.ok(values.items.every((item) => item.aftersalesTerms === ""));
   assert.notEqual(values.items[0], values.items[1]);
 });
 
