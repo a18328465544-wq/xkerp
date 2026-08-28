@@ -2,22 +2,26 @@ import {keepPreviousData, useQuery, type UseQueryResult} from "@tanstack/react-q
 import {ArrowRight, Boxes, ImageOff, LockKeyhole, RefreshCw, RotateCcw, Search, ShieldAlert, SlidersHorizontal, Warehouse} from "lucide-react";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
-import {Link} from "@tanstack/react-router";
-import type {InventoryFilters, InventoryListItem, InventoryModelSummary, InventorySummary, InventoryView} from "@/src/types/inventory";
+import {Link, useNavigate} from "@tanstack/react-router";
+import {inventoryStatuses, type InventoryFilters, type InventoryJourney, type InventoryJourneyEvent, type InventoryListItem, type InventoryModelSummary, type InventorySummary, type InventoryView} from "@/src/types/inventory";
 import {createInventoryColumns} from "@/src/features/inventory/inventory.columns";
 import {createInventoryModelColumns} from "@/src/features/inventory/inventory.model-columns";
+import {InventoryJourneyPanel} from "@/src/features/inventory/components/InventoryJourneyPanel";
 import {defaultInventoryFilters, inventoryFiltersToSearch, inventorySummaryFilters, parseInventoryFilters} from "@/src/features/inventory/inventory.filters";
 import type {VisibilityState, RowSelectionState, SortingState} from "@tanstack/react-table";
 import type {PermissionModel} from "@/src/services/api/endpoints/auth";
+import {useProductLedger} from "@/src/hooks/useProductLedger";
+import type {ProductLedgerRow} from "@/src/types/product-ledger";
 
 const emptyInventoryVisibility: VisibilityState = {};
+const journeyFinancialMenus = ["all", "finance", "finance_reports", "finance_closing", "settlement_accounts", "settlement_ledger", "payment_in", "payment_out", "account_transfer", "customer_funds", "return_reconcile"] as const;
 
 type InventoryUrlState = {filters: InventoryFilters; detailId: string | null; view: InventoryView};
 
@@ -52,6 +56,10 @@ export function InventoryListPage() {
   const {filters, commitFilters, detailId, commitDetail, view, commitView, commitState} = useInventoryUrlState();
   const permissions = session.permissions;
   const accessGranted = createCapabilities(session).menu("inventory");
+  const canViewJourneyFinance = journeyFinancialMenus.some((menu) => permissions.allowedMenus.includes(menu));
+  const [ledgerSubject, setLedgerSubject] = useState<InventoryModelSummary | null>(null);
+  const productLedger = useProductLedger({open: Boolean(ledgerSubject), productSkuId: ledgerSubject?.key || "", permissions});
+  const navigate = useNavigate();
   const listEnabled = accessGranted;
   const listQuery = useQuery({
     queryKey: queryKeys.inventory.list(filters),
@@ -74,37 +82,74 @@ export function InventoryListPage() {
     enabled: listEnabled && view === "cards" && Boolean(detailId),
     retry: false,
   });
+  const journeyQuery = useQuery({
+    queryKey: queryKeys.inventory.journey(detailId || "", {showCost: permissions.showCost, showProfit: permissions.showProfit, showFinance: canViewJourneyFinance}),
+    queryFn: ({signal}) => inventoryApi.journey(detailId || "", permissions, signal),
+    enabled: listEnabled && view === "cards" && Boolean(detailId),
+    retry: false,
+  });
 
   if (!accessGranted) return <ErpPageError title="当前账号没有库存入口权限" description="服务器已拒绝库存菜单访问（403）。请联系管理员授权后再试。" />;
 
   const rows = listQuery.data?.data || [];
   const openDetail = (item: InventoryListItem) => commitDetail(item.id);
   const openCardsForModel = (row: InventoryModelSummary) => commitState({filters: {...filters, keyword: row.productName, page: 1}, detailId: null, view: "cards"});
-  return <InventoryPageContent
-    filters={filters}
-    commitFilters={commitFilters}
-    listQuery={listQuery}
-    modelSummaryQuery={modelSummaryQuery}
-    detailQuery={detailQuery}
-    detailId={detailId}
-    onDetail={openDetail}
-    onCloseDetail={() => commitDetail(null)}
-    rows={rows}
-    permissions={permissions}
-    onRefresh={() => { void Promise.all([listQuery.refetch(), modelSummaryQuery.refetch()]); }}
-    view={view}
-    onChangeView={commitView}
-    onOpenCards={openCardsForModel}
-    userId={session.user.id}
-  />;
+  const openProductLedgerDocument = (row: ProductLedgerRow) => {
+    setLedgerSubject(null);
+    if (row.documentType === "采购入库") return void navigate({to: "/purchase", search: {keyword: row.documentNo}});
+    if (row.documentType === "采购退货") return void navigate({to: "/purchase/returns", search: {keyword: row.documentNo}});
+    if (row.documentType === "销售出库") return void navigate({to: "/sales", search: {keyword: row.documentNo}});
+    if (row.documentType === "销售退货") return void navigate({to: "/sales/returns", search: {keyword: row.documentNo}});
+    if (row.documentType === "组装拆卸") return void navigate({to: "/assembly", search: {q: row.documentNo}});
+    return void navigate({to: "/inventory", search: {keyword: row.documentNo}});
+  };
+  return <>
+    <InventoryPageContent
+      filters={filters}
+      commitFilters={commitFilters}
+      listQuery={listQuery}
+      modelSummaryQuery={modelSummaryQuery}
+      detailQuery={detailQuery}
+      journeyQuery={journeyQuery}
+      detailId={detailId}
+      onDetail={openDetail}
+      onCloseDetail={() => commitDetail(null)}
+      rows={rows}
+      permissions={permissions}
+      onRefresh={() => { void Promise.all([listQuery.refetch(), modelSummaryQuery.refetch()]); }}
+      view={view}
+      onChangeView={commitView}
+      onOpenCards={openCardsForModel}
+      onOpenLedger={setLedgerSubject}
+      userId={session.user.id}
+    />
+    <ErpProductLedgerDrawer
+      open={Boolean(ledgerSubject)}
+      subject={ledgerSubject as ProductLedgerSubject | null}
+      permissions={permissions}
+      filters={productLedger.filters}
+      page={productLedger.query.data}
+      loading={productLedger.query.isPending}
+      fetching={productLedger.query.isFetching}
+      error={productLedger.query.error as Error | null}
+      onRetry={() => { void productLedger.query.refetch(); }}
+      onFiltersChange={productLedger.updateFilter}
+      onResetFilters={productLedger.clearFilters}
+      onPageChange={productLedger.changePage}
+      onPageSizeChange={productLedger.changePageSize}
+      onOpenChange={(open) => {if (!open) setLedgerSubject(null);}}
+      onOpenDocument={openProductLedgerDocument}
+    />
+  </>;
 }
 
-function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQuery, detailQuery, detailId, onDetail, onCloseDetail, rows, permissions, onRefresh, view, onChangeView, onOpenCards, userId}: {
+function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQuery, detailQuery, journeyQuery, detailId, onDetail, onCloseDetail, rows, permissions, onRefresh, view, onChangeView, onOpenCards, onOpenLedger, userId}: {
   filters: InventoryFilters;
   commitFilters: (filters: InventoryFilters) => void;
   listQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inventoryApi.list>>>>;
   modelSummaryQuery: UseQueryResult<InventoryModelSummary[], Error>;
   detailQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inventoryApi.detail>>>>;
+  journeyQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inventoryApi.journey>>>>;
   detailId: string | null;
   onDetail: (item: InventoryListItem) => void;
   onCloseDetail: () => void;
@@ -114,9 +159,11 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   view: InventoryView;
   onChangeView: (view: InventoryView) => void;
   onOpenCards: (row: InventoryModelSummary) => void;
+  onOpenLedger: (row: InventoryModelSummary) => void;
   userId: string;
 }) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const navigate = useNavigate();
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "inventory", userId, defaultVisibility: emptyInventoryVisibility});
   const {columnVisibility: modelColumnVisibility, setColumnVisibility: setModelColumnVisibility, density: modelDensity, setDensity: setModelDensity} = useTablePreferences<VisibilityState>({feature: "inventory-models", userId, defaultVisibility: emptyInventoryVisibility});
   const modelRows = modelSummaryQuery.data || [];
@@ -132,7 +179,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     {icon: <LockKeyhole className="h-4 w-4" />, label: "成本权限", value: permissions.showCost ? "可查看" : "已隐藏", description: permissions.showCost ? "按账号权限展示" : "服务器已隐藏", tone: permissions.showCost ? "success" : "neutral"},
   ];
   const columns = useMemo(() => createInventoryColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onDetail}), [onDetail, permissions.showCost, permissions.showProfit]);
-  const modelColumns = useMemo(() => createInventoryModelColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onOpenCards}), [onOpenCards, permissions.showCost, permissions.showProfit]);
+  const modelColumns = useMemo(() => createInventoryModelColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onOpenCards, onOpenLedger}), [onOpenCards, onOpenLedger, permissions.showCost, permissions.showProfit]);
   const updateFilter = (patch: Partial<InventoryFilters>) => commitFilters({...filters, ...patch, page: 1});
   const serverToColumnSort: Record<InventoryFilters["sortKey"], string> = {id: "id", product: "product", cost: "costPrice", profit: "estimatedProfit", days: "inventoryDays", status: "status", warehouseLocation: "warehouseLocation", entryTime: "entryTime"};
   const columnToServerSort: Record<string, InventoryFilters["sortKey"]> = {id: "id", product: "product", costPrice: "cost", estimatedProfit: "profit", inventoryDays: "days", status: "status", warehouseLocation: "warehouseLocation", entryTime: "entryTime"};
@@ -143,10 +190,24 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     commitFilters({...filters, sortKey: columnToServerSort[first?.id || ""] || "entryTime", sortDirection: first?.desc ? "desc" : "asc", page: 1});
   };
   useEffect(() => setRowSelection({}), [filters]);
+  const openJourneyDocument = (event: InventoryJourneyEvent) => {
+    const target = event.type === "purchase" ? "/purchase"
+      : event.type === "sale" ? "/sales"
+        : event.type === "inspection" ? "/inspections"
+          : event.type === "payment" ? "/finance/ledger"
+            : event.type === "aftersales" ? "/aftersales"
+              : event.type === "return" ? (event.title === "销售退货" ? "/sales/returns" : "/purchase/returns")
+                : event.type === "assembly" ? "/assembly"
+                  : undefined;
+    if (!target) return;
+    onCloseDetail();
+    void navigate({to: target});
+  };
+  const detailItem = journeyQuery.data?.card ?? detailQuery.data?.item ?? null;
 
   return <>
     <ErpWarehousePageFrame>
-      <ErpPageHeader title="库存中心" subtitle="按 SN、型号、库位和状态快速定位库存；数据视图只切换下方表格。" quickStatus={quickStatus} actions={<><InventoryViewSwitcher view={view} onChange={onChangeView} /><Button variant="secondary" onClick={onRefresh} disabled={listQuery.isFetching || modelSummaryQuery.isFetching}><RefreshCw className={listQuery.isFetching || modelSummaryQuery.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button></>} />
+      <ErpPageHeader title="库存中心" subtitle="按 SN、型号、库位和状态快速定位库存；默认只展示当前库存，已退货等历史记录请通过状态筛选查看。" quickStatus={quickStatus} actions={<><InventoryViewSwitcher view={view} onChange={onChangeView} /><Button variant="secondary" onClick={onRefresh} disabled={listQuery.isFetching || modelSummaryQuery.isFetching}><RefreshCw className={listQuery.isFetching || modelSummaryQuery.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button></>} />
       <MetricsRegion>
         <MetricCard label="库存总数" value={modelSummaryQuery.data ? `${summary.totalCount} 件` : "—"} detail="按当前筛选" icon={<Boxes className="h-4 w-4" />} />
         <MetricCard label="在库数量" value={modelSummaryQuery.data ? `${summary.availableCount} 件` : "—"} detail="已入库 / 已上架" icon={<Warehouse className="h-4 w-4" />} />
@@ -160,7 +221,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
         <div className="relative min-w-[240px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => updateFilter({keyword: event.target.value})} placeholder="搜索 SN、商品、品牌、型号" aria-label="搜索库存" /></div>
         <FilterInput value={filters.brand} onChange={(value) => updateFilter({brand: value})} label="品牌" placeholder="品牌" />
         <FilterInput value={filters.warehouseLocation} onChange={(value) => updateFilter({warehouseLocation: value})} label="仓库 / 库位" placeholder="仓位" />
-        <FilterSelect value={filters.status} onChange={(value) => updateFilter({status: value, inspectionStatus: ""})} label="库存 / 检测状态" placeholder="全部状态" options={["待检测", "检测中", "已入库", "已上架", "已锁定", "已售出", "维修中", "售后中", "已报废"]} />
+        <FilterSelect value={filters.status} onChange={(value) => updateFilter({status: value, inspectionStatus: ""})} label="库存 / 历史状态" placeholder="当前库存" options={[...inventoryStatuses]} />
         <FilterSelect value={filters.risk} onChange={(value) => updateFilter({risk: value as InventoryFilters["risk"]})} label="风险" placeholder="全部风险" options={["high", "mined", "upturned"]} optionLabels={{high: "高风险", mined: "疑似矿卡", upturned: "倒挂价"}} />
         <label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs text-[var(--erp-color-text-secondary)]"><input type="checkbox" checked={filters.includeSold} onChange={(event) => updateFilter({includeSold: event.target.checked})} />包含已售出</label>
       </ErpFilterBar>
@@ -173,8 +234,8 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
       </>}
       </ErpPageContent>
     </ErpWarehousePageFrame>
-    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} title={detailQuery.data?.item?.productName || detailId || "库存详情"}>
-      {detailQuery.isPending ? <ErpLoadingState title="正在加载库存详情" /> : detailQuery.error ? <ErpEmptyState title="详情加载失败" description={(detailQuery.error as Error).message} action={<Button size="sm" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : detailQuery.data?.item ? <InventoryDetail item={detailQuery.data.item} showCost={permissions.showCost} showProfit={permissions.showProfit} /> : <ErpEmptyState title="库存记录不存在" description="该记录可能已被删除或当前账号无权访问。" />}
+    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} title={journeyQuery.data?.card.productName || detailQuery.data?.item?.productName || detailId || "库存详情"}>
+      {detailQuery.isPending && !detailItem ? <ErpLoadingState title="正在加载库存详情" /> : detailQuery.error && !detailItem ? <ErpEmptyState title="详情加载失败" description={(detailQuery.error as Error).message} action={<Button size="sm" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : detailItem ? <InventoryDetail item={detailItem} journey={journeyQuery.data} journeyLoading={journeyQuery.isPending} journeyError={journeyQuery.error as Error | null} onRetryJourney={() => void journeyQuery.refetch()} onOpenJourneyDocument={openJourneyDocument} showCost={permissions.showCost} showProfit={permissions.showProfit} /> : <ErpEmptyState title="库存记录不存在" description="该记录可能已被删除或当前账号无权访问。" />}
     </ErpDetailDrawer>
   </>;
 }
@@ -205,7 +266,16 @@ function InventoryViewSwitcher({view, onChange}: {view: InventoryView; onChange:
   </div>;
 }
 
-function InventoryDetail({item, showCost, showProfit}: {item: InventoryListItem; showCost: boolean; showProfit: boolean}) {
+function InventoryDetail({item, journey, journeyLoading, journeyError, onRetryJourney, onOpenJourneyDocument, showCost, showProfit}: {
+  item: InventoryListItem;
+  journey?: InventoryJourney;
+  journeyLoading: boolean;
+  journeyError: Error | null;
+  onRetryJourney: () => void;
+  onOpenJourneyDocument: (event: InventoryJourneyEvent) => void;
+  showCost: boolean;
+  showProfit: boolean;
+}) {
   const details: Array<[string, string | undefined]> = [
     ["SN / 库存编号", item.serialNumber], ["品牌 / 型号", `${item.brand} ${item.model}`], ["显存 / 版本", `${item.vram || "—"} ${item.version || ""}`.trim()], ["成色", item.condition], ["仓库 / 库位", item.warehouse], ["检测状态", item.inspectionStatus], ["库存状态", item.inventoryStatus], ["入库时间", item.entryTime || "—"], ["库存龄", `${item.inventoryDays} 天`], ["来源", item.sourceType || "—"], ["供应商 / 客户", item.supplierName || item.buyerName || "—"],
   ];
@@ -215,7 +285,8 @@ function InventoryDetail({item, showCost, showProfit}: {item: InventoryListItem;
       <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-lg font-bold text-[var(--erp-color-text)]">{item.productName}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{item.category}</p></div><InventoryStatus status={item.inventoryStatus} /></div>
     </section>
     <InventoryDetailSection title="基础信息"><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{details.map(([label, value]) => <DetailField key={label} label={label} value={value} />)}</div></InventoryDetailSection>
-    {showCost && <InventoryDetailSection title="成本与售价"><div className="grid grid-cols-2 gap-4 sm:grid-cols-3"><DetailAmount label="成本价" value={item.costPrice} /><DetailAmount label="当前售价" value={item.estimatedSellPrice} /><div><p className="text-xs text-[var(--erp-color-text-muted)]">预计利润</p><p className="mt-1 text-base"><ProfitDisplay value={showProfit ? item.estimatedProfit : undefined} /></p></div></div></InventoryDetailSection>}
+    <InventoryJourneyPanel item={item} journey={journey} showCost={showCost} showProfit={showProfit} loading={journeyLoading} error={journeyError} onRetry={onRetryJourney} onOpenDocument={onOpenJourneyDocument} />
+    {item.inventoryStatus !== "已售出" && showCost && <InventoryDetailSection title="成本与售价"><div className="grid grid-cols-2 gap-4 sm:grid-cols-3"><DetailAmount label="成本价" value={item.costPrice} /><DetailAmount label="预计售价" value={item.estimatedSellPrice} /><div><p className="text-xs text-[var(--erp-color-text-muted)]">预计利润</p><p className="mt-1 text-base"><ProfitDisplay value={showProfit ? item.estimatedProfit : undefined} /></p></div></div></InventoryDetailSection>}
     <InventoryDetailSection title="库存属性"><div className="flex flex-wrap gap-2"><ErpStatusBadge label={item.inWarranty ? "质保中" : "无质保"} tone={item.inWarranty ? "success" : "neutral"} />{item.repaired && <ErpStatusBadge label="维修记录" tone="warning" />}{item.gpuRisk && <ErpStatusBadge label="风险库存" tone="danger" />}{item.fullBox && <ErpStatusBadge label="全套包装" tone="info" />}</div>{item.remarks && <p className="mt-3 text-xs leading-5 text-[var(--erp-color-text-secondary)]">备注：{item.remarks}</p>}</InventoryDetailSection>
   </div>;
 }

@@ -5,6 +5,17 @@ export type {AccountTransferRecord, PaymentInRecord, PaymentOutRecord, Settlemen
 export type {
   InventoryCondition,
   InventoryFilters,
+  InventoryJourney,
+  InventoryJourneyAftersales,
+  InventoryJourneyAssembly,
+  InventoryJourneyDataQuality,
+  InventoryJourneyEvent,
+  InventoryJourneyEventType,
+  InventoryJourneyInspection,
+  InventoryJourneyPayment,
+  InventoryJourneyPurchase,
+  InventoryJourneyReturn,
+  InventoryJourneySale,
   InventoryListItem,
   InventoryListResult,
   InventoryModelSummary,
@@ -36,6 +47,8 @@ export type {
 } from "./purchase";
 export type {ReturnCreateResponse, ReturnInventoryAction, ReturnOrder, ReturnOrderBatchItemInput, ReturnOrderItem, ReturnOrderStatus, ReturnOrderType, ReturnSettlementMode, SalesReturnFormValues} from "./returns";
 export type {ProductLibraryFilters, ProductLibraryItem, ProductLibrarySnapshot, ProductTemplateFormValues} from "./product";
+export {productLedgerDocumentTypes} from "./product-ledger";
+export type {ProductLedgerDocumentType, ProductLedgerFilters, ProductLedgerOperationType, ProductLedgerPage, ProductLedgerRow} from "./product-ledger";
 export type {MarketQuote, MarketQuoteFilters, MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteImportRow, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend} from "./quote";
 export type {AssemblyFormValues, AssemblyInventoryOption, AssemblyOperation, AssemblyOperationFilters, AssemblyOperationList, AssemblyOperationType, AssemblyPart, AssemblyPartFormValue, AssemblyProductOption, AssemblyReferenceData} from "./assembly";
 export type {CrmAccount, CrmAccountFilters, CrmAccountPage, CrmBusinessStatus, CrmContactMethod, CrmFollowUpFormValues, CrmFollowUpResult, CrmIntent, CrmOwnerSummary, CrmSummary, CrmTimelineEvent, CrmTimelinePage, CustomerMatchCandidate, ProductMatchCandidate, QuickCaptureConfirmInput, QuickCaptureFields, QuickCaptureParseResult, QuickCaptureSourceType} from "./crm";

@@ -68,4 +68,17 @@ test("non-operating categories cannot be attached to business documents", () => 
     relatedDocNo: "JH-20260802-001",
     time: "2026-08-02 12:00",
   }), /非经营支出不能绑定/);
+
+  assert.throws(() => actions.createPaymentIn({
+    customerName: "手工采购退款",
+    supplierName: "错误关联供应商",
+    accountId: account.id,
+    amount: 100,
+    handler: "财务",
+    paymentMethod: "微信",
+    businessType: "采购退款",
+    relatedDocType: "退货单",
+    relatedDocNo: "JHTH-20260802-001",
+    time: "2026-08-02 12:00",
+  }), /采购退款只能由进货退货流程生成/);
 });

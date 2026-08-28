@@ -1,7 +1,10 @@
 import {apiRequest} from "../client";
-import {adaptInventoryModelSummaries, adaptInventoryPage, adaptInventorySummary} from "../adapters/inventory.adapter";
-import type {InventoryPageResponseDto, InventorySummaryResponseDto} from "../dto/inventory.dto";
-import type {InventoryFilters, InventoryListResult, InventoryModelSummary, InventorySummary} from "@/src/types/inventory";
+import {adaptInventoryJourney, adaptInventoryModelSummaries, adaptInventoryPage, adaptInventorySummary} from "../adapters/inventory.adapter";
+import {adaptProductLedgerPage} from "../adapters/product-ledger.adapter";
+import type {InventoryJourneyResponseDto, InventoryPageResponseDto, InventorySummaryResponseDto} from "../dto/inventory.dto";
+import type {ProductLedgerPageResponseDto} from "../dto/product-ledger.dto";
+import type {InventoryFilters, InventoryJourney, InventoryListResult, InventoryModelSummary, InventorySummary} from "@/src/types/inventory";
+import type {ProductLedgerFilters, ProductLedgerPage} from "@/src/types/product-ledger";
 
 export interface InventoryPermissions {
   showCost: boolean;
@@ -30,6 +33,19 @@ export function toInventoryQueryParams(filters: InventoryFilters, includePaging 
   set("includeSold", filters.includeSold);
   set("sortKey", filters.sortKey);
   set("sortDirection", filters.sortDirection);
+  return params;
+}
+
+export function toProductLedgerQueryParams(productSkuId: string, filters: ProductLedgerFilters) {
+  const params = new URLSearchParams();
+  params.set("productSkuId", productSkuId);
+  params.set("page", String(filters.page));
+  params.set("pageSize", String(filters.pageSize));
+  if (filters.documentNo.trim()) params.set("documentNo", filters.documentNo.trim());
+  if (filters.createdBy.trim()) params.set("createdBy", filters.createdBy.trim());
+  if (filters.documentType) params.set("documentType", filters.documentType);
+  if (filters.startDate) params.set("startDate", filters.startDate);
+  if (filters.endDate) params.set("endDate", filters.endDate);
   return params;
 }
 
@@ -78,5 +94,16 @@ export const inventoryApi = {
     const response = await apiRequest<InventoryPageResponseDto>(`/api/inventory/items?${params.toString()}`, {signal});
     const page = adaptInventoryPage(response, permissions);
     return {item: page.data.find((item) => item.id === id) || null, fallback: true};
+  },
+
+  async journey(id: string, permissions: InventoryPermissions, signal?: AbortSignal): Promise<InventoryJourney> {
+    const response = await apiRequest<InventoryJourneyResponseDto>(`/api/inventory/items/${encodeURIComponent(id)}/journey`, {signal});
+    return adaptInventoryJourney(response, permissions);
+  },
+
+  async productLedger(productSkuId: string, filters: ProductLedgerFilters, permissions: InventoryPermissions, signal?: AbortSignal): Promise<ProductLedgerPage> {
+    const params = toProductLedgerQueryParams(productSkuId, filters);
+    const response = await apiRequest<ProductLedgerPageResponseDto>(`/api/inventory/product-ledger?${params.toString()}`, {signal});
+    return adaptProductLedgerPage(response, permissions);
   },
 };

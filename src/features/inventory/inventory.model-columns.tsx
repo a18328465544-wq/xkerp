@@ -1,5 +1,5 @@
 import type {ColumnDef} from "@tanstack/react-table";
-import {ArrowUpRight, Boxes} from "lucide-react";
+import {ArrowDownUp, ArrowUpRight, Boxes} from "lucide-react";
 import {Button} from "@/src/components/ui";
 import {ErpStatusBadge} from "@/src/components/common";
 import {ProfitDisplay} from "@/src/components/domain";
@@ -8,7 +8,7 @@ import type {InventoryModelSummary} from "@/src/types/inventory";
 
 const amount = (value: number | undefined) => value === undefined ? "—" : formatCurrency(value);
 
-export function createInventoryModelColumns({showCost, showProfit, onOpenCards}: {showCost: boolean; showProfit: boolean; onOpenCards: (row: InventoryModelSummary) => void}): ColumnDef<InventoryModelSummary, unknown>[] {
+export function createInventoryModelColumns({showCost, showProfit, onOpenCards, onOpenLedger}: {showCost: boolean; showProfit: boolean; onOpenCards: (row: InventoryModelSummary) => void; onOpenLedger: (row: InventoryModelSummary) => void}): ColumnDef<InventoryModelSummary, unknown>[] {
   const columns: ColumnDef<InventoryModelSummary, unknown>[] = [
     {
       id: "product",
@@ -33,7 +33,7 @@ export function createInventoryModelColumns({showCost, showProfit, onOpenCards}:
   if (showProfit) columns.push({id: "estimatedProfit", header: "预计利润", accessorFn: (row) => row.estimatedProfit, size: 120, cell: ({row}) => <ProfitDisplay value={row.original.estimatedProfit} />});
   columns.push(
     {id: "lastEntryTime", header: "最近入库", accessorKey: "lastEntryTime", size: 120, cell: ({row}) => <span className="text-xs text-[var(--erp-color-text-secondary)]">{row.original.lastEntryTime ? row.original.lastEntryTime.slice(0, 10) : "—"}</span>},
-    {id: "actions", header: "操作", enableSorting: false, enableResizing: false, size: 112, enableHiding: false, cell: ({row}) => <Button type="button" size="sm" variant="ghost" onClick={(event) => {event.stopPropagation(); onOpenCards(row.original);}}><ArrowUpRight className="h-3.5 w-3.5" />查看单卡</Button>},
+    {id: "actions", header: "操作", enableSorting: false, enableResizing: false, size: 220, enableHiding: false, cell: ({row}) => <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}><Button type="button" size="sm" variant="ghost" onClick={() => onOpenLedger(row.original)}><ArrowDownUp className="h-3.5 w-3.5" />出入明细</Button><Button type="button" size="sm" variant="ghost" onClick={() => onOpenCards(row.original)}><ArrowUpRight className="h-3.5 w-3.5" />查看单卡</Button></div>},
   );
   return columns;
 }

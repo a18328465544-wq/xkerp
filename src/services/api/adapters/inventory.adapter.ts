@@ -1,5 +1,5 @@
-import type {InventoryItemDto, InventoryPageResponseDto, InventorySummaryResponseDto, InventorySummaryRowDto} from "../dto/inventory.dto";
-import type {InventoryListItem, InventoryListResult, InventoryModelSummary, InventoryPageMeta, InventorySummary, InventoryStatusValue} from "@/src/types/inventory";
+import type {InventoryItemDto, InventoryJourneyResponseDto, InventoryPageResponseDto, InventorySummaryResponseDto, InventorySummaryRowDto} from "../dto/inventory.dto";
+import type {InventoryJourney, InventoryJourneyAftersales, InventoryJourneyAssembly, InventoryJourneyEvent, InventoryJourneyEventType, InventoryJourneyInspection, InventoryJourneyPayment, InventoryJourneyPurchase, InventoryJourneyReturn, InventoryJourneySale, InventoryListItem, InventoryListResult, InventoryModelSummary, InventoryPageMeta, InventorySummary, InventoryStatusValue} from "@/src/types/inventory";
 import {storeDateDiffDays} from "@/src/utils/storeTime";
 
 const inventoryStatuses: readonly InventoryStatusValue[] = [
@@ -27,6 +27,19 @@ function booleanValue(value: unknown) {
 
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function collection(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
+}
+
+function optionalText(value: unknown) {
+  const result = text(value).trim();
+  return result || undefined;
 }
 
 function statusValue(value: unknown): InventoryStatusValue {
@@ -64,6 +77,7 @@ export function adaptInventoryItem(dto: InventoryItemDto, permissions: {showCost
     estimatedSellPrice: sell,
     marketPrice: market,
     estimatedProfit: canShowProfit && cost !== undefined && sell !== undefined ? sell - cost : undefined,
+    actualProfit: canShowProfit && canShowCost ? optionalNumber(dto.actualProfit) : undefined,
     entryTime,
     // 入库日期是库龄的唯一依据。storageDays 仅作为没有可解析日期的历史数据兜底。
     inventoryDays: entryTime ? storeDateDiffDays(entryTime) : Math.max(0, Math.floor(numberValue(dto.storageDays))),
@@ -92,6 +106,168 @@ function readMeta(value: unknown): InventoryPageMeta {
 
 export function adaptInventoryPage(response: InventoryPageResponseDto, permissions: {showCost: boolean; showProfit: boolean}): InventoryListResult {
   return {data: readRows(response.data).map((item) => adaptInventoryItem(item, permissions)), meta: readMeta(response.meta)};
+}
+
+const journeyEventTypes: readonly InventoryJourneyEventType[] = ["purchase", "inspection", "inventory", "sale", "payment", "aftersales", "return", "assembly"];
+
+function journeyEventType(value: unknown): InventoryJourneyEventType {
+  const normalized = text(value, "inventory");
+  return journeyEventTypes.includes(normalized as InventoryJourneyEventType) ? normalized as InventoryJourneyEventType : "inventory";
+}
+
+function adaptJourneyPurchase(value: unknown): InventoryJourneyPurchase | undefined {
+  const item = record(value);
+  const documentNo = text(item.documentNo);
+  if (!documentNo) return undefined;
+  return {
+    documentNo,
+    date: text(item.date),
+    sourceType: text(item.sourceType, "采购 / 回收"),
+    supplierName: text(item.supplierName, "未记录来源"),
+    handler: text(item.handler),
+    costPrice: optionalNumber(item.costPrice),
+    paymentStatus: optionalText(item.paymentStatus),
+  };
+}
+
+function adaptJourneyInspection(value: unknown): InventoryJourneyInspection | undefined {
+  const item = record(value);
+  const id = text(item.id);
+  if (!id) return undefined;
+  return {id, resultStatus: text(item.resultStatus, "未记录结果"), condition: optionalText(item.condition), inspector: text(item.inspector), inspectTime: text(item.inspectTime), remarks: optionalText(item.remarks)};
+}
+
+function adaptJourneySale(value: unknown): InventoryJourneySale | undefined {
+  const item = record(value);
+  const documentNo = text(item.documentNo);
+  if (!documentNo) return undefined;
+  return {
+    documentNo,
+    date: text(item.date),
+    customerId: optionalText(item.customerId),
+    customerName: text(item.customerName, "未记录买方"),
+    channel: optionalText(item.channel),
+    paymentMethod: optionalText(item.paymentMethod),
+    paymentStatus: optionalText(item.paymentStatus),
+    paidAmount: optionalNumber(item.paidAmount),
+    unpaidAmount: optionalNumber(item.unpaidAmount),
+    sellPrice: optionalNumber(item.sellPrice),
+    costPrice: optionalNumber(item.costPrice),
+    grossProfit: optionalNumber(item.grossProfit),
+    grossMargin: optionalNumber(item.grossMargin),
+    handleBy: optionalText(item.handleBy),
+    outboundTime: optionalText(item.outboundTime),
+    outboundHandler: optionalText(item.outboundHandler),
+  };
+}
+
+function adaptJourneyPayment(value: unknown): InventoryJourneyPayment | undefined {
+  const item = record(value);
+  const id = text(item.id);
+  if (!id) return undefined;
+  return {
+    id,
+    direction: item.direction === "out" ? "out" : "in",
+    amount: optionalNumber(item.amount),
+    accountName: text(item.accountName, "未标注账户"),
+    paymentMethod: text(item.paymentMethod, "未标注方式"),
+    businessType: optionalText(item.businessType),
+    relatedDocNo: optionalText(item.relatedDocNo),
+    time: text(item.time),
+    handler: text(item.handler),
+  };
+}
+
+function adaptJourneyAftersales(value: unknown): InventoryJourneyAftersales | undefined {
+  const item = record(value);
+  const id = text(item.id);
+  if (!id) return undefined;
+  return {
+    id,
+    type: text(item.type, "售后"),
+    status: text(item.status, "未知状态"),
+    createdAt: text(item.createdAt),
+    customerName: text(item.customerName, "未记录客户"),
+    description: text(item.description),
+    repairCost: optionalNumber(item.repairCost),
+    refundAmount: optionalNumber(item.refundAmount),
+    finalResult: optionalText(item.finalResult),
+    handler: optionalText(item.handler),
+    salesInvoiceNo: optionalText(item.salesInvoiceNo),
+  };
+}
+
+function adaptJourneyReturn(value: unknown): InventoryJourneyReturn | undefined {
+  const item = record(value);
+  const id = text(item.id);
+  if (!id) return undefined;
+  return {
+    id,
+    returnNo: text(item.returnNo, id),
+    type: text(item.type, "退货"),
+    status: text(item.status, "未知状态"),
+    date: text(item.date),
+    completedAt: optionalText(item.completedAt),
+    relatedDocNo: optionalText(item.relatedDocNo),
+    partyName: optionalText(item.partyName),
+    amount: optionalNumber(item.amount),
+    settlementMode: optionalText(item.settlementMode),
+    inventoryAction: optionalText(item.inventoryAction),
+    handler: optionalText(item.handler),
+    reason: optionalText(item.reason),
+  };
+}
+
+function adaptJourneyAssembly(value: unknown): InventoryJourneyAssembly | undefined {
+  const item = record(value);
+  const id = text(item.id);
+  if (!id) return undefined;
+  return {id, type: text(item.type, "组装拆卸"), time: text(item.time), handler: text(item.handler), beforeProductName: optionalText(item.beforeProductName), afterProductName: optionalText(item.afterProductName), documentNo: text(item.documentNo, id), remarks: optionalText(item.remarks)};
+}
+
+function adaptJourneyEvent(value: unknown): InventoryJourneyEvent | undefined {
+  const item = record(value);
+  const id = text(item.id);
+  const title = text(item.title);
+  if (!id || !title) return undefined;
+  return {
+    id,
+    type: journeyEventType(item.type),
+    title,
+    occurredAt: text(item.occurredAt),
+    documentNo: optionalText(item.documentNo),
+    partyName: optionalText(item.partyName),
+    operator: optionalText(item.operator),
+    amount: optionalNumber(item.amount),
+    direction: item.direction === "in" || item.direction === "out" ? item.direction : "neutral",
+    status: optionalText(item.status),
+    description: optionalText(item.description),
+  };
+}
+
+export function adaptInventoryJourney(response: InventoryJourneyResponseDto, permissions: {showCost: boolean; showProfit: boolean}): InventoryJourney {
+  const data = record(response.data);
+  const dataQuality = record(data.dataQuality);
+  const card = adaptInventoryItem(record(data.card) as InventoryItemDto, permissions);
+  const inspections = collection(data.inspections).map(adaptJourneyInspection).filter((item): item is InventoryJourneyInspection => Boolean(item));
+  const events = collection(data.events).map(adaptJourneyEvent).filter((item): item is InventoryJourneyEvent => Boolean(item));
+  return {
+    card,
+    purchase: adaptJourneyPurchase(data.purchase),
+    inspections,
+    sale: adaptJourneySale(data.sale),
+    payments: collection(data.payments).map(adaptJourneyPayment).filter((item): item is InventoryJourneyPayment => Boolean(item)),
+    aftersales: collection(data.aftersales).map(adaptJourneyAftersales).filter((item): item is InventoryJourneyAftersales => Boolean(item)),
+    returns: collection(data.returns).map(adaptJourneyReturn).filter((item): item is InventoryJourneyReturn => Boolean(item)),
+    assemblies: collection(data.assemblies).map(adaptJourneyAssembly).filter((item): item is InventoryJourneyAssembly => Boolean(item)),
+    events: events.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)),
+    dataQuality: {
+      complete: dataQuality.complete === true,
+      missing: stringArray(dataQuality.missing),
+      legacy: dataQuality.legacy === true,
+    },
+    generatedAt: text(data.generatedAt),
+  };
 }
 
 function readSummaryRows(value: unknown): InventorySummaryRowDto[] {

@@ -8,7 +8,11 @@ export function parseFinanceIncomeFilters(search: string): FinanceIncomeFilters 
   const params = new URLSearchParams(search);
   const pageSize = positive(params.get("pageSize"), 20);
   const dateRange = readDateRange(params, "startDate", "endDate");
-  return {keyword: (params.get("keyword") || "").trim(), businessType: (params.get("businessType") || "all").trim() || "all", accountId: (params.get("accountId") || "all").trim() || "all", handler: (params.get("handler") || "").trim(), ...dateRange, page: positive(params.get("page"), 1), pageSize: [20, 50, 100].includes(pageSize) ? pageSize : 20};
+  const rawBusinessType = (params.get("businessType") || "all").trim() || "all";
+  // Purchase refunds used to be exposed by this screen. Normalize old URLs so
+  // a bookmarked legacy filter cannot render an empty, misleading category.
+  const businessType = rawBusinessType === "采购退款" ? "all" : rawBusinessType;
+  return {keyword: (params.get("keyword") || "").trim(), businessType, accountId: (params.get("accountId") || "all").trim() || "all", handler: (params.get("handler") || "").trim(), ...dateRange, page: positive(params.get("page"), 1), pageSize: [20, 50, 100].includes(pageSize) ? pageSize : 20};
 }
 
 export function financeIncomeFiltersToSearch(filters: FinanceIncomeFilters) {

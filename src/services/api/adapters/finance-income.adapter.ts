@@ -11,7 +11,9 @@ export function isNonOperatingIncomeDto(value: unknown) {
   const dto = record(value);
   const relatedDocType = text(dto.relatedDocType);
   const relatedDocNo = text(dto.relatedDocNo);
-  return relatedDocType !== "销售单" && !relatedDocNo.startsWith("XS") && text(dto.businessType) !== "销售收款";
+  return relatedDocType !== "销售单" && relatedDocType !== "采购单" && relatedDocType !== "退货单" &&
+    !["XS", "JH", "TH"].some((prefix) => relatedDocNo.startsWith(prefix)) &&
+    text(dto.businessType) !== "销售收款" && text(dto.businessType) !== "采购退款";
 }
 
 export function adaptFinanceIncome(value: unknown): FinanceIncomeItem {
@@ -45,7 +47,10 @@ export function filterFinanceIncomeCollection(snapshot: FinanceIncomeItem[], fil
 export function adaptFinanceIncomeCollection(response: FinanceIncomeListResponseDto, filters: FinanceIncomeFilters): FinanceIncomeCollection {
   if (!Array.isArray(response.data)) return filterFinanceIncomeCollection(adaptFinanceIncomeSnapshot(response), filters);
   const meta = record(response.meta);
-  const items = response.data.map(adaptFinanceIncome).filter((item) => Boolean(item.id));
+  // Keep this guard even when the API is paged. It protects the non-operating
+  // income screen from stale/older servers that may still return business
+  // refund rows in a page.
+  const items = response.data.filter(isNonOperatingIncomeDto).map(adaptFinanceIncome).filter((item) => Boolean(item.id));
   return {items, total: Math.max(items.length, amount(meta.total)), totalAmount: amount(meta.totalAmount), page: Math.max(1, amount(meta.page) || filters.page), pageSize: Math.max(1, amount(meta.pageSize) || filters.pageSize), source: "database-page"};
 }
 

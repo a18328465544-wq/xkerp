@@ -139,6 +139,9 @@ test("finance record pages keep filtering and pagination inside PostgreSQL", () 
   assert.match(query.where, /accountId/);
   assert.match(query.where, /ILIKE/);
   assert.match(query.where, /销售收款/);
+  assert.match(query.where, /采购单/);
+  assert.match(query.where, /退货单/);
+  assert.match(query.where, /采购退款/);
   assert.ok(query.values.every((value) => typeof value === "string"));
 });
 

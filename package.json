@@ -19,6 +19,7 @@
     "test:non-operating": "tsx --test src/components/nonOperatingFinanceUtils.test.ts src/components/nonOperatingFinanceRender.test.tsx server/nonOperatingFinance.test.ts",
     "crm:migrate": "tsx server/crmMigrationCli.ts",
     "crm:migrate:apply": "tsx server/crmMigrationCli.ts --apply",
+    "return-finance:audit": "tsx server/returnFinanceMigrationCli.ts",
     "preview": "vite preview --host=0.0.0.0 --port=3010",
     "typecheck": "tsc --noEmit -p tsconfig.frontend.json",
     "typecheck:server": "tsc --noEmit -p tsconfig.server.json",

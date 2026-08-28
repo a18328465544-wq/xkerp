@@ -72,6 +72,7 @@ import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from
 import { generateEntityId, nextDailyDocumentSequence, nextProductTemplateId } from "./storeIdentifiers.ts";
 import { calculateCommission, DEFAULT_COMMISSION_RULES, normalizeCommissionRules, type CommissionRulesPatch } from "../src/utils/commissionRules.ts";
 import { appendCommissionAdjustment, commissionStatus, effectiveCommissionAmount } from "./commissionRecords.ts";
+import { findExistingReturnFinancialArtifacts, inspectReturnFinancialOrder, RETURN_CUSTOMER_REFUND_TYPE, RETURN_PURCHASE_REFUND_TYPE } from "./returnFinanceInvariants.ts";
 
 export interface AppState {
   products: ProductTemplate[];
@@ -1495,9 +1496,20 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     };
   };
 
-  const createPaymentIn = (payment: Omit<PaymentInRecord, "id" | "accountName">, options?: { skipInvoiceUpdate?: boolean }) => {
+  const createPaymentIn = (payment: Omit<PaymentInRecord, "id" | "accountName">, options?: { skipInvoiceUpdate?: boolean; internalReturnPayment?: boolean }) => {
     const paymentAmount = positiveAmount(payment.amount, "收款金额");
-    if (payment.relatedDocNo && NON_OPERATING_INCOME_TYPES.has(String(payment.businessType || ""))) {
+    const businessType = payment.businessType || "销售收款";
+    if (businessType === RETURN_PURCHASE_REFUND_TYPE) {
+      const relatedReturn = state.returnOrders.find((order) =>
+        order.status === "待处理" &&
+        order.type === "进货退货" &&
+        (order.returnNo === payment.relatedDocNo || order.id === payment.relatedDocNo),
+      );
+      if (!options?.internalReturnPayment || payment.relatedDocType !== "退货单" || !relatedReturn) {
+        throw new ConflictError("采购退款只能由进货退货流程生成，不能手工登记或重复生成");
+      }
+    }
+    if (payment.relatedDocNo && NON_OPERATING_INCOME_TYPES.has(String(businessType))) {
       throw new ValidationError("非经营收入不能绑定销售/采购业务单据，请使用关联参考号记录外部凭证");
     }
     const account = findSettlementAccount(payment.accountId);
@@ -1513,7 +1525,6 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       accountName: account.name,
       time: payment.time || nowStamp(),
     };
-    const businessType = payment.businessType || "销售收款";
     const settlementLedger = recordSettlementMovement({
       accountId: account.id,
       direction: "收入",
@@ -1592,6 +1603,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const nextAmount = Number(payment.amount ?? existing.amount);
     const nextBusinessType = payment.businessType ?? existing.businessType;
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) throw new ValidationError("收款金额必须大于 0");
+    if (nextBusinessType === RETURN_PURCHASE_REFUND_TYPE) {
+      throw new ConflictError("采购退款只能由进货退货流程调整，不能直接编辑");
+    }
     if (payment.relatedDocNo && NON_OPERATING_INCOME_TYPES.has(String(nextBusinessType || ""))) {
       throw new ValidationError("非经营收入不能绑定销售/采购业务单据，请使用关联参考号记录外部凭证");
     }
@@ -1719,8 +1733,18 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return existing;
   };
 
-  const createPaymentOut = (payment: Omit<PaymentOutRecord, "id" | "accountName">, options?: { skipInvoiceUpdate?: boolean }) => {
+  const createPaymentOut = (payment: Omit<PaymentOutRecord, "id" | "accountName">, options?: { skipInvoiceUpdate?: boolean; internalReturnPayment?: boolean }) => {
     const paymentAmount = positiveAmount(payment.amount, "付款金额");
+    if (payment.businessType === RETURN_CUSTOMER_REFUND_TYPE && payment.relatedDocType === "退货单") {
+      const relatedReturn = state.returnOrders.find((order) =>
+        order.status === "待处理" &&
+        order.type === "销售退货" &&
+        (order.returnNo === payment.relatedDocNo || order.id === payment.relatedDocNo),
+      );
+      if (!options?.internalReturnPayment || payment.relatedDocType !== "退货单" || !relatedReturn) {
+        throw new ConflictError("客户退款只能由销售退货流程生成，不能手工登记或重复生成");
+      }
+    }
     if (payment.relatedDocNo && NON_OPERATING_EXPENSE_TYPES.has(String(payment.businessType || ""))) {
       throw new ValidationError("非经营支出不能绑定采购/退货业务单据，请使用关联参考号记录外部凭证");
     }
@@ -1824,6 +1848,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     const nextAmount = Number(payment.amount ?? existing.amount);
     const nextBusinessType = payment.businessType ?? existing.businessType;
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) throw new ValidationError("付款金额必须大于 0");
+    if (nextBusinessType === RETURN_CUSTOMER_REFUND_TYPE && payment.relatedDocType === "退货单") {
+      throw new ConflictError("客户退款只能由销售退货流程调整，不能直接编辑");
+    }
     if (payment.relatedDocNo && NON_OPERATING_EXPENSE_TYPES.has(String(nextBusinessType || ""))) {
       throw new ValidationError("非经营支出不能绑定采购/退货业务单据，请使用关联参考号记录外部凭证");
     }
@@ -2481,7 +2508,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         relatedDocNo: order.returnNo,
         time: nowStamp(),
         remarks: order.remarks || order.reason,
-      }, {skipInvoiceUpdate: true}).id);
+      }, {skipInvoiceUpdate: true, internalReturnPayment: true}).id);
       paymentRecordId = refundPaymentRecordIds[0];
     }
 
@@ -2620,7 +2647,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         relatedDocNo: order.returnNo,
         time: nowStamp(),
         remarks: order.remarks || order.reason,
-      }, {skipInvoiceUpdate: true}).id);
+      }, {skipInvoiceUpdate: true, internalReturnPayment: true}).id);
       paymentRecordId = refundPaymentRecordIds[0];
     }
     state.purchaseInvoices = state.purchaseInvoices.map((item) => item.id === invoice.id
@@ -2705,7 +2732,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         relatedDocNo: order.returnNo,
         time: nowStamp(),
         remarks: order.remarks || order.reason,
-      }, { skipInvoiceUpdate: true }).id);
+      }, { skipInvoiceUpdate: true, internalReturnPayment: true }).id);
       paymentRecordId = refundPaymentRecordIds[0];
     }
 
@@ -2842,7 +2869,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         relatedDocNo: order.returnNo,
         time: nowStamp(),
         remarks: order.remarks || order.reason,
-      }, { skipInvoiceUpdate: true }).id);
+      }, { skipInvoiceUpdate: true, internalReturnPayment: true }).id);
       paymentRecordId = refundPaymentRecordIds[0];
     }
     state.purchaseInvoices = state.purchaseInvoices.map((item) => item.id === invoice.id
@@ -2925,23 +2952,40 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (!existing) throw new NotFoundError(`退货单不存在: ${id}`);
     if (existing.status === "已完成") return existing;
     if (existing.status === "已作废") throw new ConflictError("已作废退货单不能完成");
-    const result = existing.type === "销售退货" ? reverseSalesReturn(existing) : reversePurchaseReturn(existing);
-    const completed: ReturnOrder = {
-      ...existing,
-      status: "已完成",
-      completedAt: nowStamp(),
-      paymentRecordId: result.paymentRecordId,
-      refundPaymentRecordIds: result.refundPaymentRecordIds ?? existing.refundPaymentRecordIds,
-      reversedPaymentSnapshot: result.reversedPaymentSnapshot ?? existing.reversedPaymentSnapshot,
-      settlementAccountId: result.affectedAccountId ?? existing.settlementAccountId,
-      creditAmount: result.creditAmount ?? existing.creditAmount,
-      vendorCreditAmount: result.vendorCreditAmount ?? existing.vendorCreditAmount,
-      releasedVendorCreditAmount: result.releasedVendorCreditAmount ?? existing.releasedVendorCreditAmount,
-      cashReleasedAmount: result.cashReleasedAmount ?? existing.cashReleasedAmount,
-    };
-    state.returnOrders = state.returnOrders.map((item) => item.id === existing.id ? completed : item);
-    addLog(systemActor(), "退货管理", `完成${completed.type}`, completed.returnNo, "待处理", "已完成");
-    return completed;
+    const existingArtifacts = findExistingReturnFinancialArtifacts(state, existing);
+    if (existingArtifacts.length) {
+      const summary = existingArtifacts.slice(0, 3).map((artifact) => `${artifact.kind}:${artifact.id}`).join("、");
+      throw new ConflictError(`退货资金流水已存在，禁止重复完成：${summary}`);
+    }
+
+    // Reverse operations touch several collections. Keep the in-memory aggregate
+    // atomic as well as the PostgreSQL request: a failed invariant must not leave
+    // stock or the source invoice half-reversed for a later retry.
+    const before = structuredClone(state);
+    try {
+      const result = existing.type === "销售退货" ? reverseSalesReturn(existing) : reversePurchaseReturn(existing);
+      const completed: ReturnOrder = {
+        ...existing,
+        status: "已完成",
+        completedAt: nowStamp(),
+        paymentRecordId: result.paymentRecordId,
+        refundPaymentRecordIds: result.refundPaymentRecordIds ?? existing.refundPaymentRecordIds,
+        reversedPaymentSnapshot: result.reversedPaymentSnapshot ?? existing.reversedPaymentSnapshot,
+        settlementAccountId: result.affectedAccountId ?? existing.settlementAccountId,
+        creditAmount: result.creditAmount ?? existing.creditAmount,
+        vendorCreditAmount: result.vendorCreditAmount ?? existing.vendorCreditAmount,
+        releasedVendorCreditAmount: result.releasedVendorCreditAmount ?? existing.releasedVendorCreditAmount,
+        cashReleasedAmount: result.cashReleasedAmount ?? existing.cashReleasedAmount,
+      };
+      state.returnOrders = state.returnOrders.map((item) => item.id === existing.id ? completed : item);
+      const consistencyIssue = inspectReturnFinancialOrder(state, completed).find((item) => item.severity === "error");
+      if (consistencyIssue) throw new ConflictError(`退货资金流水一致性校验失败：${consistencyIssue.message}`);
+      addLog(systemActor(), "退货管理", `完成${completed.type}`, completed.returnNo, "待处理", "已完成");
+      return completed;
+    } catch (error) {
+      replaceState(state, before);
+      throw error;
+    }
   };
 
   const updateReturnOrder = (id: string, patch: Partial<Pick<ReturnOrder, "handler" | "reason" | "remarks" | "responsibility">>) => {

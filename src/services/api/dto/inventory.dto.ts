@@ -14,6 +14,7 @@ export interface InventoryItemDto {
   costPrice?: unknown;
   estSellPrice?: unknown;
   marketPrice?: unknown;
+  actualProfit?: unknown;
   priceSource?: unknown;
   priceUpdatedAt?: unknown;
   status?: unknown;
@@ -37,6 +38,10 @@ export interface InventoryItemDto {
 export interface InventoryPageResponseDto {
   data?: unknown;
   meta?: unknown;
+}
+
+export interface InventoryJourneyResponseDto {
+  data?: unknown;
 }
 
 export interface InventorySummaryRowDto {

@@ -4,11 +4,14 @@ import {Boxes, Download, Filter, Layers3, PackageCheck, Plus, RefreshCw, Search,
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, productsApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
+import {useProductLedger} from "@/src/hooks/useProductLedger";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import type {ProductLibraryFilters, ProductLibraryItem, ProductTemplateFormValues} from "@/src/types/product";
+import type {ProductLedgerRow} from "@/src/types/product-ledger";
+import {useNavigate} from "@tanstack/react-router";
 import {createProductColumns} from "../product.columns";
 import {defaultProductFilters, filterProducts, parseProductFilters, productFiltersToSearch, sortProducts} from "../product.filters";
 import {parseProductImportCsv, productCsv, productImportHeaders, type ProductImportRow} from "../product.import";
@@ -21,20 +24,24 @@ export function ProductLibraryPage() {
   const {session, logout} = useAuth();
   const {value: filters, commit} = useProductUrlState();
   const allowed = createCapabilities(session).menu("products");
+  const canViewLedger = createCapabilities(session).menu("inventory");
   const permissions = session?.permissions;
   const listQuery = useQuery({queryKey: queryKeys.products.list({showCost: Boolean(permissions?.showCost), showProfit: Boolean(permissions?.showProfit)}), queryFn: ({signal}) => productsApi.list({showCost: Boolean(permissions?.showCost), showProfit: Boolean(permissions?.showProfit)}, signal), enabled: Boolean(session && allowed), placeholderData: keepPreviousData, retry: false});
   if (!session) return <Card><ErpLoadingState title="正在验证商品库权限" /></Card>;
   if (!session || !allowed) return <ErpPageError title="当前账号没有商品库权限" description="服务器已拒绝 products 菜单访问，请联系管理员授权。" />;
-  return <ProductLibraryContent session={session} query={listQuery} filters={filters} onFiltersChange={commit} onAuthExpired={logout} />;
+  return <ProductLibraryContent session={session} query={listQuery} filters={filters} onFiltersChange={commit} onAuthExpired={logout} canViewLedger={canViewLedger} />;
 }
 
-function ProductLibraryContent({session, query, filters, onFiltersChange, onAuthExpired}: {session: AuthSession; query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof productsApi.list>>>>; filters: ProductLibraryFilters; onFiltersChange: (filters: ProductLibraryFilters) => void; onAuthExpired: () => void}) {
+function ProductLibraryContent({session, query, filters, onFiltersChange, onAuthExpired, canViewLedger}: {session: AuthSession; query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof productsApi.list>>>>; filters: ProductLibraryFilters; onFiltersChange: (filters: ProductLibraryFilters) => void; onAuthExpired: () => void; canViewLedger: boolean}) {
   const queryClient = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ProductLibraryItem | null>(null);
+  const [ledgerSubject, setLedgerSubject] = useState<ProductLedgerSubject | null>(null);
   const [confirmState, setConfirmState] = useState<{kind: "delete"; product: ProductLibraryItem} | {kind: "import"; rows: ProductImportRow[]; overwrite: number} | null>(null);
+  const productLedger = useProductLedger({open: Boolean(ledgerSubject), productSkuId: ledgerSubject?.key || "", permissions: session.permissions});
+  const navigate = useNavigate();
   const products = query.data?.products || [];
   const fullPriceAccess = session.permissions.showCost && session.permissions.showProfit;
 
@@ -62,7 +69,17 @@ function ProductLibraryContent({session, query, filters, onFiltersChange, onAuth
 
   const openCreate = () => {setEditing(null); setDialogOpen(true); saveMutation.reset();};
   const openEdit = (product: ProductLibraryItem) => {if (!fullPriceAccess) return; setEditing(product); setDialogOpen(true); saveMutation.reset();};
-  const columns = useMemo(() => createProductColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canEdit: fullPriceAccess, canDelete: session.permissions.canDelete, onEdit: openEdit, onDelete: (product) => setConfirmState({kind: "delete", product})}), [fullPriceAccess, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
+  const openLedger = (product: ProductLibraryItem) => setLedgerSubject({key: product.id, productName: product.name, category: product.category, brand: product.brand, model: product.model, version: product.version, vram: product.vram, currentStock: product.currentStock, imageUrl: product.imageUrls[0]});
+  const openProductLedgerDocument = (row: ProductLedgerRow) => {
+    setLedgerSubject(null);
+    if (row.documentType === "采购入库") return void navigate({to: "/purchase", search: {keyword: row.documentNo}});
+    if (row.documentType === "采购退货") return void navigate({to: "/purchase/returns", search: {keyword: row.documentNo}});
+    if (row.documentType === "销售出库") return void navigate({to: "/sales", search: {keyword: row.documentNo}});
+    if (row.documentType === "销售退货") return void navigate({to: "/sales/returns", search: {keyword: row.documentNo}});
+    if (row.documentType === "组装拆卸") return void navigate({to: "/assembly", search: {q: row.documentNo}});
+    return void navigate({to: "/inventory", search: {keyword: row.documentNo}});
+  };
+  const columns = useMemo(() => createProductColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canEdit: fullPriceAccess, canDelete: session.permissions.canDelete, onEdit: openEdit, onDelete: (product) => setConfirmState({kind: "delete", product}), onOpenLedger: canViewLedger ? openLedger : undefined}), [canViewLedger, fullPriceAccess, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
 
   const onImportFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".csv")) {toast.error("商品库仅支持 CSV；请先在 Excel/WPS 中另存为 CSV。"); return;}
@@ -108,6 +125,7 @@ function ProductLibraryContent({session, query, filters, onFiltersChange, onAuth
     </DashboardSection>
     <ErpProductTemplateDialog open={dialogOpen} product={editing} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, product: editing});}} />
     <ConfirmationDialog state={confirmState} pending={deleteMutation.isPending || importMutation.isPending} onClose={() => setConfirmState(null)} onConfirm={() => {if (confirmState?.kind === "delete") deleteMutation.mutate(confirmState.product.id); if (confirmState?.kind === "import") importMutation.mutate(confirmState.rows);}} />
+    <ErpProductLedgerDrawer open={Boolean(ledgerSubject)} subject={ledgerSubject} permissions={session.permissions} filters={productLedger.filters} page={productLedger.query.data} loading={productLedger.query.isPending} fetching={productLedger.query.isFetching} error={productLedger.query.error as Error | null} onRetry={() => { void productLedger.query.refetch(); }} onFiltersChange={productLedger.updateFilter} onResetFilters={productLedger.clearFilters} onPageChange={productLedger.changePage} onPageSizeChange={productLedger.changePageSize} onOpenChange={(open) => {if (!open) setLedgerSubject(null);}} onOpenDocument={openProductLedgerDocument} />
     </ErpPageContent>
   </ErpListPageFrame>;
 }

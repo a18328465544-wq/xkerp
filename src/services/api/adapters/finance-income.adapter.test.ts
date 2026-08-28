@@ -6,10 +6,26 @@ test("non-operating adapter excludes sales receipts and keeps standalone income"
   assert.equal(isNonOperatingIncomeDto({businessType: "销售收款"}), false);
   assert.equal(isNonOperatingIncomeDto({relatedDocType: "销售单", businessType: "其他收入"}), false);
   assert.equal(isNonOperatingIncomeDto({relatedDocNo: "XS-1", businessType: "其他收入"}), false);
+  assert.equal(isNonOperatingIncomeDto({businessType: "采购退款"}), false);
+  assert.equal(isNonOperatingIncomeDto({relatedDocType: "采购单", businessType: "其他收入"}), false);
+  assert.equal(isNonOperatingIncomeDto({relatedDocType: "退货单", businessType: "其他收入"}), false);
+  assert.equal(isNonOperatingIncomeDto({relatedDocNo: "JHTH-1", businessType: "其他收入"}), false);
   assert.equal(isNonOperatingIncomeDto({businessType: "返点收入"}), true);
   const rows = adaptFinanceIncomeSnapshot({data: {paymentInRecords: [{id: "I-1", customerName: "平台", accountId: "A-1", accountName: "微信", amount: 100, handler: "郭鑫", paymentMethod: "微信", businessType: "返点收入", time: "2026-08-11 10:00:00"}, {id: "S-1", businessType: "销售收款", time: "2026-08-11"}]}});
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.source, "平台");
+});
+
+test("paged income responses keep purchase refunds out even if an older server leaks them", () => {
+  const page = adaptFinanceIncomeCollection({
+    data: [
+      {id: "R-1", supplierName: "供应商", accountId: "A-1", accountName: "微信", amount: 1000, handler: "财务", paymentMethod: "微信", businessType: "采购退款", relatedDocType: "退货单", relatedDocNo: "JHTH-1", time: "2026-08-02"},
+      {id: "I-1", customerName: "平台", accountId: "A-1", accountName: "微信", amount: 80, handler: "财务", paymentMethod: "微信", businessType: "返点收入", time: "2026-08-01"},
+    ],
+    meta: {page: 1, pageSize: 20, total: 2, totalAmount: 1080},
+  }, {keyword: "", businessType: "all", accountId: "all", handler: "", startDate: "", endDate: "", page: 1, pageSize: 20});
+  assert.deepEqual(page.items.map((item) => item.id), ["I-1"]);
+  assert.equal(page.total, 2);
 });
 
 test("filters and paginates the authorized snapshot honestly", () => {

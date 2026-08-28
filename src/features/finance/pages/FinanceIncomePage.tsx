@@ -265,7 +265,7 @@ function FinanceIncomeContent({
     <ErpFinancePageFrame>
       <ErpPageHeader
         title="其他收支"
-        subtitle="集中登记销售、采购流程之外的临时收入与支出。"
+        subtitle="仅登记非销售、非采购退货流程产生的非经营收入；采购退款请在退货或账户流水中查看。"
         quickStatus={quickStatus}
         actions={
           <>
@@ -342,9 +342,9 @@ function FinanceIncomeContent({
           tone="neutral"
         />
         <Metric
-          label="受限历史记录"
-          value={`${collection.items.filter((item) => !item.editable).length} 笔`}
-          detail="必须从原业务流程调整"
+          label="业务流水隔离"
+          value="已启用"
+          detail="采购退款不计入其他收入"
           icon={<ShieldCheck className="h-4 w-4" />}
           tone="warning"
         />
@@ -382,7 +382,6 @@ function FinanceIncomeContent({
               value,
               label: value,
             })),
-            { value: "采购退款", label: "采购退款（历史）" },
           ]}
           aria-label="收入类型筛选"
         />
@@ -430,7 +429,7 @@ function FinanceIncomeContent({
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       <FinanceTableRegion
         title="收入明细"
-        description="点击行查看凭证与登记详情；采购退款等业务关联收入只能从原流程调整。"
+        description="点击行查看凭证与登记详情；采购退款属于采购退货结算，不计入其他收入。"
         actions={<ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />}
         table={{
           columns,

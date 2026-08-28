@@ -1175,6 +1175,10 @@ export function buildFinanceRecordPageQuery(kind: FinanceRecordKind, filters: Fi
     clauses.push(`COALESCE(data->>'relatedDocType', '') <> '销售单'`);
     clauses.push(`COALESCE(data->>'relatedDocNo', '') NOT LIKE 'XS%'`);
     clauses.push(`COALESCE(data->>'businessType', '') <> '销售收款'`);
+    clauses.push(`COALESCE(data->>'relatedDocType', '') NOT IN ('采购单', '退货单')`);
+    clauses.push(`COALESCE(data->>'relatedDocNo', '') NOT LIKE 'JH%'`);
+    clauses.push(`COALESCE(data->>'relatedDocNo', '') NOT LIKE 'TH%'`);
+    clauses.push(`COALESCE(data->>'businessType', '') <> '采购退款'`);
   }
   if (kind === "expense") {
     clauses.push(`COALESCE(data->>'relatedDocType', '') <> '采购单'`);

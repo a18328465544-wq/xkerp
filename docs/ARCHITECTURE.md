@@ -185,7 +185,7 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 | 商品库 | `/api/products`、`/api/products/import` |
 | 采购 | `/api/purchase-invoices` |
 | 检测 | `/api/inspections` |
-| 库存 | `/api/inventory/summary`、`/api/inventory/scan-flow`、`/api/inventory/import` |
+| 库存 | `/api/inventory/items`、`/api/inventory/items/:id/journey`、`/api/inventory/summary`、`/api/inventory/scan-flow`、`/api/inventory/import` |
 | 销售 | `/api/sales-invoices`、`/api/sales-invoices/:id/outbound` |
 | 退货 | `/api/returns`、`/api/returns/:id/complete` |
 | 客户/同行 | `/api/customers`、`/api/vendors` |

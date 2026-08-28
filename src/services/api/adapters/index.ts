@@ -1,4 +1,5 @@
-export {adaptInventoryItem, adaptInventoryPage, adaptInventorySummary} from "./inventory.adapter";
+export {adaptInventoryItem, adaptInventoryJourney, adaptInventoryPage, adaptInventorySummary} from "./inventory.adapter";
+export {adaptProductLedgerPage} from "./product-ledger.adapter";
 export {adaptSalesCustomer, adaptSalesCustomers, adaptSalesInventoryCandidate, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesSettlementAccount, adaptSalesSettlementAccounts, toCreateSalesRequest} from "./sales.adapter";
 export {adaptPermissions} from "../endpoints/auth";
 export {adaptPublicState} from "./state.adapter";

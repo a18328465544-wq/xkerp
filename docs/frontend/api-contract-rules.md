@@ -32,7 +32,7 @@ Endpoint + apiRequest
 
 ## 现有实现
 
-- 库存：`inventory.dto.ts` → `inventory.adapter.ts` → `InventoryListItem`
+- 库存：`inventory.dto.ts` → `inventory.adapter.ts` → `InventoryListItem` / `InventoryJourney`
 - 销售：`sales.dto.ts` → `sales.adapter.ts` → `SalesCustomerOption`、`SalesInventoryCandidate`、`SalesInvoiceResult`
 - 统一错误：`services/api/errors/index.ts` → `ApiError`
 - 统一缓存键：`services/api/query-keys/index.ts`

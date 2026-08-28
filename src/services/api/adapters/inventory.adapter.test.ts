@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {adaptInventoryItem, adaptInventoryModelSummaries, adaptInventoryPage, adaptInventorySummary} from "./inventory.adapter";
+import {adaptInventoryItem, adaptInventoryJourney, adaptInventoryModelSummaries, adaptInventoryPage, adaptInventorySummary} from "./inventory.adapter";
 import {storeDateAfterDays} from "@/src/utils/storeTime";
 
 test("inventory adapter respects cost and profit permissions", () => {
@@ -20,6 +20,23 @@ test("inventory page adapter preserves server pagination metadata", () => {
   const page = adaptInventoryPage({data: [{id: "KC-1", productName: "RTX 4090", status: "待检测"}], meta: {page: 2, pageSize: 20, total: 41}}, {showCost: true, showProfit: true});
   assert.equal(page.data.length, 1);
   assert.deepEqual(page.meta, {page: 2, pageSize: 20, total: 41});
+});
+
+test("inventory journey adapter preserves sold outcome and drops malformed records", () => {
+  const journey = adaptInventoryJourney({data: {
+    card: {id: "KC-1", productName: "RTX 4070", sn: "SN-1", status: "已售出", salesPrice: 3100, actualProfit: 300},
+    sale: {documentNo: "XS-1", customerName: "晴天", sellPrice: 3100, grossProfit: 300, grossMargin: 9.68},
+    inspections: [{id: "I-1", resultStatus: "通过"}, null, {resultStatus: "缺少 ID"}],
+    events: [{id: "sale-1", type: "sale", title: "销售出库", occurredAt: "2026-08-28 15:04", partyName: "晴天"}, {id: "bad", type: "unknown", title: "库存", occurredAt: "2026-08-27"}],
+    dataQuality: {complete: true, missing: [], legacy: false},
+    generatedAt: "2026-08-28 15:05:00",
+  }}, {showCost: true, showProfit: true});
+
+  assert.equal(journey.card.inventoryStatus, "已售出");
+  assert.equal(journey.card.actualProfit, 300);
+  assert.equal(journey.sale?.customerName, "晴天");
+  assert.equal(journey.inspections.length, 1);
+  assert.deepEqual(journey.events.map((event) => event.type), ["inventory", "sale"]);
 });
 
 test("inventory summary adapter aggregates server rows", () => {

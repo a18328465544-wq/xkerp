@@ -60,3 +60,19 @@ The page exposes this action only when the current session has `canEditHistory`.
 The page exposes this action only when the current session has `canDelete`. A completed purchase return is presented as “删除并冲销”; the existing backend remains responsible for restoring the linked purchase, inventory, payment, ledger and supplier state. A pending return is presented as “删除” and does not perform completion effects.
 
 The list page export is a client-generated CSV of the currently loaded server page; it does not claim to export the complete dataset.
+
+## Return finance audit / repair
+
+The operator-run audit command checks the one-to-one chain between a completed return, its refund payment, the settlement ledger and the finance ledger. It also reports return-related orphan records and legacy purchase refunds that were classified as other income.
+
+```bash
+npm run return-finance:audit
+```
+
+The command is read-only by default. Only exact, completed purchase-return chains are eligible for repair. After reviewing the dry-run report, an operator may run the guarded repair command; it creates a database backup first and aborts the whole transaction if any row changed unexpectedly:
+
+```bash
+RETURN_FINANCE_REPAIR_CONFIRM=apply npm run return-finance:audit -- --apply
+```
+
+Records that are missing a link, have ambiguous amounts, or do not match the complete chain remain in the report for manual review and are never guessed or deleted.

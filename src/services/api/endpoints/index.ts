@@ -1,6 +1,6 @@
 export {authApi, adaptPermissions} from "./auth";
 export type {AuthSession, AuthUser, PermissionModel} from "./auth";
-export {inventoryApi, toInventoryQueryParams} from "./inventory";
+export {inventoryApi, toInventoryQueryParams, toProductLedgerQueryParams} from "./inventory";
 export type {InventoryPermissions} from "./inventory";
 export {salesApi, toSalesCustomerQueryParams, toSalesInventoryQueryParams} from "./sales";
 export type {SalesApiPermissions} from "./sales";

@@ -188,6 +188,9 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "POST" && path === "/api/gpu_erp/crm/quick-capture/parse") return ["customers", "products"];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/crm/quick-capture/leads") return [];
   if (method.toUpperCase() === "GET" && path === "/api/inventory/items") return [];
+  if (method.toUpperCase() === "GET" && /^\/api\/inventory\/items\/[^/]+\/journey$/.test(path)) {
+    return ["inventory", "inspections", "purchaseInvoices", "salesInvoices", "paymentInRecords", "paymentOutRecords", "returnOrders", "aftersales", "assemblyOperations"];
+  }
   if (method.toUpperCase() === "GET" && path === "/api/open/inventory/items") return [];
   if (method.toUpperCase() === "GET" && path === "/api/logs") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/customer-funds") {

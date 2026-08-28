@@ -87,6 +87,7 @@ import { syncCrmPurchaseInvoiceLink, syncCrmSalesInvoiceLink } from "./crmEntity
 import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, MediaValidationError, replaceEntityImages } from "./mediaRepository.ts";
 import {clearSessionCookie, createCsrfToken, setSessionCookie} from "./authCookies.ts";
 import {assertStateRuntimeMode} from "./runtimeConfig.ts";
+import {registerInventoryJourneyRoutes} from "./routes/inventoryJourney.ts";
 import {
   inspectionCreateDto,
   inspectionUpdateDto,
@@ -121,7 +122,6 @@ const LOGIN_RATE_LIMIT_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX || 8);
 const OPEN_API_TOKEN = process.env.OPEN_API_TOKEN || "";
 const OPEN_API_RATE_LIMIT_WINDOW_MS = Number(process.env.OPEN_API_RATE_LIMIT_WINDOW_MS || 60 * 1000);
 const OPEN_API_RATE_LIMIT_MAX = Number(process.env.OPEN_API_RATE_LIMIT_MAX || 240);
-
 export const app = express();
 const requestMetrics = createRequestMetrics();
 app.disable("x-powered-by");
@@ -145,7 +145,6 @@ app.use((req, _res, next) => {
   }
   void ensureStateReady().then(() => next()).catch(next);
 });
-
 const loginRateLimiter = rateLimit({
   windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
   limit: LOGIN_RATE_LIMIT_MAX,
@@ -154,7 +153,6 @@ const loginRateLimiter = rateLimit({
   skipSuccessfulRequests: true,
   handler: (req, res) => sendApiError(req, res, 429, "LOGIN_RATE_LIMITED", "登录尝试过多，请稍后再试。", true),
 });
-
 const openApiRateLimiter = rateLimit({
   windowMs: OPEN_API_RATE_LIMIT_WINDOW_MS,
   limit: OPEN_API_RATE_LIMIT_MAX,
@@ -162,7 +160,6 @@ const openApiRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => sendApiError(req, res, 429, "OPEN_API_RATE_LIMITED", "开放接口请求过于频繁，请稍后再试。", true),
 });
-
 // Keep module import side-effect free with respect to PostgreSQL. The first request initializes
 // the state, which keeps HTTP tests and app composition independent from a database connection
 // at import time.
@@ -170,7 +167,6 @@ let state!: AppState;
 let stateRevision = 0;
 let stateReady: Promise<void> | undefined;
 const sessions = createSessionManager(createDatabaseSessionStore(), {cleanupIntervalMs: Number(process.env.SESSION_CLEANUP_INTERVAL_MS || 15 * 60 * 1_000)});
-
 type AuthRequest = express.Request & {
   authToken?: string;
   authMode?: "bearer" | "cookie";
@@ -178,7 +174,6 @@ type AuthRequest = express.Request & {
   requestId?: string;
   requestStartedAt?: number;
 };
-
 async function ensureStateReady() {
   if (!stateReady) {
     stateReady = (async () => {
@@ -192,26 +187,22 @@ async function ensureStateReady() {
   }
   await stateReady;
 }
-
 const runSerializedStateMutation = createSerializedMutationRunner(
   acquireStateWriteLock,
   async () => {
     await reloadStateFromDatabase();
   },
 );
-
 const runSerializedAuthMutation = createAuthMutationRunner(
   acquireAuthWriteLock,
   async () => {
     await reloadStateFromDatabase();
   },
 );
-
 function createMutationRequestSignal(req: express.Request, res: express.Response) {
   const controller = new AbortController();
   let responseFinished = false;
   let disposed = false;
-
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -835,6 +826,9 @@ function sanitizeInventoryRowsForUser(inventory: CardInventory[], user?: SystemU
   const currentInventory = inventory.map((item) => ({
     ...item,
     storageDays: storeDateDiffDays(item.entryTime),
+    actualProfit: permissions.showCost && permissions.showProfit && item.salesPrice !== undefined
+      ? Number((item.salesPrice - item.costPrice).toFixed(2))
+      : undefined,
   }));
   return permissions.showCost ? currentInventory : currentInventory.map((item) => ({ ...item, costPrice: 0 }));
 }
@@ -1644,6 +1638,12 @@ app.use((req: AuthRequest, res, next) => {
     return sendJson(payload);
   }) as typeof res.json;
   next();
+});
+
+registerInventoryJourneyRoutes(app, {
+  requireMenu,
+  getState: () => state,
+  permissionsForRequest: (req) => getScopedPermissions(state, (req as AuthRequest).authUser),
 });
 
 app.get("/api/state", (req: AuthRequest, res) => {

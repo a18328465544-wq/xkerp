@@ -12,6 +12,8 @@ export const queryKeys = {
     summary: (filters: InventoryFilters) => ["inventory", "summary", filters] as const,
     models: (filters: InventoryFilters) => ["inventory", "models", filters] as const,
     detail: (id: string) => ["inventory", "detail", id] as const,
+    journey: (id: string, access: {showCost: boolean; showProfit: boolean; showFinance: boolean}) => ["inventory", "journey", id, access] as const,
+    productLedger: (productSkuId: string, filters: unknown, access: {showCost: boolean; showProfit: boolean}) => ["inventory", "product-ledger", productSkuId, filters, access] as const,
   },
   sales: {
     all: () => ["sales"] as const,
