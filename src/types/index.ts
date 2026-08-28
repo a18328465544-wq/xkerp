@@ -34,7 +34,7 @@ export type {
   PurchaseSourceOption,
   PurchaseSummary,
 } from "./purchase";
-export type {ReturnCreateResponse, ReturnInventoryAction, ReturnOrder, ReturnOrderStatus, ReturnOrderType, ReturnSettlementMode, SalesReturnFormValues} from "./returns";
+export type {ReturnCreateResponse, ReturnInventoryAction, ReturnOrder, ReturnOrderBatchItemInput, ReturnOrderItem, ReturnOrderStatus, ReturnOrderType, ReturnSettlementMode, SalesReturnFormValues} from "./returns";
 export type {ProductLibraryFilters, ProductLibraryItem, ProductLibrarySnapshot, ProductTemplateFormValues} from "./product";
 export type {MarketQuote, MarketQuoteFilters, MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteImportRow, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend} from "./quote";
 export type {AssemblyFormValues, AssemblyInventoryOption, AssemblyOperation, AssemblyOperationFilters, AssemblyOperationList, AssemblyOperationType, AssemblyPart, AssemblyPartFormValue, AssemblyProductOption, AssemblyReferenceData} from "./assembly";

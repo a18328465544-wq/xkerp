@@ -27,6 +27,10 @@ export interface InspectionCreateRequestDto {
   images?: string[];
 }
 
+export interface InspectionUpdateRequestDto extends InspectionCreateRequestDto {
+  expectedRecordVersion: number;
+}
+
 export interface InspectionCreateResponseDto {
   data?: unknown;
   stateMerge?: unknown;

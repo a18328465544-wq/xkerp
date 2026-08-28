@@ -5,7 +5,6 @@ import {WORKSPACE_KEEP_ALIVE_ENTRIES, type WorkspaceKeepAliveKey} from "./worksp
 export type WorkspaceNavigationIntent = "switch" | "close" | null;
 export type {WorkspaceKeepAliveKey} from "./workspaceTabRuntimeConfig";
 
-type ReleaseRequests = Record<string, number>;
 type DirtyTabs = Record<string, boolean>;
 type WorkspaceDrafts = Record<string, unknown>;
 type WorkspaceDraftStore = {
@@ -14,12 +13,17 @@ type WorkspaceDraftStore = {
   clearDraft: (tabId: string) => void;
 };
 
+export type WorkspaceTabActivity = {
+  tabId: string | null;
+  pageKey: string | null;
+  active: boolean;
+};
+
 interface WorkspaceTabRuntimeValue {
   navigationIntentRef: {current: WorkspaceNavigationIntent};
   setNavigationIntent: (intent: WorkspaceNavigationIntent) => void;
   clearNavigationIntent: () => void;
   releaseTab: (tabId: string) => void;
-  releaseRequests: ReleaseRequests;
   getDraft: <T>(tabId: string) => T | undefined;
   setDraft: (tabId: string, draft: unknown) => void;
   clearDraft: (tabId: string) => void;
@@ -28,6 +32,15 @@ interface WorkspaceTabRuntimeValue {
 }
 
 const WorkspaceTabRuntimeContext = createContext<WorkspaceTabRuntimeValue | null>(null);
+const WorkspaceTabActivityContext = createContext<WorkspaceTabActivity>({tabId: null, pageKey: null, active: true});
+
+export function WorkspaceTabActivityProvider({value, children}: {value: WorkspaceTabActivity; children: ReactNode}) {
+  return <WorkspaceTabActivityContext.Provider value={value}>{children}</WorkspaceTabActivityContext.Provider>;
+}
+
+export function useWorkspaceTabActivity() {
+  return useContext(WorkspaceTabActivityContext);
+}
 
 export function createWorkspaceDraftStore(): WorkspaceDraftStore {
   const drafts: WorkspaceDrafts = {};
@@ -40,7 +53,6 @@ export function createWorkspaceDraftStore(): WorkspaceDraftStore {
 
 export function WorkspaceTabRuntimeProvider({children}: {children: ReactNode}) {
   const navigationIntentRef = useRef<WorkspaceNavigationIntent>(null);
-  const [releaseRequests, setReleaseRequests] = useState<ReleaseRequests>({});
   const [dirtyTabs, setDirtyTabs] = useState<DirtyTabs>({});
   const draftsRef = useRef(createWorkspaceDraftStore());
 
@@ -52,7 +64,6 @@ export function WorkspaceTabRuntimeProvider({children}: {children: ReactNode}) {
   const setDraft = useCallback((tabId: string, draft: unknown) => draftsRef.current.setDraft(tabId, draft), []);
   const clearDraft = useCallback((tabId: string) => draftsRef.current.clearDraft(tabId), []);
   const releaseTab = useCallback((tabId: string) => {
-    setReleaseRequests((current) => ({...current, [tabId]: (current[tabId] || 0) + 1}));
     draftsRef.current.clearDraft(tabId);
     setDirtyTabs((current) => {
       if (!current[tabId]) return current;
@@ -79,13 +90,12 @@ export function WorkspaceTabRuntimeProvider({children}: {children: ReactNode}) {
     setNavigationIntent: updateNavigationIntent,
     clearNavigationIntent,
     releaseTab,
-    releaseRequests,
     getDraft,
     setDraft,
     clearDraft,
     setTabDirty,
     isTabDirty,
-  }), [clearDraft, clearNavigationIntent, dirtyTabs, getDraft, isTabDirty, navigationIntentRef, releaseRequests, releaseTab, setDraft, setTabDirty, updateNavigationIntent]);
+  }), [clearDraft, clearNavigationIntent, dirtyTabs, getDraft, isTabDirty, navigationIntentRef, releaseTab, setDraft, setTabDirty, updateNavigationIntent]);
 
   return <WorkspaceTabRuntimeContext.Provider value={value}>{children}</WorkspaceTabRuntimeContext.Provider>;
 }
@@ -109,11 +119,12 @@ export function shouldBlockWorkspaceNavigation(dirty: boolean, navigationIntent:
 
 export function useWorkspaceTabBlocker(dirty: boolean) {
   const {navigationIntentRef} = useWorkspaceTabRuntime();
+  const {active} = useWorkspaceTabActivity();
   return useBlocker({
     withResolver: true,
-    shouldBlockFn: () => shouldBlockWorkspaceNavigation(dirty, navigationIntentRef.current),
+    shouldBlockFn: () => active && shouldBlockWorkspaceNavigation(dirty, navigationIntentRef.current),
     enableBeforeUnload: false,
-    disabled: !dirty,
+    disabled: !dirty || !active,
   });
 }
 

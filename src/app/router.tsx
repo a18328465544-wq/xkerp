@@ -124,11 +124,9 @@ const routeTree = rootRoute.addChildren([
 ]);
 export const router = createRouter({
   routeTree,
-  // Preload only after an intentional 150ms hover/focus. This keeps accidental
-  // pointer movement from competing with the current page's data requests,
-  // while making deliberate navigation feel immediate.
-  defaultPreload: "intent",
-  defaultPreloadDelay: 150,
+  // Unopened pages must not fetch route modules on hover, focus, or viewport
+  // proximity. The keep-alive registry loads a page only when its Tab opens.
+  defaultPreload: false,
   defaultPendingComponent: RouteLoadingState,
   defaultErrorComponent: RouteErrorState,
   defaultNotFoundComponent: RouteNotFoundState,

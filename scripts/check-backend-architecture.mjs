@@ -14,6 +14,8 @@ const observabilitySource = fs.existsSync(observabilityPath) ? fs.readFileSync(o
 const financeRoutesPath = path.join(root, "server", "routes", "financeClosing.ts");
 const financeRoutesSource = fs.existsSync(financeRoutesPath) ? fs.readFileSync(financeRoutesPath, "utf8") : "";
 const systemRoutesPath = path.join(root, "server", "routes", "system.ts");
+const runtimeConfigPath = path.join(root, "server", "runtimeConfig.ts");
+const pm2ConfigPath = path.join(root, "ecosystem.config.cjs");
 const failures = [];
 
 function fail(message) {
@@ -69,7 +71,15 @@ if (authBoundary < 0 || financeRegistration < 0 || authBoundary > financeRegistr
 if (!fs.existsSync(systemRoutesPath) || !indexSource.includes("registerSystemRoutes(app")) {
   fail("健康检查必须由独立 system route module 注册。");
 }
-if (indexSource.split(/\r?\n/).length > 2920) {
+const runtimeConfigSource = fs.existsSync(runtimeConfigPath) ? fs.readFileSync(runtimeConfigPath, "utf8") : "";
+if (!/assertStateRuntimeMode/.test(runtimeConfigSource) || !/assertStateRuntimeMode/.test(indexSource)) {
+  fail("生产启动必须显式校验 STATE_RUNTIME_MODE，避免未共享的进程内投影被无声明扩容。");
+}
+const pm2Source = fs.existsSync(pm2ConfigPath) ? fs.readFileSync(pm2ConfigPath, "utf8") : "";
+if (!/instances\s*:\s*1\b/.test(pm2Source) || !/exec_mode\s*:\s*[\"']fork[\"']/.test(pm2Source) || !/STATE_RUNTIME_MODE\s*:\s*[\"']single-instance[\"']/.test(pm2Source)) {
+  fail("PM2 生产配置必须明确使用 instances: 1、exec_mode: fork 和 STATE_RUNTIME_MODE=single-instance。");
+}
+if (indexSource.trimEnd().split(/\r?\n/).length > 2920) {
   fail("server/index.ts 超过 2920 行；新增领域路由必须进入 server/routes，禁止回流主组合文件。");
 }
 

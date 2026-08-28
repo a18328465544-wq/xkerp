@@ -216,7 +216,7 @@ export function ErpDateRangePicker({
       <ErpDateOverlay open={open} onOpenChange={handleOpenChange} trigger={trigger} title="选择日期范围" description="支持快捷选择，也可以直接输入日期" closeLabel="关闭日期范围" sideOffset={6} panelClassName="max-h-[min(90dvh,720px)] overflow-y-auto rounded-[var(--erp-radius-xl)]">
       {({compactViewport}) => <>
               <div className="flex flex-col sm:flex-row">
-                <div className="erp-horizontal-scroll flex gap-1 overflow-x-auto border-b border-[var(--erp-color-border)] p-2 sm:w-32 sm:shrink-0 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3">
+                <div className="grid grid-cols-3 gap-1 border-b border-[var(--erp-color-border)] p-2 sm:flex sm:w-32 sm:shrink-0 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3">
                   {presets.map((preset) => (
                     <Button
                       key={preset.value}

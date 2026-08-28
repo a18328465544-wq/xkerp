@@ -1,6 +1,6 @@
 import type {SalesReturnCompleteResult, SalesReturnListDataset, SalesReturnListItem, SalesReturnStatus} from "@/src/types/returns";
 import type {PurchaseReturnFormValues} from "@/src/types/returns";
-import type {PurchaseReturnCreateRequestDto, SalesReturnUpdateRequestDto} from "../dto/returns.dto";
+import type {PurchaseReturnCreateRequestDto, ReturnBatchItemRequestDto, SalesReturnUpdateRequestDto} from "../dto/returns.dto";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -99,18 +99,20 @@ export function adaptSalesReturnMutation(value: unknown): SalesReturnListItem | 
 }
 
 export function toPurchaseReturnRequestDto(values: PurchaseReturnFormValues): PurchaseReturnCreateRequestDto {
+  const {returnScope, returnItems, ...formValues} = values;
   return {
     type: "进货退货",
     relatedDocType: "采购单",
-    date: values.date,
-    relatedDocNo: values.relatedDocNo.trim(),
-    sourceInventoryId: values.sourceInventoryId.trim(),
-    amount: numberValue(values.amount),
-    settlementMode: values.settlementMode,
-    settlementAccountId: values.settlementAccountId.trim() || undefined,
-    handler: values.handler.trim(),
-    reason: values.reason.trim(),
-    inventoryAction: values.inventoryAction,
-    remarks: values.remarks.trim() || undefined,
+    date: formValues.date,
+    relatedDocNo: formValues.relatedDocNo.trim(),
+    sourceInventoryId: formValues.sourceInventoryId.trim(),
+    amount: numberValue(formValues.amount),
+    settlementMode: formValues.settlementMode,
+    settlementAccountId: formValues.settlementAccountId.trim() || undefined,
+    handler: formValues.handler.trim(),
+    reason: formValues.reason.trim(),
+    inventoryAction: formValues.inventoryAction,
+    remarks: formValues.remarks.trim() || undefined,
+    ...(returnScope === "document" && returnItems?.length ? {batchMode: "整单退货", items: returnItems as ReturnBatchItemRequestDto[]} : {}),
   };
 }

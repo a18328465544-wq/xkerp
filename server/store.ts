@@ -30,6 +30,8 @@ import type {
   ProductTemplate,
   ProductCategory,
   PurchaseInvoice,
+  ReturnOrderBatchItemInput,
+  ReturnOrderItem,
   ReturnRefundAllocation,
   ReturnOrder,
   SalesItem,
@@ -2158,10 +2160,163 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return allocations;
   };
 
-  const createReturnOrder = (input: Omit<ReturnOrder, "id" | "returnNo" | "status" | "date" | "settlementAccountName"> & { date?: string }) => {
+  type ReturnOrderCreateInput = Omit<ReturnOrder, "id" | "returnNo" | "status" | "date" | "settlementAccountName" | "items"> & {
+    date?: string;
+    items?: ReturnOrderBatchItemInput[];
+  };
+
+  const createBatchReturnOrder = (input: ReturnOrderCreateInput, batchInputs: ReturnOrderBatchItemInput[]) => {
+    if (batchInputs.length < 1) throw new ValidationError("整单退货至少需要一条商品明细");
+    if (batchInputs.length > 200) throw new ValidationError("单次整单退货最多处理 200 条商品明细");
+    const inventoryIds = batchInputs.map((item) => String(item?.sourceInventoryId || "").trim());
+    if (inventoryIds.some((id) => !id)) throw new ValidationError("整单退货的每条明细都必须关联库存卡片");
+    if (new Set(inventoryIds).size !== inventoryIds.length) throw new ConflictError("整单退货中不能重复选择同一库存卡片");
+
+    const salesInvoice = input.type === "销售退货"
+      ? state.salesInvoices.find((invoice) => invoice.invoiceNo === input.relatedDocNo || invoice.id === input.relatedDocNo)
+      : undefined;
+    const purchaseInvoice = input.type === "进货退货"
+      ? state.purchaseInvoices.find((invoice) => invoice.invoiceNo === input.relatedDocNo || invoice.id === input.relatedDocNo)
+      : undefined;
+    if (input.type === "销售退货" && !salesInvoice) throw new NotFoundError(`销售退货关联销售单不存在: ${input.relatedDocNo}`);
+    if (input.type === "进货退货" && !purchaseInvoice) throw new NotFoundError(`进货退货关联采购单不存在: ${input.relatedDocNo}`);
+    if (input.type === "销售退货" && salesInvoice?.outboundStatus !== "已出库") throw new ConflictError("销售单尚未完成出库，不能办理整单退货");
+    if (input.type === "进货退货" && !purchaseInvoice) throw new NotFoundError(`进货退货关联采购单不存在: ${input.relatedDocNo}`);
+
+    const activeReturnForInventory = (inventoryId: string) => state.returnOrders.find((order) =>
+      order.status !== "已作废" && (
+        order.sourceInventoryId === inventoryId ||
+        Boolean(order.items?.some((item) => item.sourceInventoryId === inventoryId))
+      ),
+    );
+    const resolvedItems: ReturnOrderItem[] = [];
+    const salesLines: ReturnLineMatch<SalesItem>[] = [];
+    const purchaseLines: ReturnLineMatch<PurchaseItem>[] = [];
+
+    for (const batchItem of batchInputs) {
+      const sourceCard = findReturnInventory({sourceInventoryId: String(batchItem.sourceInventoryId).trim(), sn: undefined});
+      if (!sourceCard) throw new NotFoundError(`整单退货库存卡片不存在: ${batchItem.sourceInventoryId}`);
+      const existingReturn = activeReturnForInventory(sourceCard.id);
+      if (existingReturn) throw new ConflictError(`库存 ${sourceCard.id} 已有未完成的退货单: ${existingReturn.returnNo}`);
+
+      if (input.type === "销售退货") {
+        const invoice = salesInvoice!;
+        const line = typeof batchItem.sourceSalesItemIndex === "number"
+          ? invoice.items.map((item, index) => ({id: makeSalesReturnLineId(item, index), index, item}))[batchItem.sourceSalesItemIndex]
+          : findSalesReturnLine(invoice, {sourceInventoryId: sourceCard.id, sourceSalesItemIndex: undefined, sourceSalesItemId: undefined, sn: sourceCard.sn, amount: 0}, sourceCard);
+        if (!line || (line.item.inventoryId && line.item.inventoryId !== sourceCard.id && line.item.sn !== sourceCard.sn)) {
+          throw new ConflictError(`库存 ${sourceCard.id} 与销售单明细不匹配`);
+        }
+        if (sourceCard.salesInvoiceId !== invoice.invoiceNo) throw new ConflictError("所选库存不属于关联销售单");
+        if (salesLines.some((item) => item.index === line.index)) throw new ConflictError("整单退货不能重复选择同一销售明细");
+        const amount = Number(line.item.sellPrice || 0);
+        if (amount <= 0) throw new ValidationError("销售退货明细金额必须大于 0");
+        salesLines.push(line);
+        resolvedItems.push({
+          sourceInventoryId: sourceCard.id,
+          sourceSalesItemId: line.id,
+          sourceSalesItemIndex: line.index,
+          sourceSalesItemSnapshot: {...line.item},
+          productId: sourceCard.productId || line.item.productId,
+          productName: sourceCard.productName || line.item.productName,
+          sn: sourceCard.sn || line.item.sn,
+          amount,
+        });
+      } else {
+        const invoice = purchaseInvoice!;
+        if (findPurchaseInvoiceForCard(sourceCard)?.id !== invoice.id) throw new ConflictError(`库存 ${sourceCard.id} 与采购单不匹配`);
+        if (["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(sourceCard.status)) {
+          throw new ConflictError(`库存状态为${sourceCard.status}，不能办理整单退货`);
+        }
+        const line = typeof batchItem.sourcePurchaseItemIndex === "number"
+          ? invoice.items.map((item, index) => ({id: makePurchaseReturnLineId(item, index), index, item}))[batchItem.sourcePurchaseItemIndex]
+          : findPurchaseReturnLine(invoice, {sourceInventoryId: sourceCard.id, sourcePurchaseItemIndex: undefined, sourcePurchaseItemId: undefined, sn: sourceCard.sn, amount: 0}, sourceCard);
+        if (!line || (line.item.sn && sourceCard.sn && line.item.sn !== sourceCard.sn && line.item.tempId !== sourceCard.id)) {
+          throw new ConflictError(`库存 ${sourceCard.id} 与采购单明细不匹配`);
+        }
+        if (purchaseLines.some((item) => item.index === line.index)) throw new ConflictError("整单退货不能重复选择同一采购明细");
+        const amount = Number(line.item.buyPrice || sourceCard.costPrice || 0);
+        if (amount <= 0) throw new ValidationError("进货退货明细金额必须大于 0");
+        purchaseLines.push(line);
+        resolvedItems.push({
+          sourceInventoryId: sourceCard.id,
+          sourcePurchaseItemId: line.id,
+          sourcePurchaseItemIndex: line.index,
+          sourcePurchaseItemSnapshot: {...line.item},
+          productId: sourceCard.productId || line.item.productId,
+          productName: sourceCard.productName || line.item.productName,
+          sn: sourceCard.sn || line.item.sn,
+          amount,
+        });
+      }
+    }
+
+    const amount = resolvedItems.reduce((sum, item) => sum + item.amount, 0);
+    const resultingTotal = input.type === "销售退货"
+      ? Math.max(0, Number(salesInvoice?.totalAmount || 0) - amount)
+      : Math.max(0, Number(purchaseInvoice?.totalCost || 0) - amount);
+    const paidBefore = input.type === "销售退货" ? Number(salesInvoice?.paidAmount || 0) : Number(purchaseInvoice?.paidAmount || 0);
+    const cashSettlementAmount = Math.max(0, paidBefore - Math.min(paidBefore, resultingTotal));
+    const refundAllocations = input.settlementMode === "原路退款"
+      ? createRefundAllocations(input.type, input.relatedDocNo, cashSettlementAmount, input.refundAllocations, input.settlementAccountId)
+      : [];
+    if (input.type === "进货退货" && input.settlementMode === "直接冲销") {
+      const invoiceCredit = purchaseVendorCreditApplied(purchaseInvoice);
+      const linkedPayments = state.paymentOutRecords.filter((payment) =>
+        payment.relatedDocNo === purchaseInvoice?.invoiceNo || payment.relatedDocNo === purchaseInvoice?.id,
+      );
+      if (resultingTotal > 0 || invoiceCredit > 0 || linkedPayments.length !== 1) {
+        throw new ConflictError("直接冲销仅用于整张采购单误录的一笔现金付款；含部分退货、供应商抵扣或多笔付款时请分别处理");
+      }
+      const linkedPayment = linkedPayments[0];
+      if (!linkedPayment || linkedPayment.businessType !== "采购付款" || Math.abs(Number(linkedPayment.amount || 0) - paidBefore) > 0.009) {
+        throw new ConflictError("直接冲销要求原采购单的唯一采购付款与现金已付金额完全一致；历史金额不一致请先核对付款流水");
+      }
+    }
+    if (input.type === "进货退货" && input.settlementMode === "抵扣账款" && purchaseInvoice && ["个人回收", "客户置换"].includes(purchaseInvoice.sourceType) && cashSettlementAmount > 0) {
+      throw new ValidationError("个人回收的已付款退货不能留作供应商抵扣余额，请选择原路退款");
+    }
+
+    const {items: _items, ...baseInput} = input;
+    const order: ReturnOrder = {
+      ...baseInput,
+      id: genId("TH"),
+      returnNo: nextReturnNo(input.type),
+      status: "待处理",
+      date: input.date || storeDate(),
+      relatedDocType: input.relatedDocType || (input.type === "销售退货" ? "销售单" : "采购单"),
+      relatedDocNo: input.relatedDocNo,
+      batchMode: "整单退货",
+      items: resolvedItems,
+      sourceInventoryId: undefined,
+      sourceSalesItemId: undefined,
+      sourceSalesItemIndex: undefined,
+      sourceSalesItemSnapshot: undefined,
+      sourcePurchaseItemId: undefined,
+      sourcePurchaseItemIndex: undefined,
+      sourcePurchaseItemSnapshot: undefined,
+      productId: undefined,
+      productName: `整单退货（${resolvedItems.length}件）`,
+      sn: `共${resolvedItems.length}件`,
+      partyId: input.partyId || salesInvoice?.customerId || purchaseInvoice?.sourcePartnerId,
+      partyType: input.partyType || (input.type === "销售退货" ? (salesInvoice?.customerPartnerType === "vendor" ? "vendor" : "customer") : (purchaseInvoice?.sourcePartnerType || (["个人回收", "客户置换"].includes(purchaseInvoice?.sourceType || "") ? "customer" : "vendor"))),
+      partyName: input.partyName || salesInvoice?.customerName || purchaseInvoice?.supplierName,
+      contact: input.contact || salesInvoice?.contact || purchaseInvoice?.contact,
+      amount,
+      refundAllocations,
+      settlementAccountId: refundAllocations.length === 1 ? refundAllocations[0]?.accountId : undefined,
+      settlementAccountName: refundAllocations.length === 1 ? refundAllocations[0]?.accountName : undefined,
+    };
+    state.returnOrders = [order, ...state.returnOrders];
+    addLog(systemActor(), "退货管理", `创建${order.type}`, order.returnNo, undefined, `${order.partyName || "未记录对象"} / 整单 ${resolvedItems.length} 件 / ${order.amount}元`);
+    return order;
+  };
+
+  const createReturnOrder = (input: ReturnOrderCreateInput) => {
     if (!input.type) throw new ValidationError("退货类型不能为空");
     if (!input.relatedDocNo?.trim()) throw new ValidationError("退货必须关联业务单据");
-    if (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0) throw new ValidationError("退货金额必须为大于 0 的有效数字");
+    const batchInputs = Array.isArray(input.items) ? input.items : [];
+    if (!batchInputs.length && (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0)) throw new ValidationError("退货金额必须为大于 0 的有效数字");
     if (input.type === "销售退货" && input.settlementMode !== "原路退款") {
       throw new ValidationError("销售退货仅支持原路退款");
     }
@@ -2174,6 +2329,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (!allowedInventoryActions.includes(input.inventoryAction)) {
       throw new ValidationError(`${input.type}的库存处理方式无效`);
     }
+    if (batchInputs.length) return createBatchReturnOrder(input, batchInputs);
 
     const sourceCard = input.sourceInventoryId || input.sn ? findReturnInventory(input) : undefined;
     const salesInvoice = input.type === "销售退货"
@@ -2248,8 +2404,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       throw new ValidationError("个人回收的已付款退货不能留作供应商抵扣余额，请选择原路退款");
     }
 
+    const {items: _batchItems, ...singleInput} = input;
     const order: ReturnOrder = {
-      ...input,
+      ...singleInput,
       id: genId("TH"),
       returnNo: nextReturnNo(input.type),
       status: "待处理",
@@ -2280,7 +2437,241 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return order;
   };
 
+  const reverseSalesReturnBatch = (order: ReturnOrder) => {
+    const invoice = state.salesInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
+    const batchItems = order.items || [];
+    if (!invoice) throw new NotFoundError(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
+    if (batchItems.length < 1) throw new ConflictError("整单销售退货缺少有效商品明细");
+    const matches = batchItems.map((batchItem) => {
+      const card = findReturnInventory(batchItem);
+      if (!card) throw new NotFoundError(`销售退货库存档案不存在: ${batchItem.sourceInventoryId}`);
+      const line = findSalesReturnLine(invoice, batchItem, card);
+      if (!line || (line.item.inventoryId && line.item.inventoryId !== card.id && line.item.sn !== card.sn)) {
+        throw new ConflictError(`库存 ${card.id} 与销售单明细不匹配`);
+      }
+      return {batchItem, card, line};
+    });
+    if (new Set(matches.map((match) => match.line.index)).size !== matches.length) throw new ConflictError("整单销售退货包含重复商品明细");
+    const refundAmount = matches.reduce((sum, match) => sum + Number(match.line.item.sellPrice || match.batchItem.amount || 0), 0);
+    if (Math.abs(refundAmount - Number(order.amount || 0)) > 0.009) throw new ConflictError("整单销售退货金额与明细合计不一致");
+
+    const returnedIndices = new Set(matches.map((match) => match.line.index));
+    const remainingItems = invoice.items.filter((_, index) => !returnedIndices.has(index));
+    const totalCount = remainingItems.length;
+    const totalCost = remainingItems.reduce((sum, item) => sum + item.costPrice, 0);
+    const totalAmount = remainingItems.reduce((sum, item) => sum + item.sellPrice, 0);
+    const totalProfit = remainingItems.reduce((sum, item) => sum + item.profit, 0);
+    const paidAmount = Math.min(invoice.paidAmount, totalAmount);
+    const unpaidAmount = Math.max(0, totalAmount - paidAmount);
+    const cashRefundAmount = Math.max(0, invoice.paidAmount - paidAmount);
+    let paymentRecordId: string | undefined;
+    let refundPaymentRecordIds: string[] | undefined;
+    if (cashRefundAmount > 0) {
+      const allocations = order.refundAllocations || [];
+      const allocationTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      if (Math.abs(allocationTotal - cashRefundAmount) > 0.009) throw new ConflictError("整单销售退货退款分摊与应退现金不一致");
+      refundPaymentRecordIds = allocations.map((allocation) => createPaymentOut({
+        customerName: invoice.customerName,
+        accountId: allocation.accountId,
+        amount: allocation.amount,
+        handler: order.handler,
+        paymentMethod: allocation.paymentMethod || "退款",
+        businessType: "客户退款",
+        relatedDocType: "退货单",
+        relatedDocNo: order.returnNo,
+        time: nowStamp(),
+        remarks: order.remarks || order.reason,
+      }, {skipInvoiceUpdate: true}).id);
+      paymentRecordId = refundPaymentRecordIds[0];
+    }
+
+    state.salesInvoices = state.salesInvoices.map((item) => item.id === invoice.id
+      ? {
+          ...item,
+          items: remainingItems,
+          totalCount,
+          totalCost,
+          totalAmount,
+          totalProfit,
+          paidAmount,
+          unpaidAmount,
+          isPaid: unpaidAmount === 0,
+          paymentStatus: totalAmount === 0 ? "已退款" : unpaidAmount === 0 ? "已收款" : paidAmount > 0 ? "部分收款" : "未收款",
+          remarks: `${item.remarks || ""}${item.remarks ? "；" : ""}销售整单退货已冲减：${order.returnNo}`,
+        }
+      : item);
+
+    const returnedSellPrice = matches.reduce((sum, match) => sum + Number(match.line.item.sellPrice || 0), 0);
+    const returnedProfit = matches.reduce((sum, match) => sum + Number(match.line.item.profit ?? (match.line.item.sellPrice - match.line.item.costPrice)), 0);
+    const returnedCount = matches.length;
+    if (invoice.customerPartnerType === "vendor" && invoice.customerId) {
+      state.vendors = state.vendors.map((vendor) => vendor.id === invoice.customerId
+        ? {
+            ...vendor,
+            totalBuyAmount: Math.max(0, vendor.totalBuyAmount - returnedSellPrice),
+            totalCount: Math.max(0, vendor.totalCount - returnedCount),
+            accountPaid: Math.max(0, (vendor.accountPaid || 0) - cashRefundAmount),
+            accountPayable: Math.max(0, (vendor.accountPayable || 0) - Math.max(0, invoice.unpaidAmount - unpaidAmount)),
+          }
+        : vendor);
+    } else {
+      const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.customerName);
+      state.customers = state.customers.map((customer) => {
+        const linkedById = invoice.customerId && invoice.customerPartnerType !== "vendor" && customer.id === invoice.customerId;
+        const linkedByName = legacyCustomerNameIsUnique && !invoice.customerId && customer.name === invoice.customerName;
+        if (!linkedById && !linkedByName) return customer;
+        return {
+          ...customer,
+          totalAmount: Math.max(0, customer.totalAmount - returnedSellPrice),
+          totalProfit: Math.max(0, customer.totalProfit - returnedProfit),
+          buyCount: Math.max(0, customer.buyCount - returnedCount),
+          ...applyCustomerBalance(customer, {receivable: -Math.max(0, invoice.unpaidAmount - unpaidAmount)}),
+        };
+      });
+    }
+
+    const returnedCardIds = new Set(matches.map((match) => match.card.id));
+    state.inventory = state.inventory.map((card) => returnedCardIds.has(card.id)
+      ? {
+          ...card,
+          status: order.inventoryAction === "直接报废" ? "已报废" : "待检测",
+          warehouseLocation: order.inventoryAction === "退回待检测" ? "退货待检测区" : card.warehouseLocation,
+          salesPrice: undefined,
+          salesInvoiceId: undefined,
+          buyerName: undefined,
+          salesTime: undefined,
+          remarks: `${card.remarks || ""}${card.remarks ? "；" : ""}${nowStamp()} 销售整单退货，退货单：${order.returnNo}`,
+        }
+      : card);
+    matches.forEach((match) => adjustCommissionForSalesReturn(invoice.invoiceNo, match.card.id, order.returnNo));
+    return {
+      paymentRecordId,
+      refundPaymentRecordIds,
+      creditAmount: undefined,
+      vendorCreditAmount: undefined,
+      releasedVendorCreditAmount: undefined,
+      cashReleasedAmount: undefined,
+      reversedPaymentSnapshot: undefined,
+      affectedAccountId: undefined,
+    };
+  };
+
+  const reversePurchaseReturnBatch = (order: ReturnOrder) => {
+    const invoice = state.purchaseInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
+    const batchItems = order.items || [];
+    if (!invoice) throw new NotFoundError(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
+    if (batchItems.length < 1) throw new ConflictError("整单进货退货缺少有效商品明细");
+    const matches = batchItems.map((batchItem) => {
+      const card = findReturnInventory(batchItem);
+      if (!card) throw new NotFoundError(`进货退货库存档案不存在: ${batchItem.sourceInventoryId}`);
+      const line = findPurchaseReturnLine(invoice, batchItem, card);
+      if (!line) throw new ConflictError(`库存 ${card.id} 与采购明细不匹配`);
+      return {batchItem, card, line};
+    });
+    if (new Set(matches.map((match) => match.line.index)).size !== matches.length) throw new ConflictError("整单进货退货包含重复商品明细");
+    const amount = matches.reduce((sum, match) => sum + Number(match.line.item.buyPrice || match.batchItem.amount || match.card.costPrice || 0), 0);
+    if (Math.abs(amount - Number(order.amount || 0)) > 0.009) throw new ConflictError("整单进货退货金额与明细合计不一致");
+    const returnedIndices = new Set(matches.map((match) => match.line.index));
+    const remainingItems = invoice.items.filter((_, index) => !returnedIndices.has(index));
+    const totalCount = remainingItems.length;
+    const totalCost = remainingItems.reduce((sum, item) => sum + item.buyPrice, 0);
+    const estTotalSell = remainingItems.reduce((sum, item) => sum + item.estSellPrice, 0);
+    const estTotalProfit = estTotalSell - totalCost;
+    const originalPaidAmount = Math.max(0, Number(invoice.paidAmount || 0));
+    const originalVendorCredit = purchaseVendorCreditApplied(invoice);
+    const originalUnpaidAmount = Math.max(0, Number(invoice.unpaidAmount || 0));
+    let returnRemainder = amount;
+    const payableOffset = Math.min(originalUnpaidAmount, returnRemainder);
+    returnRemainder -= payableOffset;
+    const releasedVendorCredit = Math.min(originalVendorCredit, returnRemainder);
+    returnRemainder -= releasedVendorCredit;
+    const cashRefundAmount = Math.min(originalPaidAmount, returnRemainder);
+    const paidAmount = Math.max(0, originalPaidAmount - cashRefundAmount);
+    const vendorCreditAppliedAmount = Math.max(0, originalVendorCredit - releasedVendorCredit);
+    const unpaidAmount = Math.max(0, totalCost - paidAmount - vendorCreditAppliedAmount);
+    let paymentRecordId: string | undefined;
+    let refundPaymentRecordIds: string[] | undefined;
+    let reversedPaymentSnapshot: PaymentOutRecord | undefined;
+    let affectedAccountId: string | undefined;
+    if (order.settlementMode === "直接冲销") {
+      const linkedPayments = state.paymentOutRecords.filter((payment) => payment.relatedDocNo === invoice.invoiceNo || payment.relatedDocNo === invoice.id);
+      if (totalCost > 0 || originalVendorCredit > 0) throw new ConflictError("直接冲销仅支持未使用供应商抵扣余额的整张采购单全部退货");
+      if (linkedPayments.length !== 1) throw new ConflictError("直接冲销要求原采购单恰好只有一笔付款；多笔付款请在付款流水中逐笔处理");
+      const linkedPayment = linkedPayments[0];
+      if (!linkedPayment) throw new ConflictError("直接冲销未找到原采购付款");
+      reversedPaymentSnapshot = {...linkedPayment};
+      affectedAccountId = linkedPayment.accountId;
+      deletePaymentOut(linkedPayment.id, {skipInvoiceUpdate: true});
+    }
+    if (order.settlementMode === "原路退款" && cashRefundAmount > 0) {
+      const allocations = order.refundAllocations || [];
+      const allocationTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      if (Math.abs(allocationTotal - cashRefundAmount) > 0.009) throw new ConflictError("整单进货退货退款分摊与应退现金不一致");
+      refundPaymentRecordIds = allocations.map((allocation) => createPaymentIn({
+        customerName: invoice.supplierName,
+        supplierId: purchaseInvoiceVendorId(invoice),
+        supplierName: invoice.supplierName,
+        accountId: allocation.accountId,
+        amount: allocation.amount,
+        handler: order.handler,
+        paymentMethod: allocation.paymentMethod || "退款",
+        businessType: "采购退款",
+        relatedDocType: "退货单",
+        relatedDocNo: order.returnNo,
+        time: nowStamp(),
+        remarks: order.remarks || order.reason,
+      }, {skipInvoiceUpdate: true}).id);
+      paymentRecordId = refundPaymentRecordIds[0];
+    }
+    state.purchaseInvoices = state.purchaseInvoices.map((item) => item.id === invoice.id
+      ? {
+          ...item,
+          items: remainingItems,
+          totalCount,
+          totalCost,
+          estTotalSell,
+          estTotalProfit,
+          paidAmount,
+          vendorCreditAppliedAmount,
+          unpaidAmount,
+          isPaid: unpaidAmount === 0,
+          paymentStatus: totalCost === 0 ? "已退款" : unpaidAmount === 0 ? "已付款" : paidAmount > 0 || vendorCreditAppliedAmount > 0 ? "部分付款" : "未付款",
+          remarks: `${item.remarks || ""}${item.remarks ? "；" : ""}进货整单退货已冲减：${order.returnNo}`,
+        }
+      : item);
+
+    const returnedCost = matches.reduce((sum, match) => sum + Number(match.line.item.buyPrice || 0), 0);
+    const returnedCount = matches.length;
+    const sourceIsPersonal = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    if (sourceIsPersonal) {
+      const linkedCustomerId = invoice.sourcePartnerId;
+      const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.supplierName);
+      state.customers = state.customers.map((customer) => {
+        const linkedById = !!linkedCustomerId && customer.id === linkedCustomerId;
+        const linkedByName = legacyCustomerNameIsUnique && !linkedCustomerId && customer.name === invoice.supplierName;
+        if (!linkedById && !linkedByName) return customer;
+        return {...customer, totalAmount: Math.max(0, customer.totalAmount - returnedCost), recycleCount: Math.max(0, customer.recycleCount - returnedCount), ...applyCustomerBalance(customer, {payable: -payableOffset}), lastDealTime: order.date};
+      });
+    } else {
+      const linkedVendorId = invoice.sourcePartnerType === "vendor" ? invoice.sourcePartnerId : undefined;
+      const legacyVendorNameIsUnique = hasUniqueLegacyName(state.vendors, invoice.supplierName);
+      state.vendors = state.vendors.map((vendor) => {
+        const linkedById = linkedVendorId && vendor.id === linkedVendorId;
+        const linkedByName = legacyVendorNameIsUnique && !linkedVendorId && vendor.name === invoice.supplierName;
+        if (!linkedById && !linkedByName) return vendor;
+        return {...vendor, totalBuyAmount: Math.max(0, vendor.totalBuyAmount - returnedCost), totalCount: Math.max(0, vendor.totalCount - returnedCount), accountPayable: Math.max(0, (vendor.accountPayable || 0) - payableOffset), accountPaid: Math.max(0, (vendor.accountPaid || 0) - cashRefundAmount), returnCreditBalance: (vendor.returnCreditBalance || 0) + releasedVendorCredit + (order.settlementMode === "抵扣账款" ? cashRefundAmount : 0), lastDealTime: order.date};
+      });
+    }
+    const returnedCardIds = new Set(matches.map((match) => match.card.id));
+    state.inventory = state.inventory.map((card) => returnedCardIds.has(card.id)
+      ? {...card, status: order.inventoryAction === "直接报废" ? "已报废" : "已退货", warehouseLocation: order.inventoryAction === "退回供应商" ? "已退回供应商" : card.warehouseLocation, remarks: `${card.remarks || ""}${card.remarks ? "；" : ""}${nowStamp()} 进货整单退货，退货单：${order.returnNo}`}
+      : card);
+    const vendorCreditAmount = order.settlementMode === "抵扣账款" ? releasedVendorCredit + cashRefundAmount : releasedVendorCredit || undefined;
+    return {paymentRecordId, refundPaymentRecordIds, reversedPaymentSnapshot, affectedAccountId, creditAmount: order.settlementMode === "抵扣账款" ? payableOffset : undefined, vendorCreditAmount, releasedVendorCreditAmount: releasedVendorCredit || undefined, cashReleasedAmount: cashRefundAmount || undefined};
+  };
+
   const reverseSalesReturn = (order: ReturnOrder) => {
+    if (order.items?.length) return reverseSalesReturnBatch(order);
     const invoice = state.salesInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
     if (!invoice) throw new NotFoundError(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
@@ -2388,6 +2779,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const reversePurchaseReturn = (order: ReturnOrder) => {
+    if (order.items?.length) return reversePurchaseReturnBatch(order);
     const invoice = state.purchaseInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
     if (!invoice) throw new NotFoundError(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
@@ -2603,7 +2995,181 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return updated;
   };
 
+  const restoreDeletedSalesReturnBatch = (order: ReturnOrder) => {
+    const invoice = state.salesInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
+    const batchItems = order.items || [];
+    if (!invoice) throw new NotFoundError(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
+    if (batchItems.length < 1) throw new ConflictError("整单销售退货缺少有效商品明细，不能冲销");
+    const payments = returnRefundPayments(order) as PaymentOutRecord[];
+    const cashRefundAmount = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    payments.forEach((payment) => deletePaymentOut(payment.id, {skipInvoiceUpdate: true}));
+
+    const restoredLines = batchItems.map((batchItem) => {
+      const returnedCard = findReturnInventory(batchItem);
+      if (!returnedCard) throw new NotFoundError(`销售退货库存档案不存在，不能删除已完成退货单: ${batchItem.sourceInventoryId}`);
+      const restoredSellPrice = Number(batchItem.sourceSalesItemSnapshot?.sellPrice || batchItem.amount || returnedCard.salesPrice || 0);
+      const restoredCost = Number(batchItem.sourceSalesItemSnapshot?.costPrice || returnedCard.costPrice || 0);
+      const restoredProfit = batchItem.sourceSalesItemSnapshot?.profit !== undefined
+        ? Number(batchItem.sourceSalesItemSnapshot.profit)
+        : restoredSellPrice - restoredCost;
+      const restoredSourceItem: SalesItem = batchItem.sourceSalesItemSnapshot
+        ? {...batchItem.sourceSalesItemSnapshot}
+        : {
+            inventoryId: returnedCard.id,
+            productId: returnedCard.productId,
+            productName: returnedCard.productName,
+            sn: returnedCard.sn,
+            condition: returnedCard.condition,
+            quantity: 1,
+            costPrice: restoredCost,
+            sellPrice: restoredSellPrice,
+            profit: restoredProfit,
+            aftersalesTerms: invoice.aftersalesTerms || "",
+            remarks: order.remarks,
+          };
+      return {batchItem, returnedCard, restoredSourceItem, restoredSellPrice, restoredCost, restoredProfit};
+    });
+    let restoredItems = invoice.items;
+    for (const line of [...restoredLines].sort((left, right) => (left.batchItem.sourceSalesItemIndex ?? Number.MAX_SAFE_INTEGER) - (right.batchItem.sourceSalesItemIndex ?? Number.MAX_SAFE_INTEGER))) {
+      const alreadyExists = restoredItems.some((item, index) =>
+        makeSalesReturnLineId(item, index) === line.batchItem.sourceSalesItemId ||
+        (!!line.restoredSourceItem.inventoryId && item.inventoryId === line.restoredSourceItem.inventoryId) ||
+        (!!line.restoredSourceItem.sn && item.sn === line.restoredSourceItem.sn),
+      );
+      if (!alreadyExists) restoredItems = insertAtOriginalIndex(restoredItems, line.restoredSourceItem, line.batchItem.sourceSalesItemIndex);
+    }
+    const totalCount = restoredItems.length;
+    const totalCost = restoredItems.reduce((sum, item) => sum + Number(item.costPrice || 0), 0);
+    const totalAmount = restoredItems.reduce((sum, item) => sum + Number(item.sellPrice || 0), 0);
+    const totalProfit = restoredItems.reduce((sum, item) => sum + Number(item.profit || 0), 0);
+    const paidAmount = Math.min(totalAmount, Number(invoice.paidAmount || 0) + cashRefundAmount);
+    const unpaidAmount = Math.max(0, totalAmount - paidAmount);
+    const restoredDebt = Math.max(0, unpaidAmount - Number(invoice.unpaidAmount || 0));
+    state.salesInvoices = state.salesInvoices.map((item) => item.id === invoice.id
+      ? {...item, items: restoredItems, totalCount, totalCost, totalAmount, totalProfit, paidAmount, unpaidAmount, isPaid: unpaidAmount === 0, paymentStatus: unpaidAmount === 0 ? "已收款" : paidAmount > 0 ? "部分收款" : "未收款", remarks: removeReturnRemark(item.remarks, order.returnNo)}
+      : item);
+
+    const restoredSellPrice = restoredLines.reduce((sum, line) => sum + line.restoredSellPrice, 0);
+    const restoredProfit = restoredLines.reduce((sum, line) => sum + line.restoredProfit, 0);
+    const restoredCount = restoredLines.length;
+    if (invoice.customerPartnerType === "vendor" && invoice.customerId) {
+      state.vendors = state.vendors.map((vendor) => vendor.id === invoice.customerId
+        ? {...vendor, totalBuyAmount: vendor.totalBuyAmount + restoredSellPrice, totalCount: vendor.totalCount + restoredCount, accountPaid: (vendor.accountPaid || 0) + cashRefundAmount, accountPayable: (vendor.accountPayable || 0) + restoredDebt, lastDealTime: invoice.date}
+        : vendor);
+    } else {
+      const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.customerName);
+      state.customers = state.customers.map((customer) => {
+        const linkedById = invoice.customerId && invoice.customerPartnerType !== "vendor" && customer.id === invoice.customerId;
+        const linkedByName = legacyCustomerNameIsUnique && !invoice.customerId && customer.name === invoice.customerName;
+        if (!linkedById && !linkedByName) return customer;
+        return {...customer, totalAmount: customer.totalAmount + restoredSellPrice, totalProfit: customer.totalProfit + restoredProfit, buyCount: customer.buyCount + restoredCount, ...applyCustomerBalance(customer, {receivable: restoredDebt}), lastDealTime: invoice.date};
+      });
+    }
+    const restoredCardIds = new Set(restoredLines.map((line) => line.returnedCard.id));
+    state.inventory = state.inventory.map((card) => restoredCardIds.has(card.id)
+      ? {...card, status: "已售出", warehouseLocation: card.warehouseLocation === "退货待检测区" ? "发货区" : card.warehouseLocation, salesPrice: restoredLines.find((line) => line.returnedCard.id === card.id)?.restoredSellPrice || card.salesPrice, salesInvoiceId: invoice.invoiceNo, buyerName: invoice.customerName, salesTime: invoice.outboundTime || invoice.date || order.date, remarks: removeReturnRemark(card.remarks, order.returnNo)}
+      : card);
+  };
+
+  const restoreDeletedPurchaseReturnBatch = (order: ReturnOrder) => {
+    const invoice = state.purchaseInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
+    const batchItems = order.items || [];
+    if (!invoice) throw new NotFoundError(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
+    if (batchItems.length < 1) throw new ConflictError("整单进货退货缺少有效商品明细，不能冲销");
+    const payments = returnRefundPayments(order) as PaymentInRecord[];
+    const refundedCash = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const cashRefundAmount = Number(order.cashReleasedAmount ?? refundedCash ?? (order.settlementMode === "直接冲销" ? order.reversedPaymentSnapshot?.amount : 0) ?? 0);
+    payments.forEach((payment) => deletePaymentIn(payment.id, {skipInvoiceUpdate: true}));
+    if (order.settlementMode === "直接冲销" && order.reversedPaymentSnapshot) {
+      const snapshot = order.reversedPaymentSnapshot;
+      createPaymentOut({supplierId: snapshot.supplierId, supplierName: snapshot.supplierName, customerId: snapshot.customerId, customerName: snapshot.customerName, accountId: snapshot.accountId, amount: snapshot.amount, handler: snapshot.handler, paymentMethod: snapshot.paymentMethod, businessType: snapshot.businessType, relatedDocType: snapshot.relatedDocType, relatedDocNo: snapshot.relatedDocNo, time: snapshot.time, remarks: snapshot.remarks}, {skipInvoiceUpdate: true});
+    }
+    const restoredLines = batchItems.map((batchItem) => {
+      const returnedCard = findReturnInventory(batchItem);
+      if (!returnedCard) throw new NotFoundError(`进货退货库存档案不存在，不能删除已完成退货单: ${batchItem.sourceInventoryId}`);
+      const amount = Number(batchItem.sourcePurchaseItemSnapshot?.buyPrice || batchItem.amount || returnedCard.costPrice || 0);
+      const restoredSourceItem: PurchaseItem = batchItem.sourcePurchaseItemSnapshot
+        ? {...batchItem.sourcePurchaseItemSnapshot}
+        : {
+            tempId: returnedCard.id,
+            productId: returnedCard.productId,
+            productName: returnedCard.productName,
+            category: returnedCard.category,
+            model: returnedCard.model,
+            brand: returnedCard.brand,
+            version: returnedCard.version,
+            vram: returnedCard.vram,
+            sn: returnedCard.sn,
+            condition: returnedCard.condition,
+            inWarranty: returnedCard.inWarranty,
+            warrantyDate: returnedCard.warrantyDate,
+            repaired: returnedCard.repaired,
+            gpuRisk: returnedCard.gpuRisk,
+            fullBox: returnedCard.fullBox,
+            quantity: 1,
+            buyPrice: amount,
+            estSellPrice: Number(returnedCard.estSellPrice || 0),
+            warehouseLocation: returnedCard.warehouseLocation === "已退回供应商" ? "待检测区" : returnedCard.warehouseLocation,
+            remarks: order.remarks,
+          };
+      return {batchItem, returnedCard, restoredSourceItem, amount};
+    });
+    let restoredItems = invoice.items;
+    for (const line of [...restoredLines].sort((left, right) => (left.batchItem.sourcePurchaseItemIndex ?? Number.MAX_SAFE_INTEGER) - (right.batchItem.sourcePurchaseItemIndex ?? Number.MAX_SAFE_INTEGER))) {
+      const alreadyExists = restoredItems.some((item, index) =>
+        makePurchaseReturnLineId(item, index) === line.batchItem.sourcePurchaseItemId ||
+        (!!line.restoredSourceItem.tempId && item.tempId === line.restoredSourceItem.tempId) ||
+        (!!line.restoredSourceItem.sn && item.sn === line.restoredSourceItem.sn),
+      );
+      if (!alreadyExists) restoredItems = insertAtOriginalIndex(restoredItems, line.restoredSourceItem, line.batchItem.sourcePurchaseItemIndex);
+    }
+    const totalCount = restoredItems.length;
+    const totalCost = restoredItems.reduce((sum, item) => sum + Number(item.buyPrice || 0), 0);
+    const estTotalSell = restoredItems.reduce((sum, item) => sum + Number(item.estSellPrice || 0), 0);
+    const estTotalProfit = estTotalSell - totalCost;
+    const releasedVendorCredit = Math.max(0, Number(order.releasedVendorCreditAmount || 0));
+    const vendorCreditAppliedAmount = Math.max(0, purchaseVendorCreditApplied(invoice) + releasedVendorCredit);
+    const paidAmount = Math.min(totalCost - vendorCreditAppliedAmount, Number(invoice.paidAmount || 0) + cashRefundAmount);
+    const unpaidAmount = Math.max(0, totalCost - paidAmount - vendorCreditAppliedAmount);
+    const restoredPayable = Math.max(0, unpaidAmount - Number(invoice.unpaidAmount || 0));
+    const creditAdded = Number(order.vendorCreditAmount ?? (order.settlementMode === "抵扣账款" ? Math.max(0, Number(order.amount || 0) - Number(order.creditAmount || 0)) : 0));
+    state.purchaseInvoices = state.purchaseInvoices.map((item) => item.id === invoice.id
+      ? {...item, items: restoredItems, totalCount, totalCost, estTotalSell, estTotalProfit, paidAmount, vendorCreditAppliedAmount, unpaidAmount, isPaid: unpaidAmount === 0, paymentStatus: unpaidAmount === 0 ? "已付款" : paidAmount > 0 || vendorCreditAppliedAmount > 0 ? "部分付款" : "未付款", remarks: removeReturnRemark(item.remarks, order.returnNo)}
+      : item);
+
+    const restoredCost = restoredLines.reduce((sum, line) => sum + line.amount, 0);
+    const restoredCount = restoredLines.length;
+    const sourceIsPersonal = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    if (sourceIsPersonal) {
+      const linkedCustomerId = invoice.sourcePartnerId;
+      const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.supplierName);
+      state.customers = state.customers.map((customer) => {
+        const linkedById = !!linkedCustomerId && customer.id === linkedCustomerId;
+        const linkedByName = legacyCustomerNameIsUnique && !linkedCustomerId && customer.name === invoice.supplierName;
+        if (!linkedById && !linkedByName) return customer;
+        return {...customer, totalAmount: customer.totalAmount + restoredCost, recycleCount: customer.recycleCount + restoredCount, ...applyCustomerBalance(customer, {payable: restoredPayable}), lastDealTime: invoice.date};
+      });
+    } else {
+      const linkedVendorId = invoice.sourcePartnerType === "vendor" ? invoice.sourcePartnerId : undefined;
+      const legacyVendorNameIsUnique = hasUniqueLegacyName(state.vendors, invoice.supplierName);
+      state.vendors = state.vendors.map((vendor) => {
+        const linkedById = linkedVendorId && vendor.id === linkedVendorId;
+        const linkedByName = legacyVendorNameIsUnique && !linkedVendorId && vendor.name === invoice.supplierName;
+        if (!linkedById && !linkedByName) return vendor;
+        return {...vendor, totalBuyAmount: vendor.totalBuyAmount + restoredCost, totalCount: vendor.totalCount + restoredCount, accountPayable: (vendor.accountPayable || 0) + restoredPayable, accountPaid: (vendor.accountPaid || 0) + cashRefundAmount, returnCreditBalance: Math.max(0, (vendor.returnCreditBalance || 0) - creditAdded), lastDealTime: invoice.date};
+      });
+    }
+    const restoredCardIds = new Set(restoredLines.map((line) => line.returnedCard.id));
+    state.inventory = state.inventory.map((card) => restoredCardIds.has(card.id)
+      ? {...card, status: "已入库", warehouseLocation: card.warehouseLocation === "已退回供应商" ? "待检测区" : card.warehouseLocation, remarks: removeReturnRemark(card.remarks, order.returnNo)}
+      : card);
+  };
+
   const restoreDeletedSalesReturn = (order: ReturnOrder) => {
+    if (order.items?.length) {
+      restoreDeletedSalesReturnBatch(order);
+      return;
+    }
     const invoice = state.salesInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
     if (!invoice) throw new NotFoundError(`销售退货关联销售单不存在: ${order.relatedDocNo}`);
@@ -2708,6 +3274,10 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   };
 
   const restoreDeletedPurchaseReturn = (order: ReturnOrder) => {
+    if (order.items?.length) {
+      restoreDeletedPurchaseReturnBatch(order);
+      return;
+    }
     const invoice = state.purchaseInvoices.find((item) => item.invoiceNo === order.relatedDocNo || item.id === order.relatedDocNo);
     const returnedCard = findReturnInventory(order);
     if (!invoice) throw new NotFoundError(`进货退货关联采购单不存在: ${order.relatedDocNo}`);
@@ -3485,7 +4055,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       remarks: report.remarks?.trim() || "全新商品快速入库：仅核验 SN 与质保。",
     } : report;
     assertSnUnique(sn, report.inventoryId);
-    const newReport: InspectionRecord = { ...normalizedReport, sn, id: genId("JC"), inspectTime: nowStamp() };
+    const newReport: InspectionRecord = { ...normalizedReport, sn, id: genId("JC"), inspectTime: nowStamp(), recordVersion: 1 };
     state.inspections = [newReport, ...state.inspections];
     state.inventory = state.inventory.map((card) => {
       if (card.id !== report.inventoryId) return card;
@@ -3521,10 +4091,14 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return newReport;
   };
 
-  const updateInspection = (id: string, updates: Partial<InspectionRecord>) => {
+  const updateInspection = (id: string, updates: Partial<InspectionRecord>, expectedRecordVersion?: number) => {
     const existing = state.inspections.find((inspection) => inspection.id === id);
     if (!existing) {
       throw new NotFoundError(`入库检测单不存在: ${id}`);
+    }
+    const currentRecordVersion = Math.max(1, Number(existing.recordVersion || 1));
+    if (expectedRecordVersion !== undefined && expectedRecordVersion !== currentRecordVersion) {
+      throw new ConflictError("检测记录已被其他操作修改，请刷新后重试");
     }
     const targetCard = state.inventory.find((card) => card.id === existing.inventoryId);
     if (!targetCard) {
@@ -3562,6 +4136,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       inventoryId: existing.inventoryId,
       inspectTime: existing.inspectTime,
       sn,
+      recordVersion: currentRecordVersion + 1,
     };
     const statusMap: Record<InspectionRecord["resultStatus"], CardStatus> = {
       通过: "已入库",
@@ -5546,16 +6121,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     };
   };
   const clearAllLogs = () => {
-    const clearedCount = state.logs.length;
-    state.logs = [];
-    return addLog(
-      systemActor(),
-      "系统设置",
-      "清空操作日志",
-      "审计日志",
-      `清理前共 ${clearedCount} 条日志`,
-      "历史操作日志已清空；保留本次清理记录以便追溯",
-    );
+    throw new ConflictError("审计日志为追加式记录，不支持清空；请使用保留策略或归档");
   };
   const reconcileLedgerItem = (id: string) => {
     const existing = state.financeLedger.find((item) => item.id === id);

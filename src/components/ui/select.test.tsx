@@ -44,11 +44,8 @@ test("Select search normalization supports full-width text, compact models and s
   assert.equal(selectOptionMatches(option, "4080"), false);
 });
 
-test("Select only shows quick create when the catalog is empty or the query has no match", () => {
-  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "", optionCount: 5, matchingOptionCount: 5, searchLoading: false}), false);
-  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "RTX 5090", optionCount: 5, matchingOptionCount: 2, searchLoading: false}), false);
-  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "新商品", optionCount: 5, matchingOptionCount: 0, searchLoading: false}), true);
-  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "", optionCount: 0, matchingOptionCount: 0, searchLoading: false}), true);
-  assert.equal(shouldShowQuickCreateAction({hasSelection: true, searchText: "新商品", optionCount: 5, matchingOptionCount: 0, searchLoading: false}), false);
-  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchText: "新商品", optionCount: 0, matchingOptionCount: 0, searchLoading: true}), false);
+test("Select shows quick create before matching options when nothing is selected", () => {
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchLoading: false}), true);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: true, searchLoading: false}), false);
+  assert.equal(shouldShowQuickCreateAction({hasSelection: false, searchLoading: true}), false);
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {adaptPurchaseReturnList, adaptSalesReturnComplete, adaptSalesReturnList, adaptSalesReturnMutation, toPurchaseReturnRequestDto, toSalesReturnUpdateRequestDto} from "./returns.adapter";
+import type {PurchaseReturnFormValues} from "@/src/types/returns";
 
 test("sales return adapter maps the paginated API envelope into domain items", () => {
   const result = adaptSalesReturnList({data: {data: [{
@@ -62,6 +63,45 @@ test("purchase return request adapter emits only the existing backend contract",
     reason: "型号不符",
     inventoryAction: "退回供应商",
     remarks: "原包装",
+  });
+});
+
+test("purchase return request adapter serializes whole-document lines without leaking draft-only fields", () => {
+  const values: PurchaseReturnFormValues = {
+    date: "2026-08-09",
+    relatedDocNo: "JH-BATCH-1",
+    sourceInventoryId: "",
+    amount: 5000,
+    settlementMode: "抵扣账款",
+    settlementAccountId: "",
+    handler: "郭鑫",
+    reason: "整单退货",
+    inventoryAction: "退回供应商",
+    remarks: "",
+    returnScope: "document",
+    returnItems: [
+      {sourceInventoryId: "KC-1", sourcePurchaseItemIndex: 0},
+      {sourceInventoryId: "KC-2", sourcePurchaseItemIndex: 1},
+    ],
+  };
+  assert.deepEqual(toPurchaseReturnRequestDto(values), {
+    type: "进货退货",
+    relatedDocType: "采购单",
+    date: "2026-08-09",
+    relatedDocNo: "JH-BATCH-1",
+    sourceInventoryId: "",
+    amount: 5000,
+    settlementMode: "抵扣账款",
+    settlementAccountId: undefined,
+    handler: "郭鑫",
+    reason: "整单退货",
+    inventoryAction: "退回供应商",
+    remarks: undefined,
+    batchMode: "整单退货",
+    items: [
+      {sourceInventoryId: "KC-1", sourcePurchaseItemIndex: 0},
+      {sourceInventoryId: "KC-2", sourcePurchaseItemIndex: 1},
+    ],
   });
 });
 

@@ -35,6 +35,20 @@ test("workspace tabs evict the oldest non-pinned page at capacity", () => {
   assert.equal(state.openIds.at(-1), "extra");
 });
 
+test("restoring workspace tabs also enforces the ten-tab ceiling", () => {
+  const ids = Array.from({length: WORKSPACE_MAX_TABS + 3}, (_, index) => `tab-${index}`);
+  const restored = restoreWorkspaceState(JSON.stringify({
+    openIds: [WORKSPACE_HOME_ID, ...ids],
+    pinnedIds: [WORKSPACE_HOME_ID],
+    recentIds: [WORKSPACE_HOME_ID, ...ids],
+    activeId: ids.at(-1),
+  }), [WORKSPACE_HOME_ID, ...ids]);
+
+  assert.equal(restored.openIds.length, WORKSPACE_MAX_TABS);
+  assert.equal(restored.openIds.includes(ids.at(-1)!), true);
+  assert.equal(restored.openIds.includes(ids[0]!), false);
+});
+
 test("closing the active page returns to the most recently used open page", () => {
   let state = createWorkspaceState();
   state = openWorkspaceTab(state, "inventory");

@@ -488,7 +488,7 @@ function Metric({
         >
           {value}
         </p>
-        <p className="mt-1 text-[11px] text-[var(--erp-color-text-muted)]">
+        <p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">
           {detail}
         </p>
       </div>
@@ -498,7 +498,7 @@ function Metric({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3">
-      <p className="text-[11px] text-[var(--erp-color-text-muted)]">{label}</p>
+      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold">{value}</p>
     </div>
   );

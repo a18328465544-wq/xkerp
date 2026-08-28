@@ -194,14 +194,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-bottom: 1px solid var(--erp-color-border);
   padding-bottom: var(--erp-space-3);
 }
-[data-page-frame="finance"] > [data-erp-component="metrics-region"] {
+[data-page-frame="finance"] [data-erp-component="metrics-region"] {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
 }
-[data-page-frame="finance"] > [data-erp-component="metrics-region"] > section {
+[data-page-frame="finance"] [data-erp-component="metrics-region"] > section {
   border-radius: var(--erp-radius-lg);
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
 }
-[data-page-frame="finance"] > [data-erp-component="metrics-region"] > section > div {
+[data-page-frame="finance"] [data-erp-component="metrics-region"] > section > div {
   min-height: 96px;
   padding: 14px 16px;
 }
@@ -408,16 +408,30 @@ button, a { -webkit-tap-highlight-color: transparent; }
     content: "";
   }
 
-  /* Mobile is a reading surface first: preserve two-up KPIs and let the
-     value/detail text truncate inside each card instead of widening the page. */
+  /* Mobile is a reading surface first: keep ordinary KPI groups two-up, but
+     give finance's primary cash value a full-width card so money is never
+     hidden behind an ellipsis. */
   [data-erp-component="metrics-region"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: var(--erp-space-2);
   }
   [data-erp-component="metrics-region"] > [data-erp-component="metric-card"] > div {
     min-height: 92px !important;
     gap: var(--erp-space-2);
     padding: var(--erp-space-3) !important;
+  }
+  [data-page-frame="finance"] [data-erp-component="metrics-region"] > [data-erp-component="metric-card"]:first-child {
+    grid-column: 1 / -1;
+  }
+  [data-page-frame="finance"] [data-erp-component="metric-card"] [data-erp-region="metric-value"] {
+    font-size: 1.25rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  [data-page-frame="finance"] [data-erp-component="metric-card"] [data-erp-region="metric-detail"] {
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
   [data-erp-component="metrics-region"] [data-erp-component="metric-card"] > div > span {
     height: 2rem;
@@ -462,6 +476,24 @@ button, a { -webkit-tap-highlight-color: transparent; }
   }
   [data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-content"] {
     min-width: 0;
+  }
+  [data-page-frame="finance"] [data-erp-component="page-header"] [data-erp-region="page-actions"] {
+    gap: var(--erp-space-2);
+  }
+  [data-page-frame="finance"] [data-erp-component="page-header"] [data-erp-region="page-actions"] > div {
+    width: 100%;
+  }
+  [data-page-frame="finance"] [data-erp-component="page-header"] [data-erp-region="page-actions"] > div > button {
+    min-height: 44px;
+    flex: 1 1 0;
+  }
+}
+@media (min-width: 640px) and (max-width: 1199px) {
+  /* The application sidebar reduces the usable canvas at tablet widths. Two
+     finance KPI columns keep the set balanced instead of leaving one card
+     stranded on a third column. */
+  [data-page-frame="finance"] [data-erp-component="metrics-region"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 @media (min-width: 1280px) {

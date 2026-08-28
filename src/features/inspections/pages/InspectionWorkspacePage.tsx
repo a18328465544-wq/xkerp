@@ -134,6 +134,7 @@ export function InspectionWorkspacePage() {
 
 function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: AuthSession; query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inspectionApi.workspace>>>>; onAuthExpired: () => void}) {
   const queryClient = useQueryClient();
+  const canEditHistory = session.permissions.canEditHistory;
   const {value: selectedId, commit: setSelectedId} = useInventorySelectionUrlState();
   const [editingHistory, setEditingHistory] = useState<InspectionHistoryItem | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -189,7 +190,9 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
     });
   }, [form, media, session.user.displayName, unsavedChanges.requestLeave]);
   const mutation = useMutation({
-    mutationFn: ({values, inspectionId}: {values: InspectionFormValues; inspectionId?: string}) => inspectionId ? inspectionApi.update(inspectionId, values) : inspectionApi.create(values),
+    mutationFn: ({values, inspectionId, expectedRecordVersion}: {values: InspectionFormValues; inspectionId?: string; expectedRecordVersion?: number}) => inspectionId
+      ? inspectionApi.update(inspectionId, values, expectedRecordVersion || 1)
+      : inspectionApi.create(values),
     onSuccess: (result) => {
       toast.success(selectedCandidate?.condition === "全新"
         ? `${result.id || "检测记录"} 已完成全新快速入库，SN 与质保已同步`
@@ -216,7 +219,7 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
     (values) => {
       if (media.blocking) {toast.error("仍有图片正在上传或上传失败，请完成处理后再提交检测单"); return;}
       if (duplicateOwner) {toast.error(`SN 已存在，不能重复入库：${duplicateOwner}`); return;}
-      mutation.mutate({values, inspectionId: editingHistory?.id});
+      mutation.mutate({values, inspectionId: editingHistory?.id, expectedRecordVersion: editingHistory?.recordVersion});
     },
     (errors) => {
       const fields = Object.keys(errors);
@@ -250,7 +253,7 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
 
         <div className="space-y-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3">
           <div className="flex items-center justify-between border-b border-[var(--erp-color-border)] pb-2"><h2 className="flex items-center gap-1.5 text-sm font-semibold tracking-normal text-[var(--erp-color-text)]"><CheckCircle2 className="h-4 w-4 text-[var(--erp-color-success)]" />已质检归档记录</h2><span className="text-xs text-[var(--erp-color-text-muted)]">{history.length} 次归档</span></div>
-          <div className="erp-scrollbar max-h-[220px] space-y-2 overflow-y-auto pr-1">{query.isPending ? <ErpLoadingState title="正在加载检测归档" /> : history.length === 0 ? <ErpEmptyState title="暂无检测归档" description="完成检测后会在这里生成归档记录。" /> : history.map((item) => <div key={item.id} className={`rounded-[var(--erp-radius-md)] border p-2.5 text-xs ${editingHistory?.id === item.id ? "border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)]" : "border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]"}`}><div className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate font-semibold text-[var(--erp-color-text-secondary)]">SN: {item.serialNumber ? <span className="font-mono">{item.serialNumber}</span> : "未记录"}</span><div className="flex shrink-0 items-center gap-1"><Badge className="rounded-[var(--erp-radius-xs)] px-1.5 py-0.5 text-xs" tone={item.resultStatus === "通过" ? "success" : item.resultStatus === "轻微问题" ? "info" : "danger"}>{item.resultStatus}</Badge><Button type="button" size="icon" variant="ghost" className="!h-7 !w-7" onClick={() => editInspection(item)} aria-label={`编辑检测单 ${item.id}`} title="编辑入库检测单"><Pencil className="h-3 w-3" /></Button></div></div><div className="mt-1 line-clamp-2 text-xs text-[var(--erp-color-text-secondary)]">烤机: {item.furmarkResult || (item.category === "显卡" ? "未记录" : "其他配件简易检测")}</div><div className="mt-1 flex justify-between gap-2 text-xs text-[var(--erp-color-text-muted)]"><span>测试员: {item.inspector || "未记录"}</span><span className="font-mono">{item.inspectTime}</span></div></div>)}</div>
+          <div className="erp-scrollbar max-h-[220px] space-y-2 overflow-y-auto pr-1">{query.isPending ? <ErpLoadingState title="正在加载检测归档" /> : history.length === 0 ? <ErpEmptyState title="暂无检测归档" description="完成检测后会在这里生成归档记录。" /> : history.map((item) => <div key={item.id} className={`rounded-[var(--erp-radius-md)] border p-2.5 text-xs ${editingHistory?.id === item.id ? "border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)]" : "border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]"}`}><div className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate font-semibold text-[var(--erp-color-text-secondary)]">SN: {item.serialNumber ? <span className="font-mono">{item.serialNumber}</span> : "未记录"}</span><div className="flex shrink-0 items-center gap-1"><Badge className="rounded-[var(--erp-radius-xs)] px-1.5 py-0.5 text-xs" tone={item.resultStatus === "通过" ? "success" : item.resultStatus === "轻微问题" ? "info" : "danger"}>{item.resultStatus}</Badge>{canEditHistory ? <Button type="button" size="icon" variant="ghost" className="!h-7 !w-7" onClick={() => editInspection(item)} aria-label={`编辑检测单 ${item.id}`} title="编辑入库检测单"><Pencil className="h-3 w-3" /></Button> : null}</div></div><div className="mt-1 line-clamp-2 text-xs text-[var(--erp-color-text-secondary)]">烤机: {item.furmarkResult || (item.category === "显卡" ? "未记录" : "其他配件简易检测")}</div><div className="mt-1 flex justify-between gap-2 text-xs text-[var(--erp-color-text-muted)]"><span>测试员: {item.inspector || "未记录"}</span><span className="font-mono">{item.inspectTime}</span></div></div>)}</div>
         </div>
       </div>
 

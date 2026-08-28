@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {returnsApi} from "./returns";
 import {defaultSalesReturnListFilters} from "@/src/features/returns/sales-return.filters";
+import type {SalesReturnFormValues} from "@/src/types/returns";
 
 test("sales returns endpoint keeps type filtering and uses existing completion/edit/delete routes", async () => {
   const previous = globalThis.fetch;
@@ -25,5 +26,45 @@ test("sales returns endpoint keeps type filtering and uses existing completion/e
       {url: "/api/returns/RET%2F1", method: "DELETE"},
     ]);
     assert.deepEqual(JSON.parse(calls[2]?.body || "{}"), {handler: "郭鑫", reason: "客户拒收", remarks: ""});
+  } finally { globalThis.fetch = previous; }
+});
+
+test("sales return endpoint serializes whole-document lines and omits draft-only scope fields", async () => {
+  const previous = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({data: {id: "RET-BATCH", returnNo: "XSTH-BATCH", type: "销售退货", status: "待处理", amount: 5000}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  const values: SalesReturnFormValues = {
+    date: "2026-08-09",
+    relatedDocNo: "XS-BATCH-1",
+    sourceInventoryId: "",
+    sourceSalesItemIndex: -1,
+    productId: "",
+    productName: "",
+    sn: "",
+    partyName: "客户",
+    partyId: "KH-1",
+    contact: "13900000000",
+    amount: 5000,
+    inventoryAction: "退回待检测",
+    reason: "整单退货",
+    responsibility: "客户",
+    handler: "郭鑫",
+    remarks: "",
+    returnScope: "document",
+    returnItems: [
+      {sourceInventoryId: "KC-1", sourceSalesItemIndex: 0},
+      {sourceInventoryId: "KC-2", sourceSalesItemIndex: 1},
+    ],
+  };
+  try {
+    await returnsApi.createSales(values);
+    assert.equal(requestBody.type, "销售退货");
+    assert.equal(requestBody.batchMode, "整单退货");
+    assert.deepEqual(requestBody.items, values.returnItems);
+    assert.equal("returnScope" in requestBody, false);
+    assert.equal("returnItems" in requestBody, false);
   } finally { globalThis.fetch = previous; }
 });

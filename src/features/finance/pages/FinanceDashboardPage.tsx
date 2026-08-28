@@ -184,6 +184,14 @@ function FinanceDashboardContent({
   const go = (to: string) => {
     void navigate({ to });
   };
+  const canRecordIncome = capabilities.menu("payment_in");
+  const canRecordExpense = capabilities.menu("payment_out");
+  const cashTrendAction = canRecordIncome || canRecordExpense ? (
+    <div className="flex flex-wrap justify-center gap-2">
+      {canRecordIncome && <Button type="button" size="sm" variant="secondary" onClick={() => go("/finance/income")}>记收入</Button>}
+      {canRecordExpense && <Button type="button" size="sm" variant="primary" onClick={() => go("/finance/expense")}>记支出</Button>}
+    </div>
+  ) : undefined;
   const quickStatus: QuickStatusItemData[] = view
     ? [
         {
@@ -210,18 +218,20 @@ function FinanceDashboardContent({
         subtitle="集中查看可用资金、今日收支、周转效率与待处理风险。"
         quickStatus={quickStatus}
         dateContent={
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs text-[var(--erp-color-text-secondary)]">
+          <span className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs text-[var(--erp-color-text-secondary)] sm:h-8 sm:w-auto">
             <CalendarDays className="h-3.5 w-3.5" />
             {storeDate()}
           </span>
         }
         actions={
-          <>
+          <div className="flex w-full gap-2 sm:w-auto">
             <Button
-              size="sm"
+              type="button"
+              size="md"
               variant="secondary"
               onClick={onRetry}
               disabled={fetching}
+              className="flex-1 sm:flex-none"
             >
               <RefreshCw
                 className={`h-4 w-4 ${fetching ? "animate-spin" : ""}`}
@@ -230,23 +240,27 @@ function FinanceDashboardContent({
             </Button>
             {capabilities.menu("payment_in") && (
               <Button
-                size="sm"
+                type="button"
+                size="md"
                 variant="secondary"
                 onClick={() => go("/finance/income")}
+                className="flex-1 sm:flex-none"
               >
                 记收入
               </Button>
             )}
             {capabilities.menu("payment_out") && (
               <Button
-                size="sm"
+                type="button"
+                size="md"
                 variant="primary"
                 onClick={() => go("/finance/expense")}
+                className="flex-1 sm:flex-none"
               >
                 记支出
               </Button>
             )}
-          </>
+          </div>
         }
       />
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
@@ -265,7 +279,7 @@ function FinanceDashboardContent({
         <>
           <FinanceDashboardMetricRegion view={view} />
           <MainRegion variant="60-40" className="gap-3">
-            <MainRegion.Primary>
+            <MainRegion.Primary className="order-2 lg:order-1">
               <DashboardSection
                 title="现金流趋势"
                 description="收入、支出与净现金流"
@@ -281,20 +295,23 @@ function FinanceDashboardContent({
                 }
                 >
                   {!access.canViewSettlementLedger ? (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <ErpEmptyState
                       title="当前账号无账户流水权限"
                       description="需要 settlement_ledger 权限才能查看真实收支趋势；页面不会把不可见数据展示为 0。"
+                      density="compact"
                     />
-                    <ChartMeta summary="收支趋势暂不可见 · 账户流水权限受限" updatedAt={storeDate()} />
+                    <ChartMeta className="mt-2" summary="收支趋势暂不可见 · 账户流水权限受限" updatedAt={storeDate()} />
                   </div>
                 ) : !view.trend.some((row) => row.income !== 0 || row.expense !== 0) ? (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <ErpEmptyState
                       title="当前期间暂无资金流水"
                       description={`统计区间 ${range.startDate} 至 ${range.endDate} 没有收入或支出记录；可调整日期范围查看历史数据。`}
+                      density="compact"
+                      action={cashTrendAction}
                     />
-                    <ChartMeta summary={`统计区间 ${range.startDate} 至 ${range.endDate} 暂无收入或支出`} updatedAt={storeDate()} />
+                    <ChartMeta className="mt-2" summary={`统计区间 ${range.startDate} 至 ${range.endDate} 暂无收入或支出`} updatedAt={storeDate()} />
                   </div>
                 ) : (
                   <>
@@ -430,7 +447,7 @@ function FinanceDashboardContent({
                 )}
               </DashboardSection>
             </MainRegion.Primary>
-            <MainRegion.Secondary className="space-y-3">
+            <MainRegion.Secondary className="order-1 space-y-3 lg:order-2">
               <FinanceDashboardHealthRegions view={view} access={access} />
             </MainRegion.Secondary>
           </MainRegion>

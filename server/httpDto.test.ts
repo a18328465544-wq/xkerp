@@ -3,6 +3,7 @@ import test from "node:test";
 import {ValidationError} from "./errors.ts";
 import {
   inspectionCreateDto,
+  inspectionUpdateDto,
   parseHttpDto,
   paymentInCreateDto,
   paymentOutCreateDto,
@@ -47,4 +48,6 @@ test("inspection DTO enforces bounded metrics and domain enums", () => {
   assert.equal(parseHttpDto(inspectionCreateDto, base).temperature, 72);
   assert.throws(() => parseHttpDto(inspectionCreateDto, {...base, temperature: 999}), ValidationError);
   assert.throws(() => parseHttpDto(inspectionCreateDto, {...base, resultStatus: "随便通过"}), ValidationError);
+  assert.equal(parseHttpDto(inspectionUpdateDto, {resultStatus: "通过", expectedRecordVersion: 2}).expectedRecordVersion, 2);
+  assert.throws(() => parseHttpDto(inspectionUpdateDto, {resultStatus: "通过"}), /检测记录版本号无效|Invalid input/);
 });

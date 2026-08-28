@@ -19,6 +19,31 @@ export interface ReturnRefundAllocation {
   amount: number;
 }
 
+/**
+ * A return order may contain several physical inventory lines when the whole
+ * source document is being returned. The snapshot is kept so a completed
+ * return can still be reversed safely even after the source invoice changes.
+ */
+export interface ReturnOrderItem {
+  sourceInventoryId: string;
+  sourceSalesItemId?: string;
+  sourceSalesItemIndex?: number;
+  sourceSalesItemSnapshot?: SalesItem;
+  sourcePurchaseItemId?: string;
+  sourcePurchaseItemIndex?: number;
+  sourcePurchaseItemSnapshot?: PurchaseItem;
+  productId?: string;
+  productName?: string;
+  sn?: string;
+  amount: number;
+}
+
+export interface ReturnOrderBatchItemInput {
+  sourceInventoryId: string;
+  sourceSalesItemIndex?: number;
+  sourcePurchaseItemIndex?: number;
+}
+
 export interface ReturnOrder {
   id: string;
   returnNo: string;
@@ -27,6 +52,9 @@ export interface ReturnOrder {
   date: string;
   relatedDocType: "销售单" | "采购单" | string;
   relatedDocNo: string;
+  /** Present when one return order covers the whole source document. */
+  batchMode?: "整单退货";
+  items?: ReturnOrderItem[];
   sourceInventoryId?: string;
   sourceSalesItemId?: string;
   sourceSalesItemIndex?: number;
@@ -78,6 +106,8 @@ export interface SalesReturnFormValues {
   responsibility: "客户" | "供应商" | "平台" | "本店" | "其他";
   handler: string;
   remarks: string;
+  returnScope?: "single" | "document";
+  returnItems?: ReturnOrderBatchItemInput[];
 }
 
 export interface ReturnCreateResponse {
@@ -137,6 +167,8 @@ export interface PurchaseReturnFormValues {
   reason: string;
   inventoryAction: "退回供应商" | "直接报废";
   remarks: string;
+  returnScope?: "single" | "document";
+  returnItems?: ReturnOrderBatchItemInput[];
 }
 
 export interface SalesReturnListDataset {

@@ -1,7 +1,7 @@
 import type {ProductCategory} from "@/src/types/core";
 import type {InspectionCandidate, InspectionCreateResult, InspectionFormValues, InspectionHistoryItem, InspectionResultStatus, InspectionWorkspace} from "@/src/types/inspection";
 import {storeDateDiffDays} from "@/src/utils/storeTime";
-import type {InspectionCreateRequestDto} from "../dto/inspection.dto";
+import type {InspectionCreateRequestDto, InspectionUpdateRequestDto} from "../dto/inspection.dto";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -104,6 +104,7 @@ function adaptHistory(dto: Record<string, unknown>, inventoryById: Map<string, R
   return {
     id: text(dto.id),
     inventoryId,
+    recordVersion: Math.max(1, Math.floor(numberValue(dto.recordVersion, 1))),
     productName: text(inventory.productName, "未命名商品"),
     category,
     serialNumber: text(dto.sn),
@@ -240,6 +241,10 @@ export function toInspectionCreateRequestDto(values: InspectionFormValues): Insp
     remarks: values.remarks.trim() || undefined,
     images: stringArray(values.images),
   };
+}
+
+export function toInspectionUpdateRequestDto(values: InspectionFormValues, expectedRecordVersion: number): InspectionUpdateRequestDto {
+  return {...toInspectionCreateRequestDto(values), expectedRecordVersion};
 }
 
 export function adaptInspectionCreateResult(value: unknown): InspectionCreateResult {

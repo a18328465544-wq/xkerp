@@ -9,7 +9,7 @@ export {adaptMediaUploadResponse, toMediaUploadRequest} from "./media.adapter";
 export type {MediaUploadInput, MediaUploadResult} from "./media.adapter";
 export {adaptCreatedCustomer, adaptCreatedProduct, adaptCreatedVendor} from "./entity-create.adapter";
 export {adaptPurchaseReturnList, adaptSalesReturnComplete, adaptSalesReturnList, adaptSalesReturnListItem, adaptSalesReturnMutation, toPurchaseReturnRequestDto, toSalesReturnUpdateRequestDto} from "./returns.adapter";
-export {adaptInspectionCreateResult, adaptInspectionWorkspace, toInspectionCreateRequestDto} from "./inspection.adapter";
+export {adaptInspectionCreateResult, adaptInspectionWorkspace, toInspectionCreateRequestDto, toInspectionUpdateRequestDto} from "./inspection.adapter";
 export {toCustomerCreateRequest, toProductTemplateCreateRequest, toVendorCreateRequest} from "./entity-create.adapter";
 export type {CustomerQuickCreateInput, ProductQuickCreateInput, VendorQuickCreateInput} from "./entity-create.adapter";
 export {adaptProduct, adaptProductLibrary, adaptProductMutation, toProductImportRequest, toProductTemplateRequest} from "./product.adapter";

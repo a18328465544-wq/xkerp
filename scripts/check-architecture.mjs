@@ -129,7 +129,7 @@ const allowedStorageBoundaries = new Set([
   "src/hooks/useTablePreferences.ts",
   "src/services/api/client.ts",
   // Workspace tabs persist shell state, not table preferences.
-  "src/app/shell/WorkspaceTabs.tsx",
+  "src/app/shell/workspaceTabStorage.ts",
 ]);
 const allowedAuthBoundaries = new Set([
   "src/app/auth/AuthProvider.tsx",

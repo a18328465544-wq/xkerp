@@ -76,10 +76,11 @@ Request 由 `toInspectionCreateRequestDto()` 唯一生成，页面不得自行�
 - `403`：显示权限不足，不展示检测工作台内容。
 - `400/409/500`：保留当前检测表单，展示服务端错误，允许用户修正后重试。
 - 提交成功后才清空当前表单，并精确失效 inspections、inventory 和 state Query。
+- 历史检测单修改使用 `PUT /api/inspections/:id`，除 `inspections` 菜单权限外，还要求现有 `canEditHistory` 权限；老板角色沿用现有权限规则。
 
 ## 本轮不做
 
-- 不调用 `PUT /api/inspections/:id` 修改历史检测单。
+- 不实现检测记录版本链、删除或回滚；历史检测单编辑入口仅在具备 `canEditHistory` 时展示，最终权限校验以服务端为准。
 - 不实现检测记录删除。
 - 不实现伪服务端分页、排序或筛选。
 - 不新增图片、OCR、AI 检测或自动判定。

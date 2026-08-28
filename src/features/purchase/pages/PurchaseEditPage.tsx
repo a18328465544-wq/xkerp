@@ -1,6 +1,6 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {useBlocker, useNavigate} from "@tanstack/react-router";
+import {useNavigate} from "@tanstack/react-router";
 import {ArrowLeft, LockKeyhole, ShieldCheck} from "lucide-react";
 import {useEffect, useMemo, useState, type FormEvent} from "react";
 import {Controller, useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
@@ -18,6 +18,7 @@ import {createPurchaseEditValues, createPurchaseLineDefaults} from "../purchase.
 import {purchaseFieldErrors, purchaseSubmitErrorMessage} from "../purchase.errors";
 import {derivePurchaseEditPolicy, type PurchaseEditPolicy} from "../purchase.edit-policy";
 import {parsePurchaseOrderValues, purchaseOrderSchema} from "../purchase.schema";
+import {useWorkspaceTabActivity, useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 
 function hasMenu(session: AuthSession | null | undefined, menu: string) {
   const menus = session?.permissions.allowedMenus || [];
@@ -121,6 +122,8 @@ function PurchaseEditForm({detail, policy, referenceData, session, onAuthExpired
   const vendorCreditAvailable = selectedSource?.partnerType === "vendor" ? (selectedSource.returnCreditBalance || 0) + currentCredit : 0;
   const canSubmit = formState.isDirty && (fullMode ? parsePurchaseOrderValues(values, vendorCreditAvailable).success && Boolean(selectedSource) : values.expressNo.length <= 120 && values.remarks.length <= 1000);
   const mutation = useMutation({mutationFn: (submitted: PurchaseFormValues) => purchaseApi.update(invoice.id, submitted, selectedAccount, invoice.recordVersion || 1, fullMode ? "full" : "metadata")});
+  const {tabId} = useWorkspaceTabActivity();
+  useWorkspaceTabDirty(tabId || "purchase_list", formState.isDirty);
 
   const selectSource = (option: PurchaseSourceOption) => {
     if (!option.selectable) return;
@@ -176,7 +179,7 @@ function PurchaseEditForm({detail, policy, referenceData, session, onAuthExpired
       if (caught instanceof ApiError && caught.isUnauthorized) onAuthExpired();
     }
   };
-  const blocker = useBlocker({withResolver: true, shouldBlockFn: () => formState.isDirty, enableBeforeUnload: false, disabled: !formState.isDirty});
+  const blocker = useWorkspaceTabBlocker(formState.isDirty);
 
   return <ErpTransactionPageFrame>
     <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader title={`编辑采购单 ${invoice.invoiceNo}`} subtitle={policy.summary} actions={<Button type="button" variant="secondary" onClick={leave}><ArrowLeft className="h-4 w-4" />返回详情</Button>} /></CardContent></Card>

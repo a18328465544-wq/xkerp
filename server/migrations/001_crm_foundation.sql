@@ -1,7 +1,8 @@
 -- CRM foundation v1 (additive migration)
 --
--- This file mirrors server/crmSchema.ts for operators who run migrations
--- separately from application startup. It intentionally does not alter or
+-- This is the first stage of the operator-run CRM migration path. The
+-- application-owned schema in server/crmSchema.ts is completed by
+-- 003_crm_foundation_v2.sql. These migrations intentionally do not alter or
 -- delete gpu_customers, gpu_vendors, or any existing JSONB business table.
 
 CREATE TABLE IF NOT EXISTS gpu_schema_migrations (

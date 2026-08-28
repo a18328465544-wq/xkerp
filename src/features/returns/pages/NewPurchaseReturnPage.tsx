@@ -11,7 +11,7 @@ import type {AuthSession} from "@/src/services/api";
 import {formatCurrency} from "@/src/lib/format";
 import type {CardInventory} from "@/src/types/core";
 import type {PurchaseInvoice, PurchaseItem} from "@/src/types/purchase";
-import type {PurchaseReturnFormValues} from "@/src/types/returns";
+import type {PurchaseReturnFormValues, ReturnOrderBatchItemInput} from "@/src/types/returns";
 import {isInventoryLinkedToPurchase} from "@/src/utils/inventoryRelations";
 import {createProductIdentityIndex, sameProductIdentity} from "@/src/utils/productIdentity";
 import {storeDate} from "@/src/utils/storeTime";
@@ -36,7 +36,7 @@ export function NewPurchaseReturnPage() {
 
 function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session: AuthSession; state: Awaited<ReturnType<typeof returnsApi.reference>>; onAuthExpired: () => void; onSuccess: () => void}) {
   const navigate = useNavigate();
-  const defaultValues: PurchaseReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementMode: "抵扣账款", settlementAccountId: "", handler: session.user.displayName, reason: "", inventoryAction: "退回供应商", remarks: ""};
+  const defaultValues: PurchaseReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementMode: "抵扣账款", settlementAccountId: "", handler: session.user.displayName, reason: "", inventoryAction: "退回供应商", remarks: "", returnScope: "single"};
   const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: PurchaseReturnFormValues}>("return_purchase");
   const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
   const [values, setValues] = useState<PurchaseReturnFormValues>(() => restoredDraft?.values || defaultValues);
@@ -44,27 +44,36 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
   const [success, setSuccess] = useState("");
   const productIndex = useMemo(() => createProductIdentityIndex(state.products), [state.products]);
   const selectedInvoice = state.purchaseInvoices.find((invoice) => invoice.invoiceNo === values.relatedDocNo || invoice.id === values.relatedDocNo);
-  const eligibleCards = useMemo(() => selectedInvoice ? state.inventory.filter((card) => isInventoryLinkedToPurchase(card, selectedInvoice) && !["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(card.status)) : [], [selectedInvoice, state.inventory]);
+  const linkedCards = useMemo(() => selectedInvoice ? state.inventory.filter((card) => isInventoryLinkedToPurchase(card, selectedInvoice)) : [], [selectedInvoice, state.inventory]);
+  const eligibleCards = useMemo(() => linkedCards.filter((card) => !["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(card.status)), [linkedCards]);
+  const invoiceLineCards = useMemo(() => matchPurchaseCardsToLines(selectedInvoice, linkedCards, productIndex), [linkedCards, productIndex, selectedInvoice]);
+  const batchLines = invoiceLineCards.filter((line) => line.card && line.eligible && line.line);
+  const missingBatchLines = invoiceLineCards.filter((line) => !line.card || !line.eligible || !line.line);
+  const batchAmount = batchLines.reduce((sum, line) => sum + Number(line.line?.buyPrice || line.card?.costPrice || 0), 0);
+  const batchItems: ReturnOrderBatchItemInput[] = batchLines.map((line) => ({sourceInventoryId: line.card!.id, sourcePurchaseItemIndex: line.index}));
+  const isDocumentReturn = values.returnScope === "document";
   const selectedCard = eligibleCards.find((card) => card.id === values.sourceInventoryId);
-  const selectedLine = useMemo(() => findPurchaseLine(selectedInvoice, selectedCard, productIndex), [productIndex, selectedCard, selectedInvoice]);
-  const returnAmount = Number(selectedLine?.buyPrice || selectedCard?.costPrice || 0);
+  const selectedMatch = invoiceLineCards.find((line) => line.card?.id === values.sourceInventoryId && line.eligible);
+  const selectedLine = selectedMatch?.line;
+  const returnAmount = isDocumentReturn ? batchAmount : Number(selectedLine?.buyPrice || selectedCard?.costPrice || 0);
   const linkedPayments = selectedInvoice ? state.paymentOutRecords.filter((payment) => payment.relatedDocNo === selectedInvoice.invoiceNo || payment.relatedDocNo === selectedInvoice.id) : [];
-  const preview = selectedInvoice && selectedCard ? calculatePurchaseReturnPreview({totalCost: selectedInvoice.totalCost, paidAmount: selectedInvoice.paidAmount, unpaidAmount: selectedInvoice.unpaidAmount, vendorCreditAppliedAmount: selectedInvoice.vendorCreditAppliedAmount, returnAmount, settlementMode: values.settlementMode}) : null;
-  const directWriteOffAllowed = selectedInvoice && selectedCard ? canDirectWriteOffPurchase({totalCost: selectedInvoice.totalCost, returnAmount, vendorCreditAppliedAmount: selectedInvoice.vendorCreditAppliedAmount, paidAmount: selectedInvoice.paidAmount, linkedPayments}) : false;
+  const preview = selectedInvoice && (selectedCard || isDocumentReturn) ? calculatePurchaseReturnPreview({totalCost: selectedInvoice.totalCost, paidAmount: selectedInvoice.paidAmount, unpaidAmount: selectedInvoice.unpaidAmount, vendorCreditAppliedAmount: selectedInvoice.vendorCreditAppliedAmount, returnAmount, settlementMode: values.settlementMode}) : null;
+  const directWriteOffAllowed = selectedInvoice && (selectedCard || isDocumentReturn) ? canDirectWriteOffPurchase({totalCost: selectedInvoice.totalCost, returnAmount, vendorCreditAppliedAmount: selectedInvoice.vendorCreditAppliedAmount, paidAmount: selectedInvoice.paidAmount, linkedPayments}) : false;
   const needsLegacyAccount = Boolean(values.settlementMode === "原路退款" && (preview?.cashRefundAmount || 0) > 0 && linkedPayments.every((payment) => payment.businessType !== "采购付款"));
   const enabledAccounts = state.settlementAccounts.filter((account) => account.enabled);
-  const mutation = useMutation({mutationFn: () => returnsApi.createPurchase({...values, amount: returnAmount})});
+  const mutation = useMutation({mutationFn: () => returnsApi.createPurchase({...values, amount: returnAmount, returnItems: isDocumentReturn ? batchItems : undefined})});
 
-  const selectInvoice = (invoiceNo: string) => setValues((current) => ({...current, relatedDocNo: invoiceNo, sourceInventoryId: "", amount: 0, settlementAccountId: ""}));
+  const selectInvoice = (invoiceNo: string) => setValues((current) => ({...current, relatedDocNo: invoiceNo, sourceInventoryId: "", amount: 0, settlementAccountId: "", returnScope: "single", returnItems: undefined}));
   const selectCard = (inventoryId: string) => {
-    const card = eligibleCards.find((candidate) => candidate.id === inventoryId);
-    const line = findPurchaseLine(selectedInvoice, card, productIndex);
-    setValues((current) => ({...current, sourceInventoryId: inventoryId, amount: Number(line?.buyPrice || card?.costPrice || 0)}));
+    const match = invoiceLineCards.find((line) => line.card?.id === inventoryId);
+    setValues((current) => ({...current, sourceInventoryId: inventoryId, amount: Number(match?.line?.buyPrice || match?.card?.costPrice || 0), returnScope: "single", returnItems: undefined}));
   };
+  const setReturnScope = (scope: "single" | "document") => setValues((current) => ({...current, returnScope: scope, returnItems: scope === "document" ? batchItems : undefined, sourceInventoryId: scope === "document" ? "" : current.sourceInventoryId, amount: scope === "document" ? batchAmount : current.amount}));
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError(""); setSuccess("");
     if (!selectedInvoice) return setError("请选择原采购单");
-    if (!selectedCard || !selectedLine) return setError("请选择可追溯到该采购单的库存卡片");
+    if (!isDocumentReturn && (!selectedCard || !selectedLine)) return setError("请选择可追溯到该采购单的库存卡片");
+    if (isDocumentReturn && (batchLines.length !== invoiceLineCards.length || !batchLines.length)) return setError("整单退货要求原采购单的每一条明细都能匹配可退库存");
     if (!values.reason.trim()) return setError("请填写退货原因");
     if (needsLegacyAccount && !values.settlementAccountId) return setError("该历史采购单缺少付款流水，请选择人工退款账户");
     if (values.settlementMode === "直接冲销" && !directWriteOffAllowed) return setError("直接冲销只允许整张采购单、无供应商抵扣且仅有一笔完全匹配的采购付款");
@@ -76,14 +85,14 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
       toast.success("采购退货单已提交");
       discardDraft();
       setRestoredDraftActive(false);
-      setValues((current) => ({...current, relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementAccountId: "", reason: "", remarks: ""}));
+      setValues((current) => ({...current, relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementAccountId: "", reason: "", remarks: "", returnScope: "single", returnItems: undefined}));
       onSuccess();
     } catch (caught) {
       if (caught instanceof ApiError && caught.isUnauthorized) onAuthExpired();
       setError(caught instanceof Error ? caught.message : "采购退货提交失败");
     }
   };
-  const dirty = restoredDraftActive || Boolean(values.relatedDocNo || values.sourceInventoryId || values.reason || values.remarks);
+  const dirty = restoredDraftActive || Boolean(values.relatedDocNo || values.sourceInventoryId || values.reason || values.remarks || values.returnItems?.length);
   useEffect(() => {
     if (!dirty) {
       discardDraft();
@@ -91,7 +100,7 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
     }
     saveDraft({values});
   }, [discardDraft, dirty, saveDraft, values]);
-  const canSubmit = Boolean(selectedInvoice && selectedCard && selectedLine && values.reason.trim()
+  const canSubmit = Boolean(selectedInvoice && values.reason.trim() && (isDocumentReturn ? batchLines.length === invoiceLineCards.length && batchLines.length > 0 : selectedCard && selectedLine)
     && (!needsLegacyAccount || values.settlementAccountId)
     && (values.settlementMode !== "直接冲销" || directWriteOffAllowed)
     && !(["个人回收", "客户置换"].includes(selectedInvoice?.sourceType || "") && values.settlementMode === "抵扣账款" && (preview?.cashRefundAmount || 0) > 0));
@@ -105,20 +114,26 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
     {success && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="p-4 text-sm font-semibold text-[var(--erp-color-success)]">{success}</CardContent></Card>}
     {error && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="p-4 text-sm text-[var(--erp-color-danger)]">{error}</CardContent></Card>}
     <form className="flex flex-col gap-5" onSubmit={submit}>
-      <ErpFormSection title="原采购单与库存" description="只允许选择仍可退回、且与采购单存在精确结构化关联的库存卡片。"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><label className="text-sm font-semibold">退货日期<ErpDatePicker className="mt-2" value={values.date} onChange={(date) => setValues((current) => ({...current, date}))} aria-label="采购退货日期" /></label><label className="text-sm font-semibold md:col-span-2">采购单<Select searchable searchPlaceholder="搜索采购单号或供应商" className="mt-2" value={values.relatedDocNo} options={state.purchaseInvoices.map((invoice) => ({value: invoice.invoiceNo, label: `${invoice.invoiceNo} · ${invoice.supplierName} · ${formatCurrency(invoice.totalCost)}`}))} onValueChange={selectInvoice} placeholder="请选择原采购单" aria-label="原采购单" /></label><label className="text-sm font-semibold">供应商<Input className="mt-2" value={selectedInvoice?.supplierName || ""} disabled /></label><label className="text-sm font-semibold md:col-span-2">退货库存<Select searchable searchPlaceholder="搜索库存编号、商品或 SN" className="mt-2" value={values.sourceInventoryId} options={eligibleCards.map((card) => ({value: card.id, label: `${card.id} · ${card.productName} · ${card.sn || "无 SN"}`}))} onValueChange={selectCard} placeholder={selectedInvoice ? "选择可退库存卡片" : "先选择采购单"} disabled={!selectedInvoice} aria-label="采购退货库存" /></label><label className="text-sm font-semibold">原采购价<Input className="mt-2" value={selectedCard ? formatCurrency(returnAmount) : "—"} disabled /></label><label className="text-sm font-semibold">当前库存状态<Input className="mt-2" value={selectedCard ? `${selectedCard.status} · ${selectedCard.warehouseLocation}` : "—"} disabled /></label></div></ErpFormSection>
-      <ErpFormSection title="结算与库存处理" description="退货金额依次冲减未付应付、释放已用抵扣，再处理现金；抵扣账款不会生成现金流水。"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><label className="text-sm font-semibold">结算方式<Select className="mt-2" value={values.settlementMode} options={settlementOptions} onValueChange={(value) => setValues((current) => ({...current, settlementMode: value as PurchaseReturnFormValues["settlementMode"], settlementAccountId: ""}))} aria-label="采购退货结算方式" /></label><label className="text-sm font-semibold">库存处理<Select className="mt-2" value={values.inventoryAction} options={actionOptions} onValueChange={(value) => setValues((current) => ({...current, inventoryAction: value as PurchaseReturnFormValues["inventoryAction"]}))} aria-label="采购退货库存处理" /></label>{needsLegacyAccount && <label className="text-sm font-semibold md:col-span-2">人工退款账户<Select className="mt-2" value={values.settlementAccountId} options={enabledAccounts.map((account) => ({value: account.id, label: `${account.name} · ${formatCurrency(account.balance)}`}))} onValueChange={(value) => setValues((current) => ({...current, settlementAccountId: value}))} placeholder="请选择退款入账账户" aria-label="采购退款账户" /></label>}</div>{values.settlementMode === "直接冲销" && !directWriteOffAllowed && selectedCard && <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">当前采购单不满足直接冲销条件，请改用原路退款或抵扣账款。</p>}</ErpFormSection>
-      <MetricsRegion><Metric label="退货金额" value={formatCurrency(returnAmount)} detail="必须等于原商品采购价" /><Metric label="冲减应付款" value={formatCurrency(preview?.payableOffset || 0)} detail="优先减少原采购欠款" /><Metric label="现金退款" value={formatCurrency(preview?.cashRefundAmount || 0)} detail={values.settlementMode === "抵扣账款" ? "将转入供应商抵扣余额" : "按原付款来源退款"} /><Metric label="新增供应商抵扣" value={formatCurrency(preview?.vendorCreditIncrease || 0)} detail="非现金结算，不生成资金流水" /></MetricsRegion>
+      <ErpFormSection title="退货范围" description="整单模式会将原采购单的全部可退库存放进同一张退货单，结算一次性计算。"><div className="flex flex-wrap gap-2"><Button type="button" variant={values.returnScope === "single" ? "primary" : "secondary"} onClick={() => setReturnScope("single")}>单件退货</Button><Button type="button" variant={values.returnScope === "document" ? "primary" : "secondary"} onClick={() => setReturnScope("document")} disabled={!selectedInvoice}>整单退货</Button></div></ErpFormSection>
+      <ErpFormSection title="原采购单与库存" description={isDocumentReturn ? "整单模式要求每一条采购明细都能精确匹配仍可退回的库存卡片。" : "只允许选择仍可退回、且与采购单存在精确结构化关联的库存卡片。"}><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><label className="text-sm font-semibold">退货日期<ErpDatePicker className="mt-2" value={values.date} onChange={(date) => setValues((current) => ({...current, date}))} aria-label="采购退货日期" /></label><label className="text-sm font-semibold md:col-span-2">采购单<Select searchable searchPlaceholder="搜索采购单号或供应商" className="mt-2" value={values.relatedDocNo} options={state.purchaseInvoices.map((invoice) => ({value: invoice.invoiceNo, label: `${invoice.invoiceNo} · ${invoice.supplierName} · ${formatCurrency(invoice.totalCost)}`}))} onValueChange={selectInvoice} placeholder="请选择原采购单" aria-label="原采购单" /></label><label className="text-sm font-semibold">供应商<Input className="mt-2" value={selectedInvoice?.supplierName || ""} disabled /></label>{isDocumentReturn ? <div className="md:col-span-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">整单退货明细</p><p className="font-mono text-sm font-bold text-[var(--erp-color-primary)]">共 {batchLines.length} 件 · {formatCurrency(batchAmount)}</p></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{invoiceLineCards.map((line) => <div key={`${line.index}-${line.line?.productName || line.card?.id || "missing"}`} className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white p-3"><p className="font-semibold">{line.line?.productName || line.card?.productName || "未匹配商品"}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{line.card?.sn || line.line?.sn || "无 SN"} · {formatCurrency(line.line?.buyPrice || line.card?.costPrice || 0)}</p><p className={`mt-1 text-xs ${line.card && line.eligible && line.line ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{line.card && line.eligible && line.line ? "可退" : "缺少可退库存"}</p></div>)}</div>{missingBatchLines.length > 0 && <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">有 {missingBatchLines.length} 条明细不能整单退货，请改用单件退货或先处理库存状态。</p>}</div> : <><label className="text-sm font-semibold md:col-span-2">退货库存<Select searchable searchPlaceholder="搜索库存编号、商品或 SN" className="mt-2" value={values.sourceInventoryId} options={eligibleCards.map((card) => ({value: card.id, label: `${card.id} · ${card.productName} · ${card.sn || "无 SN"}`}))} onValueChange={selectCard} placeholder={selectedInvoice ? "选择可退库存卡片" : "先选择采购单"} disabled={!selectedInvoice} aria-label="采购退货库存" /></label><label className="text-sm font-semibold">原采购价<Input className="mt-2" value={selectedCard ? formatCurrency(returnAmount) : "—"} disabled /></label><label className="text-sm font-semibold">当前库存状态<Input className="mt-2" value={selectedCard ? `${selectedCard.status} · ${selectedCard.warehouseLocation}` : "—"} disabled /></label></>}</div></ErpFormSection>
+      <ErpFormSection title="结算与库存处理" description="退货金额依次冲减未付应付、释放已用抵扣，再处理现金；抵扣账款不会生成现金流水。"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><label className="text-sm font-semibold">结算方式<Select className="mt-2" value={values.settlementMode} options={settlementOptions} onValueChange={(value) => setValues((current) => ({...current, settlementMode: value as PurchaseReturnFormValues["settlementMode"], settlementAccountId: ""}))} aria-label="采购退货结算方式" /></label><label className="text-sm font-semibold">库存处理<Select className="mt-2" value={values.inventoryAction} options={actionOptions} onValueChange={(value) => setValues((current) => ({...current, inventoryAction: value as PurchaseReturnFormValues["inventoryAction"]}))} aria-label="采购退货库存处理" /></label>{needsLegacyAccount && <label className="text-sm font-semibold md:col-span-2">人工退款账户<Select className="mt-2" value={values.settlementAccountId} options={enabledAccounts.map((account) => ({value: account.id, label: `${account.name} · ${formatCurrency(account.balance)}`}))} onValueChange={(value) => setValues((current) => ({...current, settlementAccountId: value}))} placeholder="请选择退款入账账户" aria-label="采购退款账户" /></label>}</div>{values.settlementMode === "直接冲销" && !directWriteOffAllowed && (selectedCard || isDocumentReturn) && <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">当前采购单不满足直接冲销条件，请改用原路退款或抵扣账款。</p>}</ErpFormSection>
+      <MetricsRegion><Metric label="退货金额" value={formatCurrency(returnAmount)} detail={isDocumentReturn ? "原采购单全部可退明细合计" : "原商品采购价"} /><Metric label="冲减应付款" value={formatCurrency(preview?.payableOffset || 0)} detail="优先减少原采购欠款" /><Metric label="现金退款" value={formatCurrency(preview?.cashRefundAmount || 0)} detail={values.settlementMode === "抵扣账款" ? "将转入供应商抵扣余额" : "按原付款来源退款"} /><Metric label="新增供应商抵扣" value={formatCurrency(preview?.vendorCreditIncrease || 0)} detail="非现金结算，不生成资金流水" /></MetricsRegion>
       <ErpFormSection title="原因与备注" description="采购退货创建后需回到列表执行完成，届时才正式改变采购单、供应商余额和库存。"><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-semibold">经办人<Input className="mt-2" value={values.handler} disabled /></label><label className="text-sm font-semibold md:col-span-2">退货原因<Textarea className="mt-2" value={values.reason} onChange={(event) => setValues((current) => ({...current, reason: event.target.value}))} placeholder="例如：到货检测不符、型号错误、供应商同意退回" required /></label><label className="text-sm font-semibold md:col-span-2">备注<Textarea className="mt-2" value={values.remarks} onChange={(event) => setValues((current) => ({...current, remarks: event.target.value}))} placeholder="补充物流、沟通或财务说明" /></label></div></ErpFormSection>
-      <ErpSubmitBar dirty={dirty} canSubmit={canSubmit} blockedReason="请选择原采购单、库存并填写退货原因" submitting={mutation.isPending} onCancel={() => void navigate({to: "/purchase/returns"})} submitLabel="提交采购退货"><span>创建后状态：待处理</span></ErpSubmitBar>
+      <ErpSubmitBar dirty={dirty} canSubmit={canSubmit} blockedReason={isDocumentReturn ? "请选择完整匹配的采购单并填写退货原因" : "请选择原采购单、库存并填写退货原因"} submitting={mutation.isPending} onCancel={() => void navigate({to: "/purchase/returns"})} submitLabel={isDocumentReturn ? "提交整单退货" : "提交采购退货"}><span>创建后状态：待处理{isDocumentReturn ? " · 整单统一结算" : ""}</span></ErpSubmitBar>
     </form>
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
     </ErpPageContent>
   </ErpTransactionPageFrame>;
 }
 
-function findPurchaseLine(invoice: PurchaseInvoice | undefined, card: CardInventory | undefined, index: ReturnType<typeof createProductIdentityIndex>): PurchaseItem | undefined {
-  if (!invoice || !card) return undefined;
-  return invoice.items.find((item) => sameProductIdentity(item, card, index) && (card.sn ? item.sn === card.sn || !item.sn : true));
+function matchPurchaseCardsToLines(invoice: PurchaseInvoice | undefined, cards: CardInventory[], index: ReturnType<typeof createProductIdentityIndex>) {
+  if (!invoice) return [] as Array<{index: number; line?: PurchaseItem; card?: CardInventory; eligible: boolean}>;
+  const usedCardIds = new Set<string>();
+  return invoice.items.map((line, lineIndex) => {
+    const card = cards.find((candidate) => !usedCardIds.has(candidate.id) && sameProductIdentity(line, candidate, index) && (line.sn ? candidate.sn === line.sn : true));
+    if (card) usedCardIds.add(card.id);
+    return {index: lineIndex, line, card, eligible: Boolean(card && !["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(card.status))};
+  });
 }
 
 function Metric({label, value, detail}: {label: string; value: string; detail: string}) { return <Card><CardContent className="min-h-[104px] p-4"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className="mt-2 font-mono text-2xl font-bold">{value}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{detail}</p></CardContent></Card>; }

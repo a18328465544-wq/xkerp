@@ -36,7 +36,8 @@ export const returnsApi = {
   },
 
   async createSales(values: SalesReturnFormValues, signal?: AbortSignal) {
-    return apiRequest<{data?: unknown; state?: unknown}>("/api/returns", {method: "POST", body: JSON.stringify({type: "销售退货", relatedDocType: "销售单", settlementMode: "原路退款", ...values, sourceInventoryId: values.sourceInventoryId || undefined, partyId: values.partyId || undefined}), signal});
+    const {returnScope, returnItems, ...formValues} = values;
+    return apiRequest<{data?: unknown; state?: unknown}>("/api/returns", {method: "POST", body: JSON.stringify({type: "销售退货", relatedDocType: "销售单", settlementMode: "原路退款", ...formValues, sourceInventoryId: formValues.sourceInventoryId || undefined, partyId: formValues.partyId || undefined, ...(returnScope === "document" && returnItems?.length ? {batchMode: "整单退货", items: returnItems} : {})}), signal});
   },
 
   async createPurchase(values: PurchaseReturnFormValues, signal?: AbortSignal) {

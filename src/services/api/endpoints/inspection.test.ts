@@ -38,14 +38,16 @@ test("inspection create uses the existing POST contract and unwraps the response
 
 test("inspection update encodes the inspection id and keeps the same request body contract", async () => {
   const previous = globalThis.fetch;
-  let request: {url: string; method: string} | undefined;
+  let request: {url: string; method: string; body: Record<string, unknown>} | undefined;
   globalThis.fetch = async (input, init) => {
-    request = {url: String(input), method: String(init?.method)};
+    request = {url: String(input), method: String(init?.method), body: JSON.parse(String(init?.body)) as Record<string, unknown>};
     return response({data: {id: "JC/1", inventoryId: "KC-1", sn: "SN-1", resultStatus: "轻微问题", inspectTime: "2026-08-18 10:00"}});
   };
   try {
-    const result = await inspectionApi.update("JC/1", values());
-    assert.deepEqual(request, {url: "/api/inspections/JC%2F1", method: "PUT"});
+    const result = await inspectionApi.update("JC/1", values(), 3);
+    assert.equal(request?.url, "/api/inspections/JC%2F1");
+    assert.equal(request?.method, "PUT");
+    assert.equal(request?.body.expectedRecordVersion, 3);
     assert.equal(result.id, "JC/1");
   } finally {
     globalThis.fetch = previous;

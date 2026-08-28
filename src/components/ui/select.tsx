@@ -41,7 +41,7 @@ export interface SelectProps {
   searchResultLimit?: number;
   /** Optional explicit clear behavior for entity fields with dependent form data. */
   onClear?: () => void;
-  /** Optional create action rendered inside the searchable popup when there is no matching option. */
+  /** Optional create action rendered inside the searchable popup before the options. */
   quickCreateAction?: {label: string; onClick: (searchText: string) => void; disabled?: boolean};
 }
 
@@ -68,16 +68,11 @@ export function selectOptionMatches(option: SelectOption, query: string): boolea
   return tokensMatch || compactMatch;
 }
 
-export function shouldShowQuickCreateAction({hasSelection, searchText, optionCount, matchingOptionCount, searchLoading}: {
+export function shouldShowQuickCreateAction({hasSelection, searchLoading}: {
   hasSelection: boolean;
-  searchText: string;
-  optionCount: number;
-  matchingOptionCount: number;
   searchLoading: boolean;
 }): boolean {
-  if (hasSelection || searchLoading) return false;
-  if (optionCount === 0) return true;
-  return Boolean(searchText.trim()) && matchingOptionCount === 0;
+  return !hasSelection && !searchLoading;
 }
 
 /**
@@ -93,8 +88,7 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
   if (searchable) {
     const selected = options.find((option) => option.value === value) || null;
     const inputPlaceholder = searchPlaceholder || (typeof placeholder === "string" ? placeholder : "搜索并选择");
-    const matchingOptionCount = shouldFilter ? options.filter((option) => selectOptionMatches(option, searchText)).length : options.length;
-    const showQuickCreateAction = Boolean(quickCreateAction && shouldShowQuickCreateAction({hasSelection: Boolean(selected), searchText, optionCount: options.length, matchingOptionCount, searchLoading}));
+    const showQuickCreateAction = Boolean(quickCreateAction && shouldShowQuickCreateAction({hasSelection: Boolean(selected), searchLoading}));
     return <BaseCombobox.Root<SelectOption>
       items={options}
       limit={searchResultLimit}

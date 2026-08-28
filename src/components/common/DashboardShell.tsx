@@ -28,7 +28,7 @@ export function DashboardSection({title, description, actions, density = "compac
 
 export function MainRegion({variant = "70-30", className, children, ...props}: HTMLAttributes<HTMLDivElement> & {variant?: "full" | "70-30" | "60-40" | "50-50"; children: ReactNode}) {
   const grid = variant === "full" ? "grid-cols-1" : variant === "60-40" ? "lg:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]" : variant === "50-50" ? "lg:grid-cols-2" : "lg:grid-cols-[minmax(0,7fr)_minmax(280px,3fr)]";
-  return <div {...props} className={cn("grid min-w-0 grid-cols-1 gap-5", grid, className)}>{children}</div>;
+  return <div {...props} data-erp-component="main-region" className={cn("grid min-w-0 grid-cols-1 items-start gap-5", grid, className)}>{children}</div>;
 }
 
 function MainRegionPrimary({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {

@@ -52,8 +52,12 @@ jobs:
         run: npm run lint
       - name: Test
         run: npm test
+      - name: Production preflight script tests
+        run: npm run test:production-scripts
       - name: Build
         run: npm run build
+      - name: Frontend performance budgets
+        run: npm run check:performance
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Release traceability check

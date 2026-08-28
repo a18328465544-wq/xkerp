@@ -86,6 +86,7 @@ import { registerFinanceCommissionRoutes } from "./routes/financeCommissions.ts"
 import { syncCrmPurchaseInvoiceLink, syncCrmSalesInvoiceLink } from "./crmEntityRepository.ts";
 import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, MediaValidationError, replaceEntityImages } from "./mediaRepository.ts";
 import {clearSessionCookie, createCsrfToken, setSessionCookie} from "./authCookies.ts";
+import {assertStateRuntimeMode} from "./runtimeConfig.ts";
 import {
   inspectionCreateDto,
   inspectionUpdateDto,
@@ -181,6 +182,7 @@ type AuthRequest = express.Request & {
 async function ensureStateReady() {
   if (!stateReady) {
     stateReady = (async () => {
+      if (process.env.NODE_ENV === "production") assertStateRuntimeMode();
       state = await loadState();
       stateRevision = await getStateRevision();
     })().catch((error) => {
@@ -786,9 +788,10 @@ function productPriceSyncMerge(productId: string) {
   });
 }
 
-function returnOrderMerge(record: { id: string; returnNo: string; relatedDocNo: string; sourceInventoryId?: string; partyId?: string; partyType?: string; partyName?: string; paymentRecordId?: string; settlementAccountId?: string } | null) {
+function returnOrderMerge(record: { id: string; returnNo: string; relatedDocNo: string; sourceInventoryId?: string; items?: Array<{sourceInventoryId?: string}>; partyId?: string; partyType?: string; partyName?: string; paymentRecordId?: string; settlementAccountId?: string } | null) {
   if (!record) return compactStateMerge({ logs: state.logs.slice(0, 1) });
   const relatedDocNos = new Set([record.id, record.returnNo, record.relatedDocNo].filter(Boolean));
+  const inventoryIds = [record.sourceInventoryId, ...(record.items || []).map((item) => item.sourceInventoryId)].filter((id): id is string => Boolean(id));
   const paymentInRecords = state.paymentInRecords.filter((item) => item.relatedDocNo && relatedDocNos.has(item.relatedDocNo));
   const paymentOutRecords = state.paymentOutRecords.filter((item) => item.relatedDocNo && relatedDocNos.has(item.relatedDocNo));
   const settlementLedgerIds = new Set([...paymentInRecords, ...paymentOutRecords].map((item) => item.settlementLedgerId).filter(Boolean));
@@ -797,7 +800,7 @@ function returnOrderMerge(record: { id: string; returnNo: string; relatedDocNo: 
   if (record.settlementAccountId) accountIds.add(record.settlementAccountId);
   return compactStateMerge({
     returnOrders: state.returnOrders.filter((item) => item.id === record.id || item.returnNo === record.returnNo),
-    inventory: recordsByIds(state.inventory, [record.sourceInventoryId]),
+    inventory: recordsByIds(state.inventory, inventoryIds),
     salesInvoices: state.salesInvoices.filter((item) => relatedDocNos.has(item.id) || relatedDocNos.has(item.invoiceNo)),
     purchaseInvoices: state.purchaseInvoices.filter((item) => relatedDocNos.has(item.id) || relatedDocNos.has(item.invoiceNo)),
     purchaseCommissions: state.purchaseCommissions.filter((item) => relatedDocNos.has(item.salesInvoiceNo) || relatedDocNos.has(item.purchaseInvoiceNo || "")),
@@ -2436,10 +2439,10 @@ app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req, 
   res.status(201).json(okMerge(created, stateMerge));
 }));
 
-app.put("/api/inspections/:id", requireMenu("inspections"), asyncRoute(async (req, res) => {
-  const command = parseHttpDto(inspectionUpdateDto, withoutImagePayload(req.body));
+app.put("/api/inspections/:id", requireMenu("inspections"), requireHistoryEditPermission, asyncRoute(async (req, res) => {
+  const {expectedRecordVersion, ...updates} = parseHttpDto(inspectionUpdateDto, withoutImagePayload(req.body));
   const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updateInspection(req.params.id!, command),
+    () => actions(req).updateInspection(req.params.id!, updates, expectedRecordVersion),
     inspectionMerge,
     async (record) => {
       const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
@@ -2912,7 +2915,6 @@ function isMainModule() {
   const entry = process.argv[1];
   return Boolean(entry && resolve(entry) === resolve(fileURLToPath(import.meta.url)));
 }
-
 if (isMainModule()) {
   startServer();
 }

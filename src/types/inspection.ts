@@ -37,6 +37,7 @@ export interface InspectionCandidate {
 export interface InspectionHistoryItem {
   id: string;
   inventoryId: string;
+  recordVersion: number;
   productName: string;
   category: ProductCategory;
   serialNumber: string;

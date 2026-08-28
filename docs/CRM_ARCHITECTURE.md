@@ -8,7 +8,8 @@
 
 ## 第一阶段已落地
 
-`server/crmSchema.ts` 和 `server/migrations/001_crm_foundation.sql` 新增以下表：
+`server/crmSchema.ts` 与 `server/migrations/001_crm_foundation.sql`、
+`server/migrations/003_crm_foundation_v2.sql` 共同维护以下表：
 
 - `gpu_crm_accounts`：统一客户主体。
 - `gpu_crm_account_roles`：客户/供应商/同行等角色。
@@ -21,6 +22,11 @@
 - `gpu_crm_timeline_events`：客户时间线，支持幂等写入。
 - `gpu_crm_legacy_map`：旧客户/供应商 ID 到新主体 ID 的映射。
 - `gpu_media_assets`、`gpu_media_relations`：图片压缩后以 `BYTEA` 保存，并可关联任意 CRM 或业务实体。
+
+`001_crm_foundation.sql` 保留早期基础表和 `crm-foundation-v1` 兼容标记；
+`003_crm_foundation_v2.sql` 以幂等的新增列、线索/任务/快照审计表和索引补齐
+应用启动时 `crmSchema.ts` 已包含的 v2 契约，并登记 `crm-foundation-v2`。新环境按
+`001 → 002 → 003` 顺序执行；已由应用启动完成 v2 schema 的环境重复执行也安全。
 
 读链路已接入：
 

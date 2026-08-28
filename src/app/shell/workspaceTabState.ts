@@ -17,9 +17,19 @@ function keepAllowed(values: string[], allowedIds: string[]) {
 
 function normalizeState(state: WorkspaceTabState, allowedIds: string[]) {
   const allowed = new Set(allowedIds);
-  const openIds = unique([WORKSPACE_HOME_ID, ...state.openIds]).filter((id) => allowed.has(id) || id === WORKSPACE_HOME_ID);
-  const pinnedIds = unique([WORKSPACE_HOME_ID, ...state.pinnedIds]).filter((id) => openIds.includes(id));
-  const recentIds = unique([...state.recentIds, ...openIds]).filter((id) => openIds.includes(id));
+  let openIds = unique([WORKSPACE_HOME_ID, ...state.openIds]).filter((id) => allowed.has(id) || id === WORKSPACE_HOME_ID);
+  const requestedPinnedIds = unique([WORKSPACE_HOME_ID, ...state.pinnedIds]).filter((id) => openIds.includes(id));
+  const recentIdsBeforeTrim = unique([...state.recentIds, ...openIds]).filter((id) => openIds.includes(id));
+  while (openIds.length > WORKSPACE_MAX_TABS) {
+    const removable = openIds
+      .filter((id) => id !== WORKSPACE_HOME_ID && !requestedPinnedIds.includes(id))
+      .sort((left, right) => recentIdsBeforeTrim.indexOf(left) - recentIdsBeforeTrim.indexOf(right))[0];
+    const fallback = openIds.find((id) => id !== WORKSPACE_HOME_ID && !requestedPinnedIds.includes(id));
+    const candidate = removable || fallback || openIds[openIds.length - 1];
+    openIds = openIds.filter((id) => id !== candidate);
+  }
+  const pinnedIds = requestedPinnedIds.filter((id) => openIds.includes(id));
+  const recentIds = unique([...recentIdsBeforeTrim, ...openIds]).filter((id) => openIds.includes(id));
   const activeId = openIds.includes(state.activeId) ? state.activeId : WORKSPACE_HOME_ID;
   return {openIds, pinnedIds, recentIds, activeId};
 }

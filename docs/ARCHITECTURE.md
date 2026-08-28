@@ -172,7 +172,7 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 - 网页 token 鉴权和菜单权限校验。
 - 各业务路由挂载。
 - 按权限脱敏返回前端状态。
-- 变更请求先取得 PostgreSQL 会话级咨询锁，再完成“读库 → 业务校验 → 持久化”；该锁覆盖多个 PM2/Node 实例。
+- 变更请求先取得 PostgreSQL 会话级咨询锁，再完成“读库 → 业务校验 → 持久化”；该锁可防止误启动重复 worker，但当前受支持的生产拓扑仍是单个 PM2 fork。
 
 主要接口分组：
 
@@ -493,8 +493,17 @@ flowchart LR
 ```txt
 process: gpu-erp-api
 mode: fork
+instances: 1
 API_PORT: 3001
+STATE_RUNTIME_MODE: single-instance
 ```
+
+由于服务端仍保留一份用于快速读取的进程内状态投影，`instances: 1`、
+`exec_mode: fork` 和 `STATE_RUNTIME_MODE=single-instance` 是生产硬门禁，而不是
+“建议配置”。PostgreSQL 会话级锁能保护重复写入，但不能让不同进程的内存投影
+自动保持一致；在引入共享读模型/Redis 并完成一致性验收前，不得通过 PM2 cluster、
+多实例滚动发布或多进程方式扩容。生产预检会同时检查运行时环境、PM2 配置、
+投影索引、密码哈希和最近备份。
 
 预发布使用 `ecosystem.staging.config.cjs` 和独立的 `gpu-erp-api-staging`
 进程。生产与预发布都必须通过 `npm run start:api` 启动 bundle；不要让 PM2
@@ -658,7 +667,7 @@ sudo nginx -t
    首页、客户等级、利润、库存价值等应逐步变成后端汇总接口或汇总表，避免前端全量计算。
 
 5. **会话已持久化并具备有界清理，未来高并发可再引入专用存储**
-   `gpu_sessions` 只保存 token 哈希，支持 PM2 重启和多实例共享；登录与会话读取会按 `SESSION_CLEANUP_INTERVAL_MS` 节流执行一次批量过期清理，维护失败不会阻断正常鉴权。只有扩展到高并发、多地域部署时才需要评估 Redis。
+   `gpu_sessions` 只保存 token 哈希，支持 PM2 重启；登录与会话读取会按 `SESSION_CLEANUP_INTERVAL_MS` 节流执行一次批量过期清理，维护失败不会阻断正常鉴权。会话数据虽然可跨进程共享，但业务状态投影目前不行，因此扩展到高并发、多地域部署前仍需先完成共享读模型/Redis 方案和一致性验收。
 
 6. **网站和小程序应复用 Open API**  
    不建议复制 ERP 业务逻辑到网站或小程序后端。网站/小程序应作为 API 消费方。

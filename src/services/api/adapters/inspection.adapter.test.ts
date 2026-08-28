@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {adaptInspectionCreateResult, adaptInspectionWorkspace, toInspectionCreateRequestDto} from "./inspection.adapter";
+import {adaptInspectionCreateResult, adaptInspectionWorkspace, toInspectionCreateRequestDto, toInspectionUpdateRequestDto} from "./inspection.adapter";
 import type {InspectionFormValues} from "@/src/types/inspection";
 
 function gpuValues(): InspectionFormValues {
@@ -18,7 +18,7 @@ test("inspection workspace keeps only valid pending candidates and enriches hist
       {id: "CPU-1", category: "CPU", productName: "i9", status: "待检测", entryTime: "2026-08-07"},
       {id: "CPU-2", category: "CPU", productName: "i7", status: "已售出", entryTime: "2026-08-06"},
     ],
-    inspections: [{id: "JC-1", inventoryId: "CPU-1", sn: "CPU-SN", resultStatus: "通过", inspectTime: "2026-08-09 10:00", images: ["/api/media/assets/IMG-2"]}],
+    inspections: [{id: "JC-1", inventoryId: "CPU-1", sn: "CPU-SN", resultStatus: "通过", recordVersion: 4, inspectTime: "2026-08-09 10:00", images: ["/api/media/assets/IMG-2"]}],
   }});
   assert.deepEqual(result.candidates.map((item) => item.id), ["GPU-1"]);
   assert.equal(result.history[0]?.productName, "i9");
@@ -26,6 +26,7 @@ test("inspection workspace keeps only valid pending candidates and enriches hist
   assert.equal(result.history[0]?.temperature, undefined);
   assert.equal(result.history[0]?.candidate.id, "CPU-1");
   assert.deepEqual(result.history[0]?.images, ["/api/media/assets/IMG-2"]);
+  assert.equal(result.history[0]?.recordVersion, 4);
 });
 
 test("inspection adapter normalizes legacy condition labels before form validation", () => {
@@ -84,4 +85,10 @@ test("inspection create response excludes state patches", () => {
   assert.deepEqual(adaptInspectionCreateResult({id: "JC-1", inventoryId: "KC-1", sn: "SN-1", resultStatus: "通过", inspectTime: "2026-08-09 12:00", stateMerge: {inventory: []}}), {
     id: "JC-1", inventoryId: "KC-1", serialNumber: "SN-1", resultStatus: "通过", inspectTime: "2026-08-09 12:00",
   });
+});
+
+test("inspection update request carries the optimistic-lock version", () => {
+  const request = toInspectionUpdateRequestDto(gpuValues(), 7);
+  assert.equal(request.expectedRecordVersion, 7);
+  assert.equal(request.sn, "SN-1");
 });

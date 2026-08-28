@@ -138,7 +138,9 @@ const inspectionFields = {
 };
 
 export const inspectionCreateDto = z.object(inspectionFields).strict();
-export const inspectionUpdateDto = z.object(inspectionFields).partial().strict();
+export const inspectionUpdateDto = z.object(inspectionFields).partial().extend({
+  expectedRecordVersion: z.number().int().positive("检测记录版本号无效"),
+}).strict();
 
 const queryText = (max: number) => z.preprocess(
   (value) => Array.isArray(value) ? "" : value ?? "",

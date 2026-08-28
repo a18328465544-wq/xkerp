@@ -1,7 +1,7 @@
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {Check, Link2, Loader2, LogIn, MessageSquareText, RefreshCw, Sparkles, UserPlus} from "lucide-react";
 import {useState, type FormEvent, type ReactNode} from "react";
-import {Link, useBlocker, useNavigate} from "@tanstack/react-router";
+import {Link, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Select, Textarea} from "@/src/components/ui";
 import {ErpCrmPageFrame, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
@@ -9,6 +9,7 @@ import {crmApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {QuickCaptureConfirmInput, QuickCaptureParseResult, QuickCaptureSourceType} from "@/src/types/crm";
+import {useWorkspaceTabActivity, useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 
 const sourceOptions = [{value: "manual", label: "手工录入"}, {value: "chat", label: "聊天记录"}, {value: "voice", label: "语音转写"}] satisfies Array<{value: QuickCaptureSourceType; label: string}>;
 
@@ -41,8 +42,10 @@ function LeadForm({session, onSuccess}: {session: AuthSession; onSuccess: () => 
     confirmMutation.mutate({parseId: parsed.parseId, rawText: parsed.rawText, sourceType: parsed.sourceType, fields: parsed.fields, confidence: parsed.confidence, missingFields: parsed.missingFields, conflicts: parsed.conflicts, matchAction, matchedCustomerId: matchAction === "link_existing" ? matchedCustomerId : undefined, idempotencyKey: createIdempotencyKey()});
   };
   const dirty = Boolean(rawText.trim() && !success);
+  const {tabId} = useWorkspaceTabActivity();
+  useWorkspaceTabDirty(tabId || "customers", dirty);
   useErpDirtyGuard(dirty);
-  const blocker = useBlocker({withResolver: true, shouldBlockFn: () => dirty, enableBeforeUnload: false, disabled: !dirty});
+  const blocker = useWorkspaceTabBlocker(dirty);
   return <ErpCrmPageFrame className="max-w-[1450px]">
     <ErpPageHeader density="default" title="新增客户线索" subtitle="粘贴一句话或聊天记录，由现有 CRM 规则解析并在确认后写入客户、跟进和时间线。" actions={<Link to="/crm" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><Link2 className="h-4 w-4" />返回客户 CRM</Link>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">

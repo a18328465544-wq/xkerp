@@ -53,7 +53,7 @@ export function FinanceHealthPanel({view}: {view: FinanceDashboardView}) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-mono text-3xl font-bold">{view.healthScore}</span>
-          <span className="text-[11px] text-[var(--erp-color-text-muted)]">健康分</span>
+          <span className="text-xs text-[var(--erp-color-text-muted)]">健康分</span>
         </div>
       </div>
       <div className="min-w-0 flex-1 space-y-2">
@@ -100,7 +100,7 @@ export function FinanceAccountList({
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{item.name}</p>
-              <p className="text-[11px] text-[var(--erp-color-text-muted)]">{item.type || "资金账户"}</p>
+              <p className="text-xs text-[var(--erp-color-text-muted)]">{item.type || "资金账户"}</p>
             </div>
             <span className={`font-mono text-sm font-bold ${item.availableBalance < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-text)]"}`}>
               {formatCurrency(item.availableBalance)}
@@ -161,7 +161,7 @@ export function FinanceEventList({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{item.businessType}</span>
-            <span className="block truncate font-mono text-[11px] text-[var(--erp-color-text-muted)]">{item.time} · {item.accountName || "未标记账户"}</span>
+            <span className="block truncate font-mono text-xs text-[var(--erp-color-text-muted)]">{item.time} · {item.accountName || "未标记账户"}</span>
           </span>
           <span className={`font-mono text-sm font-bold ${item.net >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}>
             {item.net >= 0 ? "+" : ""}{formatCurrency(item.net)}
@@ -198,7 +198,7 @@ export function FinanceHealthFact({ok, label, detail}: {ok: boolean; label: stri
       </span>
       <div>
         <p className="text-xs font-semibold">{label}</p>
-        <p className="text-[11px] text-[var(--erp-color-text-muted)]">{detail}</p>
+        <p className="text-xs text-[var(--erp-color-text-muted)]">{detail}</p>
       </div>
     </div>
   );

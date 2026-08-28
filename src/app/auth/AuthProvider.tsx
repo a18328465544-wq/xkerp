@@ -5,7 +5,11 @@ import {authApi, type AuthSession} from "@/src/services/api/endpoints/auth";
 import {ApiError, clearBrowserAuthState} from "@/src/services/api/client";
 import {queryKeys} from "@/src/services/api/query-keys";
 import {Button, Card, Input} from "@/src/components/ui";
-import {ErpLoadingState, ErpPageError} from "@/src/components/common";
+// Import these leaf components directly. The common barrel also exports
+// ErpAiDrawer, which consumes useAuth through the auth barrel and would make
+// the app shell/auth chunk graph circular during Rollup code splitting.
+import {ErpLoadingState} from "@/src/components/common/ErpLoadingState";
+import {ErpPageError} from "@/src/components/common/ErpPageError";
 
 type AuthContextValue = {
   session: AuthSession | null;

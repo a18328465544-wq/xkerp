@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ProductTemplate, PurchaseItem } from "../src/types";
 import { MAX_LOG_ENTRIES, createInitialState, createStoreActions } from "./store.ts";
+import { ConflictError } from "./errors.ts";
 
 const withFixedNow = <T>(isoDate: string, fn: () => T): T => {
   const RealDate = Date;
@@ -516,6 +517,7 @@ test("brand-new inventory is normalized to quick SN and warranty verification", 
 
   assert.equal(report.condition, "全新");
   assert.equal(report.resultStatus, "通过");
+  assert.equal(report.recordVersion, 1);
   assert.equal(report.temperature, 0);
   assert.equal(report.wattage, 0);
   assert.match(report.remarks || "", /仅核验 SN 与质保/);
@@ -533,11 +535,17 @@ test("brand-new inventory is normalized to quick SN and warranty verification", 
     wattage: 1200,
     resultStatus: "需要维修",
   });
+  assert.equal(updated.recordVersion, 2);
   assert.equal(updated.inWarranty, false);
   assert.equal(updated.resultStatus, "通过");
   assert.equal(updated.temperature, 0);
   assert.equal(updated.wattage, 0);
   assert.equal(state.inventory.find((item) => item.id === pendingCard.id)?.warrantyDate, undefined);
+  assert.throws(
+    () => actions.updateInspection(report.id, {remarks: "过期版本不应覆盖"}, 1),
+    /已被其他操作修改/,
+  );
+  assert.equal(state.inspections.find((item) => item.id === report.id)?.remarks, updated.remarks);
 });
 
 test("sales invoice records model first and outbound confirmation binds SN then completes stock out", () => {
@@ -1073,10 +1081,13 @@ test("account permission overrides, logs, and reset are persisted in one state o
 
   actions.addLog("tester", "模块", "动作", "对象");
   assert.equal(state.logs[0].user, "tester");
-  actions.clearAllLogs();
-  assert.equal(state.logs.length, 1);
-  assert.equal(state.logs[0].type, "清空操作日志");
-  assert.match(state.logs[0].afterVal || "", /保留本次清理记录/);
+  const logsBeforeClear = structuredClone(state.logs);
+  assert.throws(() => actions.clearAllLogs(), (error: unknown) => {
+    assert.ok(error instanceof ConflictError);
+    assert.match(error.message, /追加式记录.*不支持清空/);
+    return true;
+  });
+  assert.deepEqual(state.logs, logsBeforeClear);
 
   actions.resetToDemoData();
   assert.equal(state.currentRole, "老板");
@@ -3015,6 +3026,114 @@ test("genId produces unique ids for rapid successive entities", () => {
     ids.add(inv.id);
   }
   assert.equal(ids.size, 50);
+});
+
+test("whole-document sales return creates one atomic order for every sold line and restores on delete", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const cards = state.inventory.filter((item) => item.sn && (item.status === "已入库" || item.status === "已上架")).slice(0, 2);
+  const account = state.settlementAccounts.find((item) => item.enabled);
+  assert.equal(cards.length, 2);
+  assert.ok(account);
+
+  const totalAmount = cards.reduce((sum, card) => sum + card.estSellPrice, 0);
+  const invoice = actions.createSalesInvoice({
+    date: "2026-06-12",
+    customerName: "整单退货测试客户",
+    contact: "13900006667",
+    channel: "到店",
+    paymentMethod: "微信",
+    settlementAccountId: account.id,
+    settlementAccountName: account.name,
+    isPaid: true,
+    paidAmount: totalAmount,
+    unpaidAmount: 0,
+    needInvoice: false,
+    freeShipping: true,
+    aftersalesTerms: "店保三个月",
+    handleBy: "销售小王",
+    paymentHandler: "销售小王",
+    items: cards.map((card) => ({
+      inventoryId: card.id,
+      productId: card.productId,
+      productName: card.productName,
+      sn: card.sn,
+      condition: card.condition,
+      costPrice: card.costPrice,
+      sellPrice: card.estSellPrice,
+      profit: card.estSellPrice - card.costPrice,
+      aftersalesTerms: "店保三个月",
+    })),
+  });
+  actions.confirmSalesOutbound(invoice.id, {handler: "仓库小李", codes: cards.map((card) => card.sn)});
+
+  const order = actions.createReturnOrder({
+    type: "销售退货",
+    relatedDocType: "销售单",
+    relatedDocNo: invoice.invoiceNo,
+    amount: 0,
+    settlementMode: "原路退款",
+    settlementAccountId: account.id,
+    handler: "销售小王",
+    reason: "客户整单退货",
+    inventoryAction: "退回待检测",
+    items: cards.map((card, sourceSalesItemIndex) => ({sourceInventoryId: card.id, sourceSalesItemIndex})),
+  });
+
+  assert.equal(order.batchMode, "整单退货");
+  assert.equal(order.items?.length, 2);
+  assert.equal(order.amount, totalAmount);
+  const completed = actions.completeReturnOrder(order.id);
+  assert.equal(completed.status, "已完成");
+  assert.equal(completed.refundPaymentRecordIds?.length, 1);
+  assert.equal(state.salesInvoices.find((item) => item.id === invoice.id)?.items.length, 0);
+  assert.equal(state.salesInvoices.find((item) => item.id === invoice.id)?.paymentStatus, "已退款");
+  assert.equal(state.paymentOutRecords.filter((item) => item.relatedDocNo === completed.returnNo).length, 1);
+  cards.forEach((card) => assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "待检测"));
+
+  actions.deleteReturnOrder(completed.id);
+  assert.equal(state.returnOrders.length, 0);
+  assert.equal(state.salesInvoices.find((item) => item.id === invoice.id)?.items.length, 2);
+  assert.equal(state.paymentOutRecords.filter((item) => item.relatedDocNo === completed.returnNo).length, 0);
+  cards.forEach((card) => assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已售出"));
+});
+
+test("whole-document purchase return creates one atomic order for every purchase line and restores on delete", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const invoice = actions.createPurchaseInvoice(buildPurchase([
+    buildPurchaseItem(product, "BATCH-PURCHASE-SN-1", 2000),
+    buildPurchaseItem(product, "BATCH-PURCHASE-SN-2", 3000),
+  ]));
+  const cards = state.inventory.filter((item) => item.purchaseInvoiceNo === invoice.invoiceNo);
+  assert.equal(cards.length, 2);
+
+  const order = actions.createReturnOrder({
+    type: "进货退货",
+    relatedDocType: "采购单",
+    relatedDocNo: invoice.invoiceNo,
+    amount: 0,
+    settlementMode: "抵扣账款",
+    handler: "采购小李",
+    reason: "供应商整单退货",
+    inventoryAction: "退回供应商",
+    items: cards.map((card, sourcePurchaseItemIndex) => ({sourceInventoryId: card.id, sourcePurchaseItemIndex})),
+  });
+
+  assert.equal(order.batchMode, "整单退货");
+  assert.equal(order.items?.length, 2);
+  assert.equal(order.amount, 5000);
+  const completed = actions.completeReturnOrder(order.id);
+  assert.equal(completed.status, "已完成");
+  assert.equal(state.purchaseInvoices.find((item) => item.id === invoice.id)?.items.length, 0);
+  assert.equal(state.purchaseInvoices.find((item) => item.id === invoice.id)?.paymentStatus, "已退款");
+  cards.forEach((card) => assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已退货"));
+
+  actions.deleteReturnOrder(completed.id);
+  assert.equal(state.returnOrders.length, 0);
+  assert.equal(state.purchaseInvoices.find((item) => item.id === invoice.id)?.items.length, 2);
+  cards.forEach((card) => assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已入库"));
 });
 
 test("sales return creates a return order, refunds customer, and sends stock back to pending inspection", () => {

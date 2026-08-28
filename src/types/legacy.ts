@@ -275,6 +275,8 @@ export interface InventoryScanResult {
 export interface InspectionRecord {
   id: string;
   inventoryId: string;
+  /** Optimistic-lock version; legacy records without it are treated as version 1. */
+  recordVersion?: number;
   sn: string;
   condition?: CardInventory["condition"];
   inWarranty?: boolean;
@@ -962,6 +964,26 @@ export interface ReturnRefundAllocation {
   amount: number;
 }
 
+export interface ReturnOrderItem {
+  sourceInventoryId: string;
+  sourceSalesItemId?: string;
+  sourceSalesItemIndex?: number;
+  sourceSalesItemSnapshot?: SalesItem;
+  sourcePurchaseItemId?: string;
+  sourcePurchaseItemIndex?: number;
+  sourcePurchaseItemSnapshot?: PurchaseItem;
+  productId?: string;
+  productName?: string;
+  sn?: string;
+  amount: number;
+}
+
+export interface ReturnOrderBatchItemInput {
+  sourceInventoryId: string;
+  sourceSalesItemIndex?: number;
+  sourcePurchaseItemIndex?: number;
+}
+
 export interface ReturnOrder {
   id: string;
   returnNo: string;
@@ -970,6 +992,9 @@ export interface ReturnOrder {
   date: string;
   relatedDocType: "销售单" | "采购单" | string;
   relatedDocNo: string;
+  /** Present when one return order covers the whole source document. */
+  batchMode?: "整单退货";
+  items?: ReturnOrderItem[];
   sourceInventoryId?: string;
   sourceSalesItemId?: string;
   sourceSalesItemIndex?: number;

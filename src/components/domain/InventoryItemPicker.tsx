@@ -4,6 +4,7 @@ import {useEffect, useId, useRef, useState} from "react";
 import {Button, Input} from "@/src/components/ui";
 import {useFloatingPanelPosition} from "@/src/hooks/useFloatingPanelPosition";
 import {formatCurrency} from "@/src/lib/format";
+import {cn} from "@/src/lib/cn";
 import type {SalesInventoryCandidate} from "@/src/types/sales";
 
 function nextSaleableIndex(options: SalesInventoryCandidate[], current: number, direction: 1 | -1) {
@@ -62,7 +63,44 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
       {loading && <div className="flex items-center gap-2 px-3 py-4 text-xs text-[var(--erp-color-text-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" />正在查询可销售商品候选…</div>}
       {error && !loading && <div className="flex items-center justify-between gap-3 px-3 py-3 text-xs text-[var(--erp-color-danger)]"><span>{error}</span>{onRetry && <Button type="button" size="sm" variant="ghost" onClick={onRetry}><RefreshCw className="h-3.5 w-3.5" />重试</Button>}</div>}
       {!loading && !error && !options.length && <div className="px-3 py-5 text-center text-xs text-[var(--erp-color-text-muted)]"><Search className="mx-auto mb-2 h-4 w-4" />没有找到可销售商品候选</div>}
-      {!loading && !error && options.map((option, index) => <button type="button" role="option" aria-selected={activeIndex === index} id={`${listboxId}-option-${index}`} key={option.id} disabled={!option.saleable} className={activeIndex === index ? "flex w-full items-center gap-3 rounded-[var(--erp-radius-sm)] bg-[var(--erp-color-surface-muted)] px-3 py-2.5 text-left" : "flex w-full items-center gap-3 rounded-[var(--erp-radius-sm)] px-3 py-2.5 text-left hover:bg-[var(--erp-color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(index)}><span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--erp-radius-sm)] bg-[var(--erp-color-surface-muted)]">{option.imageUrl ? <img src={option.imageUrl} alt={option.productName} className="h-full w-full object-contain" /> : <ImageOff className="h-4 w-4 text-[var(--erp-color-text-muted)]" />}</span><span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-sm font-semibold text-[var(--erp-color-text)]"><span className="truncate">{option.productName}</span><span className="rounded-full bg-[var(--erp-color-success-soft)] px-1.5 py-0.5 text-[10px] text-[var(--erp-color-success)]">{option.inventoryStatus}</span></span><span className="mt-0.5 block truncate text-xs text-[var(--erp-color-text-muted)]">{option.serialNumber ? `可检索 SN：${option.serialNumber}` : "SN 将在出库阶段绑定"} · {option.warehouse || "未分配库位"} · {option.condition}</span><span className="mt-1 block truncate text-[11px] text-[var(--erp-color-text-muted)]">{option.estimatedSellPrice === undefined ? "暂无参考售价" : `参考售价 ${formatCurrency(option.estimatedSellPrice)}`}{option.costPrice === undefined ? "" : ` · 成本 ${formatCurrency(option.costPrice)}`}{option.inventoryDays > 0 ? ` · 库龄 ${option.inventoryDays} 天` : ""}</span></span>{option.saleable ? <Check className="h-4 w-4 shrink-0 text-[var(--erp-color-success)]" /> : <span className="shrink-0 text-[10px] text-[var(--erp-color-danger)]">不可选</span>}</button>)}
+      {!loading && !error && options.map((option, index) => {
+        const availabilityLabel = option.saleable ? "可销售" : `不可选 · ${option.inventoryStatus || "当前状态不支持销售"}`;
+        const locationLabel = option.warehouse ? `库位 ${option.warehouse}` : "未分配库位";
+        return <button
+          type="button"
+          role="option"
+          aria-selected={activeIndex === index}
+          id={`${listboxId}-option-${index}`}
+          key={option.id}
+          disabled={!option.saleable}
+          className={cn(
+            "flex w-full items-start gap-3 rounded-[var(--erp-radius-sm)] px-3 py-2 text-left transition-colors",
+            activeIndex === index ? "bg-[var(--erp-color-surface-muted)]" : "hover:bg-[var(--erp-color-surface-muted)]",
+            !option.saleable && "bg-[var(--erp-color-surface-muted)]/60 opacity-70",
+          )}
+          onMouseEnter={() => setActiveIndex(index)}
+          onClick={() => choose(index)}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--erp-radius-sm)] bg-[var(--erp-color-surface-muted)]">
+            {option.imageUrl ? <img src={option.imageUrl} alt={option.productName} className="h-full w-full object-contain" /> : <ImageOff className="h-4 w-4 text-[var(--erp-color-text-muted)]" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-[var(--erp-color-text)]">
+              <span className="min-w-0 flex-1 break-words leading-5" title={option.productName}>{option.productName}</span>
+              <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", option.saleable ? "bg-[var(--erp-color-success-soft)] text-[var(--erp-color-success)]" : "bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]")}>
+                {availabilityLabel}
+              </span>
+            </span>
+            <span className="mt-0.5 block break-words text-xs leading-5 text-[var(--erp-color-text-secondary)]" title={`${option.serialNumber ? `可检索 SN：${option.serialNumber}` : "SN 将在出库阶段绑定"} · ${locationLabel} · ${option.condition}`}>
+              {option.serialNumber ? `可检索 SN：${option.serialNumber}` : "SN 将在出库阶段绑定"} · {locationLabel} · {option.condition}
+            </span>
+            <span className="mt-1 hidden truncate text-xs text-[var(--erp-color-text-muted)] sm:block">
+              {option.estimatedSellPrice === undefined ? "暂无参考售价" : `参考售价 ${formatCurrency(option.estimatedSellPrice)}`}{option.costPrice === undefined ? "" : ` · 成本 ${formatCurrency(option.costPrice)}`}{option.inventoryDays > 0 ? ` · 库龄 ${option.inventoryDays} 天` : ""}
+            </span>
+          </span>
+          {option.saleable ? <Check className="mt-1 h-4 w-4 shrink-0 text-[var(--erp-color-success)]" aria-hidden="true" /> : <span className="mt-1 shrink-0 text-[10px] text-[var(--erp-color-warning)]">不可选</span>}
+        </button>;
+      })}
     </div> : null;
 
   return <div ref={rootRef} className="relative">
