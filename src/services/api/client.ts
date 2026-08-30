@@ -35,6 +35,11 @@ export function createIdempotencyKey(prefix: string) {
   return `${prefix}-${createRequestId()}`;
 }
 
+export type ApiRequestInit = RequestInit & {
+  /** Authentication endpoints may handle an expected 401 locally without re-emitting expiry. */
+  notifyOnUnauthorized?: boolean;
+};
+
 function requestPath(path: string) {
   try {
     return new URL(path, typeof window === "undefined" ? "http://localhost" : window.location.origin).pathname;
@@ -55,7 +60,8 @@ function reportApiFailure(error: ApiError, path: string, method: string, request
   });
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  const {notifyOnUnauthorized = true, ...fetchInit} = init;
   const headers = new Headers(init.headers);
   const requestId = headers.get("X-Request-ID") || createRequestId();
   headers.set("X-Request-ID", requestId);
@@ -69,7 +75,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 
   let response: Response;
   try {
-    response = await fetch(path, {...init, headers, credentials: init.credentials ?? "same-origin"});
+    response = await fetch(path, {...fetchInit, headers, credentials: init.credentials ?? "same-origin"});
   } catch (error) {
     const normalized = normalizeApiError(error, 0, requestId);
     reportClientRequest({phase: "error", requestId, method, path: requestPath(path)});
@@ -80,7 +86,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const payload = await response.json().catch(() => undefined);
   if (!response.ok) {
     const error = normalizeApiError(payload, response.status, requestId);
-    if (error instanceof ApiError && error.isUnauthorized) {
+    if (notifyOnUnauthorized && error instanceof ApiError && error.isUnauthorized) {
       clearBrowserAuthState();
       notifyAuthExpired();
     }

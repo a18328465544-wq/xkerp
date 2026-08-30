@@ -64,8 +64,8 @@ RESTORE_DRILL_CONFIRM=I_UNDERSTAND_ISOLATED_DATABASE npm run restore:drill
 ```
 
 - 生产数据库与 `RESTORE_TEST_DATABASE_URL` 相同会被脚本拒绝。
-- 恢复脚本会校验核心业务表、必需迁移版本，并对比生产源与恢复库的核心表行数指纹。
-- 记录最近一次 dump 文件、大小、`pg_restore --list` 结果、核心表行数指纹和恢复演练时间。
+- 新备份包含 SHA-256 manifest；恢复脚本会先比对校验和，再校验 16 张核心业务表、4 条必需迁移，并输出恢复库核心表行数指纹。
+- 记录最近一次 dump 文件、大小、manifest 校验结果、`pg_restore --list` 结果、恢复库核心表行数指纹和恢复演练时间。
 
 ## 4. 上线后验收
 
@@ -74,6 +74,7 @@ SMOKE_BASE_URL=https://gpu-erp.cdgpu.cn npm run smoke:public
 curl -fsSI https://gpu-erp.cdgpu.cn/
 pm2 list
 sudo nginx -t
+test "$(stat -c %a /home/ubuntu/gpu-erp)" -ge 755
 ```
 
 浏览器还需使用真实测试账号完成一次只读验收：登录、财务页、销售开单页、质检页、日期/选项浮层、移动端侧栏和一个权限拒绝场景。不能把“匿名 HTTP 冒烟通过”当成业务流程验收。

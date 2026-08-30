@@ -40,7 +40,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
 
   useEffect(() => {
     const onExpired = () => {
-      authApi.logout();
+      clearBrowserAuthState();
       setSignedOut(true);
       queryClient.removeQueries({queryKey: queryKeys.auth.session()});
     };
@@ -50,7 +50,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
 
   useEffect(() => {
     if (sessionQuery.error instanceof ApiError && sessionQuery.error.isUnauthorized) {
-      authApi.logout();
+      clearBrowserAuthState();
       setSignedOut(true);
     }
   }, [sessionQuery.error]);

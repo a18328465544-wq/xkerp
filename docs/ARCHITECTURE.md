@@ -536,7 +536,7 @@ npm run build
 常用同步排除：
 
 ```bash
-rsync -az --no-perms --delete-delay \
+rsync -az --no-perms --no-owner --no-group --delete-delay \
   --exclude node_modules \
   --exclude .git \
   --exclude .env \
@@ -547,6 +547,7 @@ rsync -az --no-perms --delete-delay \
 ```
 
 注意：`/data/***` 必须带前导 `/`，避免误排除 `src/data/`。
+同步后必须检查 `stat -c %a /home/ubuntu/gpu-erp`，目录权限不得低于 `755`；否则 Nginx 无法读取 SPA 构建目录。
 
 服务器构建与重启：
 

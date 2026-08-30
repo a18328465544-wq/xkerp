@@ -155,12 +155,12 @@ npm run build
 1. 确认用户明确授权上线，并记录本次包含的文件/功能。
 2. 执行 npm run lint、npm test、npm run build。
 3. 确认生产数据库备份可用；涉及迁移先完成迁移演练，并确认 `/api/ready` 通过。
-4. 使用 rsync 时必须排除 .env、.git、node_modules、data/、dist/、server-dist/，避免覆盖生产数据和本地环境。
+4. 使用 rsync 时必须排除 .env、.git、node_modules、data/、dist/、server-dist/，并强制使用 `--no-perms --no-owner --no-group`；同步后断言 `/home/ubuntu/gpu-erp` 至少为 `755`，避免 Nginx 因父目录不可遍历而返回 500。
 
 ### 9.2 当前生产流程
 
 ```
-rsync -az --no-perms --delete-delay \
+rsync -az --no-perms --no-owner --no-group --delete-delay \
   --exclude node_modules --exclude .git --exclude .env \
   --exclude '/data/***' --exclude '/dist/***' --exclude '/server-dist/***' \
   ./ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp/
@@ -168,6 +168,7 @@ rsync -az --no-perms --delete-delay \
 ssh -o BatchMode=yes ubuntu@1.14.64.60 '
   set -euo pipefail
   cd /home/ubuntu/gpu-erp
+  chmod 755 /home/ubuntu/gpu-erp
   npm ci
   npm run build
   npm prune --omit=dev

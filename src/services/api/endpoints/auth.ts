@@ -111,7 +111,7 @@ export const authApi = {
   },
 
   logout() {
-    void apiRequest("/api/auth/logout", {method: "POST"}).catch(() => undefined);
+    void apiRequest("/api/auth/logout", {method: "POST", notifyOnUnauthorized: false}).catch(() => undefined);
     clearBrowserAuthState();
   },
 };

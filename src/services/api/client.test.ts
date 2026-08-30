@@ -22,3 +22,18 @@ test("browser API requests use same-origin cookies and attach CSRF only to mutat
     globalThis.fetch = previousFetch;
   }
 });
+
+test("expected authentication 401 can be handled without emitting another expiry event", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  let expiredEvents = 0;
+  globalThis.fetch = async () => new Response(JSON.stringify({error: {code: "UNAUTHORIZED", message: "请先登录系统"}}), {status: 401, headers: {"Content-Type": "application/json"}});
+  Object.defineProperty(globalThis, "window", {configurable: true, value: {location: {origin: "https://example.test"}, localStorage: {removeItem() {}}, dispatchEvent(event: Event) {if (event.type === "gpu-erp:auth-expired") expiredEvents += 1;}}});
+  try {
+    await assert.rejects(apiRequest("/api/auth/logout", {method: "POST", notifyOnUnauthorized: false}));
+    assert.equal(expiredEvents, 0);
+  } finally {
+    globalThis.fetch = previousFetch;
+    Object.defineProperty(globalThis, "window", {configurable: true, value: previousWindow});
+  }
+});
