@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
-import {calculateSalesAmounts, normalizeSalesPaidAmount} from "./sales.calculations";
+import {calculateSalesAmounts, calculateSalesLineTotal, calculateSalesUnitPrice, normalizeSalesPaidAmount} from "./sales.calculations";
 import {salesOrderSchema} from "./sales.schema";
 import {createSalesDefaults} from "./sales.defaults";
 import {salesFieldErrors, salesFormValidationMessage, salesSubmitErrorMessage} from "./sales.errors";
@@ -70,6 +70,14 @@ test("sales amount calculation respects cost visibility and keeps integer curren
   const withoutCost = calculateSalesAmounts(values, false);
   assert.equal(withoutCost.estimatedCost, undefined);
   assert.equal(withoutCost.estimatedProfit, undefined);
+});
+
+test("sales line total and unit price stay linked with integer currency", () => {
+  assert.equal(calculateSalesLineTotal(3, 1200), 3600);
+  assert.equal(calculateSalesUnitPrice(3600, 3), 1200);
+  assert.equal(calculateSalesUnitPrice(1000, 3), 333);
+  assert.equal(calculateSalesLineTotal(3, calculateSalesUnitPrice(1000, 3)), 999);
+  assert.equal(calculateSalesUnitPrice(500, 0), 500);
 });
 
 test("sales payment amount follows the current item total", () => {

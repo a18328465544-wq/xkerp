@@ -1,12 +1,14 @@
 import {Plus, Trash2} from "lucide-react";
-import {Controller, type Control, type FieldArrayWithId} from "react-hook-form";
+import {Controller, useWatch, type Control, type FieldArrayWithId, type UseFormSetValue} from "react-hook-form";
 import {Button, Card, CardContent, Input} from "@/src/components/ui";
-import {ErpAmountInput, ErpStatusBadge} from "@/src/components/common";
+import {ErpAmountInput} from "@/src/components/common";
 import {InventoryItemPicker} from "@/src/components/domain";
 import type {SalesFormValues, SalesProductCandidate} from "@/src/types/sales";
+import {calculateSalesLineTotal, calculateSalesUnitPrice} from "@/src/features/sales/sales.calculations";
 
-export function SalesLineItemsTable({control, fields, selectedCandidates, pickerKeyword, pickerOptions, pickerLoading, pickerError, pickerDisabled, onPickerKeywordChange, onPickerFocus, onPickerRetry, onCandidateSelect, onCandidateClear, onAdd, onRemove}: {
+export function SalesLineItemsTable({control, setValue, fields, selectedCandidates, pickerKeyword, pickerOptions, pickerLoading, pickerError, pickerDisabled, onPickerKeywordChange, onPickerFocus, onPickerRetry, onCandidateSelect, onCandidateClear, onAdd, onRemove}: {
   control: Control<SalesFormValues>;
+  setValue: UseFormSetValue<SalesFormValues>;
   fields: FieldArrayWithId<SalesFormValues, "items", "id">[];
   selectedCandidates: Record<string, SalesProductCandidate | null>;
   pickerKeyword: (fieldId: string) => string;
@@ -22,18 +24,22 @@ export function SalesLineItemsTable({control, fields, selectedCandidates, picker
   onAdd: () => void;
   onRemove: (index: number) => void;
 }) {
+  const items = useWatch({control, name: "items"});
+
   return <Card data-erp-component="transaction-line-items"><CardContent className="p-3 sm:p-4">
-    <div className="hidden grid-cols-[minmax(0,2.2fr)_5rem_9rem_8rem_minmax(0,1.6fr)_3rem] gap-0 border-b border-[var(--erp-color-border)] pb-2 text-left text-xs font-semibold text-[var(--erp-color-text-secondary)] sm:grid">
+    <div className="hidden grid-cols-[minmax(0,2.2fr)_5rem_9rem_9rem_minmax(0,1.6fr)_3rem] gap-0 border-b border-[var(--erp-color-border)] pb-2 text-left text-xs font-semibold text-[var(--erp-color-text-secondary)] sm:grid">
       <div className="px-2">商品 / 可售数量</div>
       <div className="px-2">数量</div>
       <div className="px-2">销售价</div>
-      <div className="px-2">状态</div>
+      <div className="px-2">总价</div>
       <div className="px-2">备注</div>
       <div aria-hidden="true" />
     </div>
     <div className="space-y-3 sm:space-y-0">{fields.map((field, index) => {
       const selected = selectedCandidates[field.id] || null;
-      return <div key={field.id} className="relative grid min-w-0 grid-cols-2 gap-x-3 gap-y-3 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3 sm:grid-cols-[minmax(0,2.2fr)_5rem_9rem_8rem_minmax(0,1.6fr)_3rem] sm:gap-0 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:px-2 sm:py-3 sm:last:border-0">
+      const quantity = items[index]?.quantity || 1;
+      const lineTotal = calculateSalesLineTotal(quantity, items[index]?.sellPrice || 0);
+      return <div key={field.id} className="relative grid min-w-0 grid-cols-2 gap-x-3 gap-y-3 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3 sm:grid-cols-[minmax(0,2.2fr)_5rem_9rem_9rem_minmax(0,1.6fr)_3rem] sm:gap-0 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:px-2 sm:py-3 sm:last:border-0">
         <div className="col-span-2 min-w-0 pr-10 sm:col-span-1 sm:pr-0">
           <InventoryItemPicker value={selected} keyword={pickerKeyword(field.id)} options={pickerOptions(field.id)} loading={pickerLoading(field.id)} error={pickerError?.(field.id)} disabled={pickerDisabled} onFocus={() => onPickerFocus(field.id)} onKeywordChange={(value) => onPickerKeywordChange(field.id, value)} onRetry={onPickerRetry} onSelect={(option) => onCandidateSelect(field.id, index, option)} onClear={() => onCandidateClear(field.id, index)} />
           {selected && <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--erp-color-text-muted)]"><span className="break-words">{selected.brand} {selected.model}</span><span aria-hidden="true">·</span><span>{selected.vram || "无规格信息"}</span><span aria-hidden="true">·</span><span className="text-[var(--erp-color-success)]">可售 {selected.availableQuantity} 张</span><span aria-hidden="true">·</span><span>出库时扫码绑定 SN</span></div>}
@@ -77,9 +83,16 @@ export function SalesLineItemsTable({control, fields, selectedCandidates, picker
             )}
           />
         </div>
-        <div className="col-span-2 min-w-0 sm:col-span-1 sm:px-2">
-          <span className="mb-1 block text-[11px] font-semibold text-[var(--erp-color-text-secondary)] sm:hidden">状态</span>
-          {selected ? <ErpStatusBadge label={selected.saleable ? `可售 ${selected.availableQuantity} 张 · 待出库绑定 SN` : "可售数量不足"} tone={selected.saleable ? "success" : "danger"} /> : <span className="text-xs text-[var(--erp-color-text-muted)]">待选择</span>}
+        <div className="min-w-0 sm:px-2">
+          <span className="mb-1 block text-[11px] font-semibold text-[var(--erp-color-text-secondary)] sm:hidden">总价</span>
+          <ErpAmountInput
+            value={lineTotal}
+            onValueChange={(values) => {
+              const unitPrice = calculateSalesUnitPrice(values.floatValue || 0, quantity);
+              setValue(`items.${index}.sellPrice`, unitPrice, {shouldDirty: true, shouldValidate: true});
+            }}
+            aria-label={`第 ${index + 1} 行总价`}
+          />
         </div>
         <div className="col-span-2 min-w-0 sm:col-span-1 sm:px-2">
           <span className="mb-1 block text-[11px] font-semibold text-[var(--erp-color-text-secondary)] sm:hidden">备注</span>
