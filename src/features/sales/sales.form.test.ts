@@ -34,6 +34,13 @@ test("sales form rejects duplicate product candidates", () => {
   assert.ok(result.success === false && result.error.issues.some((issue) => issue.message.includes("重复")));
 });
 
+test("sales form allows an empty after-sales terms field", () => {
+  const values = validValues();
+  values.aftersalesTerms = "";
+  values.items[0]!.aftersalesTerms = "";
+  assert.equal(salesOrderSchema.safeParse(values).success, true);
+});
+
 test("sales defaults expose four independent clean line-item editors", () => {
   const values = createSalesDefaults("测试员");
   assert.equal(values.items.length, 4);
