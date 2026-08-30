@@ -1,7 +1,9 @@
 import type {CommissionAdjustment, CommissionMode} from "@/src/types/commission";
+import type {CommissionRules} from "@/src/types/legacy";
 import type {PurchaseCommissionRecord} from "@/src/types/finance-remaining";
 import type {AuditLogItem, CustomerFundsRow, CustomerFundsSnapshot, FinanceCommissionItem, FinanceCommissionPage, PagedCollection, SettingsUserItem} from "@/src/types/finance-remaining";
-import type {CommissionPageResponseDto, CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
+import type {CommissionPageResponseDto, CommissionRulesResponseDto, CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
+import {normalizeCommissionRules} from "@/src/utils/commissionRules";
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" ? value as Record<string, unknown> : {}; }
 function text(value: unknown, fallback = "") { return typeof value === "string" ? value : value === null || value === undefined ? fallback : String(value); }
@@ -113,6 +115,11 @@ export function adaptCommissionPage(response: CommissionPageResponseDto, mode: C
       totalCommission: optionalNumber(summary.totalCommission),
     },
   };
+}
+
+/** Normalize rule settings at the API boundary so the editor never relies on a legacy or partial payload. */
+export function adaptCommissionRules(response: CommissionRulesResponseDto): CommissionRules {
+  return normalizeCommissionRules(record(response.data) as unknown as CommissionRules);
 }
 
 function adaptPermissionOverrides(value: unknown): SettingsUserItem["permissionOverrides"] {

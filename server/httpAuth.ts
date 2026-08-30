@@ -6,10 +6,12 @@ export type AuthenticatedRequest<TUser> = express.Request & {
   authToken?: string;
   authMode?: "bearer" | "cookie";
   authUser?: TUser;
+  tenantId?: string;
+  storeId?: string;
   requestId?: string;
 };
 
-type SessionRecord = { userId: string };
+type SessionRecord = { userId: string; tenantId?: string; storeId?: string };
 type SessionResolver = {
   resolve(token: string | null): Promise<SessionRecord | null>;
   revoke(token: string | null): Promise<void>;
@@ -73,7 +75,7 @@ export function createRequireOpenApiToken(expectedToken: string, options?: AuthM
 
 export function createRequireAuth<TUser extends { id: string }>(
   sessions: SessionResolver,
-  resolveUser: (userId: string) => TUser | null,
+  resolveUser: (userId: string, session?: SessionRecord) => TUser | null | Promise<TUser | null>,
   options?: AuthMiddlewareOptions,
 ): express.RequestHandler {
   return (req, res, next) => {
@@ -88,7 +90,7 @@ export function createRequireAuth<TUser extends { id: string }>(
         deny(req, res, { status: 401, code: "UNAUTHORIZED" }, "请先登录系统", options);
         return;
       }
-      const user = resolveUser(session.userId);
+      const user = await resolveUser(session.userId, session);
       if (!user) {
         await sessions.revoke(token);
         if (cookieToken) clearSessionCookie(res);
@@ -97,6 +99,8 @@ export function createRequireAuth<TUser extends { id: string }>(
       }
       authRequest.authToken = token || undefined;
       authRequest.authMode = bearerToken ? "bearer" : "cookie";
+      authRequest.tenantId = session.tenantId;
+      authRequest.storeId = session.storeId;
       authRequest.authUser = user;
       next();
     })().catch(next);

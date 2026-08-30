@@ -5,9 +5,9 @@ import {Button, Input} from "@/src/components/ui";
 import {useFloatingPanelPosition} from "@/src/hooks/useFloatingPanelPosition";
 import {formatCurrency} from "@/src/lib/format";
 import {cn} from "@/src/lib/cn";
-import type {SalesInventoryCandidate} from "@/src/types/sales";
+import type {SalesProductCandidate} from "@/src/types/sales";
 
-function nextSaleableIndex(options: SalesInventoryCandidate[], current: number, direction: 1 | -1) {
+function nextSaleableIndex(options: SalesProductCandidate[], current: number, direction: 1 | -1) {
   if (!options.length) return -1;
   for (let offset = 1; offset <= options.length; offset += 1) {
     const index = (current + direction * offset + options.length) % options.length;
@@ -17,14 +17,14 @@ function nextSaleableIndex(options: SalesInventoryCandidate[], current: number, 
 }
 
 export function InventoryItemPicker({value, keyword, options, loading, error, disabled, onKeywordChange, onSelect, onClear, onRetry, onFocus}: {
-  value: SalesInventoryCandidate | null;
+  value: SalesProductCandidate | null;
   keyword: string;
-  options: SalesInventoryCandidate[];
+  options: SalesProductCandidate[];
   loading?: boolean;
   error?: string;
   disabled?: boolean;
   onKeywordChange: (value: string) => void;
-  onSelect: (option: SalesInventoryCandidate) => void;
+  onSelect: (option: SalesProductCandidate) => void;
   onClear: () => void;
   onRetry?: () => void;
   onFocus?: () => void;
@@ -59,12 +59,12 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
     setOpen(false);
   };
 
-  const listbox = open && !value && panelPosition ? <div ref={listboxRef} id={listboxId} role="listbox" aria-label="可销售库存候选" className="erp-picker-listbox fixed erp-popover-layer max-h-80 overflow-y-auto rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 shadow-[var(--erp-shadow-popover)]" style={{left: panelPosition.left, top: panelPosition.top, width: panelPosition.width, maxHeight: panelPosition.maxHeight}}>
+  const listbox = open && !value && panelPosition ? <div ref={listboxRef} id={listboxId} role="listbox" aria-label="可销售商品" className="erp-picker-listbox fixed erp-popover-layer max-h-80 overflow-y-auto rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 shadow-[var(--erp-shadow-popover)]" style={{left: panelPosition.left, top: panelPosition.top, width: panelPosition.width, maxHeight: panelPosition.maxHeight}}>
       {loading && <div className="flex items-center gap-2 px-3 py-4 text-xs text-[var(--erp-color-text-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" />正在查询可销售商品候选…</div>}
       {error && !loading && <div className="flex items-center justify-between gap-3 px-3 py-3 text-xs text-[var(--erp-color-danger)]"><span>{error}</span>{onRetry && <Button type="button" size="sm" variant="ghost" onClick={onRetry}><RefreshCw className="h-3.5 w-3.5" />重试</Button>}</div>}
       {!loading && !error && !options.length && <div className="px-3 py-5 text-center text-xs text-[var(--erp-color-text-muted)]"><Search className="mx-auto mb-2 h-4 w-4" />没有找到可销售商品候选</div>}
       {!loading && !error && options.map((option, index) => {
-        const availabilityLabel = option.saleable ? "可销售" : `不可选 · ${option.inventoryStatus || "当前状态不支持销售"}`;
+        const availabilityLabel = option.saleable ? `可售 ${option.availableQuantity} 张` : `不可选 · 可售 ${option.availableQuantity} 张`;
         const locationLabel = option.warehouse ? `库位 ${option.warehouse}` : "未分配库位";
         return <button
           type="button"
@@ -91,11 +91,11 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
                 {availabilityLabel}
               </span>
             </span>
-            <span className="mt-0.5 block break-words text-xs leading-5 text-[var(--erp-color-text-secondary)]" title={`${option.serialNumber ? `可检索 SN：${option.serialNumber}` : "SN 将在出库阶段绑定"} · ${locationLabel} · ${option.condition}`}>
-              {option.serialNumber ? `可检索 SN：${option.serialNumber}` : "SN 将在出库阶段绑定"} · {locationLabel} · {option.condition}
+            <span className="mt-0.5 block break-words text-xs leading-5 text-[var(--erp-color-text-secondary)]" title={`${option.brand} ${option.model} · 在库 ${option.inventoryQuantity} 张 · 已占用 ${option.reservedQuantity} 张`}>
+              {option.brand} {option.model} · 在库 {option.inventoryQuantity} 张 · 已占用 {option.reservedQuantity} 张
             </span>
             <span className="mt-1 hidden truncate text-xs text-[var(--erp-color-text-muted)] sm:block">
-              {option.estimatedSellPrice === undefined ? "暂无参考售价" : `参考售价 ${formatCurrency(option.estimatedSellPrice)}`}{option.costPrice === undefined ? "" : ` · 成本 ${formatCurrency(option.costPrice)}`}{option.inventoryDays > 0 ? ` · 库龄 ${option.inventoryDays} 天` : ""}
+              {option.estimatedSellPrice === undefined ? "暂无参考售价" : `参考售价 ${formatCurrency(option.estimatedSellPrice)}`}{option.costPrice === undefined ? "" : ` · 成本 ${formatCurrency(option.costPrice)}`}{option.inventoryDays > 0 ? ` · 最近入库 ${option.inventoryDays} 天` : ""}
             </span>
           </span>
           {option.saleable ? <Check className="mt-1 h-4 w-4 shrink-0 text-[var(--erp-color-success)]" aria-hidden="true" /> : <span className="mt-1 shrink-0 text-[10px] text-[var(--erp-color-warning)]">不可选</span>}
@@ -107,7 +107,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
     <div className="relative">
       <PackageSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
       <Input
-        value={value ? `${value.productName}${value.serialNumber ? ` · ${value.serialNumber}` : ""}` : keyword}
+        value={value ? value.productName : keyword}
         onChange={(event) => { onKeywordChange(event.target.value); setOpen(true); }}
         onFocus={() => { onFocus?.(); setOpen(true); }}
         onKeyDown={(event) => {
@@ -126,10 +126,10 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
             setOpen(false);
           }
         }}
-        placeholder="搜索商品型号、SN 或品牌"
+        placeholder="搜索商品名称、型号或品牌"
         disabled={disabled || Boolean(value)}
         className="pl-9 pr-20"
-        aria-label="选择销售商品候选"
+        aria-label="选择销售商品"
         aria-autocomplete="list"
         aria-controls={open && !value ? listboxId : undefined}
         aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}

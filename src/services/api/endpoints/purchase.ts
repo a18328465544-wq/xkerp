@@ -17,9 +17,9 @@ export const purchaseApi = {
     return adaptPurchaseReferenceData(response, permissions);
   },
 
-  async create(values: PurchaseFormValues, account?: PurchaseSettlementAccountOption, signal?: AbortSignal): Promise<PurchaseCreateResult> {
+  async create(values: PurchaseFormValues, account?: PurchaseSettlementAccountOption, signal?: AbortSignal, idempotencyKey?: string): Promise<PurchaseCreateResult> {
     const request = toPurchaseRequestDto(values, account);
-    const response = await apiRequest<PurchaseCreateResponseDto>("/api/purchase-invoices", {method: "POST", body: JSON.stringify(request), signal});
+    const response = await apiRequest<PurchaseCreateResponseDto>("/api/purchase-invoices", {method: "POST", body: JSON.stringify(request), signal, headers: idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined});
     return adaptPurchaseCreateResponse(response);
   },
 

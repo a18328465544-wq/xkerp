@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import test from "node:test";
 import {calculateSalesAmounts, normalizeSalesPaidAmount} from "./sales.calculations";
 import {salesOrderSchema} from "./sales.schema";
 import {createSalesDefaults} from "./sales.defaults";
 import {salesFieldErrors, salesFormValidationMessage, salesSubmitErrorMessage} from "./sales.errors";
 import {ApiError} from "@/src/services/api";
+
+const salesOrderPageSource = readFileSync(new URL("./pages/NewSalesOrderPage.tsx", import.meta.url), "utf8");
 
 function validValues() {
   const values = createSalesDefaults("测试员");
@@ -23,7 +26,7 @@ test("sales defaults use the current operator for the salesperson and receipt ha
   assert.equal(values.paymentHandler, "当前操作人");
 });
 
-test("sales form rejects duplicate inventory candidates", () => {
+test("sales form rejects duplicate product candidates", () => {
   const values = validValues();
   values.items.push({...values.items[0]!});
   const result = salesOrderSchema.safeParse(values);
@@ -99,4 +102,10 @@ test("sales form validation failures produce visible actionable feedback", () =>
   assert.equal(salesFormValidationMessage({customerId: {message: "请选择客户档案"}}), "请先完善销售单信息：请选择客户档案");
   assert.equal(salesFormValidationMessage({items: {0: {productId: {message: "请选择销售商品"}}}}), "请先完善销售单信息：请选择销售商品");
   assert.equal(salesFormValidationMessage({}), "请先完善销售单信息");
+});
+
+test("live sales entry keeps its workspace draft without an unsaved-leave guard", () => {
+  assert.match(salesOrderPageSource, /useWorkspaceTabDraft/);
+  assert.match(salesOrderPageSource, /saveDraft\(/);
+  assert.doesNotMatch(salesOrderPageSource, /ErpUnsavedChangesDialog|useErpDirtyGuard|useWorkspaceTabBlocker|useWorkspaceTabDirty/);
 });

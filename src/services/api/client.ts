@@ -31,6 +31,10 @@ function createRequestId() {
   return `v2-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function createIdempotencyKey(prefix: string) {
+  return `${prefix}-${createRequestId()}`;
+}
+
 function requestPath(path: string) {
   try {
     return new URL(path, typeof window === "undefined" ? "http://localhost" : window.location.origin).pathname;

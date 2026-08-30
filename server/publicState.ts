@@ -66,7 +66,8 @@ function canAccessReturnType(permissions: { allowedMenus: string[] }, type: stri
 
 export function getPermissionsForUser(state: AppState, user?: SystemUserAccount) {
   const role = user?.role || state.currentRole;
-  const base = state.customPermissions.find((item) => item.role === role)
+  const customPermissions = Array.isArray(state.customPermissions) ? state.customPermissions : [];
+  const base = customPermissions.find((item) => item.role === role)
     || defaultPermissions.find((item) => item.role === role)
     || defaultPermissions[0];
   const merged = { ...base, ...user?.permissionOverrides, role };
@@ -91,6 +92,9 @@ export function publicStateForUser(state: AppState, user?: SystemUserAccount, mo
   const safeState = mode === "initial"
     ? stripLazyStateCollections(sanitizeAppStateForClient(state))
     : sanitizeAppStateForClient(state);
+  // Keep malformed legacy JSONB permission settings from leaking into the
+  // response or breaking the authenticated state projection.
+  safeState.customPermissions = Array.isArray(safeState.customPermissions) ? safeState.customPermissions : [];
   safeState.inventory = inventoryWithCurrentAge(safeState.inventory);
   if (!user) return safeState;
 

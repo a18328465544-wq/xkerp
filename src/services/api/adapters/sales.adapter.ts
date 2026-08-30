@@ -1,7 +1,7 @@
 import {adaptInventoryItem} from "./inventory.adapter";
 import type {InventoryItemDto} from "../dto/inventory.dto";
-import type {SalesCreateRequestDto, SalesCustomerDto, SalesOutboundRequestDto, SalesSettlementAccountDto} from "../dto/sales.dto";
-import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListItem, SalesListLine, SalesOutboundDataset, SalesOutboundInventoryItem, SalesOutboundRequest, SalesOutboundResult, SalesOutboundStatus, SalesPartnerType, SalesPaymentStatus, SalesSettlementAccountOption} from "@/src/types/sales";
+import type {SalesCreateRequestDto, SalesCustomerDto, SalesOutboundRequestDto, SalesProductCandidateDto, SalesSettlementAccountDto} from "../dto/sales.dto";
+import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListItem, SalesListLine, SalesOutboundDataset, SalesOutboundInventoryItem, SalesOutboundRequest, SalesOutboundResult, SalesOutboundStatus, SalesPartnerType, SalesPaymentStatus, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
 import {isInventoryLinkedToSales} from "@/src/utils/inventoryRelations";
 import {createProductIdentityIndex, resolveProductIdentityKey} from "@/src/utils/productIdentity";
 import {filledSalesLines} from "@/src/features/sales/sales.calculations";
@@ -298,6 +298,45 @@ export function adaptSalesInventoryCandidate(dto: InventoryItemDto, permissions:
 export function adaptSalesInventoryCandidates(response: {data?: unknown}, permissions: {showCost: boolean; showProfit: boolean}): SalesInventoryCandidate[] {
   const rows = Array.isArray(response.data) ? response.data : [];
   return rows.filter((item): item is InventoryItemDto => Boolean(item && typeof item === "object")).map((item) => adaptSalesInventoryCandidate(item, permissions));
+}
+
+export function adaptSalesProductCandidate(dto: SalesProductCandidateDto, permissions: {showCost: boolean}): SalesProductCandidate {
+  const availableQuantity = Math.max(0, Math.floor(numberValue(dto.availableQuantity)));
+  const inventoryQuantity = Math.max(0, Math.floor(numberValue(dto.inventoryQuantity, availableQuantity)));
+  const reservedQuantity = Math.max(0, Math.floor(numberValue(dto.reservedQuantity)));
+  const productId = text(dto.productId || dto.id);
+  const productName = text(dto.productName, "未命名商品");
+  const saleable = booleanValue(dto.saleable, availableQuantity > 0);
+  return {
+    id: text(dto.id || productId || productName),
+    productId,
+    productName,
+    category: text(dto.category, "其他配件"),
+    brand: text(dto.brand, "未标注品牌"),
+    model: text(dto.model, "未标注型号"),
+    version: text(dto.version),
+    vram: text(dto.vram),
+    condition: text(dto.condition, "出库核验"),
+    warehouse: text(dto.warehouse, "未分配库位"),
+    inventoryStatus: text(dto.inventoryStatus, "可售库存"),
+    inventoryQuantity,
+    reservedQuantity,
+    availableQuantity,
+    costPrice: permissions.showCost ? optionalNumber(dto.costPrice) : undefined,
+    estimatedSellPrice: optionalNumber(dto.estimatedSellPrice),
+    entryTime: text(dto.entryTime),
+    inventoryDays: Math.max(0, Math.floor(numberValue(dto.inventoryDays))),
+    imageUrl: text(dto.imageUrl) || undefined,
+    saleable,
+    unavailableReason: saleable ? undefined : text(dto.unavailableReason, "可售库存已被待出库订单占用"),
+  };
+}
+
+export function adaptSalesProductCandidates(response: {data?: unknown}, permissions: {showCost: boolean}): SalesProductCandidate[] {
+  const rows = Array.isArray(response.data) ? response.data : [];
+  return rows
+    .filter((item): item is SalesProductCandidateDto => Boolean(item && typeof item === "object"))
+    .map((item) => adaptSalesProductCandidate(item, permissions));
 }
 
 export function adaptSalesSettlementAccount(dto: SalesSettlementAccountDto): SalesSettlementAccountOption {

@@ -2,13 +2,18 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { CrmFollowUpRecord, CrmQuote, CrmRequirement, CustomerCard } from "../src/types.ts";
 import { ensureCrmCustomerAccount } from "./crmAccountRepository.ts";
+import { currentCrmTenantId } from "./crmTenant.ts";
 
 function stableHash(value: string) {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }
 
-function normalizedId(prefix: string, sourceId: string) {
-  return `${prefix}-${stableHash(sourceId)}`;
+function normalizedId(prefix: string, sourceId: string, tenantId = currentCrmTenantId()) {
+  return `${prefix}-${stableHash(tenantId === "tenant_default" ? sourceId : `${tenantId}:${sourceId}`)}`;
+}
+
+function scopedKey(value: string, tenantId = currentCrmTenantId()) {
+  return tenantId === "tenant_default" ? value : `${tenantId}:${value}`;
 }
 
 function dateOnly(value?: string) {
@@ -54,10 +59,11 @@ async function writeTimelineEvent(
     occurredAt?: string;
   },
 ) {
+  const tenantId = currentCrmTenantId();
   await client.query(
     `INSERT INTO gpu_crm_timeline_events
-       (id, account_id, event_type, source_type, source_id, summary, payload, actor_id, idempotency_key, occurred_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, COALESCE($10::timestamptz, NOW()))
+       (id, tenant_id, account_id, event_type, source_type, source_id, summary, payload, actor_id, idempotency_key, occurred_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, COALESCE($11::timestamptz, NOW()))
      ON CONFLICT (idempotency_key) DO UPDATE SET
        account_id = EXCLUDED.account_id,
        event_type = EXCLUDED.event_type,
@@ -69,6 +75,7 @@ async function writeTimelineEvent(
        occurred_at = EXCLUDED.occurred_at`,
     [
       event.id,
+      tenantId,
       event.accountId,
       event.eventType,
       event.sourceType,
@@ -88,12 +95,13 @@ export async function syncCrmFollowUp(
   customer: CustomerCard,
   actorId?: string,
 ) {
+  const tenantId = currentCrmTenantId();
   const { accountId } = await ensureCrmCustomerAccount(client, customer);
-  const id = normalizedId("CRM-FOLLOWUP", followup.id);
+  const id = normalizedId("CRM-FOLLOWUP", followup.id, tenantId);
   await client.query(
     `INSERT INTO gpu_crm_followups
-       (id, account_id, contact_method, content, result, handler_id, follow_time, next_follow_time, remarks, legacy_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8::timestamptz, $9, $10)
+       (id, tenant_id, account_id, contact_method, content, result, handler_id, follow_time, next_follow_time, remarks, legacy_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz, $10, $11)
      ON CONFLICT (id) DO UPDATE SET
        account_id = EXCLUDED.account_id,
        contact_method = EXCLUDED.contact_method,
@@ -104,9 +112,11 @@ export async function syncCrmFollowUp(
        next_follow_time = EXCLUDED.next_follow_time,
        remarks = EXCLUDED.remarks,
        legacy_id = EXCLUDED.legacy_id,
-       updated_at = NOW()`,
+       updated_at = NOW()
+     WHERE gpu_crm_followups.tenant_id = EXCLUDED.tenant_id`,
     [
       id,
+      tenantId,
       accountId,
       followup.contactMethod,
       followup.content,
@@ -120,7 +130,7 @@ export async function syncCrmFollowUp(
   );
 
   await writeTimelineEvent(client, {
-    id: normalizedId("CRM-TL", `followup:${followup.id}`),
+    id: normalizedId("CRM-TL", `followup:${followup.id}`, tenantId),
     accountId,
     eventType: "followup_recorded",
     sourceType: "crm_followup",
@@ -128,7 +138,7 @@ export async function syncCrmFollowUp(
     summary: `跟进记录：${followup.result}`,
     payload: { legacyId: followup.id, contactMethod: followup.contactMethod, nextAction: followup.nextAction || null },
     actorId,
-    idempotencyKey: `legacy:crm_followup:${followup.id}`,
+    idempotencyKey: scopedKey(`legacy:crm_followup:${followup.id}`, tenantId),
     occurredAt: followup.followTime,
   });
 }
@@ -139,15 +149,16 @@ export async function syncCrmRequirement(
   customer: CustomerCard,
   actorId?: string,
 ) {
+  const tenantId = currentCrmTenantId();
   const { accountId } = await ensureCrmCustomerAccount(client, customer);
-  const requirementId = normalizedId("CRM-REQ", requirement.id);
-  const opportunityId = normalizedId("CRM-OPP", requirement.id);
+  const requirementId = normalizedId("CRM-REQ", requirement.id, tenantId);
+  const opportunityId = normalizedId("CRM-OPP", requirement.id, tenantId);
   const title = requirement.productDemand.trim() || "客户需求";
   const expectedDealAt = dateOnly(requirement.expectedDealTime);
   await client.query(
     `INSERT INTO gpu_crm_account_requirements
-       (id, account_id, title, product_demand, budget, intent, stage, source, owner_id, expected_deal_at, status, remarks, legacy_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11, $12, $13)
+       (id, tenant_id, account_id, title, product_demand, budget, intent, stage, source, owner_id, expected_deal_at, status, remarks, legacy_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13, $14)
      ON CONFLICT (id) DO UPDATE SET
        account_id = EXCLUDED.account_id,
        title = EXCLUDED.title,
@@ -161,9 +172,11 @@ export async function syncCrmRequirement(
        status = EXCLUDED.status,
        remarks = EXCLUDED.remarks,
        legacy_id = EXCLUDED.legacy_id,
-       updated_at = NOW()`,
+       updated_at = NOW()
+     WHERE gpu_crm_account_requirements.tenant_id = EXCLUDED.tenant_id`,
     [
       requirementId,
+      tenantId,
       accountId,
       title,
       requirement.productDemand,
@@ -181,8 +194,8 @@ export async function syncCrmRequirement(
 
   await client.query(
     `INSERT INTO gpu_crm_opportunities
-       (id, account_id, requirement_id, title, stage, amount, probability, owner_id, expected_close_at, lost_reason)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10)
+       (id, tenant_id, account_id, requirement_id, title, stage, amount, probability, owner_id, expected_close_at, lost_reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12)
      ON CONFLICT (id) DO UPDATE SET
        account_id = EXCLUDED.account_id,
        requirement_id = EXCLUDED.requirement_id,
@@ -193,9 +206,11 @@ export async function syncCrmRequirement(
        owner_id = EXCLUDED.owner_id,
        expected_close_at = EXCLUDED.expected_close_at,
        lost_reason = EXCLUDED.lost_reason,
-       updated_at = NOW()`,
+       updated_at = NOW()
+     WHERE gpu_crm_opportunities.tenant_id = EXCLUDED.tenant_id`,
     [
       opportunityId,
+      tenantId,
       accountId,
       requirementId,
       title,
@@ -209,7 +224,7 @@ export async function syncCrmRequirement(
   );
 
   await writeTimelineEvent(client, {
-    id: normalizedId("CRM-TL", `requirement:${requirement.id}`),
+    id: normalizedId("CRM-TL", `requirement:${requirement.id}`, tenantId),
     accountId,
     eventType: "requirement_created",
     sourceType: "crm_requirement",
@@ -217,7 +232,7 @@ export async function syncCrmRequirement(
     summary: `新增需求：${title}`,
     payload: { legacyId: requirement.id, stage: requirement.stage, budget: Number(requirement.budget) || 0, opportunityId },
     actorId,
-    idempotencyKey: `legacy:crm_requirement:${requirement.id}`,
+    idempotencyKey: scopedKey(`legacy:crm_requirement:${requirement.id}`, tenantId),
     occurredAt: requirement.createTime,
   });
 }
@@ -228,13 +243,14 @@ export async function syncCrmQuote(
   customer: CustomerCard,
   actorId?: string,
 ) {
+  const tenantId = currentCrmTenantId();
   const { accountId } = await ensureCrmCustomerAccount(client, customer);
-  const quoteId = normalizedId("CRM-QUOTE", quote.id);
+  const quoteId = normalizedId("CRM-QUOTE", quote.id, tenantId);
   const status = quoteStatus(quote.status);
   await client.query(
     `INSERT INTO gpu_crm_quotes
-       (id, account_id, quote_no, version, status, total_amount, valid_until, owner_id, remarks)
-     VALUES ($1, $2, $3, 1, $4, $5, $6::date, $7, $8)
+       (id, tenant_id, account_id, quote_no, version, status, total_amount, valid_until, owner_id, remarks)
+     VALUES ($1, $2, $3, $4, 1, $5, $6, $7::date, $8, $9)
      ON CONFLICT (id) DO UPDATE SET
        account_id = EXCLUDED.account_id,
        quote_no = EXCLUDED.quote_no,
@@ -243,21 +259,23 @@ export async function syncCrmQuote(
        valid_until = EXCLUDED.valid_until,
        owner_id = EXCLUDED.owner_id,
        remarks = EXCLUDED.remarks,
-       updated_at = NOW()`,
-    [quoteId, accountId, quote.quoteNo, status, Number(quote.totalAmount) || 0, dateOnly(quote.validUntil), quote.owner || actorId || null, quote.notes || null],
+       updated_at = NOW()
+     WHERE gpu_crm_quotes.tenant_id = EXCLUDED.tenant_id`,
+    [quoteId, tenantId, accountId, quote.quoteNo, status, Number(quote.totalAmount) || 0, dateOnly(quote.validUntil), quote.owner || actorId || null, quote.notes || null],
   );
 
-  await client.query("DELETE FROM gpu_crm_quote_items WHERE quote_id = $1", [quoteId]);
+  await client.query("DELETE FROM gpu_crm_quote_items WHERE quote_id = $1 AND tenant_id = $2", [quoteId, tenantId]);
   for (const [index, item] of quote.items.entries()) {
     const quantity = Number(item.quantity) || 0;
     const unitPrice = Number(item.unitPrice) || 0;
     if (quantity <= 0 || unitPrice < 0 || !item.productName.trim()) continue;
     await client.query(
       `INSERT INTO gpu_crm_quote_items
-         (id, quote_id, product_id, product_name, quantity, unit_price, amount, remarks)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         (id, tenant_id, quote_id, product_id, product_name, quantity, unit_price, amount, remarks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
-        normalizedId("CRM-QI", `${quote.id}:${index}:${item.id}`),
+        normalizedId("CRM-QI", `${quote.id}:${index}:${item.id}`, tenantId),
+        tenantId,
         quoteId,
         item.productId || null,
         item.productName.trim(),
@@ -270,7 +288,7 @@ export async function syncCrmQuote(
   }
 
   await writeTimelineEvent(client, {
-    id: normalizedId("CRM-TL", `quote:${quote.id}`),
+    id: normalizedId("CRM-TL", `quote:${quote.id}`, tenantId),
     accountId,
     eventType: "quote_created",
     sourceType: "crm_quote",
@@ -278,7 +296,7 @@ export async function syncCrmQuote(
     summary: `生成报价单：${quote.quoteNo}`,
     payload: { legacyId: quote.id, quoteNo: quote.quoteNo, totalAmount: Number(quote.totalAmount) || 0, status: quote.status },
     actorId,
-    idempotencyKey: `legacy:crm_quote:${quote.id}`,
+    idempotencyKey: scopedKey(`legacy:crm_quote:${quote.id}`, tenantId),
     occurredAt: quote.createdAt,
   });
 }

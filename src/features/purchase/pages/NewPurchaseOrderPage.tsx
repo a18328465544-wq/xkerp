@@ -6,8 +6,8 @@ import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form"
 import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
-import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
-import {ApiError, productsApi, purchaseApi, queryKeys} from "@/src/services/api";
+import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
+import {ApiError, createIdempotencyKey, productsApi, purchaseApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {ProductTemplateFormValues} from "@/src/types/product";
@@ -20,7 +20,7 @@ import {PurchaseAmountSummary, PurchaseImageSection, PurchaseLineItemsTable, Pur
 import {addPurchaseProductToReferenceData, addPurchaseSourceToReferenceData} from "@/src/features/purchase/quick-create/quick-create.cache";
 import {quickCreateError} from "@/src/features/purchase/quick-create/quick-create.errors";
 import type {PurchaseMediaStateChange} from "@/src/features/purchase/hooks/usePurchaseMediaUpload";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 import {derivePurchaseCapabilities} from "../purchase.permissions";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -69,8 +69,10 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const [productCreate, setProductCreate] = useState<{index: number; initialName: string} | null>(null);
   const productCreateInitialValues = useMemo(() => productCreate ? {model: productCreate.initialName} : undefined, [productCreate]);
   const submitLock = useRef(false);
+  const createIdempotencyKeyRef = useRef(createIdempotencyKey("purchase-create"));
   const clearMediaRef = useRef<(() => void) | null>(null);
   const isDirty = formState.isDirty || restoredDraftActive;
+  // 录单页使用实时工作区草稿，离开或切换时不拦截；回到标签页即可继续录入。
   useEffect(() => {
     const persist = () => {
       if (!formState.isDirty && !restoredDraftActive) {
@@ -83,9 +85,6 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     const subscription = form.watch(persist);
     return () => subscription.unsubscribe();
   }, [discardDraft, form, formState.isDirty, restoredDraftActive, saveDraft, selectedSource]);
-  useErpDirtyGuard(isDirty);
-  useWorkspaceTabDirty("purchase_add", isDirty);
-
   const referenceData = referenceQuery.data;
   const vendorCreditAvailable = selectedSource?.partnerType === "vendor" ? selectedSource.returnCreditBalance || 0 : 0;
   const sourcePartnerType = values.sourcePartnerType;
@@ -95,7 +94,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     && !mediaState.pending
     && !mediaState.failed
     && (values.paidAmount <= 0 || canReadSettlementAccounts), [canReadSettlementAccounts, mediaState.failed, mediaState.pending, selectedSource, values, vendorCreditAvailable]);
-  const createMutation = useMutation({mutationFn: (payload: PurchaseFormValues) => purchaseApi.create(payload, selectedAccount)});
+  const createMutation = useMutation({mutationFn: (payload: PurchaseFormValues) => purchaseApi.create(payload, selectedAccount, undefined, createIdempotencyKeyRef.current)});
   const productCreateMutation = useMutation({mutationFn: (payload: ProductTemplateFormValues) => productsApi.createTemplate(payload, permissions.showCost, permissions.showProfit)});
 
   const selectSource = (option: PurchaseSourceOption) => {
@@ -207,6 +206,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     }
     try {
       const result = await createMutation.mutateAsync(submitted);
+      createIdempotencyKeyRef.current = createIdempotencyKey("purchase-create");
       const categories = new Set(result.invoice.items.map((item) => item.category));
       const hasGpu = categories.has("显卡");
       const hasAccessory = Array.from(categories).some((category) => category !== "显卡");
@@ -236,7 +236,6 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   };
 
   const leave = () => { void navigate({to: "/purchase"}); };
-  const blocker = useWorkspaceTabBlocker(isDirty);
 
   if (referenceQuery.isPending || !referenceData) return <Card><ErpLoadingState title="正在加载采购基础数据" description="正在读取商品、来源、结算账户和现有仓位候选。" /></Card>;
   if (referenceQuery.error) return <ErpPageError title="无法加载采购基础数据" description={errorText(referenceQuery.error)} onRetry={() => void referenceQuery.refetch()} />;
@@ -275,7 +274,6 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     <PurchasePasteDrawer open={pasteOpen} onOpenChange={setPasteOpen} products={referenceData.products} defaults={createPurchaseLineDefaults()} existingItems={values.items || []} canEnterCost={canEnterPurchaseCost} canEnterEstimatedSell={permissions.showProfit} onConfirm={(rows) => { append(rows); toast.success(`已加入 ${rows.length} 行采购明细`, {description: "明细已写入当前采购表单，提交时仍由统一适配层处理数量展开。"}); }} />
     <PurchasePartnerCreateDialog open={Boolean(partnerCreate)} target={partnerCreate?.target || null} initialName={partnerCreate?.initialName || ""} onOpenChange={(open) => {if (!open) setPartnerCreate(null);}} onCreated={handleCreatedSource} />
     <ErpProductTemplateDialog open={Boolean(productCreate)} product={null} initialValues={productCreateInitialValues} showCost={permissions.showCost} showProfit={permissions.showProfit} pending={productCreateMutation.isPending} error={productCreateMutation.error ? quickCreateError(productCreateMutation.error, "商品模板") : undefined} onOpenChange={(open) => {if (!open) {setProductCreate(null); productCreateMutation.reset();}}} onSubmit={submitProductTemplate} />
-    <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
     </ErpPageContent>
   </ErpTransactionPageFrame>;
 }

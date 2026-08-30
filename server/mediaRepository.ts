@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import { withDatabaseTransaction } from "./db.ts";
+import type { PoolClient } from "pg";
+import { DEFAULT_TENANT_ID } from "./commercialConstants.ts";
+import { getCurrentTenantContext } from "./requestTenantContext.ts";
 
 export const MEDIA_MAX_BYTES = 110_000;
 export const MEDIA_TARGET_BYTES = 100_000;
@@ -30,12 +33,13 @@ export type MediaRelation = MediaAsset & {
 
 export class MediaValidationError extends Error {
   readonly code: string;
-  readonly status = 400;
+  readonly status: number;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, status = 400) {
     super(message);
     this.name = "MediaValidationError";
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -76,6 +80,36 @@ function parseDataUrl(dataUrl: unknown): ParsedImage {
   return { mimeType, content };
 }
 
+function tenantScope(tenantId?: string) {
+  return tenantId?.trim() || getCurrentTenantContext()?.tenantId || DEFAULT_TENANT_ID;
+}
+
+async function reserveMediaBytes(client: PoolClient, tenantId: string, bytes: number) {
+  const subscription = await client.query<{ media_bytes_limit: string }>(
+    "SELECT media_bytes_limit::text FROM gpu_subscriptions WHERE tenant_id = $1 FOR UPDATE",
+    [tenantId],
+  );
+  const limit = Number(subscription.rows[0]?.media_bytes_limit);
+  if (!Number.isFinite(limit)) throw new MediaValidationError("MEDIA_QUOTA_UNAVAILABLE", "企业媒体额度未配置", 503);
+  // media_bytes_limit is a storage ceiling, not a monthly transfer quota.
+  // Sum durable assets while holding the subscription row lock so concurrent
+  // uploads cannot both pass the same remaining capacity check.
+  const current = await client.query<{ bytes: string }>(
+    "SELECT COALESCE(SUM(size_bytes), 0)::text AS bytes FROM gpu_media_assets WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const previous = Number(current.rows[0]?.bytes || 0);
+  if (previous + bytes > limit) throw new MediaValidationError("MEDIA_QUOTA_EXCEEDED", "已超过企业媒体存储额度", 409);
+  const periodStart = new Date().toISOString().slice(0, 7) + "-01";
+  await client.query(
+    `INSERT INTO gpu_usage_counters (tenant_id, metric, period_start, quantity)
+     VALUES ($1, 'media_bytes', $2::date, $3)
+     ON CONFLICT (tenant_id, metric, period_start)
+     DO UPDATE SET quantity = gpu_usage_counters.quantity + EXCLUDED.quantity, updated_at = NOW()`,
+    [tenantId, periodStart, bytes],
+  );
+}
+
 export function imageUrlForAsset(id: string) {
   return `${MEDIA_URL_PREFIX}${encodeURIComponent(id)}`;
 }
@@ -111,12 +145,14 @@ function mapAsset(row: {
 }
 
 export async function replaceEntityImages(input: {
+  tenantId?: string;
   entityType: string;
   entityId: string;
   values: unknown[];
   relationRole?: string;
   createdBy?: string;
 }): Promise<string[]> {
+  const tenantId = tenantScope(input.tenantId);
   const entityType = String(input.entityType || "").trim();
   const entityId = String(input.entityId || "").trim();
   const relationRole = String(input.relationRole || "attachment").trim() || "attachment";
@@ -133,41 +169,60 @@ export async function replaceEntityImages(input: {
       const existingId = typeof value === "string" ? parseMediaAssetId(value) : null;
       let assetId = existingId;
       if (assetId) {
-        const existing = await client.query<{ id: string }>("SELECT id FROM gpu_media_assets WHERE id = $1", [assetId]);
+        const existing = await client.query<{ id: string }>("SELECT id FROM gpu_media_assets WHERE id = $1 AND tenant_id = $2", [assetId, tenantId]);
         if (!existing.rowCount) throw new MediaValidationError("MEDIA_NOT_FOUND", "图片资源不存在或已被删除");
       } else {
         const parsed = parseDataUrl(value);
         const sha256 = createHash("sha256").update(parsed.content).digest("hex");
-        assetId = `IMG-${sha256.slice(0, 24)}`;
-        await client.query(
-          `INSERT INTO gpu_media_assets (id, mime_type, original_name, size_bytes, sha256, content, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (sha256) DO NOTHING`,
-          [assetId, parsed.mimeType, undefined, parsed.content.length, sha256, parsed.content, input.createdBy || null],
+        const existing = await client.query<{ id: string }>(
+          "SELECT id FROM gpu_media_assets WHERE tenant_id = $1 AND sha256 = $2 LIMIT 1",
+          [tenantId, sha256],
         );
-        const resolved = await client.query<{ id: string }>("SELECT id FROM gpu_media_assets WHERE sha256 = $1", [sha256]);
-        assetId = resolved.rows[0]?.id || assetId;
+        if (existing.rows[0]) {
+          assetId = existing.rows[0].id;
+        } else {
+          assetId = tenantId === DEFAULT_TENANT_ID
+            ? `IMG-${sha256.slice(0, 24)}`
+            : `IMG-${tenantId.slice(-12)}-${sha256.slice(0, 20)}`;
+          const inserted = await client.query<{ id: string }>(
+            `INSERT INTO gpu_media_assets (id, tenant_id, mime_type, original_name, size_bytes, sha256, content, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (tenant_id, sha256) DO NOTHING
+             RETURNING id`,
+            [assetId, tenantId, parsed.mimeType, undefined, parsed.content.length, sha256, parsed.content, input.createdBy || null],
+          );
+          if (inserted.rows[0]) {
+            await reserveMediaBytes(client, tenantId, parsed.content.length);
+          } else {
+            const resolved = await client.query<{ id: string }>(
+              "SELECT id FROM gpu_media_assets WHERE tenant_id = $1 AND sha256 = $2 LIMIT 1",
+              [tenantId, sha256],
+            );
+            assetId = resolved.rows[0]?.id || assetId;
+          }
+        }
       }
       assetIds.push(assetId);
       await client.query(
-        `INSERT INTO gpu_media_relations (asset_id, entity_type, entity_id, relation_role, sort_order)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO gpu_media_relations (tenant_id, asset_id, entity_type, entity_id, relation_role, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (asset_id, entity_type, entity_id, relation_role)
          DO UPDATE SET sort_order = EXCLUDED.sort_order`,
-        [assetId, entityType, entityId, relationRole, index],
+        [tenantId, assetId, entityType, entityId, relationRole, index],
       );
     }
     await client.query(
       `DELETE FROM gpu_media_relations
-       WHERE entity_type = $1 AND entity_id = $2 AND relation_role = $3
-         AND NOT (asset_id = ANY($4::text[]))`,
-      [entityType, entityId, relationRole, assetIds],
+       WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3 AND relation_role = $4
+         AND NOT (asset_id = ANY($5::text[]))`,
+      [tenantId, entityType, entityId, relationRole, assetIds],
     );
     return assetIds.map(imageUrlForAsset);
   });
 }
 
-export async function listEntityImages(entityType: string, entityId: string, relationRole?: string): Promise<MediaRelation[]> {
+export async function listEntityImages(entityType: string, entityId: string, relationRole?: string, tenantId?: string): Promise<MediaRelation[]> {
+  const scope = tenantScope(tenantId);
   validateEntityPart(entityType, "实体类型");
   validateEntityPart(entityId, "实体编号");
   const role = relationRole?.trim();
@@ -191,21 +246,22 @@ export async function listEntityImages(entityType: string, entityId: string, rel
       `SELECT a.id, a.mime_type, a.original_name, a.size_bytes, a.width, a.height, a.sha256,
               a.created_by, a.created_at, r.entity_type, r.entity_id, r.relation_role, r.sort_order
        FROM gpu_media_relations r
-       JOIN gpu_media_assets a ON a.id = r.asset_id
-       WHERE r.entity_type = $1 AND r.entity_id = $2 ${role ? "AND r.relation_role = $3" : ""}
+       JOIN gpu_media_assets a ON a.id = r.asset_id AND a.tenant_id = r.tenant_id
+       WHERE r.tenant_id = $1 AND r.entity_type = $2 AND r.entity_id = $3 ${role ? "AND r.relation_role = $4" : ""}
        ORDER BY r.sort_order ASC, r.created_at ASC`,
-      role ? [entityType, entityId, role] : [entityType, entityId],
+      role ? [scope, entityType, entityId, role] : [scope, entityType, entityId],
     );
     return result.rows.map((row) => ({ ...mapAsset(row), entityType: row.entity_type, entityId: row.entity_id, relationRole: row.relation_role, sortOrder: row.sort_order }));
   });
 }
 
-export async function getMediaAsset(id: string) {
+export async function getMediaAsset(id: string, tenantId?: string) {
+  const scope = tenantScope(tenantId);
   validateEntityPart(id, "图片编号");
   return withDatabaseTransaction(async (client) => {
     const result = await client.query<{ id: string; mime_type: string; content: Buffer }>(
-      "SELECT id, mime_type, content FROM gpu_media_assets WHERE id = $1",
-      [id],
+      "SELECT id, mime_type, content FROM gpu_media_assets WHERE id = $1 AND tenant_id = $2",
+      [id, scope],
     );
     return result.rows[0] || null;
   });

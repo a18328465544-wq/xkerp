@@ -19,6 +19,7 @@ test("CRM account query paginates and filters by keyword, role, owner and status
   assert.match(query.where, /ILIKE \$1/);
   assert.match(query.where, /a\.primary_qq/);
   assert.match(query.where, /role_filter\.role = \$2/);
+  assert.match(query.where, /role_filter\.tenant_id = a\.tenant_id/);
   assert.match(query.listSql, /LIMIT \$5 OFFSET \$6/);
 });
 

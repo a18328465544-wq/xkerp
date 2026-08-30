@@ -68,7 +68,9 @@ test("backup helper selects the newest non-empty dump and reports age", () => {
 });
 
 test("preflight index contract remains aligned with the operational projection", () => {
-  assert.equal(REQUIRED_OPERATIONAL_INDEXES.length, 16);
+  assert.equal(REQUIRED_OPERATIONAL_INDEXES.length, 19);
   assert.ok(REQUIRED_OPERATIONAL_INDEXES.includes("gpu_inventory_op_sn_idx"));
   assert.ok(REQUIRED_OPERATIONAL_INDEXES.includes("gpu_finance_op_status_time_idx"));
+  assert.ok(REQUIRED_OPERATIONAL_INDEXES.includes("gpu_idempotency_keys_expiry_idx"));
+  assert.ok(REQUIRED_OPERATIONAL_INDEXES.includes("gpu_inventory_reservations_active_idx"));
 });

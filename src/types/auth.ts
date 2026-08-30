@@ -19,6 +19,10 @@ export interface SystemUserAccount {
   displayName: string;
   role: StoreRole;
   enabled: boolean;
+  /** Commercial control-plane scope. Optional for legacy imported accounts. */
+  tenantId?: string;
+  storeId?: string;
+  membershipStatus?: "active" | "invited" | "deactivated";
   permissionOverrides?: AccountPermissionOverrides;
   lastLoginTime?: string;
   remarks?: string;

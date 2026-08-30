@@ -73,6 +73,8 @@ import { generateEntityId, nextDailyDocumentSequence, nextProductTemplateId } fr
 import { calculateCommission, DEFAULT_COMMISSION_RULES, normalizeCommissionRules, type CommissionRulesPatch } from "../src/utils/commissionRules.ts";
 import { appendCommissionAdjustment, commissionStatus, effectiveCommissionAmount } from "./commissionRecords.ts";
 import { findExistingReturnFinancialArtifacts, inspectReturnFinancialOrder, RETURN_CUSTOMER_REFUND_TYPE, RETURN_PURCHASE_REFUND_TYPE } from "./returnFinanceInvariants.ts";
+import { getCurrentTenantContext } from "./requestTenantContext.ts";
+import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
 
 export interface AppState {
   products: ProductTemplate[];
@@ -108,6 +110,9 @@ export interface StoreActionContext {
   userId?: string;
   role?: StoreRole;
   actor?: string;
+  tenantId?: string;
+  storeId?: string;
+  requestId?: string;
 }
 
 const PRODUCT_STOCK_EXCLUDED_STATUSES = new Set<CardStatus>(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
@@ -237,6 +242,10 @@ type ProductIdentityLike = {
   productId?: string | null;
   name?: string | null;
   productName?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  version?: string | null;
+  vram?: string | null;
 };
 
 type InventoryProductStats = {
@@ -799,7 +808,12 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       throw new ConflictError(contact ? `联系方式已被同行【${duplicate.name}】使用，请勿重复建档` : `同行【${name}】缺少联系方式且已存在，请补充联系方式后再建档`);
     }
   };
-  state.customPermissions = normalizePermissions(state.customPermissions);
+  // Older commercial settings rows may contain the JSONB object default (`{}`)
+  // instead of the PermissionSettings array.  Preserve role defaults when a
+  // malformed row is encountered so a legacy tenant cannot take the API down.
+  state.customPermissions = normalizePermissions(
+    Array.isArray(state.customPermissions) ? state.customPermissions : [],
+  );
 
   const addLog = (user: string, module: string, type: string, target: string, beforeVal?: string, afterVal?: string) => {
     syncProductCurrentStock(state);
@@ -812,6 +826,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       target,
       beforeVal,
       afterVal,
+      requestId: context.requestId,
+      tenantId: context.tenantId,
+      storeId: context.storeId,
     };
     state.logs = [newLog, ...state.logs].slice(0, MAX_LOG_ENTRIES);
     return newLog;
@@ -4942,6 +4959,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       ...filters,
       activeOnly: filters.activeOnly ?? !filters.includeSold,
     };
+    const productIdentityIndex = createProductIdentityIndex(state.products);
+    const pendingNeedByProduct = buildPendingSalesNeedByProduct(state, productIdentityIndex);
     const rows = new Map<string, InventorySummaryRow>();
     state.inventory
       .filter((card) => matchesInventoryListFilters(card, summaryFilters))
@@ -4950,6 +4969,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         const key = [category, card.productName, card.brand, card.model, card.version, card.vram].join("::");
         const existing = rows.get(key) || {
           key,
+          productId: card.productId,
           productName: card.productName,
           category,
           brand: card.brand,
@@ -4960,6 +4980,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
           warehouseLocations: [],
           totalCount: 0,
           availableCount: 0,
+          reservedCount: 0,
+          availableForSalesCount: 0,
           pendingCount: 0,
           lockedCount: 0,
           soldCount: 0,
@@ -4988,7 +5010,24 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         existing.avgEstSell = Math.round(existing.totalEstSell / existing.totalCount);
         rows.set(key, existing);
       });
-    return Array.from(rows.values()).sort((a, b) => b.totalCount - a.totalCount || a.productName.localeCompare(b.productName, "zh-Hans-CN"));
+    return Array.from(rows.values())
+      .map((row) => {
+        const identityKey = productIdentityKey({
+          productId: row.productId,
+          productName: row.productName,
+          brand: row.brand,
+          model: row.model,
+          version: row.version,
+          vram: row.vram,
+        }, productIdentityIndex);
+        const reservedCount = pendingNeedByProduct.get(identityKey) || 0;
+        return {
+          ...row,
+          reservedCount,
+          availableForSalesCount: Math.max(0, row.availableCount - reservedCount),
+        };
+      })
+      .sort((a, b) => b.totalCount - a.totalCount || a.productName.localeCompare(b.productName, "zh-Hans-CN"));
   };
 
   const importInventoryRows = (rows: InventoryImportRow[], handler: string = getActiveRole()) => {
@@ -6040,6 +6079,9 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       displayName,
       role: payload.role,
       enabled: payload.enabled ?? true,
+      tenantId: context.tenantId || payload.tenantId || DEFAULT_TENANT_ID,
+      storeId: context.storeId || payload.storeId || DEFAULT_STORE_ID,
+      membershipStatus: "active",
       permissionOverrides: payload.permissionOverrides || {},
       remarks: payload.remarks,
     };
@@ -6067,9 +6109,13 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     if (nextUsername && state.systemUsers.some((item) => item.id !== id && item.username.toLowerCase() === nextUsername.toLowerCase())) {
       throw new ConflictError("账号已存在");
     }
+    const { tenantId: _tenantId, storeId: _storeId, membershipStatus: _membershipStatus, ...safePayload } = payload;
     const updated: SystemUserAccount = {
       ...existing,
-      ...payload,
+      ...safePayload,
+      tenantId: existing.tenantId || DEFAULT_TENANT_ID,
+      storeId: existing.storeId || DEFAULT_STORE_ID,
+      membershipStatus: payload.enabled === false ? "deactivated" : payload.enabled === true ? "active" : existing.membershipStatus || "active",
       username: nextUsername || existing.username,
       displayName: nextDisplayName || existing.displayName,
       password: nextPassword ? hashPassword(nextPassword) : existing.password,

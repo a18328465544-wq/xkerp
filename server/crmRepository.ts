@@ -1,6 +1,7 @@
 import { withDatabaseTransaction } from "./db.ts";
 
 export type CrmAccountPageFilters = {
+  tenantId?: string;
   page?: number;
   pageSize?: number;
   keyword?: string;
@@ -56,6 +57,12 @@ export function buildCrmAccountsPageQuery(filters: CrmAccountPageFilters = {}) {
   const pageSize = Math.min(200, pageValue(filters.pageSize, 30));
   const values: unknown[] = [];
   const clauses = ["a.deleted_at IS NULL"];
+  const tenantId = filters.tenantId?.trim();
+  const tenantPlaceholder = tenantId ? "$1" : undefined;
+  if (tenantId) {
+    values.push(tenantId);
+    clauses.push(`a.tenant_id = ${tenantPlaceholder}`);
+  }
   const bind = (value: unknown) => {
     values.push(value);
     return `$${values.length}`;
@@ -65,11 +72,15 @@ export function buildCrmAccountsPageQuery(filters: CrmAccountPageFilters = {}) {
     clauses.push(`CONCAT_WS(' ', a.id, a.display_name, a.primary_phone, a.primary_wechat, a.primary_qq, a.city, a.company_name, a.owner_id, a.source, c.data->>'name', v.data->>'name', v.data->>'contactPerson', v.data->>'phone') ILIKE ${bind(`%${keyword}%`)}`);
   }
   if (filters.role?.trim()) {
-    clauses.push(`EXISTS (SELECT 1 FROM gpu_crm_account_roles role_filter WHERE role_filter.account_id = a.id AND role_filter.role = ${bind(filters.role.trim())})`);
+    clauses.push(`EXISTS (SELECT 1 FROM gpu_crm_account_roles role_filter WHERE role_filter.account_id = a.id AND role_filter.tenant_id = a.tenant_id AND role_filter.role = ${bind(filters.role.trim())})`);
   }
   if (filters.ownerId?.trim()) clauses.push(`a.owner_id = ${bind(filters.ownerId.trim())}`);
   if (filters.status?.trim()) clauses.push(`a.status = ${bind(filters.status.trim())}`);
   const where = `WHERE ${clauses.join(" AND ")}`;
+  const roleScope = tenantPlaceholder ? `WHERE tenant_id = ${tenantPlaceholder}` : "";
+  const contactScope = tenantPlaceholder ? `WHERE tenant_id = ${tenantPlaceholder}` : "";
+  const customerScope = tenantId ? ` AND c.tenant_id = ${tenantPlaceholder}` : "";
+  const vendorScope = tenantId ? ` AND v.tenant_id = ${tenantPlaceholder}` : "";
   return {
     page,
     pageSize,
@@ -100,15 +111,17 @@ export function buildCrmAccountsPageQuery(filters: CrmAccountPageFilters = {}) {
       LEFT JOIN (
         SELECT account_id, ARRAY_AGG(role ORDER BY role) AS roles
         FROM gpu_crm_account_roles
+        ${roleScope}
         GROUP BY account_id
       ) role_summary ON role_summary.account_id = a.id
       LEFT JOIN (
         SELECT account_id, COUNT(*)::int AS contact_count
         FROM gpu_crm_contacts
+        ${contactScope}
         GROUP BY account_id
       ) contact_summary ON contact_summary.account_id = a.id
-      LEFT JOIN gpu_customers c ON c.id = a.legacy_customer_id
-      LEFT JOIN gpu_vendors v ON v.id = a.legacy_vendor_id
+      LEFT JOIN gpu_customers c ON c.id = a.legacy_customer_id${customerScope}
+      LEFT JOIN gpu_vendors v ON v.id = a.legacy_vendor_id${vendorScope}
       ${where}
       ORDER BY a.updated_at DESC, a.id ASC
       LIMIT $${values.length + 1} OFFSET $${values.length + 2}
@@ -116,8 +129,8 @@ export function buildCrmAccountsPageQuery(filters: CrmAccountPageFilters = {}) {
     countSql: `
       SELECT COUNT(*)::text AS total
       FROM gpu_crm_accounts a
-      LEFT JOIN gpu_customers c ON c.id = a.legacy_customer_id
-      LEFT JOIN gpu_vendors v ON v.id = a.legacy_vendor_id
+      LEFT JOIN gpu_customers c ON c.id = a.legacy_customer_id${customerScope}
+      LEFT JOIN gpu_vendors v ON v.id = a.legacy_vendor_id${vendorScope}
       ${where}
     `,
   };
@@ -177,10 +190,12 @@ export async function listCrmAccounts(filters: CrmAccountPageFilters = {}): Prom
   });
 }
 
-export async function listCrmTimeline(accountId: string, options: { page?: number; pageSize?: number } = {}) {
+export async function listCrmTimeline(accountId: string, options: { page?: number; pageSize?: number; tenantId?: string } = {}) {
   const page = pageValue(options.page, 1);
   const pageSize = Math.min(200, pageValue(options.pageSize, 50));
   return withDatabaseTransaction(async (client) => {
+    const values: unknown[] = [accountId];
+    const tenantClause = options.tenantId?.trim() ? ` AND tenant_id = $${values.push(options.tenantId.trim())}` : "";
     const rows = await client.query<{
       id: string;
       event_type: string;
@@ -193,14 +208,16 @@ export async function listCrmTimeline(accountId: string, options: { page?: numbe
     }>(
       `SELECT id, event_type, source_type, source_id, summary, payload, actor_id, occurred_at
        FROM gpu_crm_timeline_events
-       WHERE account_id = $1
+       WHERE account_id = $1${tenantClause}
        ORDER BY occurred_at DESC, id DESC
-       LIMIT $2 OFFSET $3`,
-      [accountId, pageSize, (page - 1) * pageSize],
+       LIMIT $${values.push(pageSize)} OFFSET $${values.push((page - 1) * pageSize)}`,
+      values,
     );
+    const countValues: unknown[] = [accountId];
+    const countTenantClause = options.tenantId?.trim() ? ` AND tenant_id = $${countValues.push(options.tenantId.trim())}` : "";
     const count = await client.query<{ total: string }>(
-      "SELECT COUNT(*)::text AS total FROM gpu_crm_timeline_events WHERE account_id = $1",
-      [accountId],
+      `SELECT COUNT(*)::text AS total FROM gpu_crm_timeline_events WHERE account_id = $1${countTenantClause}`,
+      countValues,
     );
     const data: CrmTimelineItem[] = rows.rows.map((row) => ({
       id: row.id,

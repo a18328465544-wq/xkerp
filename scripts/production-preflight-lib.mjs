@@ -21,6 +21,9 @@ export const REQUIRED_OPERATIONAL_INDEXES = [
   "gpu_finance_op_status_time_idx",
   "gpu_return_op_type_status_idx",
   "gpu_return_op_related_doc_idx",
+  "gpu_idempotency_keys_expiry_idx",
+  "gpu_inventory_reservations_active_idx",
+  "gpu_inventory_reservations_invoice_idx",
 ];
 
 const PLACEHOLDER_PATTERN = /change[_-]?me|replace-with|example|placeholder/i;

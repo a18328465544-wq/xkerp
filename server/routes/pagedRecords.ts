@@ -12,6 +12,7 @@ import {AppError} from "../errors.ts";
 import type {CommissionMode, PurchaseCommissionRecord, PurchaseInvoice, SalesInvoice} from "../../src/types.ts";
 import {canAccessCommissionMode, projectCommissionRecord} from "../commissionRecords.ts";
 import {commissionListQueryDto, parseHttpDto} from "../httpDto.ts";
+import type {AuthenticatedRequest} from "../httpAuth.ts";
 
 type VisibilityPermissions = {showCost?: boolean; showProfit?: boolean; allowedMenus: string[]};
 
@@ -34,7 +35,10 @@ function assertDateRange(dateStart: string, dateEnd: string, label: string) {
 }
 
 function invoicePageFilters(req: Request) {
+  const authRequest = req as AuthenticatedRequest<unknown>;
   return {
+    tenantId: authRequest.tenantId,
+    storeId: authRequest.storeId,
     page: Number(req.query.page), pageSize: Number(req.query.pageSize), keyword: String(req.query.keyword || "").trim(),
     sourceType: String(req.query.sourceType || ""), channel: String(req.query.channel || ""), paymentStatus: String(req.query.paymentStatus || ""),
     outboundStatus: String(req.query.outboundStatus || ""), dateStart: String(req.query.dateStart || ""), dateEnd: String(req.query.dateEnd || ""),
@@ -43,7 +47,10 @@ function invoicePageFilters(req: Request) {
 }
 
 function paymentPageFilters(req: Request) {
+  const authRequest = req as AuthenticatedRequest<unknown>;
   return {
+    tenantId: authRequest.tenantId,
+    storeId: authRequest.storeId,
     page: Number(req.query.page), pageSize: Number(req.query.pageSize), keyword: String(req.query.keyword || "").trim(),
     accountId: String(req.query.accountId || ""), handler: String(req.query.handler || ""), businessType: String(req.query.businessType || ""),
     dateStart: String(req.query.startDate || req.query.dateStart || ""), dateEnd: String(req.query.endDate || req.query.dateEnd || ""),
@@ -116,6 +123,8 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
           : requestedSortKey;
       const page = await queryCommissionPage<PurchaseCommissionRecord>({
         ...query,
+        tenantId: (req as AuthenticatedRequest<unknown>).tenantId,
+        storeId: (req as AuthenticatedRequest<unknown>).storeId,
         sortKey,
         status: query.status || undefined,
         handler: query.handler || undefined,
@@ -139,6 +148,8 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
       const dateEnd = String(req.query.dateEnd || "");
       assertDateRange(dateStart, dateEnd, "账户流水");
       res.json(await querySettlementLedgerPage({
+        tenantId: (req as AuthenticatedRequest<unknown>).tenantId,
+        storeId: (req as AuthenticatedRequest<unknown>).storeId,
         page: Number(req.query.page), pageSize: Number(req.query.pageSize), keyword: String(req.query.keyword || "").trim().toLocaleLowerCase(),
         accountId: String(req.query.accountId || ""), handler: String(req.query.handler || ""), businessType: String(req.query.businessType || ""),
         direction: String(req.query.direction || ""), relatedDocNo: String(req.query.relatedDocNo || ""), customerName: String(req.query.customerName || ""),
@@ -168,7 +179,7 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
       const dateStart = String(req.query.dateStart || req.query.startDate || "");
       const dateEnd = String(req.query.dateEnd || req.query.endDate || "");
       assertDateRange(dateStart, dateEnd, "利润");
-      res.json(await queryFinanceProfitOtherFlows({dateStart, dateEnd}));
+      res.json(await queryFinanceProfitOtherFlows({tenantId: (req as AuthenticatedRequest<unknown>).tenantId, storeId: (req as AuthenticatedRequest<unknown>).storeId, dateStart, dateEnd}));
     } catch (error) { next(error); }
   });
 }

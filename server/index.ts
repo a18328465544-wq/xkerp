@@ -5,15 +5,14 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, createManualBackup, dataFilePath, deleteAiInsightAction, findInventoryRecord, findInventoryRecordBySn, getStateRevision, listAiInsightActions, listBackups, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
+import { acquireAuthWriteLock, acquireStateWriteLock, appendInspectionVersionInTransaction, createDatabaseSessionStore, dataFilePath, deleteAiInsightAction, findActiveTenantMembership, findInventoryRecord, findInventoryRecordBySn, findSystemUserById, findSystemUserByUsername, getStateRevision, listAiInsightActions, listInspectionVersions, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
-import { buildExport } from "./export.ts";
 import { notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
 import { getDashboardAiInsights } from "./aiInsights.ts";
 import { runCopilotTurn, type CopilotMessage } from "./aiCopilot.ts";
 import type { CopilotContext } from "../src/utils/copilotTools.ts";
-import { createSessionManager, sanitizeUserAccount } from "./security.ts";
+import { createSessionManager } from "./security.ts";
 import { assertPurchaseUpdateScope } from "./purchaseEditAccess.ts";
 import { createRequireAuth, createRequireCsrf, createRequireOpenApiToken } from "./httpAuth.ts";
 import { AppError, NotFoundError, toDomainError, UnauthorizedError } from "./errors.ts";
@@ -40,18 +39,11 @@ import {
   type StateDeletePatch,
   type StateMergePatch,
 } from "./statePatch.ts";
-import { runStateCommand } from "./stateCommand.ts";
-import {
-  aggregateProductLedgerRows,
-  findSelectedLedgerCard,
-  isInventoryCardLinkedToPurchase,
-  ledgerItemMatchesSelectedInventoryCards,
-} from "./productLedger.ts";
+import { runStateCommand, type StateCommandTransactionHook } from "./stateCommand.ts";
 import { storeDate, storeDateDiffDays, storeDateTime } from "../src/utils/storeTime.ts";
-import {addDateDays, startOfMonth} from "../src/lib/dateRangePickerUtils.ts";
+import { addDateDays, startOfMonth } from "../src/lib/dateRangePickerUtils.ts";
 import { matchesKeyword, normalizeSearchText } from "../src/utils/search.ts";
 import { isInventoryLinkedToAssembly, isInventoryLinkedToPurchase } from "../src/utils/inventoryRelations.ts";
-import { createProductIdentityIndex, sameProductIdentity } from "../src/utils/productIdentity.ts";
 import { listCrmAccounts, listCrmTimeline } from "./crmRepository.ts";
 import { ensureCrmCustomerAccount, upsertCrmCustomerAccount } from "./crmAccountRepository.ts";
 import { createSerializedMutationRunner, isMutationAbortedError } from "./mutationQueue.ts";
@@ -88,6 +80,17 @@ import { getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, M
 import {clearSessionCookie, createCsrfToken, setSessionCookie} from "./authCookies.ts";
 import {assertStateRuntimeMode} from "./runtimeConfig.ts";
 import {registerInventoryJourneyRoutes} from "./routes/inventoryJourney.ts";
+import { registerSalesProductCandidateRoutes } from "./routes/salesProductCandidates.ts";
+import { registerSalesCustomerRoutes } from "./routes/salesCustomers.ts";
+import { registerProductLedgerRoutes } from "./routes/productLedger.ts";
+import {createDomainSnapshotRefresh} from "./routes/domainSnapshotRefresh.ts";
+import { registerCommercialRoutes } from "./routes/commercial.ts";
+import { registerBackupRoutes } from "./routes/backup.ts";
+import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.ts";
+import { registerFinanceReadModelRoutes } from "./routes/financeReadModels.ts";
+import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
+import { createStateProxy, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
+import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
 import {
   inspectionCreateDto,
   inspectionUpdateDto,
@@ -111,7 +114,6 @@ import type {
   MarketQuote,
   PaymentInRecord,
   PaymentOutRecord,
-  ProductLedgerRow,
   ProductTemplate,
   SalesInvoice,
   SystemUserAccount,
@@ -163,7 +165,7 @@ const openApiRateLimiter = rateLimit({
 // Keep module import side-effect free with respect to PostgreSQL. The first request initializes
 // the state, which keeps HTTP tests and app composition independent from a database connection
 // at import time.
-let state!: AppState;
+const state = createStateProxy<AppState>();
 let stateRevision = 0;
 let stateReady: Promise<void> | undefined;
 const sessions = createSessionManager(createDatabaseSessionStore(), {cleanupIntervalMs: Number(process.env.SESSION_CLEANUP_INTERVAL_MS || 15 * 60 * 1_000)});
@@ -173,12 +175,14 @@ type AuthRequest = express.Request & {
   authUser?: SystemUserAccount;
   requestId?: string;
   requestStartedAt?: number;
+  tenantId?: string;
+  storeId?: string;
 };
 async function ensureStateReady() {
   if (!stateReady) {
     stateReady = (async () => {
       if (process.env.NODE_ENV === "production") assertStateRuntimeMode();
-      state = await loadState();
+      replaceCurrentState(await loadState());
       stateRevision = await getStateRevision();
     })().catch((error) => {
       stateReady = undefined;
@@ -221,7 +225,6 @@ function createMutationRequestSignal(req: express.Request, res: express.Response
     abort();
     dispose();
   };
-
   req.once("aborted", abort);
   res.once("finish", finished);
   res.once("close", closed);
@@ -238,7 +241,7 @@ async function withStateMutation<T>(req: AuthRequest | undefined, res: express.R
       // here so every mutation calculates from the committed snapshot it actually owns.
       await reloadStateFromDatabase();
       if (req?.authUser) {
-        const freshUser = applyAuthenticatedUser(req.authUser.id);
+        const freshUser = await applyAuthenticatedUser(req.authUser.id, { tenantId: req.tenantId });
         if (!freshUser) {
           await sessions.revoke(req.authToken);
           throw new UnauthorizedError("账号已停用或不存在");
@@ -258,8 +261,19 @@ async function withAuthMutation<T>(req: AuthRequest, res: express.Response, oper
     return await runSerializedAuthMutation(async () => {
       // Login/logout only need these two collections. Refresh them while holding the
       // auth lock so two processes cannot calculate audit/account writes from stale rows.
-      state = await loadStateCollections(state, ["systemUsers", "logs"]);
-      return operation();
+      const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
+      // A tenant member may share a username with another tenant.  The optional
+      // tenantId is therefore used only as a lookup scope; it never grants access
+      // by itself because the session still requires an active membership below.
+      const requestedTenantId = typeof req.body?.tenantId === "string" ? req.body.tenantId.trim() : undefined;
+      const candidate = username ? await findSystemUserByUsername(username, requestedTenantId) : null;
+      const tenantId = requestedTenantId || candidate?.tenantId || req.tenantId || DEFAULT_TENANT_ID;
+      const storeId = candidate?.storeId || req.storeId || DEFAULT_STORE_ID;
+      const baseState = getFallbackState<AppState>() || state;
+      const authState = tenantId === DEFAULT_TENANT_ID
+        ? await loadStateCollections(baseState, ["systemUsers", "logs"], tenantId, storeId)
+        : await loadState(tenantId, storeId);
+      return runTenantContext({ tenantId, storeId, state: authState }, operation);
     }, { signal: requestSignal.signal });
   } finally {
     requestSignal.dispose();
@@ -340,7 +354,15 @@ function requireApiAuthentication(req: express.Request, res: express.Response, n
     next();
     return;
   }
-  requireAuth(req as AuthRequest, res, next);
+  requireAuth(req as AuthRequest, res, () => {
+    const authRequest = req as AuthRequest;
+    const tenantId = authRequest.tenantId || authRequest.authUser?.tenantId || DEFAULT_TENANT_ID;
+    const storeId = authRequest.storeId || authRequest.authUser?.storeId || DEFAULT_STORE_ID;
+    void assertCommercialTenantActive(tenantId)
+      .then(() => loadState(tenantId, storeId))
+      .then((tenantState) => runTenantContext({ tenantId, storeId, state: tenantState }, next))
+      .catch(next);
+  });
 }
 
 app.use(requireApiAuthentication);
@@ -349,7 +371,13 @@ app.use(createRequireCsrf({onDenied: logSecurityDenial}));
 function actions(req?: AuthRequest, context?: StoreActionContext) {
   const storeActions = createStoreActions(
     state,
-    req?.authUser ? { userId: req.authUser.id, role: req.authUser.role } : context,
+    req?.authUser ? {
+      userId: req.authUser.id,
+      role: req.authUser.role,
+      tenantId: req.tenantId || req.authUser.tenantId,
+      storeId: req.storeId || req.authUser.storeId,
+      requestId: req.requestId,
+    } : context,
   );
   return new Proxy(storeActions, {
     get(target, property, receiver) {
@@ -377,7 +405,7 @@ async function persist<T>(result: T, keys?: StateCollectionKey[] | null) {
   } else {
     await saveState(state);
   }
-  state = await loadState();
+  replaceCurrentState(await loadState());
   return result;
 }
 
@@ -385,8 +413,34 @@ async function persistRequest<T>(req: AuthRequest, result: T) {
   return persist(result, getPersistenceKeysForRequest(req.method, req.path));
 }
 
+async function persistUserWithMembership(req: AuthRequest, user: SystemUserAccount) {
+  // Store the canonical in-memory record rather than the sanitized response.
+  // `createUser`/`updateUser` intentionally strip the password from their return
+  // value; persisting that response would silently erase the credential and make
+  // the next login fail.  The membership transaction still receives the safe
+  // projection below, while the state record retains the hashed password.
+  const persistedUser = state.systemUsers.find((item) => item.id === user.id) || user;
+  await saveStateRecords(
+    [
+      { key: "systemUsers", items: [persistedUser] },
+      { key: "logs", items: state.logs.slice(0, 1) },
+    ],
+    (client) => upsertCommercialMembershipInTransaction(client, {
+      tenantId: user.tenantId,
+      userId: user.id,
+      storeId: user.storeId,
+      role: user.role,
+      status: user.enabled ? "active" : "deactivated",
+      permissions: user.permissionOverrides as Record<string, unknown> | undefined,
+      invitedBy: req.authUser?.id,
+    }),
+    req.tenantId,
+  );
+  return user;
+}
+
 async function reloadStateFromDatabase() {
-  state = await loadState();
+  replaceCurrentState(await loadState());
   stateRevision = await getStateRevision();
 }
 
@@ -395,12 +449,17 @@ async function reloadRequestStateFromDatabase(req: AuthRequest) {
   // Do not turn that lightweight response into a full database read by loading audit/ledger
   // histories first; those collections have their own on-demand endpoints.
   if (req.path === "/api/state" && req.query.mode === "initial") {
-    state = await loadStateCollections(state, INITIAL_STATE_RELOAD_KEYS);
+    replaceCurrentState(await loadStateCollections(state, INITIAL_STATE_RELOAD_KEYS));
     stateRevision = await getStateRevision();
     return;
   }
   const keys = getReloadKeysForRequest(req.method, req.path);
-  state = keys === null ? await loadState() : await loadStateCollections(state, keys);
+  // PostgreSQL-backed list endpoints return an empty key list because they
+  // query their read model directly. Their request tenant state was already
+  // loaded by authentication; replacing it with the shared state proxy here
+  // would create a self-referencing proxy and overflow on the next read.
+  if (keys === null) replaceCurrentState(await loadState());
+  else if (keys.length) replaceCurrentState(await loadStateCollections(state, keys));
   stateRevision = await getStateRevision();
 }
 
@@ -420,16 +479,6 @@ function publicCollectionForUser(key: StateCollectionKey, user?: SystemUserAccou
   return getPublicCollection(state, key, user);
 }
 
-function validDateKey(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
-function dateRangeDays(startDate: string, endDate: string) {
-  return Math.round((new Date(`${endDate}T00:00:00Z`).getTime() - new Date(`${startDate}T00:00:00Z`).getTime()) / 86400000) + 1;
-}
-
 function publicStatePatch(req: AuthRequest, keys: StateCollectionKey[]) {
   return Object.fromEntries(
     Array.from(new Set(keys))
@@ -440,6 +489,61 @@ function publicStatePatch(req: AuthRequest, keys: StateCollectionKey[]) {
 
 function okMerge(data: unknown, stateMerge: StateMergePatch, stateDelete: StateDeletePatch = {}) {
   return statePatchResponse(data, stateMerge, stateDelete);
+}
+
+type IdempotencyContext = {
+  request: {
+    tenantId: string;
+    route: string;
+    key: string;
+    requestHash: string;
+  };
+  replay?: {statusCode: number; response: unknown};
+};
+
+function idempotencyContext(req: AuthRequest): IdempotencyContext | null {
+  const raw = req.headers["idempotency-key"];
+  const key = String(Array.isArray(raw) ? raw[0] || "" : raw || "").trim();
+  if (!key) return null;
+  return {
+    request: {
+      tenantId: req.tenantId || req.authUser?.tenantId || DEFAULT_TENANT_ID,
+      route: (req.originalUrl || req.path).split("?", 1)[0] || req.path,
+      key,
+      requestHash: hashIdempotencyPayload(req.body ?? null),
+    },
+  };
+}
+
+async function claimMutationIdempotency(req: AuthRequest) {
+  const context = idempotencyContext(req);
+  if (!context) return null;
+  const claim = await claimIdempotencyKey(context.request);
+  if (claim.replay) context.replay = {statusCode: claim.statusCode, response: claim.response};
+  return context;
+}
+
+async function releaseMutationIdempotency(context: IdempotencyContext | null) {
+  if (!context || context.replay) return;
+  await releaseIdempotencyKey(context.request).catch(() => undefined);
+}
+
+function transactionHookWithIdempotency<T>(
+  context: IdempotencyContext | null,
+  statusCode: number,
+  hook?: (client: Parameters<StateCommandTransactionHook<T>>[0], data: T, patch?: {stateMerge: StateMergePatch; stateDelete?: StateDeletePatch}) => void | Promise<unknown>,
+) {
+  if (!context && !hook) return undefined;
+  return async (
+    client: Parameters<StateCommandTransactionHook<T>>[0],
+    data: T,
+    patch?: {stateMerge: StateMergePatch; stateDelete?: StateDeletePatch},
+  ) => {
+    await hook?.(client, data, patch);
+    if (context && patch) {
+      await completeIdempotencyKeyInTransaction(client, context.request, statusCode, okMerge(data, patch.stateMerge, patch.stateDelete || {}));
+    }
+  };
 }
 
 function deleteMerge(logs = state.logs.slice(0, 1)) {
@@ -870,6 +974,7 @@ async function persistEntityImages(
     : preferredField === "images" ? body.imageUrls : body.images;
   const values = Array.isArray(rawValues) ? rawValues : [];
   return replaceEntityImages({
+    tenantId: (req as AuthRequest).tenantId,
     entityType,
     entityId,
     relationRole,
@@ -1012,301 +1117,30 @@ function openInventoryItem(card: AppState["inventory"][number]) {
   };
 }
 
-function filterOpenInventory(req: express.Request) {
-  const keyword = String(req.query.keyword || req.query.search || "").trim().toLowerCase();
-  const status = String(req.query.status || "");
-  const category = String(req.query.category || "");
-  const warehouseLocation = String(req.query.warehouseLocation || "");
-  const includeSold = String(req.query.includeSold || "") === "true";
-  return state.inventory
-    .filter((card) => includeSold || card.status !== "已售出")
-    .filter((card) => !status || card.status === status)
-    .filter((card) => !category || category === "all" || (card.category || "显卡") === category)
-    .filter((card) => !warehouseLocation || card.warehouseLocation === warehouseLocation)
-    .filter((card) => {
-      return matchesKeyword([
-        card.id,
-        card.productId,
-        card.productName,
-        card.model,
-        card.brand,
-        card.version,
-        card.vram,
-        card.sn,
-        card.expressNo,
-        card.supplierName,
-        card.warehouseLocation,
-        card.remarks,
-      ], keyword);
-    })
-    .sort((a, b) => String(b.entryTime || "").localeCompare(String(a.entryTime || "")) || a.id.localeCompare(b.id));
-}
 
-const normalizedText = (value?: string | number | null) => normalizeSearchText(value);
-
-function inventoryProductKey(card: AppState["inventory"][number]) {
-  return [
-    card.category || "显卡",
-    card.productName,
-    card.brand,
-    card.model,
-    card.version,
-    card.vram,
-  ].join("::");
-}
-
-function productTemplateKey(product: AppState["products"][number]) {
-  return [
-    product.category || "显卡",
-    product.name,
-    product.brand,
-    product.model,
-    product.version,
-    product.vram,
-  ].join("::");
-}
-
-function buildProductLedger(req: AuthRequest) {
-  const productSkuId = String(req.query.productSkuId || "").trim();
-  const page = Math.max(1, Number(req.query.page || 1) || 1);
-  const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize || 30) || 30));
-  const documentNo = String(req.query.documentNo || "").trim();
-  const createdBy = String(req.query.createdBy || "").trim();
-  const documentType = String(req.query.documentType || "").trim();
-  const startDate = String(req.query.startDate || "").trim();
-  const endDate = String(req.query.endDate || "").trim();
-  const canShowCost = getPermissionsForUser(req.authUser).showCost;
-
-  const productIdentityIndex = createProductIdentityIndex(state.products || []);
-  const selectedProduct = (state.products || []).find((product) =>
-    product.id === productSkuId || productTemplateKey(product) === productSkuId
-  );
-
-  const matchedCards = state.inventory.filter((card) =>
-    inventoryProductKey(card) === productSkuId ||
-    card.productId === productSkuId ||
-    card.id === productSkuId ||
-    Boolean(selectedProduct && sameProductIdentity(card, selectedProduct, productIdentityIndex))
-  );
-  const snSet = new Set(matchedCards.map((card) => normalizedText(card.sn)).filter(Boolean));
-
-  const itemMatches = (
-    item: { productId?: string; inventoryId?: string; sn?: string; productName?: string; partName?: string; model?: string; brand?: string; version?: string; vram?: string },
-    relatedDocumentNo?: string,
-  ) => ledgerItemMatchesSelectedInventoryCards(item, matchedCards, relatedDocumentNo, productIdentityIndex);
-
-  const cleanLedgerRemark = (value?: string | null) => {
-    const text = String(value || "").trim();
-    if (!text) return "";
-    const parts = text
-      .split(/[；;]/)
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .filter((part) =>
-        !part.startsWith("进货单:") &&
-        !part.startsWith("销售单:") &&
-        !part.startsWith("快递单号:") &&
-        !["显卡待检测入库", "其他配件待检测入库", "配件扫码确认入库"].includes(part)
-      );
-    return parts.join("；") || text;
-  };
-  const firstRemark = (...values: Array<string | undefined | null>) =>
-    values.map(cleanLedgerRemark).find(Boolean) || "";
-  const findLedgerCard = (
-    item: { productId?: string; inventoryId?: string; sn?: string; productName?: string; partName?: string; model?: string; brand?: string; version?: string; vram?: string },
-    documentNo?: string,
-  ) => findSelectedLedgerCard(item, matchedCards, documentNo, productIdentityIndex);
-  const getDocumentRemark = (invoice: { remarks?: string; outboundRemarks?: string; note?: string }, relatedCard?: CardInventory) =>
-    firstRemark(invoice.remarks, invoice.outboundRemarks, invoice.note, relatedCard?.remarks);
-
-  const rows: ProductLedgerRow[] = [];
-  const pushRow = (row: ProductLedgerRow) => rows.push(row);
-
-  state.purchaseInvoices.forEach((invoice) => {
-    const currentDocumentNo = invoice.invoiceNo || invoice.id;
-    invoice.items.filter((item) => itemMatches(item, currentDocumentNo)).forEach((item, index) => {
-      const relatedCard = findLedgerCard(item, currentDocumentNo);
-      const unitPrice = canShowCost ? Number(item.buyPrice || 0) : 0;
-      pushRow({
-        id: `purchase-${invoice.id}-${index}`,
-        storeName: "主门店",
-        operatedAt: invoice.date,
-        documentType: "采购入库",
-        documentNo: invoice.invoiceNo || invoice.id,
-        operationType: "增加",
-        customerName: "",
-        supplierName: invoice.supplierName || "",
-        quantity: 1,
-        unitPrice,
-        amount: unitPrice,
-        createdBy: invoice.handleBy || invoice.paymentHandler || "",
-        productRemarks: firstRemark(item.remarks, relatedCard?.remarks),
-        documentRemarks: getDocumentRemark(invoice, relatedCard),
-      });
-    });
-  });
-
-  state.salesInvoices.forEach((invoice) => {
-    const currentDocumentNo = invoice.invoiceNo || invoice.id;
-    invoice.items.filter((item) => itemMatches(item, currentDocumentNo)).forEach((item, index) => {
-      const relatedCard = findLedgerCard(item, currentDocumentNo);
-      const unitPrice = Number(item.sellPrice || 0);
-      pushRow({
-        id: `sales-${invoice.id}-${index}`,
-        storeName: "主门店",
-        operatedAt: invoice.outboundTime || invoice.date,
-        documentType: "销售出库",
-        documentNo: invoice.invoiceNo || invoice.id,
-        operationType: "减少",
-        customerName: invoice.customerName || "",
-        supplierName: "",
-        quantity: -1,
-        unitPrice,
-        amount: -unitPrice,
-        createdBy: invoice.outboundHandler || invoice.handleBy || invoice.paymentHandler || "",
-        productRemarks: firstRemark(item.remarks, relatedCard?.remarks, item.aftersalesTerms),
-        documentRemarks: getDocumentRemark(invoice, relatedCard),
-      });
-    });
-  });
-
-  state.returnOrders.filter((order) => order.status === "已完成").forEach((order) => {
-    const matches = itemMatches({
-      productId: order.productId,
-      inventoryId: order.sourceInventoryId,
-      sn: order.sn,
-      productName: order.productName,
-    }, order.relatedDocNo || order.returnNo || order.id);
-    if (!matches) return;
-    const isSalesReturn = order.type === "销售退货";
-    pushRow({
-      id: `return-${order.id}`,
-      storeName: "主门店",
-      operatedAt: order.completedAt || order.date,
-      documentType: order.type,
-      documentNo: order.returnNo || order.id,
-      operationType: isSalesReturn ? "增加" : "减少",
-      customerName: order.partyType === "customer" || isSalesReturn ? order.partyName || "" : "",
-      supplierName: order.partyType === "vendor" || !isSalesReturn ? order.partyName || "" : "",
-      quantity: isSalesReturn ? 1 : -1,
-      unitPrice: Number(order.amount || 0),
-      amount: isSalesReturn ? Number(order.amount || 0) : -Number(order.amount || 0),
-      createdBy: order.handler || "",
-      productRemarks: order.reason || "",
-      documentRemarks: order.remarks || "",
-    });
-  });
-
-  state.assemblyOperations.forEach((operation) => {
-    const time = operation.time;
-    if (operation.type === "拆卸" && operation.beforeSn && snSet.has(normalizedText(operation.beforeSn))) {
-      pushRow({
-        id: `assembly-before-${operation.id}`,
-        storeName: "主门店",
-        operatedAt: time,
-        documentType: "组装拆卸",
-        documentNo: operation.id,
-        operationType: "减少",
-        customerName: "",
-        supplierName: "",
-        quantity: -1,
-        unitPrice: 0,
-        amount: 0,
-        createdBy: operation.handler,
-        productRemarks: operation.beforeProductName || "",
-        documentRemarks: operation.remarks || "",
-      });
-    }
-    operation.afterParts.filter((part) => itemMatches(part, operation.id)).forEach((part, index) => {
-      const unitPrice = canShowCost ? Number(part.costPrice || 0) : 0;
-      pushRow({
-        id: `assembly-after-${operation.id}-${index}`,
-        storeName: "主门店",
-        operatedAt: time,
-        documentType: "组装拆卸",
-        documentNo: operation.id,
-        operationType: operation.type === "拆卸" ? "增加" : "减少",
-        customerName: "",
-        supplierName: "",
-        quantity: operation.type === "拆卸" ? 1 : -1,
-        unitPrice,
-        amount: operation.type === "拆卸" ? unitPrice : -unitPrice,
-        createdBy: operation.handler,
-        productRemarks: part.remarks || "",
-        documentRemarks: operation.remarks || "",
-      });
-    });
-    if (operation.type === "组装" && operation.afterSn && snSet.has(normalizedText(operation.afterSn))) {
-      pushRow({
-        id: `assembly-product-${operation.id}`,
-        storeName: "主门店",
-        operatedAt: time,
-        documentType: "组装拆卸",
-        documentNo: operation.id,
-        operationType: "增加",
-        customerName: "",
-        supplierName: "",
-        quantity: 1,
-        unitPrice: 0,
-        amount: 0,
-        createdBy: operation.handler,
-        productRemarks: operation.afterProductName || "",
-        documentRemarks: operation.remarks || "",
-      });
-    }
-  });
-
-  const purchaseDocumentNos = new Set(
-    state.purchaseInvoices.flatMap((invoice) => [invoice.invoiceNo, invoice.id]).filter(Boolean),
-  );
-  matchedCards
-    .filter((card) => !isInventoryCardLinkedToPurchase(card, purchaseDocumentNos))
-    .forEach((card) => {
-      const unitPrice = canShowCost ? Number(card.costPrice || 0) : 0;
-      pushRow({
-        id: `inventory-${card.id}`,
-        storeName: "主门店",
-        operatedAt: card.entryTime,
-        documentType: "其他入库",
-        documentNo: card.id,
-        operationType: "增加",
-        customerName: "",
-        supplierName: card.supplierName || "",
-        quantity: 1,
-        unitPrice,
-        amount: unitPrice,
-        createdBy: card.purchaseHandler || "",
-        productRemarks: firstRemark(card.remarks),
-        documentRemarks: firstRemark(card.remarks),
-      });
-    });
-
-  const filtered = aggregateProductLedgerRows(rows)
-    .filter((row) => matchesKeyword(row.documentNo, documentNo))
-    .filter((row) => matchesKeyword(row.createdBy, createdBy))
-    .filter((row) => !documentType || documentType === "全部类型" || row.documentType === documentType)
-    .filter((row) => !startDate || String(row.operatedAt || "").slice(0, 10) >= startDate)
-    .filter((row) => !endDate || String(row.operatedAt || "").slice(0, 10) <= endDate)
-    .sort((a, b) => String(b.operatedAt || "").localeCompare(String(a.operatedAt || "")) || b.id.localeCompare(a.id));
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-
+async function applyAuthenticatedUser(userId: string, session?: { tenantId?: string; storeId?: string }) {
+  const tenantId = session?.tenantId || DEFAULT_TENANT_ID;
+  // Always resolve the account inside the session tenant first. Falling back to
+  // the process snapshot is only a compatibility path for legacy in-memory
+  // tests; it must never allow a default-tenant row to authorize another tenant.
+  const persisted = await findSystemUserById(userId, tenantId)
+    || (tenantId === DEFAULT_TENANT_ID ? state.systemUsers.find((item) => item.id === userId) : undefined);
+  if (!persisted?.enabled) return null;
+  const membership = await findActiveTenantMembership(userId, tenantId, session?.storeId);
+  if (!membership) return null;
+  const membershipRole = ["老板", "店员", "检测员", "财务"].includes(membership.role)
+    ? membership.role as SystemUserAccount["role"]
+    : persisted.role;
   return {
-    rows: filtered.slice(start, start + pageSize),
-    total,
-    page: safePage,
-    pageSize,
-    totalPages,
+    ...persisted,
+    role: membershipRole,
+    permissionOverrides: membership.permissions && Object.keys(membership.permissions).length
+      ? { ...(persisted.permissionOverrides || {}), ...membership.permissions } as SystemUserAccount["permissionOverrides"]
+      : persisted.permissionOverrides,
+    tenantId,
+    storeId: membership.storeId,
+    membershipStatus: "active" as const,
   };
-}
-
-function applyAuthenticatedUser(userId: string) {
-  const user = state.systemUsers.find((item) => item.id === userId);
-  if (!user?.enabled) return null;
-  return user;
 }
 
 const requireAuth = createRequireAuth(sessions, applyAuthenticatedUser, { onDenied: logSecurityDenial });
@@ -1406,11 +1240,7 @@ function requireReturnTypeFromRecord(req: AuthRequest, res: express.Response, ne
   next();
 }
 
-registerDomainSnapshotRoutes(app, {
-  requireMenu,
-  requireAnyMenu,
-  publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys),
-});
+registerDomainSnapshotRoutes(app, {requireMenu, requireAnyMenu, publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys), refreshState: createDomainSnapshotRefresh({getDatabaseRevision: getStateRevision, getStateRevision: () => stateRevision, reloadState: (req) => reloadRequestStateFromDatabase(req as AuthRequest)})});
 registerPagedRecordRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getScopedPermissions(state, (req as AuthRequest).authUser)});
 
 registerSystemRoutes(app, {
@@ -1436,14 +1266,23 @@ registerFinanceCommissionRoutes(app, {
   persist: (req, result) => persistRequest(req as AuthRequest, result),
   permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser),
 });
+registerCommercialRoutes(app, {
+  requireBoss,
+  requireAnyMenu,
+  asyncRoute,
+  createSession: (userId, scope) => sessions.create(userId, scope),
+  revokeSession: (token) => sessions.revoke(token),
+  setSessionCookie,
+  createCsrfToken,
+});
 
 app.post("/api/auth/login", loginRateLimiter, authMutationRoute(async (req, res) => {
   try {
 	    // Login only needs a current account record. Loading every order, log and ledger row here
 	    // made a normal sign-in slower as the audit trail grew.
-	    state = await loadStateCollections(state, ["systemUsers"]);
+    replaceCurrentState(await loadStateCollections(state, ["systemUsers"]));
 	    const user = actions(req).login(req.body);
-	    const token = await sessions.create(user.id);
+    const token = await sessions.create(user.id, { tenantId: user.tenantId || DEFAULT_TENANT_ID, storeId: user.storeId || DEFAULT_STORE_ID });
 	    setSessionCookie(res, token);
 	    const savedUser = state.systemUsers.find((item) => item.id === user.id);
 	    await saveStateRecords([
@@ -1470,6 +1309,8 @@ openInventoryRouter.use(openApiRateLimiter, requireOpenApiToken);
 
 openInventoryRouter.get("/items", asyncRoute(async (req, res) => {
   const page = await queryInventoryPage<CardInventory>({
+    tenantId: DEFAULT_TENANT_ID,
+    storeId: DEFAULT_STORE_ID,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || req.query.per_page || 20),
     keyword: String(req.query.keyword || req.query.search || ""),
@@ -1484,7 +1325,7 @@ openInventoryRouter.get("/items", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
-  const card = await findInventoryRecord<CardInventory>(req.params.id!);
+  const card = await findInventoryRecord<CardInventory>(req.params.id!, DEFAULT_TENANT_ID, DEFAULT_STORE_ID);
   if (!card) {
     sendApiError(req, res, 404, "INVENTORY_NOT_FOUND", "库存档案不存在");
     return;
@@ -1493,7 +1334,7 @@ openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.get("/by-sn/:sn", asyncRoute(async (req, res) => {
-  const card = await findInventoryRecordBySn<CardInventory>(req.params.sn!.trim());
+  const card = await findInventoryRecordBySn<CardInventory>(req.params.sn!.trim(), DEFAULT_TENANT_ID, DEFAULT_STORE_ID);
   if (!card) {
     sendApiError(req, res, 404, "INVENTORY_SN_NOT_FOUND", "未找到该 SN 对应库存");
     return;
@@ -1502,13 +1343,13 @@ openInventoryRouter.get("/by-sn/:sn", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.get("/summary", asyncRoute(async (req, res) => {
-  state = await loadStateCollections(state, ["inventory"]);
+  replaceCurrentState(await loadStateCollections(state, ["inventory"]));
   const rows = actions(undefined, { role: "财务", actor: "OpenAPI" }).getInventorySummary(req.query as Record<string, string>);
   res.json(paginated(rows, req));
 }));
 
 openInventoryRouter.post("/scan-in", asyncRoute(async (req, res) => {
-  state = await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]);
+  replaceCurrentState(await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]));
   const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
     ...req.body,
     mode: "入库",
@@ -1520,7 +1361,7 @@ openInventoryRouter.post("/scan-in", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.post("/scan-out", asyncRoute(async (req, res) => {
-  state = await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]);
+  replaceCurrentState(await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]));
   const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
     ...req.body,
     mode: "出库",
@@ -1532,7 +1373,7 @@ openInventoryRouter.post("/scan-out", asyncRoute(async (req, res) => {
 }));
 
 openInventoryRouter.post("/relocate", asyncRoute(async (req, res) => {
-  state = await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]);
+  replaceCurrentState(await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]));
   const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
     ...req.body,
     mode: "移库",
@@ -1549,7 +1390,7 @@ const openPricesRouter = express.Router();
 openPricesRouter.use(openApiRateLimiter, requireOpenApiToken);
 
 openPricesRouter.post("/sync-est-sell", asyncRoute(async (req, res) => {
-  state = await loadStateCollections(state, ["products", "inventory", "marketQuotes", "logs"]);
+  replaceCurrentState(await loadStateCollections(state, ["products", "inventory", "marketQuotes", "logs"]));
   const body = req.body || {};
   const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).syncEstimatedSellPrice({
     productId: String(body.productId || ""),
@@ -1563,7 +1404,7 @@ openPricesRouter.post("/sync-est-sell", asyncRoute(async (req, res) => {
 }));
 
 openPricesRouter.get("/market-quotes", asyncRoute(async (req, res) => {
-  state = await loadStateCollections(state, ["marketQuotes"]);
+  replaceCurrentState(await loadStateCollections(state, ["marketQuotes"]));
   const keyword = String(req.query.q || req.query.search || "").trim();
   const brand = normalizeSearchText(req.query.brand);
   const rows = state.marketQuotes
@@ -1594,9 +1435,13 @@ app.use("/api/open/prices", openPricesRouter);
 
 // Background clients poll this lightweight revision endpoint first. Keeping it ahead of the
 // state-reload middleware avoids deserializing every business collection when nothing changed.
-app.get("/api/state/revision", asyncRoute(async (_req: AuthRequest, res) => {
-  res.json({ data: { revision: await getStateRevision() } });
-}));
+registerStateRevisionRoute(app, {
+  asyncRoute,
+  getRevision: getStateRevision,
+  getPublicState: (req, mode) => publicState(req as AuthRequest, mode),
+  getCurrentUser: (req) => actions(req as AuthRequest).getCurrentUser(),
+  createCsrfToken,
+});
 
 app.use((req: AuthRequest, res, next) => {
   void (async () => {
@@ -1613,7 +1458,7 @@ app.use((req: AuthRequest, res, next) => {
       await reloadRequestStateFromDatabase(req);
     }
     if (req.authUser) {
-      const freshUser = applyAuthenticatedUser(req.authUser.id);
+      const freshUser = await applyAuthenticatedUser(req.authUser.id, { tenantId: req.tenantId });
       if (!freshUser) {
         await sessions.revoke(req.authToken);
         sendApiError(req, res, 401, "UNAUTHORIZED", "账号已停用或不存在", true);
@@ -1645,15 +1490,20 @@ registerInventoryJourneyRoutes(app, {
   getState: () => state,
   permissionsForRequest: (req) => getScopedPermissions(state, (req as AuthRequest).authUser),
 });
-
-app.get("/api/state", (req: AuthRequest, res) => {
-  const mode = req.query.mode === "initial" ? "initial" : "full";
-  res.json({ data: publicState(req, mode), meta: { stateMode: mode, stateRevision } });
+registerSalesProductCandidateRoutes(app, {requireMenu, getInventorySummary: (req, query) => actions(req as AuthRequest).getInventorySummary(query), permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser), storeDateDiffDays});
+registerSalesCustomerRoutes(app, {requireMenu});
+registerProductLedgerRoutes(app, {
+  requireMenu,
+  getState: () => state,
+  permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser),
+  ok,
 });
-
-app.get("/api/auth/me", (req: AuthRequest, res) => {
-  const user = req.authUser ? actions(req).getCurrentUser() : null;
-  res.json({ data: user && req.authToken ? {...user, csrfToken: createCsrfToken(req.authToken)} : user });
+registerStateRoutes(app, {
+  asyncRoute,
+  getRevision: () => stateRevision,
+  getPublicState: (req, mode) => publicState(req as AuthRequest, mode),
+  getCurrentUser: (req) => actions(req as AuthRequest).getCurrentUser(),
+  createCsrfToken,
 });
 
 // AI only receives a compact, anonymized business snapshot. The endpoint remains read-only:
@@ -1690,6 +1540,11 @@ app.post("/api/ai/copilot", requireAnyMenu(copilotMenuIds), async (req: AuthRequ
     selectedDocumentNo: String(rawContext.selectedDocumentNo || "").slice(0, 120) || undefined,
     filters: rawContext.filters && typeof rawContext.filters === "object" ? Object.fromEntries(Object.entries(rawContext.filters as Record<string, unknown>).slice(0, 20).map(([key, value]) => [String(key).slice(0, 40), typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined])) : undefined,
   };
+  const tenantId = req.tenantId || req.authUser?.tenantId || DEFAULT_TENANT_ID;
+  if (!(await commercialFeatureEnabled(tenantId, "ai_assist"))) {
+    sendApiError(req, res, 403, "FEATURE_NOT_INCLUDED", "当前套餐未包含 AI 助手能力", true);
+    return;
+  }
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -1700,6 +1555,10 @@ app.post("/api/ai/copilot", requireAnyMenu(copilotMenuIds), async (req: AuthRequ
     if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
   try {
+    // Reserve a conservative input budget before invoking a provider. The
+    // database counter is locked transactionally, so concurrent tabs cannot
+    // oversubscribe the tenant's monthly AI quota.
+    await recordCommercialUsage({ tenantId, metric: "ai_tokens", quantity: estimateAiUsageUnits(messages) });
     await reloadStateFromDatabase();
     await runCopilotTurn({ messages, context }, state, emit);
   } catch (error) {
@@ -1710,8 +1569,8 @@ app.post("/api/ai/copilot", requireAnyMenu(copilotMenuIds), async (req: AuthRequ
   }
 });
 
-app.get("/api/ai/insight-actions", requireMenu("ai_insights"), asyncRoute(async (_req: AuthRequest, res) => {
-  res.json({ data: await listAiInsightActions() });
+app.get("/api/ai/insight-actions", requireMenu("ai_insights"), asyncRoute(async (req: AuthRequest, res) => {
+  res.json({ data: await listAiInsightActions(req.tenantId) });
 }));
 
 app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), asyncRoute(async (req: AuthRequest, res) => {
@@ -1722,7 +1581,7 @@ app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), 
     return;
   }
   if (status === "pending") {
-    await deleteAiInsightAction(insightId);
+    await deleteAiInsightAction(insightId, req.tenantId);
     res.json({ data: { insightId, status: "pending" } });
     return;
   }
@@ -1730,7 +1589,7 @@ app.put("/api/ai/insight-actions/:id", requireBoss, requireMenu("ai_insights"), 
     sendApiError(req, res, 400, "VALIDATION_ERROR", "经营建议状态不合法");
     return;
   }
-  res.json({ data: await saveAiInsightAction({ insightId, status, updatedBy: crmActor(req) }) });
+  res.json({ data: await saveAiInsightAction({ insightId, status, updatedBy: crmActor(req) }, req.tenantId) });
 }));
 
 app.post("/api/auth/logout", authMutationRoute(async (req: AuthRequest, res) => {
@@ -1751,12 +1610,50 @@ app.get("/api/users", requireBoss, requireMenu("permissions"), (req: AuthRequest
   res.json(ok(actions(req).listUsers()));
 });
 
-app.post("/api/users", requireBoss, requireMenu("permissions"), asyncRoute(async (req, res) => {
-  res.status(201).json(ok(await persistRequest(req, actions(req).createUser(req.body))));
+app.post("/api/users", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
+  const created = actions(req).createUser(req.body);
+  if (created.enabled) await assertSeatAvailable(created.tenantId || DEFAULT_TENANT_ID, created.id, created.storeId || DEFAULT_STORE_ID);
+  const persisted = await persistUserWithMembership(req, created);
+  res.status(201).json(ok(persisted));
 }));
 
-app.put("/api/users/:id", requireBoss, requireMenu("permissions"), asyncRoute(async (req, res) => {
-  res.json(ok(await persistRequest(req, actions(req).updateUser(req.params.id!, req.body))));
+app.put("/api/users/:id", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
+  const updated = actions(req).updateUser(req.params.id!, req.body);
+  if (updated.enabled) await assertSeatAvailable(updated.tenantId || DEFAULT_TENANT_ID, updated.id, updated.storeId || DEFAULT_STORE_ID);
+  const persisted = await persistUserWithMembership(req, updated);
+  res.json(ok(persisted));
+}));
+
+// Account lifecycle operations are explicit so operators do not need to send a
+// full user object just to suspend an account or rotate a credential.
+app.post("/api/users/:id/deactivate", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
+  if (req.params.id === req.authUser?.id) {
+    sendApiError(req, res, 400, "SELF_DEACTIVATION", "不能停用当前登录账号");
+    return;
+  }
+  const updated = actions(req).updateUser(req.params.id!, { enabled: false });
+  const persisted = await persistUserWithMembership(req, updated);
+  await sessions.revokeUserSessions?.(updated.id, updated.tenantId || DEFAULT_TENANT_ID);
+  res.json(ok(persisted));
+}));
+
+app.post("/api/users/:id/reactivate", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
+  const updated = actions(req).updateUser(req.params.id!, { enabled: true });
+  await assertSeatAvailable(updated.tenantId || DEFAULT_TENANT_ID, updated.id, updated.storeId || DEFAULT_STORE_ID);
+  const persisted = await persistUserWithMembership(req, updated);
+  res.json(ok(persisted));
+}));
+
+app.post("/api/users/:id/reset-password", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
+  const password = typeof req.body?.password === "string" ? req.body.password.trim() : "";
+  if (password.length < 12 || password.length > 1024) {
+    sendApiError(req, res, 400, "INVALID_PASSWORD", "新密码至少 12 位且不能超过 1024 位");
+    return;
+  }
+  const updated = actions(req).updateUser(req.params.id!, { password });
+  const persisted = await persistUserWithMembership(req, updated);
+  await sessions.revokeUserSessions?.(updated.id, updated.tenantId || DEFAULT_TENANT_ID);
+  res.json(ok(persisted));
 }));
 
 app.get("/api/gpu_erp/finance/settlement-accounts", requireMenu("settlement_accounts"), (req, res) => {
@@ -1764,11 +1661,24 @@ app.get("/api/gpu_erp/finance/settlement-accounts", requireMenu("settlement_acco
 });
 
 app.post("/api/gpu_erp/finance/settlement-account/create", requireMenu("settlement_accounts"), asyncRoute(async (req, res) => {
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createSettlementAccount(req.body),
-    (record) => ({ stateMerge: simpleRecordCreateMerge("settlementAccounts", record) }),
-  );
-  res.status(201).json(okMerge(created, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const { data: created, stateMerge } = await runStateCommand(
+      () => actions(authRequest).createSettlementAccount(req.body),
+      (record) => ({ stateMerge: simpleRecordCreateMerge("settlementAccounts", record) }),
+      undefined,
+      transactionHookWithIdempotency(idempotency, 201),
+    );
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.patch("/api/gpu_erp/finance/settlement-account/:id/reconcile", requireMenu("settlement_accounts"), asyncRoute(async (req: AuthRequest, res) => {
@@ -1787,45 +1697,41 @@ app.delete("/api/gpu_erp/finance/settlement-account/:id", requireMenu("settlemen
   res.status(deleted ? 200 : 404).json(okMerge(deleted, stateMerge, stateDelete));
 }));
 
-// Lazy full-collection load for the settlement ledger (stripped from the initial state payload).
-app.get("/api/settlement-ledger", requireMenu("settlement_ledger"), (req: AuthRequest, res) => {
-  res.json(ok({
-    settlementLedger: publicStatePatch(req, ["settlementLedger"]).settlementLedger ?? [],
-    settlementLedgerLoaded: true,
-  }));
-});
-
-// Purpose-built projection for the customer funds center. Access to this page does not imply
-// broad access to raw receipt, payment or settlement-ledger collections.
-app.get("/api/gpu_erp/finance/customer-funds", requireMenu("customer_funds"), (req: AuthRequest, res) => {
-  const today = storeDate();
-  const startDate = String(req.query.startDate || startOfMonth(today));
-  const endDate = String(req.query.endDate || today);
-  const trendStartDate = String(req.query.trendStartDate || addDateDays(today, -6));
-  const trendEndDate = String(req.query.trendEndDate || today);
-  const dates = [startDate, endDate, trendStartDate, trendEndDate];
-  if (dates.some((date) => !validDateKey(date)) || startDate > endDate || trendStartDate > trendEndDate) {
-    sendApiError(req, res, 400, "VALIDATION_ERROR", "资金往来日期范围无效");
-    return;
-  }
-  if (dateRangeDays(startDate, endDate) > 366 || dateRangeDays(trendStartDate, trendEndDate) > 366) {
-    sendApiError(req, res, 400, "VALIDATION_ERROR", "资金往来查询范围不能超过 366 天");
-    return;
-  }
-  res.json(ok(buildCustomerFundsSnapshot(state, { today, startDate, endDate, trendStartDate, trendEndDate })));
+registerFinanceReadModelRoutes(app, {
+  state,
+  requireMenu,
+  publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys),
+  buildCustomerFundsSnapshot,
+  getStoreDate: storeDate,
+  startOfMonth: (date) => startOfMonth(date),
+  addDateDays: (date, days) => addDateDays(date, days),
+  ok,
+  sendValidationError: (req, res, message) => sendApiError(req as AuthRequest, res, 400, "VALIDATION_ERROR", message),
 });
 
 app.post("/api/gpu_erp/finance/payment-in/create", requireMenu("payment_in"), asyncRoute(async (req, res) => {
-  const command = parseHttpDto(paymentInCreateDto, withoutImagePayload(req.body));
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createPaymentIn(command),
-    paymentInMerge,
-    async (record) => {
-      const urls = await persistEntityImages(req, "payment_in", record.id, "payment-evidence");
-      if (urls) record.images = urls;
-    },
-  );
-  res.status(201).json(okMerge(created, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const command = parseHttpDto(paymentInCreateDto, withoutImagePayload(req.body));
+    const { data: created, stateMerge } = await runStateCommand(
+      () => actions(authRequest).createPaymentIn(command),
+      paymentInMerge,
+      async (record) => {
+        const urls = await persistEntityImages(authRequest, "payment_in", record.id, "payment-evidence");
+        if (urls) record.images = urls;
+      },
+      transactionHookWithIdempotency(idempotency, 201),
+    );
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.put("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), asyncRoute(async (req, res) => {
@@ -1861,16 +1767,28 @@ app.delete("/api/gpu_erp/finance/payment-in/:id", requireMenu("payment_in"), req
 }));
 
 app.post("/api/gpu_erp/finance/payment-out/create", requireMenu("payment_out"), asyncRoute(async (req, res) => {
-  const command = parseHttpDto(paymentOutCreateDto, withoutImagePayload(req.body));
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createPaymentOut(command),
-    paymentOutMerge,
-    async (record) => {
-      const urls = await persistEntityImages(req, "payment_out", record.id, "payment-evidence");
-      if (urls) record.images = urls;
-    },
-  );
-  res.status(201).json(okMerge(created, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const command = parseHttpDto(paymentOutCreateDto, withoutImagePayload(req.body));
+    const { data: created, stateMerge } = await runStateCommand(
+      () => actions(authRequest).createPaymentOut(command),
+      paymentOutMerge,
+      async (record) => {
+        const urls = await persistEntityImages(authRequest, "payment_out", record.id, "payment-evidence");
+        if (urls) record.images = urls;
+      },
+      transactionHookWithIdempotency(idempotency, 201),
+    );
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.put("/api/gpu_erp/finance/payment-out/:id", requireMenu("payment_out"), asyncRoute(async (req, res) => {
@@ -1907,11 +1825,24 @@ app.delete("/api/gpu_erp/finance/payment-out/:id", requireMenu("payment_out"), r
 }));
 
 app.post("/api/gpu_erp/finance/account-transfer/create", requireMenu("account_transfer"), asyncRoute(async (req, res) => {
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createAccountTransfer(req.body),
-    accountTransferMerge,
-  );
-  res.status(201).json(okMerge(created, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const { data: created, stateMerge } = await runStateCommand(
+      () => actions(authRequest).createAccountTransfer(req.body),
+      accountTransferMerge,
+      undefined,
+      transactionHookWithIdempotency(idempotency, 201),
+    );
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.put("/api/gpu_erp/finance/account-transfer/:id", requireMenu("account_transfer"), asyncRoute(async (req, res) => {
@@ -1966,6 +1897,7 @@ app.get("/api/gpu_erp/crm/customers", requireMenu("crm"), (req, res) => {
 // gpu_crm_accounts instead of loading the full JSONB collection.
 app.get("/api/gpu_erp/crm/accounts", requireMenu("crm"), asyncRoute(async (req, res) => {
   const result = await listCrmAccounts({
+    tenantId: (req as AuthRequest).tenantId,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || req.query.per_page || 30),
     keyword: String(req.query.keyword || req.query.search || ""),
@@ -1980,6 +1912,7 @@ app.get("/api/gpu_erp/crm/accounts", requireMenu("crm"), asyncRoute(async (req, 
 
 app.get("/api/gpu_erp/crm/accounts/:id/timeline", requireMenu("crm"), asyncRoute(async (req, res) => {
   const result = await listCrmTimeline(req.params.id!, {
+    tenantId: (req as AuthRequest).tenantId,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || req.query.per_page || 50),
   });
@@ -2337,6 +2270,7 @@ const mediaMenuIds = [
 app.post("/api/media", requireAnyMenu(mediaMenuIds), asyncRoute(async (req: AuthRequest, res) => {
   const values = Array.isArray(req.body?.images) ? req.body.images : [req.body?.dataUrl];
   const urls = await replaceEntityImages({
+    tenantId: req.tenantId,
     entityType: String(req.body?.entityType || "").trim(),
     entityId: String(req.body?.entityId || "").trim(),
     relationRole: String(req.body?.relationRole || "attachment").trim(),
@@ -2351,12 +2285,13 @@ app.get("/api/media", requireAnyMenu(mediaMenuIds), asyncRoute(async (req, res) 
     String(req.query.entityType || "").trim(),
     String(req.query.entityId || "").trim(),
     req.query.relationRole ? String(req.query.relationRole) : undefined,
+    (req as AuthRequest).tenantId,
   );
   res.json({ data: assets });
 }));
 
 app.get("/api/media/assets/:id", requireAnyMenu(mediaMenuIds), asyncRoute(async (req, res) => {
-  const asset = await getMediaAsset(req.params.id!);
+  const asset = await getMediaAsset(req.params.id!, (req as AuthRequest).tenantId);
   if (!asset) {
     sendApiError(req, res, 404, "MEDIA_NOT_FOUND", "图片资源不存在");
     return;
@@ -2368,17 +2303,28 @@ app.get("/api/media/assets/:id", requireAnyMenu(mediaMenuIds), asyncRoute(async 
 }));
 
 app.post("/api/purchase-invoices", requireMenu("purchase_add"), asyncRoute(async (req, res) => {
-  const command = parseHttpDto(purchaseInvoiceCreateDto, withoutImagePayload(req.body));
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createPurchaseInvoice(command),
-    purchaseInvoiceCreateMerge,
-    async (invoice) => {
-      const urls = await persistEntityImages(req, "purchase_invoice", invoice.id, "purchase-evidence");
-      if (urls) invoice.images = urls;
-    },
-    (client, invoice) => syncCrmPurchaseInvoiceLink(client, invoice, crmActor(req)),
-  );
-  res.status(201).json(okMerge(created, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const command = parseHttpDto(purchaseInvoiceCreateDto, withoutImagePayload(req.body));
+    const { data: created, stateMerge } = await runStateCommand(
+      () => actions(authRequest).createPurchaseInvoice(command),
+      purchaseInvoiceCreateMerge,
+      async (invoice) => {
+        const urls = await persistEntityImages(req, "purchase_invoice", invoice.id, "purchase-evidence");
+        if (urls) invoice.images = urls;
+      },
+      transactionHookWithIdempotency(idempotency, 201, (client, invoice) => syncCrmPurchaseInvoiceLink(client, invoice, crmActor(req))),
+    );
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 app.put("/api/purchase-invoices/:id", requireMenu("purchase_list"), requireHistoryEditPermission, asyncRoute(async (req, res) => {
   const { expectedRecordVersion, ...updates } = parseHttpDto(purchaseInvoiceUpdateDto, withoutImagePayload(req.body));
@@ -2426,7 +2372,7 @@ app.delete("/api/purchase-invoices/:id", requireMenu("purchase_list"), requireDe
   res.status(deleted ? 200 : 404).json(okMerge(deleted, stateMerge, stateDelete));
 }));
 
-app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req, res) => {
+app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req: AuthRequest, res) => {
   const command = parseHttpDto(inspectionCreateDto, withoutImagePayload(req.body));
   const { data: created, stateMerge } = await runStateCommand(
     () => actions(req).submitInspection(command),
@@ -2435,11 +2381,21 @@ app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req, 
       const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
       if (urls) record.images = urls;
     },
+    (client, record) => appendInspectionVersionInTransaction(client, record, req.tenantId, crmActor(req)),
   );
   res.status(201).json(okMerge(created, stateMerge));
 }));
 
-app.put("/api/inspections/:id", requireMenu("inspections"), requireHistoryEditPermission, asyncRoute(async (req, res) => {
+app.get("/api/inspections/:id/versions", requireMenu("inspections"), asyncRoute(async (req: AuthRequest, res) => {
+  const inspection = state.inspections.find((item) => item.id === req.params.id);
+  if (!inspection) {
+    sendApiError(req, res, 404, "INSPECTION_NOT_FOUND", "检测记录不存在");
+    return;
+  }
+  res.json({ data: await listInspectionVersions(req.params.id!, req.tenantId) });
+}));
+
+app.put("/api/inspections/:id", requireMenu("inspections"), requireHistoryEditPermission, asyncRoute(async (req: AuthRequest, res) => {
   const {expectedRecordVersion, ...updates} = parseHttpDto(inspectionUpdateDto, withoutImagePayload(req.body));
   const { data: updated, stateMerge } = await runStateCommand(
     () => actions(req).updateInspection(req.params.id!, updates, expectedRecordVersion),
@@ -2448,6 +2404,7 @@ app.put("/api/inspections/:id", requireMenu("inspections"), requireHistoryEditPe
       const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
       if (urls) record.images = urls;
     },
+    (client, record) => appendInspectionVersionInTransaction(client, record, req.tenantId, crmActor(req)),
   );
   res.json(okMerge(updated, stateMerge));
 }));
@@ -2498,15 +2455,26 @@ app.delete("/api/assembly-operations/:id", requireMenu("assembly"), requireDelet
 }));
 
 app.post("/api/sales-invoices", requireMenu("sales_add"), asyncRoute(async (req, res) => {
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).createSalesInvoice(req.body),
-    salesInvoiceMerge,
-    undefined,
-    (client, invoice) => syncCrmSalesInvoiceLink(client, invoice, crmActor(req)),
-  );
-  // Persist first. A Feishu delivery failure must never turn a successful sales order into an API error.
-  void notifyFeishuSalesInvoiceCreated(created);
-  res.status(201).json(okMerge(created, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const { data: created, stateMerge } = await runStateCommand(
+      () => actions(authRequest).createSalesInvoice(req.body),
+      salesInvoiceMerge,
+      undefined,
+      transactionHookWithIdempotency(idempotency, 201, (client, invoice) => syncCrmSalesInvoiceLink(client, invoice, crmActor(req))),
+    );
+    // Persist first. A Feishu delivery failure must never turn a successful sales order into an API error.
+    void notifyFeishuSalesInvoiceCreated(created);
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.put("/api/sales-invoices/:id", requireMenu("sales_list"), asyncRoute(async (req, res) => {
@@ -2545,16 +2513,33 @@ app.delete("/api/sales-invoices/:id", requireMenu("sales_list"), requireDeletePe
     settlementLedger: relatedPayments.map((payment) => payment.settlementLedgerId).filter(Boolean) as string[],
     financeLedger: [...relatedPayments.map((payment) => payment.financeLedgerId).filter(Boolean), ...relatedFinanceIds] as string[],
   };
-  await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
+  await saveStateRecords(
+    [...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)],
+    (client) => releaseInventoryReservationsInTransaction(client, Array.from(chosenIds), (req as AuthRequest).tenantId, existing?.id),
+    (req as AuthRequest).tenantId,
+  );
   res.status(deleted ? 200 : 404).json(okMerge(deleted, stateMerge, stateDelete));
 }));
 
 app.post("/api/sales-invoices/:id/outbound", requireMenu("sales_outbound"), requireManualOutboundPermission, asyncRoute(async (req, res) => {
-  const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).confirmSalesOutbound(req.params.id!, req.body),
-    salesInvoiceMerge,
-  );
-  res.json(okMerge(updated, stateMerge));
+  const authRequest = req as AuthRequest;
+  const idempotency = await claimMutationIdempotency(authRequest);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const { data: updated, stateMerge } = await runStateCommand(
+      () => actions(authRequest).confirmSalesOutbound(req.params.id!, req.body),
+      salesInvoiceMerge,
+      undefined,
+      transactionHookWithIdempotency(idempotency, 200, (client, invoice) => reserveSalesOutboundInventoryInTransaction(client, invoice, authRequest.tenantId, idempotency?.request.key)),
+    );
+    res.json(okMerge(updated, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.get("/api/returns", requireAnyMenu([...returnMenuIds]), (req: AuthRequest, res) => {
@@ -2584,17 +2569,49 @@ app.post("/api/returns", requireAnyMenu([...returnMenuIds]), asyncRoute(async (r
     sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该退货类型的操作权限", true);
     return;
   }
-  const created = actions(req).createReturnOrder(req.body);
-  const stateMerge = returnOrderMerge(created);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.status(201).json(okMerge(created, stateMerge));
+  const idempotency = await claimMutationIdempotency(req);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const created = actions(req).createReturnOrder(req.body);
+    const stateMerge = returnOrderMerge(created);
+    await saveStateRecords(
+      stateMergeRecords(stateMerge),
+      idempotency ? (client) => completeIdempotencyKeyInTransaction(client, idempotency.request, 201, okMerge(created, stateMerge)) : undefined,
+      req.tenantId,
+    );
+    res.status(201).json(okMerge(created, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
-app.post("/api/returns/:id/complete", requireAnyMenu([...returnMenuIds]), requireReturnTypeFromRecord, asyncRoute(async (req, res) => {
-  const completed = actions(req).completeReturnOrder(req.params.id!);
-  const stateMerge = returnOrderMerge(completed);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.json(okMerge(completed, stateMerge));
+app.post("/api/returns/:id/complete", requireAnyMenu([...returnMenuIds]), requireReturnTypeFromRecord, asyncRoute(async (req: AuthRequest, res) => {
+  const idempotency = await claimMutationIdempotency(req);
+  if (idempotency?.replay) {
+    res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
+    return;
+  }
+  try {
+    const completed = actions(req).completeReturnOrder(req.params.id!);
+    const stateMerge = returnOrderMerge(completed);
+    const releaseIds = [completed?.sourceInventoryId, ...(completed?.items || []).map((item) => item.sourceInventoryId)].filter(Boolean) as string[];
+    await saveStateRecords(
+      stateMergeRecords(stateMerge),
+      (client) => Promise.all([
+        releaseInventoryReservationsInTransaction(client, releaseIds, req.tenantId),
+        idempotency ? completeIdempotencyKeyInTransaction(client, idempotency.request, 200, okMerge(completed, stateMerge)) : Promise.resolve(),
+      ]),
+      req.tenantId,
+    );
+    res.json(okMerge(completed, stateMerge));
+  } catch (error) {
+    await releaseMutationIdempotency(idempotency);
+    throw error;
+  }
 }));
 
 app.patch("/api/returns/:id", requireAnyMenu([...returnMenuIds]), requireReturnTypeFromRecord, asyncRoute(async (req, res) => {
@@ -2695,6 +2712,8 @@ app.get("/api/inventory/summary", requireMenu("inventory"), (req, res) => {
 // new screens can page directly from PostgreSQL instead of receiving the whole inventory array.
 app.get("/api/inventory/items", requireMenu("inventory"), asyncRoute(async (req: AuthRequest, res) => {
   const page = await queryInventoryPage<CardInventory>({
+    tenantId: (req as AuthRequest).tenantId,
+    storeId: (req as AuthRequest).storeId,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || 50),
     keyword: String(req.query.keyword || req.query.search || ""),
@@ -2714,10 +2733,6 @@ app.get("/api/inventory/items", requireMenu("inventory"), asyncRoute(async (req:
   res.json({ data: sanitizeInventoryRowsForUser(page.data, req.authUser), meta: page.meta });
 }));
 
-app.get("/api/inventory/product-ledger", requireMenu("inventory"), (req: AuthRequest, res) => {
-  res.json(ok(buildProductLedger(req)));
-});
-
 app.post("/api/inventory/import", requireMenu("inventory"), asyncRoute(async (req, res) => {
   const { data: created, stateMerge } = await runStateCommand(
     () => actions(req).importInventoryRows(req.body.rows || [], req.body.handler),
@@ -2733,10 +2748,18 @@ app.post("/api/inventory/scan-flow", requireMenu("inventory"), asyncRoute(async 
   res.json(okMerge(result, stateMerge));
 }));
 
-app.post("/api/customers", requireMenu("customers"), asyncRoute(async (req, res) => {
+app.post("/api/customers", requireMenu("customers"), asyncRoute(async (req: AuthRequest, res) => {
   const created = actions(req).createCustomer(req.body);
   const stateMerge = simpleRecordCreateMerge("customers", created);
-  await saveStateRecords(stateMergeRecords(stateMerge));
+  // Customer quick-create is used by sales and purchase forms, whose pickers
+  // read the normalized CRM accounts endpoint. Persist the legacy customer row
+  // and its CRM主体 mapping in one transaction so a newly-created customer is
+  // searchable immediately from every entry point.
+  await saveStateRecords(
+    stateMergeRecords(stateMerge),
+    (client) => upsertCrmCustomerAccount(client, created, "created", crmActor(req)),
+    req.tenantId,
+  );
   res.status(201).json(okMerge(created, stateMerge));
 }));
 
@@ -2772,6 +2795,8 @@ app.delete("/api/vendors/:id", requireMenu("vendors"), requireDeletePermission, 
 
 app.get("/api/logs", requireMenu("logs"), asyncRoute(async (req, res) => {
   const page = await queryLogsPage({
+    tenantId: (req as AuthRequest).tenantId,
+    storeId: (req as AuthRequest).storeId,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || req.query.per_page || 100),
     keyword: String(req.query.keyword || ""),
@@ -2790,14 +2815,6 @@ app.delete("/api/logs", requireMenu("logs"), requireHistoryEditPermission, async
   res.json(ok(null));
 }));
 
-// Lazy full-collection load for the finance ledger (stripped from the initial state payload).
-app.get("/api/finance-ledger", requireMenu("finance"), (req: AuthRequest, res) => {
-  res.json(ok({
-    financeLedger: publicStatePatch(req, ["financeLedger"]).financeLedger ?? [],
-    financeLedgerLoaded: true,
-  }));
-});
-
 app.patch("/api/finance-ledger/:id/reconcile", requireMenu("finance"), asyncRoute(async (req, res) => {
   const updated = actions(req).reconcileLedgerItem(req.params.id!);
   const stateMerge = compactStateMerge({
@@ -2813,48 +2830,20 @@ app.post("/api/reset", requireBoss, asyncRoute(async (req, res) => {
     sendApiError(req, res, 403, "FORBIDDEN", "生产环境已禁用数据初始化接口", true);
     return;
   }
-  state = actions(req).resetToDemoData();
+  replaceCurrentState(actions(req).resetToDemoData());
   await saveState(state);
   await reloadStateFromDatabase();
   res.json(ok(state));
 }));
 
-// 业务数据导出(CSV)。成本/毛利列受 showCost 权限控制。
-app.get("/api/export/:dataset", requireMenu("finance_reports"), (req: AuthRequest, res) => {
-  try {
-    const showCost = Boolean(actions(req).getPermissions().showCost);
-    const { filename, csv } = buildExport(state, req.params.dataset!, { showCost });
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    res.send(`﻿${csv}`);
-  } catch (error) {
-    throw error;
-  }
-});
-
-// 触发一次手动备份(老板权限)。
-app.post("/api/backup", requireBoss, asyncRoute(async (_req, res) => {
-  const result = await createManualBackup();
-  res.status(201).json(ok({ file: result.file }));
-}));
-
-// 备份清单(老板权限)。
-app.get("/api/backup", requireBoss, asyncRoute(async (_req, res) => {
-  res.json(ok(await listBackups()));
-}));
-
-// 业务数据下载，用于异地备份/迁移。账号口令哈希不进入浏览器下载文件。
-app.get("/api/backup/download", requireBoss, (_req, res) => {
-  const stamp = storeDate();
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(`成都显卡一号店数据备份_${stamp}.json`)}`);
-  res.setHeader("Cache-Control", "no-store, private");
-  res.setHeader("Pragma", "no-cache");
-  res.send(JSON.stringify({
-    ...state,
-    systemUsers: state.systemUsers.map(sanitizeUserAccount),
-    currentUserId: undefined,
-  }, null, 2));
+registerBackupRoutes(app, {
+  state,
+  requireBoss,
+  requireReports: requireMenu("finance_reports"),
+  asyncRoute,
+  getStoreDate: storeDate,
+  getShowCost: (req) => Boolean(actions(req as AuthRequest).getPermissions().showCost),
+  ok,
 });
 
 app.use((req: AuthRequest, res: express.Response) => {
@@ -2894,6 +2883,10 @@ app.use((err: unknown, req: AuthRequest, res: express.Response, _next: express.N
     return;
   }
   if (err instanceof MediaValidationError) {
+    res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
+    return;
+  }
+  if (err instanceof CommercialValidationError) {
     res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
     return;
   }

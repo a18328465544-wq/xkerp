@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCrmCustomerProjection, crmCustomerAccountId, normalizeCrmAccountName } from "./crmAccountRepository.ts";
+import { buildCrmCustomerProjection, canReuseMappedCrmCustomerAccount, crmCustomerAccountId, normalizeCrmAccountName } from "./crmAccountRepository.ts";
 
 test("CRM customer projection is stable and keeps the normalized主体 fields", () => {
   const customer = {
@@ -33,4 +33,10 @@ test("CRM customer projection is stable and keeps the normalized主体 fields", 
   assert.equal(created.primaryPhone, "13800000000");
   assert.equal(created.primaryWechat, "zhangsan");
   assert.equal(created.contactRole, "购买客户");
+});
+
+test("CRM customer mapping never steals an account owned by another customer archive", () => {
+  assert.equal(canReuseMappedCrmCustomerAccount("KH-2", null), true);
+  assert.equal(canReuseMappedCrmCustomerAccount("KH-2", "KH-2"), true);
+  assert.equal(canReuseMappedCrmCustomerAccount("KH-2", "KH-1"), false);
 });

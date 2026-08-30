@@ -1,7 +1,9 @@
 import {apiRequest} from "../client";
-import {adaptCommissionPage, adaptCustomerFunds, adaptLogs, adaptUserMutation, adaptUsers} from "../adapters/finance-remaining.adapter";
-import type {CommissionPageResponseDto, CommissionSettlementResponseDto, CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
+import {adaptCommissionPage, adaptCommissionRules, adaptCustomerFunds, adaptLogs, adaptUserMutation, adaptUsers} from "../adapters/finance-remaining.adapter";
+import type {CommissionPageResponseDto, CommissionRulesResponseDto, CommissionSettlementResponseDto, CustomerFundsResponseDto, LogsResponseDto, UserMutationResponseDto, UsersResponseDto} from "../dto/finance-remaining.dto";
 import type {CommissionMode} from "@/src/types/commission";
+import type {CommissionRules} from "@/src/types/legacy";
+import type {CommissionRulesPatch} from "@/src/utils/commissionRules";
 import type {FinanceCommissionPage, PagedCollection} from "@/src/types/finance-remaining";
 import type {StoreRole} from "@/src/types/auth";
 
@@ -47,6 +49,12 @@ export const usersApi = {
 };
 export const logsApi = { async list(filters: LogsFilters, signal?: AbortSignal): Promise<PagedCollection<import("@/src/types/finance-remaining").AuditLogItem>> { const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize)}); if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim()); return adaptLogs(await apiRequest<LogsResponseDto>(`/api/logs?${params.toString()}`, {signal})); } };
 export const financeCommissionApi = {
+  async getRules(signal?: AbortSignal): Promise<CommissionRules> {
+    return adaptCommissionRules(await apiRequest<CommissionRulesResponseDto>("/api/finance/commission-rules", {signal}));
+  },
+  async updateRules(input: CommissionRulesPatch, signal?: AbortSignal): Promise<CommissionRules> {
+    return adaptCommissionRules(await apiRequest<CommissionRulesResponseDto>("/api/finance/commission-rules", {method: "PUT", body: JSON.stringify(input), signal}));
+  },
   async list(filters: FinanceCommissionFilters, signal?: AbortSignal): Promise<FinanceCommissionPage> {
     const params = new URLSearchParams({mode: filters.mode, page: String(filters.page), pageSize: String(filters.pageSize), sortKey: filters.sortKey, sortDirection: filters.sortDirection});
     if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());

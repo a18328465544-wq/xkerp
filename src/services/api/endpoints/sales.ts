@@ -1,12 +1,12 @@
 import {apiRequest} from "../client";
-import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesSettlementAccounts, toSalesOutboundRequestDto} from "../adapters/sales.adapter";
-import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesListStateResponseDto, SalesOutboundResponseDto, SalesSettlementAccountsResponseDto} from "../dto/sales.dto";
-import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesOutboundDataset, SalesOutboundRequest, SalesOutboundResult, SalesSettlementAccountOption} from "@/src/types/sales";
+import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesProductCandidates, adaptSalesSettlementAccounts, toSalesOutboundRequestDto} from "../adapters/sales.adapter";
+import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesListStateResponseDto, SalesOutboundResponseDto, SalesProductCandidatesResponseDto, SalesSettlementAccountsResponseDto} from "../dto/sales.dto";
+import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesOutboundDataset, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
 import {toCreateSalesRequest} from "../adapters/sales.adapter";
 import type {SalesApiPermissions} from "../adapters/sales.adapter";
 
 export function toSalesCustomerQueryParams(keyword: string, page = 1, pageSize = 20) {
-  const params = new URLSearchParams({page: String(page), pageSize: String(pageSize), role: "customer"});
+  const params = new URLSearchParams({page: String(page), pageSize: String(pageSize)});
   if (keyword.trim()) params.set("keyword", keyword.trim());
   return params;
 }
@@ -44,15 +44,15 @@ export const salesApi = {
     return adaptSalesOutboundState(response);
   },
 
-  async confirmOutbound(invoiceId: string, values: SalesOutboundRequest, signal?: AbortSignal): Promise<SalesOutboundResult> {
+  async confirmOutbound(invoiceId: string, values: SalesOutboundRequest, signal?: AbortSignal, idempotencyKey?: string): Promise<SalesOutboundResult> {
     const request = toSalesOutboundRequestDto(values);
-    const response = await apiRequest<SalesOutboundResponseDto>(`/api/sales-invoices/${encodeURIComponent(invoiceId)}/outbound`, {method: "POST", body: JSON.stringify(request), signal});
+    const response = await apiRequest<SalesOutboundResponseDto>(`/api/sales-invoices/${encodeURIComponent(invoiceId)}/outbound`, {method: "POST", body: JSON.stringify(request), signal, headers: idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined});
     return adaptSalesOutboundResult(response.data);
   },
 
   async searchCustomers(keyword: string, signal?: AbortSignal): Promise<SalesCustomerOption[]> {
     const params = toSalesCustomerQueryParams(keyword, 1, 200);
-    const response = await apiRequest<SalesCustomerListResponseDto>(`/api/gpu_erp/crm/accounts?${params.toString()}`, {signal});
+    const response = await apiRequest<SalesCustomerListResponseDto>(`/api/sales/customers?${params.toString()}`, {signal});
     return adaptSalesCustomers(response);
   },
 
@@ -62,14 +62,21 @@ export const salesApi = {
     return adaptSalesInventoryCandidates(response, permissions);
   },
 
+  async searchProductCandidates(keyword: string, permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesProductCandidate[]> {
+    const params = new URLSearchParams();
+    if (keyword.trim()) params.set("keyword", keyword.trim());
+    const response = await apiRequest<SalesProductCandidatesResponseDto>(`/api/sales/product-candidates?${params.toString()}`, {signal});
+    return adaptSalesProductCandidates(response, permissions);
+  },
+
   async settlementAccounts(signal?: AbortSignal): Promise<SalesSettlementAccountOption[]> {
     const response = await apiRequest<SalesSettlementAccountsResponseDto>("/api/gpu_erp/finance/settlement-accounts?page=1&pageSize=100", {signal});
     return adaptSalesSettlementAccounts(response);
   },
 
-  async create(values: SalesFormValues, account?: SalesSettlementAccountOption, signal?: AbortSignal): Promise<SalesInvoiceResult> {
+  async create(values: SalesFormValues, account?: SalesSettlementAccountOption, signal?: AbortSignal, idempotencyKey?: string): Promise<SalesInvoiceResult> {
     const request = toCreateSalesRequest(values, account);
-    const response = await apiRequest<SalesCreateResponseDto>("/api/sales-invoices", {method: "POST", body: JSON.stringify(request), signal});
+    const response = await apiRequest<SalesCreateResponseDto>("/api/sales-invoices", {method: "POST", body: JSON.stringify(request), signal, headers: idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined});
     return adaptSalesInvoice(response.data);
   },
 

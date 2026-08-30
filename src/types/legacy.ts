@@ -190,6 +190,8 @@ export interface PurchaseCommissionRecord {
 
 export interface InventorySummaryRow {
   key: string;
+  /** Primary product template id for product-level selectors. */
+  productId?: string;
   productName: string;
   category: ProductCategory;
   brand: string;
@@ -200,6 +202,10 @@ export interface InventorySummaryRow {
   warehouseLocations?: string[];
   totalCount: number;
   availableCount: number;
+  /** Quantity reserved by sales invoices that are not outbound-complete yet. */
+  reservedCount?: number;
+  /** Available sellable quantity after pending sales reservations are deducted. */
+  availableForSalesCount?: number;
   pendingCount: number;
   lockedCount: number;
   soldCount: number;
@@ -796,6 +802,10 @@ export interface AuditLog {
   target: string;
   beforeVal?: string;
   afterVal?: string;
+  /** Request-scoped correlation fields for production audit/incident tracing. */
+  requestId?: string;
+  tenantId?: string;
+  storeId?: string;
 }
 
 export interface FinanceLedger {
@@ -1123,6 +1133,10 @@ export interface SystemUserAccount {
   displayName: string;
   role: StoreRole;
   enabled: boolean;
+  /** Commercial control-plane scope. Optional for legacy imported accounts. */
+  tenantId?: string;
+  storeId?: string;
+  membershipStatus?: "active" | "invited" | "deactivated";
   permissionOverrides?: AccountPermissionOverrides;
   lastLoginTime?: string;
   remarks?: string;

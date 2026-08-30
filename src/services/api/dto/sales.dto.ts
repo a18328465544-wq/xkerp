@@ -8,6 +8,34 @@ export interface SalesInventoryListResponseDto {
   meta?: unknown;
 }
 
+export interface SalesProductCandidateDto {
+  id?: unknown;
+  productId?: unknown;
+  productName?: unknown;
+  category?: unknown;
+  brand?: unknown;
+  model?: unknown;
+  version?: unknown;
+  vram?: unknown;
+  condition?: unknown;
+  warehouse?: unknown;
+  inventoryStatus?: unknown;
+  inventoryQuantity?: unknown;
+  reservedQuantity?: unknown;
+  availableQuantity?: unknown;
+  costPrice?: unknown;
+  estimatedSellPrice?: unknown;
+  entryTime?: unknown;
+  inventoryDays?: unknown;
+  imageUrl?: unknown;
+  saleable?: unknown;
+  unavailableReason?: unknown;
+}
+
+export interface SalesProductCandidatesResponseDto {
+  data?: unknown;
+}
+
 export interface SalesSettlementAccountsResponseDto {
   data?: unknown;
   meta?: unknown;

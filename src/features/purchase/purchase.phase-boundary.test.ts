@@ -43,6 +43,12 @@ test("purchase entry omits redundant introduction headers", () => {
   assert.doesNotMatch(purchaseTableSource, /title="采购明细"/);
 });
 
+test("live purchase entry keeps its workspace draft without an unsaved-leave guard", () => {
+  assert.match(purchasePageSource, /useWorkspaceTabDraft/);
+  assert.match(purchasePageSource, /saveDraft\(/);
+  assert.doesNotMatch(purchasePageSource, /ErpUnsavedChangesDialog|useErpDirtyGuard|useWorkspaceTabBlocker|useWorkspaceTabDirty/);
+});
+
 test("purchase product selection updates identity atomically and hides stale selection errors", () => {
   assert.match(purchasePageSource, /setValue\(`items\.\$\{index\}`/);
   assert.match(purchasePageSource, /clearErrors\(\[`items\.\$\{index\}\.productId`, `items\.\$\{index\}\.productName`\]\)/);

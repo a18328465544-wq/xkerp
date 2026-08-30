@@ -21,6 +21,7 @@ export const queryKeys = {
     outbound: (userId: string) => ["sales", "outbound", userId] as const,
     customers: (keyword: string) => ["sales", "customers", keyword] as const,
     inventoryCandidates: (keyword: string) => ["sales", "inventory-candidates", keyword] as const,
+    productCandidates: (keyword: string) => ["sales", "product-candidates", keyword] as const,
     settlementAccounts: () => ["sales", "settlement-accounts"] as const,
   },
   state: {
@@ -93,6 +94,7 @@ export const queryKeys = {
     profitFlows: (access: {userId: string}, range: {startDate: string; endDate: string}) => ["finance", "profit", "other-flows", access, range] as const,
     transfers: (filters: unknown) => ["finance", "transfers", filters] as const,
     customerFunds: (filters: unknown) => ["finance", "customer-funds", filters] as const,
+    commissionRules: () => ["finance", "commission-rules"] as const,
     commissionsRoot: () => ["finance", "commissions"] as const,
     commissions: (filters: FinanceCommissionFilters) => ["finance", "commissions", filters] as const,
     dailyClosings: {

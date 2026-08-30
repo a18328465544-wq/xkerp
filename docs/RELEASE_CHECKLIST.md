@@ -39,9 +39,10 @@ systemctl is-enabled gpu-erp-backup.timer
 systemctl status gpu-erp-backup.timer --no-pager
 ```
 
-预检必须确认 `DATABASE_URL`、`OPEN_API_TOKEN`、`BOOTSTRAP_ADMIN_PASSWORD`、数据库连接、必需迁移版本、核心业务表、16 个高频查询投影索引和三份非空构建文件均存在。CRM 手工迁移按
+预检必须确认 `DATABASE_URL`、`OPEN_API_TOKEN`、`BOOTSTRAP_ADMIN_PASSWORD`、数据库连接、必需迁移版本、核心业务表、19 个高频查询/一致性索引和三份非空构建文件均存在。CRM/商业化手工迁移按
 `001_crm_foundation.sql` → `002_operational_projections.sql` →
-`003_crm_foundation_v2.sql` 顺序执行；应用启动的幂等 schema 初始化与该顺序保持一致。
+`003_crm_foundation_v2.sql` → `004_commercial_foundation.sql` →
+`005_commercial_hardening.sql` 顺序执行；应用启动的幂等 schema 初始化与该顺序保持一致。
 生产密钥不得使用示例占位值且长度不得少于 16 位，`POSTGRES_IMPORT_LEGACY_JSON` 必须为 `false`；`DATABASE_SSL` 必须显式设置，生产 Cookie 不得关闭 Secure。
 
 运行时拓扑必须明确为单实例：`STATE_RUNTIME_MODE=single-instance`，PM2 使用

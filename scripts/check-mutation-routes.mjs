@@ -14,6 +14,8 @@ const protectedPatterns = [
   /^\/api\/ai\/insights\/refresh$/,
   /^\/api\/ai\/insight-actions\/[^/]+$/,
   /^\/api\/users(?:\/[^/]+)?$/,
+  /^\/api\/users\/[^/]+\/(?:deactivate|reactivate|reset-password)$/,
+  /^\/api\/commercial\/(?:context\/switch|tenants|stores(?:\/[^/]+)?|members|members\/[^/]+|subscription|usage|exports)$/,
   /^\/api\/gpu_erp\/finance\/.+$/,
   /^\/api\/gpu_erp\/crm\/quick-capture\/confirm$/,
   /^\/api\/gpu_erp\/crm\/customer\/(?:create|(?!(?:lead-preview)$)[^/]+)$/,
@@ -91,7 +93,7 @@ for (const route of routes) {
   }
   if (protectedPatterns.some((pattern) => pattern.test(pathname))) {
     const routeContext = route.source.slice(route.offset, route.offset + 1200);
-    if (!/\b(?:asyncRoute|mutationRoute)\s*\(/.test(routeContext)) {
+    if (!/(?:\basyncRoute|\bmutationRoute|\.asyncRoute|\.mutationRoute)\s*\(/.test(routeContext)) {
       failures.push(`${pathname} ${route.method} matches mutation policy but is missing asyncRoute/mutationRoute wrapper`);
       console.log(`FAIL: ✗ ${pathname} ${route.method} policy match without mutation runner`);
     } else {
@@ -101,7 +103,7 @@ for (const route of routes) {
   }
   if (snapshotPatterns.some((pattern) => pattern.test(pathname))) {
     const routeContext = route.source.slice(route.offset, route.offset + 1200);
-    if (!/\b(?:asyncRoute|mutationRoute)\s*\(/.test(routeContext)) {
+    if (!/(?:\basyncRoute|\bmutationRoute|\.asyncRoute|\.mutationRoute)\s*\(/.test(routeContext)) {
       failures.push(`${pathname} ${route.method} snapshot route is missing asyncRoute/mutationRoute wrapper`);
       console.log(`FAIL: ✗ ${pathname} ${route.method} snapshot route is not serialized`);
     } else {

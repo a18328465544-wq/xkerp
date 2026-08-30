@@ -4,11 +4,15 @@ import path from "node:path";
 import { Pool, type PoolClient } from "pg";
 import { createInitialState, normalizeStateConditions, type AppState } from "./store.ts";
 import { hashPassword, isPasswordHash, type PersistedSession, type SessionStore } from "./security.ts";
-import type { CommissionMode, DailyClosing, SystemUserAccount } from "../src/types.ts";
+import type { CommissionMode, DailyClosing, InspectionRecord, SystemUserAccount } from "../src/types.ts";
 import { storeDateAfterDays } from "../src/utils/storeTime.ts";
 import { applyCrmFoundationSchema } from "./crmSchema.ts";
 import { applyOperationalProjectionSchema } from "./operationalSchema.ts";
+import { applyCommercialFoundationSchema, applyCommercialHardeningSchema } from "./commercialSchema.ts";
+import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
+import { getCurrentTenantContext } from "./requestTenantContext.ts";
 import { createResilientQueue } from "./resilientQueue.ts";
+import { ConflictError } from "./errors.ts";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const LEGACY_DATA_FILE = path.join(DATA_DIR, "app-state.json");
@@ -29,6 +33,8 @@ export type StateCollectionKey = CollectionKey;
 export type StateRecordSave = { key: CollectionKey; items: unknown[]; deleteMissing?: boolean; deleteIds?: string[] };
 export type StateRecordTransactionHook = (client: PoolClient) => void | Promise<unknown>;
 export type InventoryPageFilters = {
+  tenantId?: string;
+  storeId?: string;
   page?: number;
   pageSize?: number;
   keyword?: string;
@@ -46,8 +52,10 @@ export type InventoryPageFilters = {
   sortDirection?: "asc" | "desc";
 };
 export type CollectionPage<T> = { data: T[]; meta: { page: number; pageSize: number; total: number } };
-export type LogPageFilters = { page?: number; pageSize?: number; keyword?: string };
+export type LogPageFilters = { tenantId?: string; storeId?: string; page?: number; pageSize?: number; keyword?: string };
 export type FinanceRecordPageFilters = {
+  tenantId?: string;
+  storeId?: string;
   page?: number;
   pageSize?: number;
   keyword?: string;
@@ -62,10 +70,12 @@ export type FinanceRecordPageFilters = {
   dateEnd?: string;
 };
 export type FinanceRecordPage<T> = CollectionPage<T> & { meta: CollectionPage<T>["meta"] & { totalAmount?: number } };
-export type FinanceProfitFlowFilters = {dateStart?: string; dateEnd?: string};
+export type FinanceProfitFlowFilters = {tenantId?: string; storeId?: string; dateStart?: string; dateEnd?: string};
 export type FinanceProfitFlowRow = {date: string; income: number; expense: number; net: number};
 export type InvoicePageKind = "purchase" | "sales";
 export type InvoicePageFilters = {
+  tenantId?: string;
+  storeId?: string;
   page?: number;
   pageSize?: number;
   keyword?: string;
@@ -80,6 +90,8 @@ export type InvoicePageFilters = {
 };
 export type InvoicePage<T> = CollectionPage<T> & {meta: CollectionPage<T>["meta"] & {summary: Record<string, number>}};
 export type CommissionPageFilters = {
+  tenantId?: string;
+  storeId?: string;
   mode: CommissionMode;
   page?: number;
   pageSize?: number;
@@ -108,6 +120,26 @@ export type AiInsightActionRecord = {
   updatedBy: string;
   updatedAt: string;
 };
+
+function scopedTenantId(tenantId?: string) {
+  return tenantId?.trim() || getCurrentTenantContext()?.tenantId || DEFAULT_TENANT_ID;
+}
+
+function scopedStoreId(storeId?: string) {
+  return storeId?.trim() || getCurrentTenantContext()?.storeId || DEFAULT_STORE_ID;
+}
+
+// Auxiliary tables created before tenancy (AI caches/actions and daily-closing
+// snapshots) keep their original primary keys for backwards compatibility.
+// Prefixing non-default keys gives each tenant an isolated namespace without
+// rewriting those tables or changing legacy identifiers returned to clients.
+function scopedAuxiliaryKey(value: string, tenantId?: string) {
+  const scope = scopedTenantId(tenantId);
+  // A caller-controlled auxiliary identifier must not be able to smuggle the
+  // namespace delimiter and address another tenant's prefixed row.
+  const safeValue = value.replaceAll("::", "%3A%3A");
+  return scope === DEFAULT_TENANT_ID ? safeValue : `${scope}::${safeValue}`;
+}
 
 const collectionTables: Array<{
   key: CollectionKey;
@@ -269,16 +301,21 @@ function quoteIdentifier(identifier: string) {
   return `"${identifier}"`;
 }
 
-export function buildDeleteMissingRowsQuery(table: string, ids: string[]) {
+export function buildDeleteMissingRowsQuery(table: string, ids: string[], tenantId?: string, storeId?: string) {
+  const storeScope = tenantId ? scopedStoreId(storeId) : undefined;
+  const tenantClause = tenantId
+    ? ` WHERE tenant_id = $1${storeScope ? " AND store_id = $2" : ""}`
+    : "";
   if (ids.length === 0) {
     return {
-      sql: `DELETE FROM ${quoteIdentifier(table)}`,
-      values: [] as unknown[],
+      sql: `DELETE FROM ${quoteIdentifier(table)}${tenantClause}`,
+      values: tenantId ? (storeScope ? [tenantId, storeScope] : [tenantId]) : [] as unknown[],
     };
   }
+  const idParam = tenantId ? (storeScope ? "$3" : "$2") : "$1";
   return {
-    sql: `DELETE FROM ${quoteIdentifier(table)} WHERE NOT (id = ANY($1::text[]))`,
-    values: [ids],
+    sql: `DELETE FROM ${quoteIdentifier(table)}${tenantId ? ` WHERE tenant_id = $1${storeScope ? " AND store_id = $2" : ""} AND` : " WHERE"} NOT (id = ANY(${idParam}::text[]))`,
+    values: tenantId ? (storeScope ? [tenantId, storeScope, ids] : [tenantId, ids]) : [ids],
   };
 }
 
@@ -287,7 +324,7 @@ export function buildDeleteMissingRowsQuery(table: string, ids: string[]) {
 // which made writes — especially the unbounded logs table — slower the more data accumulated.
 export const BULK_UPSERT_CHUNK_SIZE = 500;
 
-export async function bulkUpsertRows(client: PoolClient, table: string, rows: { id: string; json: string }[]) {
+export async function bulkUpsertRows(client: PoolClient, table: string, rows: { id: string; json: string }[], tenantId?: string, storeId?: string) {
   // Dedupe by id (last write wins) so a multi-row VALUES list never hits the same conflict target
   // twice — Postgres rejects that — and to match the original "last assignment wins" semantics.
   const deduped = new Map<string, string>();
@@ -295,18 +332,36 @@ export async function bulkUpsertRows(client: PoolClient, table: string, rows: { 
   const list = Array.from(deduped, ([id, json]) => ({ id, json }));
 
   const quotedTable = quoteIdentifier(table);
+  const storeScope = tenantId ? scopedStoreId(storeId) : undefined;
   for (let start = 0; start < list.length; start += BULK_UPSERT_CHUNK_SIZE) {
     const chunk = list.slice(start, start + BULK_UPSERT_CHUNK_SIZE);
+    if (tenantId && chunk.length) {
+      // Legacy ids are globally primary-keyed.  Never silently turn a
+      // cross-tenant collision into a no-op: callers must rotate the id or
+      // explicitly migrate the record under the owning tenant.
+      const collisions = await client.query<{id: string; tenant_id: string}>(
+        `SELECT id, tenant_id FROM ${quotedTable}
+          WHERE id = ANY($1::text[]) AND (tenant_id <> $2 OR store_id <> $3)
+          LIMIT 1`,
+        [chunk.map((row) => row.id), tenantId, storeScope],
+      );
+      if (collisions.rows[0]) {
+        throw new ConflictError(`记录 ${collisions.rows[0].id} 已属于其他企业，禁止跨企业覆盖`);
+      }
+    }
     const placeholders: string[] = [];
     const params: unknown[] = [];
     chunk.forEach((row, offset) => {
       const base = offset * 2;
-      placeholders.push(`($${base + 1}, $${base + 2}::jsonb, NOW())`);
+      placeholders.push(tenantId
+        ? `($${base + 1}, $${base + 2}::jsonb, NOW(), $${chunk.length * 2 + 1}, $${chunk.length * 2 + 2})`
+        : `($${base + 1}, $${base + 2}::jsonb, NOW())`);
       params.push(row.id, row.json);
     });
+    if (tenantId) params.push(tenantId, storeScope);
     await client.query(
-      `INSERT INTO ${quotedTable} (id, data, updated_at) VALUES ${placeholders.join(", ")}
-       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+      `INSERT INTO ${quotedTable}${tenantId ? " AS target" : ""} (id, data, updated_at${tenantId ? ", tenant_id, store_id" : ""}) VALUES ${placeholders.join(", ")}
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()${tenantId ? " WHERE target.tenant_id = EXCLUDED.tenant_id AND target.store_id = EXCLUDED.store_id" : ""}`,
       params,
     );
   }
@@ -320,19 +375,25 @@ export async function appendOnlyCollection(
   client: PoolClient,
   table: string,
   items: unknown[],
+  tenantId?: string,
+  storeId?: string,
 ) {
   const desired = new Map<string, string>();
   items.forEach((item, index) => desired.set(rowId(item, index), JSON.stringify(item)));
 
-  const existing = await client.query<{ id: string }>(`SELECT id FROM ${quoteIdentifier(table)}`);
+  const storeScope = tenantId ? scopedStoreId(storeId) : undefined;
+  const existing = await client.query<{ id: string }>(
+    `SELECT id FROM ${quoteIdentifier(table)}${tenantId ? ` WHERE tenant_id = $1${storeScope ? " AND store_id = $2" : ""}` : ""}`,
+    tenantId ? (storeScope ? [tenantId, storeScope] : [tenantId]) : [],
+  );
   const existingIds = new Set(existing.rows.map((row) => row.id));
 
   const newRows = Array.from(desired)
     .filter(([id]) => !existingIds.has(id))
     .map(([id, json]) => ({ id, json }));
-  await bulkUpsertRows(client, table, newRows);
+  await bulkUpsertRows(client, table, newRows, tenantId, storeScope);
 
-  const deleteMissing = buildDeleteMissingRowsQuery(table, Array.from(desired.keys()));
+  const deleteMissing = buildDeleteMissingRowsQuery(table, Array.from(desired.keys()), tenantId, storeScope);
   await client.query(deleteMissing.sql, deleteMissing.values);
 }
 
@@ -460,19 +521,59 @@ function rowId(item: unknown, index: number) {
   return `ROW-${String(index + 1).padStart(6, "0")}`;
 }
 
+export type PersistedPasswordUpgradeRow = {
+  id: string;
+  data: SystemUserAccount;
+  tenantId?: string | null;
+  storeId?: string | null;
+};
+
+export type PasswordUpgradeBatch = {
+  tenantId: string;
+  storeId: string;
+  rows: { id: string; json: string }[];
+};
+
+/**
+ * Prepare password upgrades without losing the row's commercial scope.  The
+ * password migration runs during startup and must never write a non-default
+ * tenant row through the default scope: ids are globally unique, while the
+ * scope columns are mandatory after the commercial foundation migration.
+ */
+export function buildPasswordUpgradeBatches(rows: PersistedPasswordUpgradeRow[]): PasswordUpgradeBatch[] {
+  const batches = new Map<string, PasswordUpgradeBatch>();
+  for (const row of rows) {
+    const password = row.data?.password;
+    if (!password || isPasswordHash(password)) continue;
+    const tenantId = row.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const storeId = row.storeId?.trim() || DEFAULT_STORE_ID;
+    const key = `${tenantId}\u0000${storeId}`;
+    const batch = batches.get(key) || { tenantId, storeId, rows: [] };
+    batch.rows.push({
+      id: row.id,
+      json: JSON.stringify({ ...row.data, password: hashPassword(password) }),
+    });
+    batches.set(key, batch);
+  }
+  return Array.from(batches.values());
+}
+
 async function upgradePersistedUserPasswords(client: PoolClient) {
-  const result = await client.query<{ id: string; data: SystemUserAccount }>("SELECT id, data FROM gpu_system_users");
-  const upgrades = result.rows
-    .filter((row) => row.data?.password && !isPasswordHash(row.data.password))
-    .map((row) => {
-      const password = row.data?.password;
-      return password ? {
-        id: row.id,
-        json: JSON.stringify({ ...row.data, password: hashPassword(password) }),
-      } : null;
-    })
-    .filter((row): row is { id: string; json: string } => Boolean(row));
-  if (upgrades.length) await bulkUpsertRows(client, "gpu_system_users", upgrades);
+  const result = await client.query<{
+    id: string;
+    data: SystemUserAccount;
+    tenant_id: string | null;
+    store_id: string | null;
+  }>("SELECT id, data, tenant_id, store_id FROM gpu_system_users");
+  const batches = buildPasswordUpgradeBatches(result.rows.map((row) => ({
+    id: row.id,
+    data: row.data,
+    tenantId: row.tenant_id,
+    storeId: row.store_id,
+  })));
+  for (const batch of batches) {
+    await bulkUpsertRows(client, "gpu_system_users", batch.rows, batch.tenantId, batch.storeId);
+  }
 }
 
 async function initializePostgres() {
@@ -498,6 +599,8 @@ async function initializePostgres() {
       CREATE TABLE IF NOT EXISTS gpu_sessions (
         token_hash TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
+        tenant_id TEXT,
+        store_id TEXT,
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
@@ -506,6 +609,8 @@ async function initializePostgres() {
       CREATE TABLE IF NOT EXISTS gpu_daily_notifications (
         report_date TEXT NOT NULL,
         notification_type TEXT NOT NULL,
+        tenant_id TEXT,
+        store_id TEXT,
         status TEXT NOT NULL,
         attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         sent_at TIMESTAMPTZ,
@@ -552,11 +657,17 @@ async function initializePostgres() {
         )
       `);
     }
-    await upgradePersistedUserPasswords(client);
     // Additive normalized CRM foundation. Legacy JSONB CRM collections remain intact
     // and are migrated later through an explicit mapping/backfill process.
     await applyCrmFoundationSchema(client);
     await applyOperationalProjectionSchema(client);
+    // Commercial foundation is additive: legacy rows are assigned to the
+    // default tenant while request-scoped repositories are rolled out.
+    await applyCommercialFoundationSchema(client);
+    await applyCommercialHardeningSchema(client);
+    // The commercial migration adds the scope columns used by the password
+    // upgrade writer; run the upgrade only after those columns exist.
+    await upgradePersistedUserPasswords(client);
     // JSONB remains the canonical document format, while these expression indexes make the
     // high-frequency operational lookups use PostgreSQL instead of loading whole collections.
     await client.query(`CREATE INDEX IF NOT EXISTS gpu_inventory_sn_idx ON gpu_inventory (LOWER(data->>'sn')) WHERE COALESCE(BTRIM(data->>'sn'), '') <> ''`);
@@ -697,8 +808,9 @@ export async function acquireAuthWriteLock(signal?: AbortSignal): Promise<() => 
   };
 }
 
-export async function getAiInsightsCache(scope: string): Promise<AiInsightsCacheRecord | null> {
+export async function getAiInsightsCache(scope: string, tenantId?: string): Promise<AiInsightsCacheRecord | null> {
   await initializePostgres();
+  const cacheScope = scopedAuxiliaryKey(scope, tenantId);
   const result = await getPool().query<{
     scope: string;
     source_hash: string;
@@ -711,7 +823,7 @@ export async function getAiInsightsCache(scope: string): Promise<AiInsightsCache
     `SELECT scope, source_hash, payload, generated_at, expires_at, provider, model
      FROM gpu_ai_insights
      WHERE scope = $1`,
-    [scope],
+    [cacheScope],
   );
   const row = result.rows[0];
   return row ? {
@@ -725,8 +837,9 @@ export async function getAiInsightsCache(scope: string): Promise<AiInsightsCache
   } : null;
 }
 
-export async function saveAiInsightsCache(record: AiInsightsCacheRecord) {
+export async function saveAiInsightsCache(record: AiInsightsCacheRecord, tenantId?: string) {
   await initializePostgres();
+  const cacheScope = scopedAuxiliaryKey(record.scope, tenantId);
   await getPool().query(
     `INSERT INTO gpu_ai_insights (scope, source_hash, payload, provider, model, generated_at, expires_at)
      VALUES ($1, $2, $3::jsonb, $4, $5, $6::timestamptz, $7::timestamptz)
@@ -738,28 +851,38 @@ export async function saveAiInsightsCache(record: AiInsightsCacheRecord) {
        generated_at = EXCLUDED.generated_at,
        expires_at = EXCLUDED.expires_at,
        updated_at = NOW()`,
-    [record.scope, record.sourceHash, JSON.stringify(record.payload), record.provider, record.model, record.generatedAt, record.expiresAt],
+    [cacheScope, record.sourceHash, JSON.stringify(record.payload), record.provider, record.model, record.generatedAt, record.expiresAt],
   );
 }
 
-export async function listAiInsightActions(): Promise<AiInsightActionRecord[]> {
+export async function listAiInsightActions(tenantId?: string): Promise<AiInsightActionRecord[]> {
   await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const prefix = scope === DEFAULT_TENANT_ID ? "" : `${scope}::`;
   const result = await getPool().query<{
     insight_id: string;
     status: AiInsightActionStatus;
     updated_by: string;
     updated_at: Date;
-  }>(`SELECT insight_id, status, updated_by, updated_at FROM gpu_ai_insight_actions ORDER BY updated_at DESC LIMIT 500`);
+  }>(
+    `SELECT insight_id, status, updated_by, updated_at
+       FROM gpu_ai_insight_actions
+      WHERE ${scope === DEFAULT_TENANT_ID ? "insight_id NOT LIKE $1" : "insight_id LIKE $1"}
+      ORDER BY updated_at DESC LIMIT 500`,
+    [`${scope === DEFAULT_TENANT_ID ? "%::%" : `${prefix}%`}`],
+  );
   return result.rows.map(row => ({
-    insightId: row.insight_id,
+    insightId: scope === DEFAULT_TENANT_ID ? row.insight_id : row.insight_id.slice(prefix.length).replaceAll("%3A%3A", "::"),
     status: row.status,
     updatedBy: row.updated_by,
     updatedAt: row.updated_at.toISOString(),
   }));
 }
 
-export async function saveAiInsightAction(record: Omit<AiInsightActionRecord, "updatedAt">): Promise<AiInsightActionRecord> {
+export async function saveAiInsightAction(record: Omit<AiInsightActionRecord, "updatedAt">, tenantId?: string): Promise<AiInsightActionRecord> {
   await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const insightId = scopedAuxiliaryKey(record.insightId, scope);
   const result = await getPool().query<{
     insight_id: string;
     status: AiInsightActionStatus;
@@ -770,16 +893,16 @@ export async function saveAiInsightAction(record: Omit<AiInsightActionRecord, "u
      VALUES ($1, $2, $3)
      ON CONFLICT (insight_id) DO UPDATE SET status = EXCLUDED.status, updated_by = EXCLUDED.updated_by, updated_at = NOW()
      RETURNING insight_id, status, updated_by, updated_at`,
-    [record.insightId, record.status, record.updatedBy],
+    [insightId, record.status, record.updatedBy],
   );
   const row = result.rows[0];
   if (!row) throw new Error("AI insight action insert returned no row");
-  return { insightId: row.insight_id, status: row.status, updatedBy: row.updated_by, updatedAt: row.updated_at.toISOString() };
+  return { insightId: record.insightId, status: row.status, updatedBy: row.updated_by, updatedAt: row.updated_at.toISOString() };
 }
 
-export async function deleteAiInsightAction(insightId: string) {
+export async function deleteAiInsightAction(insightId: string, tenantId?: string) {
   await initializePostgres();
-  await getPool().query(`DELETE FROM gpu_ai_insight_actions WHERE insight_id = $1`, [insightId]);
+  await getPool().query(`DELETE FROM gpu_ai_insight_actions WHERE insight_id = $1`, [scopedAuxiliaryKey(insightId, tenantId)]);
 }
 
 async function lockTransactionForStateWrite(client: PoolClient) {
@@ -793,29 +916,38 @@ export function createDatabaseSessionStore(): SessionStore {
     async create(tokenHash: string, session: PersistedSession) {
       await initializePostgres();
       await getPool().query(
-        `INSERT INTO gpu_sessions (token_hash, user_id, expires_at)
-         VALUES ($1, $2, to_timestamp($3 / 1000.0))
-         ON CONFLICT (token_hash) DO UPDATE SET user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at, created_at = NOW()`,
-        [tokenHash, session.userId, session.expiresAt],
+        `INSERT INTO gpu_sessions (token_hash, user_id, tenant_id, store_id, expires_at)
+         VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0))
+         ON CONFLICT (token_hash) DO UPDATE SET user_id = EXCLUDED.user_id, tenant_id = EXCLUDED.tenant_id, store_id = EXCLUDED.store_id, expires_at = EXCLUDED.expires_at, created_at = NOW()`,
+        [tokenHash, session.userId, session.tenantId || DEFAULT_TENANT_ID, session.storeId || null, session.expiresAt],
       );
     },
     async resolve(tokenHash: string) {
       await initializePostgres();
-      const result = await getPool().query<{ user_id: string; expires_at: Date }>(
-        `DELETE FROM gpu_sessions WHERE token_hash = $1 AND expires_at <= NOW() RETURNING user_id, expires_at`,
+      const result = await getPool().query<{ user_id: string; tenant_id: string | null; store_id: string | null; expires_at: Date }>(
+        `DELETE FROM gpu_sessions WHERE token_hash = $1 AND expires_at <= NOW() RETURNING user_id, tenant_id, store_id, expires_at`,
         [tokenHash],
       );
       if (result.rowCount) return null;
-      const active = await getPool().query<{ user_id: string; expires_at: Date }>(
-        "SELECT user_id, expires_at FROM gpu_sessions WHERE token_hash = $1 AND expires_at > NOW()",
+      const active = await getPool().query<{ user_id: string; tenant_id: string | null; store_id: string | null; expires_at: Date }>(
+        "SELECT user_id, tenant_id, store_id, expires_at FROM gpu_sessions WHERE token_hash = $1 AND expires_at > NOW()",
         [tokenHash],
       );
       const row = active.rows[0];
-      return row ? { userId: row.user_id, expiresAt: row.expires_at.getTime() } : null;
+      return row ? { userId: row.user_id, tenantId: row.tenant_id || DEFAULT_TENANT_ID, storeId: row.store_id || undefined, expiresAt: row.expires_at.getTime() } : null;
     },
     async revoke(tokenHash: string) {
       await initializePostgres();
       await getPool().query("DELETE FROM gpu_sessions WHERE token_hash = $1", [tokenHash]);
+    },
+    async revokeUserSessions(userId: string, tenantId?: string) {
+      await initializePostgres();
+      const scope = tenantId?.trim();
+      const result = await getPool().query(
+        `DELETE FROM gpu_sessions WHERE user_id = $1${scope ? " AND tenant_id = $2" : ""}`,
+        scope ? [userId, scope] : [userId],
+      );
+      return result.rowCount || 0;
     },
     async cleanupExpired(expiresBefore: number) {
       await initializePostgres();
@@ -847,6 +979,8 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     values.push(value);
     return `$${values.length}`;
   };
+  if (filters.tenantId?.trim()) clauses.push(`tenant_id = ${bind(filters.tenantId.trim())}`);
+  if (filters.storeId?.trim()) clauses.push(`store_id = ${bind(filters.storeId.trim())}`);
   const keyword = filters.keyword?.trim();
   const selectedStatus = filters.status?.trim();
   const selectedSoldStatus = selectedStatus === "已售出";
@@ -938,12 +1072,20 @@ export function buildLogPageQuery(filters: LogPageFilters = {}) {
   const pageSize = Math.min(200, normalizedPage(filters.pageSize, 100));
   const keyword = filters.keyword?.trim();
   const values: unknown[] = [];
-  const where = keyword
-    ? (() => {
-        values.push(`%${keyword}%`);
-        return `WHERE CONCAT_WS(' ', id, data->>'user', data->>'module', data->>'type', data->>'target', data->>'beforeVal', data->>'afterVal', data->>'time') ILIKE $1`;
-      })()
-    : "";
+  const clauses: string[] = [];
+  if (filters.tenantId?.trim()) {
+    values.push(filters.tenantId.trim());
+    clauses.push("tenant_id = $1");
+  }
+  if (filters.storeId?.trim()) {
+    values.push(filters.storeId.trim());
+    clauses.push(`store_id = $${values.length}`);
+  }
+  if (keyword) {
+    values.push(`%${keyword}%`);
+    clauses.push(`CONCAT_WS(' ', id, data->>'user', data->>'module', data->>'type', data->>'target', data->>'beforeVal', data->>'afterVal', data->>'time') ILIKE $${values.length}`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   return { page, pageSize, offset: (page - 1) * pageSize, values, where };
 }
 
@@ -999,6 +1141,8 @@ export function buildCommissionPageQuery(filters: CommissionPageFilters) {
     return `$${values.length}`;
   };
   const expressions = commissionExpressions(filters.mode);
+  if (filters.tenantId?.trim()) clauses.push(`tenant_id = ${bind(filters.tenantId.trim())}`);
+  if (filters.storeId?.trim()) clauses.push(`store_id = ${bind(filters.storeId.trim())}`);
   const keyword = filters.keyword?.trim();
   if (keyword) {
     clauses.push(`CONCAT_WS(' ', id, data->>'sn', data->>'productName', ${expressions.handler}, ${expressions.documentNo}, data->>'purchaseInvoiceNo', data->>'salesInvoiceNo') ILIKE ${bind(`%${keyword}%`)}`);
@@ -1102,6 +1246,8 @@ export function buildFinanceProfitFlowQuery(kind: FinanceProfitFlowKind, filters
     values.push(value);
     return `$${values.length}`;
   };
+  if (filters.tenantId?.trim()) clauses.unshift(`tenant_id = ${bind(filters.tenantId.trim())}`);
+  if (filters.storeId?.trim()) clauses.unshift(`store_id = ${bind(filters.storeId.trim())}`);
   const types = kind === "income" ? PROFIT_OTHER_INCOME_TYPES : PROFIT_OTHER_EXPENSE_TYPES;
   clauses.push(`COALESCE(data->>'businessType', '') = ANY(${bind([...types])}::text[])`);
   if (filters.dateStart) clauses.push(`LEFT(data->>'time', 10) >= ${bind(filters.dateStart)}`);
@@ -1157,6 +1303,8 @@ export function buildFinanceRecordPageQuery(kind: FinanceRecordKind, filters: Fi
     values.push(value);
     return `$${values.length}`;
   };
+  if (filters.tenantId?.trim()) clauses.push(`tenant_id = ${bind(filters.tenantId.trim())}`);
+  if (filters.storeId?.trim()) clauses.push(`store_id = ${bind(filters.storeId.trim())}`);
   const exactFilters: Array<[keyof FinanceRecordPageFilters, string]> = [
     ["accountId", "accountId"], ["handler", "handler"], ["businessType", "businessType"],
     ["direction", "direction"], ["relatedDocNo", "relatedDocNo"], ["customerName", "customerName"], ["supplierName", "supplierName"],
@@ -1236,6 +1384,8 @@ export function buildInvoicePageQuery(kind: InvoicePageKind, filters: InvoicePag
   const values: unknown[] = [];
   const clauses: string[] = [];
   const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
+  if (filters.tenantId?.trim()) clauses.push(`tenant_id = ${bind(filters.tenantId.trim())}`);
+  if (filters.storeId?.trim()) clauses.push(`store_id = ${bind(filters.storeId.trim())}`);
   if (filters.dateStart) clauses.push(`COALESCE(data->>'date', '') >= ${bind(filters.dateStart)}`);
   if (filters.dateEnd) clauses.push(`COALESCE(data->>'date', '') <= ${bind(filters.dateEnd)}`);
   if (kind === "purchase" && filters.sourceType) clauses.push(`data->>'sourceType' = ${bind(filters.sourceType)}`);
@@ -1269,7 +1419,11 @@ async function queryInvoicePage<T>(kind: InvoicePageKind, filters: InvoicePageFi
   const legacyLabel = kind === "purchase" ? "进货单" : "销售单";
   const structuredField = kind === "purchase" ? "purchaseInvoiceNo" : "salesInvoiceId";
   const countKey = kind === "purchase" ? "__inventoryCount" : "__linkedInventoryCount";
-  const inventoryCount = `(SELECT COUNT(*) FROM gpu_inventory inventory WHERE inventory.data->>'${structuredField}' IN (document.id, ${invoiceNo}) OR SUBSTRING(COALESCE(inventory.data->>'remarks', '') FROM '${legacyLabel}\\s*[:：]\\s*([^；;\\s]+)') IN (document.id, ${invoiceNo}))`;
+  const inventoryScopeClauses: string[] = [];
+  if (filters.tenantId?.trim()) inventoryScopeClauses.push("inventory.tenant_id = $1");
+  if (filters.storeId?.trim()) inventoryScopeClauses.push(`inventory.store_id = $${filters.tenantId?.trim() ? 2 : 1}`);
+  const inventoryScope = inventoryScopeClauses.length ? `${inventoryScopeClauses.join(" AND ")} AND ` : "";
+  const inventoryCount = `(SELECT COUNT(*) FROM gpu_inventory inventory WHERE ${inventoryScope}(inventory.data->>'${structuredField}' IN (document.id, ${invoiceNo}) OR SUBSTRING(COALESCE(inventory.data->>'remarks', '') FROM '${legacyLabel}\\s*[:：]\\s*([^；;\\s]+)') IN (document.id, ${invoiceNo})))`;
   const pendingPayment = kind === "purchase" ? `${purchasePaymentStatusExpression.replaceAll("data", "document.data")} IN ('未付款', '部分付款')` : `${salesPaymentStatusExpression.replaceAll("data", "document.data")} IN ('未收款', '部分收款')`;
   const summarySql = kind === "purchase"
     ? `COUNT(*)::text AS total, COALESCE(SUM(COALESCE(NULLIF(data->>'totalCount', '')::numeric, 0)), 0)::text AS unit_count, COUNT(*) FILTER (WHERE ${pendingPayment.replaceAll("document.data", "data")})::text AS pending_payment_count, COALESCE(SUM(COALESCE(NULLIF(data->>'totalCost', '')::numeric, 0)), 0)::text AS total_cost, COALESCE(SUM(COALESCE(NULLIF(data->>'estTotalProfit', '')::numeric, 0)), 0)::text AS estimated_profit`
@@ -1291,30 +1445,109 @@ async function queryInvoicePage<T>(kind: InvoicePageKind, filters: InvoicePageFi
 export function queryPurchaseInvoicePage<T = unknown>(filters: InvoicePageFilters = {}) { return queryInvoicePage<T>("purchase", filters); }
 export function querySalesInvoicePage<T = unknown>(filters: InvoicePageFilters = {}) { return queryInvoicePage<T>("sales", filters); }
 
-export async function findInventoryRecord<T = unknown>(id: string): Promise<T | null> {
+export async function findInventoryRecord<T = unknown>(id: string, tenantId?: string, storeId?: string): Promise<T | null> {
   await initializePostgres();
-  const result = await getPool().query<{ data: T }>("SELECT data FROM gpu_inventory WHERE id = $1", [id]);
-  return result.rows[0]?.data || null;
-}
-
-export async function findInventoryRecordBySn<T = unknown>(sn: string): Promise<T | null> {
-  await initializePostgres();
+  const scope = tenantId?.trim();
+  const storeScope = scope ? scopedStoreId(storeId) : undefined;
   const result = await getPool().query<{ data: T }>(
-    "SELECT data FROM gpu_inventory WHERE op_sn = LOWER($1) LIMIT 1",
-    [sn],
+    `SELECT data FROM gpu_inventory WHERE id = $1${scope ? ` AND tenant_id = $2${storeScope ? " AND store_id = $3" : ""}` : ""}`,
+    scope ? (storeScope ? [id, scope, storeScope] : [id, scope]) : [id],
   );
   return result.rows[0]?.data || null;
 }
 
-async function hasPersistedState(client: PoolClient) {
-  const result = await client.query<{ count: string }>(
-    "SELECT COUNT(*)::text AS count FROM gpu_app_meta WHERE key IN ('currentRole', 'customPermissions')",
+export async function findInventoryRecordBySn<T = unknown>(sn: string, tenantId?: string, storeId?: string): Promise<T | null> {
+  await initializePostgres();
+  const scope = tenantId?.trim();
+  const storeScope = scope ? scopedStoreId(storeId) : undefined;
+  const result = await getPool().query<{ data: T }>(
+    `SELECT data FROM gpu_inventory WHERE op_sn = LOWER($1)${scope ? ` AND tenant_id = $2${storeScope ? " AND store_id = $3" : ""}` : ""} LIMIT 1`,
+    scope ? (storeScope ? [sn, scope, storeScope] : [sn, scope]) : [sn],
   );
-  if (Number(result.rows[0]?.count || 0) > 0) return true;
+  return result.rows[0]?.data || null;
+}
 
-  const inventory = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM gpu_inventory");
-  const users = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM gpu_system_users");
+/** Resolve the global login identity; tenant authorization is enforced by membership. */
+export async function findSystemUserById(userId: string, tenantId?: string): Promise<SystemUserAccount | null> {
+  await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const result = await getPool().query<{ data: SystemUserAccount; tenant_id: string }>(
+    "SELECT data, tenant_id FROM gpu_system_users WHERE id = $1 ORDER BY CASE WHEN tenant_id = $2 THEN 0 ELSE 1 END, id ASC LIMIT 1",
+    [userId, scope],
+  );
+  const user = result.rows[0]?.data;
+  return user ? { ...user, tenantId: user.tenantId || result.rows[0]?.tenant_id || scope, storeId: user.storeId || DEFAULT_STORE_ID } : null;
+}
+
+export async function findSystemUserByUsername(username: string, tenantId?: string): Promise<SystemUserAccount | null> {
+  await initializePostgres();
+  const scope = tenantId?.trim();
+  const result = await getPool().query<{ data: SystemUserAccount; tenant_id: string }>(
+    scope
+      ? "SELECT data, tenant_id FROM gpu_system_users WHERE LOWER(data->>'username') = LOWER($1) AND tenant_id = $2 ORDER BY id ASC LIMIT 1"
+      : "SELECT data, tenant_id FROM gpu_system_users WHERE LOWER(data->>'username') = LOWER($1) ORDER BY CASE WHEN tenant_id = $2 THEN 0 ELSE 1 END, id ASC LIMIT 1",
+    scope ? [username.trim(), scope] : [username.trim(), DEFAULT_TENANT_ID],
+  );
+  const user = result.rows[0]?.data;
+  return user ? { ...user, tenantId: user.tenantId || result.rows[0]?.tenant_id || scope || DEFAULT_TENANT_ID, storeId: user.storeId || DEFAULT_STORE_ID } : null;
+}
+
+export async function findActiveTenantMembership(userId: string, tenantId: string, storeId?: string) {
+  await initializePostgres();
+  const result = await getPool().query<{ tenant_id: string; store_id: string; role: string; status: string; permissions: unknown }>(
+    `SELECT tenant_id, store_id, role, status, permissions
+       FROM gpu_tenant_memberships
+      WHERE tenant_id = $1 AND user_id = $2 AND status = 'active'
+        ${storeId ? "AND store_id = $3" : ""}
+      ORDER BY created_at ASC LIMIT 1`,
+    storeId ? [tenantId, userId, storeId] : [tenantId, userId],
+  );
+  const row = result.rows[0];
+  return row ? { tenantId: row.tenant_id, storeId: row.store_id, role: row.role, status: row.status, permissions: row.permissions && typeof row.permissions === "object" ? row.permissions as Record<string, unknown> : {} } : null;
+}
+
+async function hasPersistedState(client: PoolClient, tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
+  if (scope === DEFAULT_TENANT_ID) {
+    const result = await client.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM gpu_app_meta WHERE key IN ('currentRole', 'customPermissions')",
+    );
+    if (Number(result.rows[0]?.count || 0) > 0) return true;
+  } else {
+    const settings = await client.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM gpu_tenant_settings WHERE tenant_id = $1",
+      [scope],
+    );
+    if (Number(settings.rows[0]?.count || 0) > 0) return true;
+  }
+
+  const inventory = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM gpu_inventory WHERE tenant_id = $1 AND store_id = $2", [scope, storeScope]);
+  const users = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM gpu_system_users WHERE tenant_id = $1 AND store_id = $2", [scope, storeScope]);
   return Number(inventory.rows[0]?.count || 0) > 0 || Number(users.rows[0]?.count || 0) > 0;
+}
+
+/**
+ * The commercial schema is applied before a clean database receives the
+ * initial JSONB state.  Keep the membership projection in sync after that
+ * bootstrap (and repair legacy tenants that predate the projection) without
+ * reactivating a membership that an operator deliberately deactivated.
+ */
+async function ensureTenantMemberships(client: PoolClient, tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
+  await client.query(
+    `INSERT INTO gpu_tenant_memberships
+       (tenant_id, user_id, store_id, role, status, joined_at)
+     SELECT tenant_id, id, store_id,
+            COALESCE(NULLIF(data->>'role', ''), '店员'),
+            CASE WHEN data->>'enabled' = 'false' THEN 'deactivated' ELSE 'active' END,
+            NOW()
+       FROM gpu_system_users
+      WHERE tenant_id = $1 AND store_id = $2
+     ON CONFLICT (tenant_id, user_id, store_id) DO NOTHING`,
+    [scope, storeScope],
+  );
 }
 
 async function touchStateRevision(client: PoolClient) {
@@ -1347,24 +1580,48 @@ async function loadLegacyJsonState() {
   }
 }
 
-async function readStateFromPostgres(client: PoolClient): Promise<AppState> {
+async function readStateFromPostgres(client: PoolClient, tenantId?: string, storeId?: string): Promise<AppState> {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   const state = createInitialState({ includeCrmDemoData: false });
 
   for (const { key, table } of collectionTables) {
-    const result = await client.query<{ data: unknown }>(`SELECT data FROM ${table} ORDER BY id ASC`);
+    const result = await client.query<{ data: unknown }>(`SELECT data FROM ${table} WHERE tenant_id = $1 AND store_id = $2 ORDER BY id ASC`, [scope, storeScope]);
     (state[key] as unknown[]) = result.rows.map((row) => row.data);
   }
+  state.systemUsers = state.systemUsers.map((user) => ({
+    ...user,
+    tenantId: user.tenantId || scope,
+    storeId: user.storeId || storeScope,
+  }));
 
-  const meta = await client.query<{ key: string; value: unknown }>("SELECT key, value FROM gpu_app_meta");
-  for (const row of meta.rows) {
-    if (row.key === "currentRole") {
-      state.currentRole = row.value as AppState["currentRole"];
-    }
-    if (row.key === "customPermissions") {
-      state.customPermissions = row.value as AppState["customPermissions"];
-    }
-    if (row.key === "commissionRules") {
-      state.commissionRules = row.value as AppState["commissionRules"];
+  const settings = await client.query<{ current_role: string | null; custom_permissions: unknown; commission_rules: unknown }>(
+    "SELECT \"current_role\", custom_permissions, commission_rules FROM gpu_tenant_settings WHERE tenant_id = $1",
+    [scope],
+  );
+  const setting = settings.rows[0];
+  if (setting?.current_role) state.currentRole = setting.current_role as AppState["currentRole"];
+  // Commercial foundation rows created before the permission setting contract
+  // was finalized used `{}` as the JSONB default.  Only the array form is a
+  // valid PermissionSettings value; keep the in-memory defaults for malformed
+  // legacy rows instead of allowing an object to reach `.find()`/`.map()`.
+  if (Array.isArray(setting?.custom_permissions)) {
+    state.customPermissions = setting.custom_permissions as AppState["customPermissions"];
+  }
+  if (setting?.commission_rules && typeof setting.commission_rules === "object") {
+    state.commissionRules = setting.commission_rules as AppState["commissionRules"];
+  }
+  // Keep the legacy app_meta values readable for the default tenant during the
+  // migration window. They are intentionally never used as another tenant's
+  // authorization or commission source.
+  if (scope === DEFAULT_TENANT_ID && !setting) {
+    const meta = await client.query<{ key: string; value: unknown }>("SELECT key, value FROM gpu_app_meta");
+    for (const row of meta.rows) {
+      if (row.key === "currentRole") state.currentRole = row.value as AppState["currentRole"];
+      if (row.key === "customPermissions" && Array.isArray(row.value)) {
+        state.customPermissions = row.value as AppState["customPermissions"];
+      }
+      if (row.key === "commissionRules") state.commissionRules = row.value as AppState["commissionRules"];
     }
   }
 
@@ -1376,39 +1633,79 @@ async function readStateCollectionsFromPostgres(
   client: PoolClient,
   currentState: AppState,
   keys: CollectionKey[],
+  tenantId?: string,
+  storeId?: string,
 ): Promise<AppState> {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   const state = {
     ...currentState,
     currentUserId: undefined,
   };
 
   for (const { key, table } of getCollectionTablesForKeys(keys)) {
-    const result = await client.query<{ data: unknown }>(`SELECT data FROM ${table} ORDER BY id ASC`);
+    const result = await client.query<{ data: unknown }>(`SELECT data FROM ${table} WHERE tenant_id = $1 AND store_id = $2 ORDER BY id ASC`, [scope, storeScope]);
     (state[key] as unknown[]) = result.rows.map((row) => row.data);
   }
+  state.systemUsers = state.systemUsers.map((user) => ({
+    ...user,
+    tenantId: user.tenantId || scope,
+    storeId: user.storeId || storeScope,
+  }));
 
-  const meta = await client.query<{ key: string; value: unknown }>("SELECT key, value FROM gpu_app_meta WHERE key = 'commissionRules'");
-  if (meta.rows[0]) state.commissionRules = meta.rows[0].value as AppState["commissionRules"];
+  const settings = await client.query<{ current_role: string | null; custom_permissions: unknown; commission_rules: unknown }>(
+    "SELECT \"current_role\", custom_permissions, commission_rules FROM gpu_tenant_settings WHERE tenant_id = $1",
+    [scope],
+  );
+  const setting = settings.rows[0];
+  if (setting?.current_role) state.currentRole = setting.current_role as AppState["currentRole"];
+  if (Array.isArray(setting?.custom_permissions)) {
+    state.customPermissions = setting.custom_permissions as AppState["customPermissions"];
+  }
+  if (setting?.commission_rules && typeof setting.commission_rules === "object") {
+    state.commissionRules = setting.commission_rules as AppState["commissionRules"];
+  } else if (scope === DEFAULT_TENANT_ID && !setting) {
+    const meta = await client.query<{ value: unknown }>("SELECT value FROM gpu_app_meta WHERE key = 'commissionRules'");
+    if (meta.rows[0]) state.commissionRules = meta.rows[0].value as AppState["commissionRules"];
+  }
 
   return normalizeStateConditions(state);
 }
 
-async function writeStateToPostgres(client: PoolClient, nextState: AppState) {
+async function writeStateToPostgres(client: PoolClient, nextState: AppState, tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   const state = cloneWithoutRuntimeSession(nextState);
 
-  await writeCollectionsToPostgres(client, state, collectionTables.map(({ key }) => key));
+  await writeCollectionsToPostgres(client, state, collectionTables.map(({ key }) => key), scope, storeScope);
 
   await client.query(
-    `INSERT INTO gpu_app_meta (key, value, updated_at) VALUES
-      ('currentRole', $1::jsonb, NOW()),
-      ('customPermissions', $2::jsonb, NOW()),
-      ('commissionRules', $3::jsonb, NOW())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-    [JSON.stringify(state.currentRole), JSON.stringify(state.customPermissions), JSON.stringify(state.commissionRules)],
+    `INSERT INTO gpu_tenant_settings (tenant_id, "current_role", custom_permissions, commission_rules, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, NOW())
+     ON CONFLICT (tenant_id) DO UPDATE SET
+       "current_role" = EXCLUDED."current_role",
+       custom_permissions = EXCLUDED.custom_permissions,
+       commission_rules = EXCLUDED.commission_rules,
+       updated_at = NOW()`,
+    [scope, state.currentRole || null, JSON.stringify(state.customPermissions || []), JSON.stringify(state.commissionRules || {})],
   );
+  // Keep app_meta in sync for legacy tooling, but only the default tenant is
+  // allowed to write these compatibility keys.
+  if (scope === DEFAULT_TENANT_ID) {
+    await client.query(
+      `INSERT INTO gpu_app_meta (key, value, updated_at) VALUES
+        ('currentRole', $1::jsonb, NOW()),
+        ('customPermissions', $2::jsonb, NOW()),
+        ('commissionRules', $3::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify(state.currentRole), JSON.stringify(state.customPermissions), JSON.stringify(state.commissionRules)],
+    );
+  }
 }
 
-async function writeCollectionsToPostgres(client: PoolClient, nextState: AppState, keys: CollectionKey[]) {
+async function writeCollectionsToPostgres(client: PoolClient, nextState: AppState, keys: CollectionKey[], tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   const state = cloneWithoutRuntimeSession(nextState);
 
   for (const { key, table } of getCollectionTablesForKeys(keys)) {
@@ -1416,12 +1713,12 @@ async function writeCollectionsToPostgres(client: PoolClient, nextState: AppStat
     // Logs are immutable + append-only: persist incrementally so a submit never rewrites the
     // whole (capped) log table — it only inserts the few new entries and trims the tail.
     if (key === "logs") {
-      await appendOnlyCollection(client, table, items);
+      await appendOnlyCollection(client, table, items, scope, storeScope);
       continue;
     }
     const rows = items.map((item, index) => ({ id: rowId(item, index), json: JSON.stringify(item) }));
-    await bulkUpsertRows(client, table, rows);
-    const deleteMissing = buildDeleteMissingRowsQuery(table, rows.map((row) => row.id));
+    await bulkUpsertRows(client, table, rows, scope, storeScope);
+    const deleteMissing = buildDeleteMissingRowsQuery(table, rows.map((row) => row.id), scope, storeScope);
     await client.query(deleteMissing.sql, deleteMissing.values);
   }
 }
@@ -1429,44 +1726,85 @@ async function writeCollectionsToPostgres(client: PoolClient, nextState: AppStat
 async function upsertCollectionRecords(
   client: PoolClient,
   records: StateRecordSave[],
+  tenantId?: string,
+  storeId?: string,
 ) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   for (const record of records) {
     const target = getCollectionTablesForKeys([record.key])[0];
     if (!target) continue;
 
     const rows = record.items.map((item, index) => ({ id: rowId(item, index), json: JSON.stringify(item) }));
-    await bulkUpsertRows(client, target.table, rows);
+    await bulkUpsertRows(client, target.table, rows, scope, storeScope);
     if (record.deleteIds?.length) {
       await client.query(
-        `DELETE FROM ${quoteIdentifier(target.table)} WHERE id = ANY($1::text[])`,
-        [Array.from(new Set(record.deleteIds))],
+        `DELETE FROM ${quoteIdentifier(target.table)} WHERE tenant_id = $1 AND store_id = $2 AND id = ANY($3::text[])`,
+        [scope, storeScope, Array.from(new Set(record.deleteIds))],
       );
     }
     if (record.deleteMissing) {
-      const deleteMissing = buildDeleteMissingRowsQuery(target.table, rows.map((row) => row.id));
+      const deleteMissing = buildDeleteMissingRowsQuery(target.table, rows.map((row) => row.id), scope, storeScope);
       await client.query(deleteMissing.sql, deleteMissing.values);
     }
   }
 }
 
-async function snapshotState(client: PoolClient) {
-  const state = await readStateFromPostgres(client);
+async function snapshotState(client: PoolClient, tenantId?: string, storeId?: string) {
+  const state = await readStateFromPostgres(client, tenantId, storeId);
   return cloneWithoutRuntimeSession(state);
 }
 
-export async function loadState(): Promise<AppState> {
+/**
+ * Keep every inspection revision as an append-only record.  The JSONB
+ * collection remains the current read model, while this table is the durable
+ * evidence needed for re-checks, approvals and later rollback tooling.
+ */
+export async function appendInspectionVersionInTransaction(
+  client: PoolClient,
+  record: InspectionRecord,
+  tenantId?: string,
+  recordedBy?: string,
+) {
+  const scope = scopedTenantId(tenantId);
+  await client.query(
+    `INSERT INTO gpu_inspection_versions (tenant_id, inspection_id, record_version, data, recorded_by)
+     VALUES ($1, $2, $3, $4::jsonb, $5)
+     ON CONFLICT (tenant_id, inspection_id, record_version) DO NOTHING`,
+    [scope, record.id, Math.max(1, Number(record.recordVersion || 1)), JSON.stringify(record), recordedBy?.trim() || null],
+  );
+}
+
+export async function listInspectionVersions<T = InspectionRecord>(inspectionId: string, tenantId?: string): Promise<T[]> {
+  await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const result = await getPool().query<{ data: T }>(
+    `SELECT data
+       FROM gpu_inspection_versions
+      WHERE tenant_id = $1 AND inspection_id = $2
+      ORDER BY record_version ASC`,
+    [scope, inspectionId.trim()],
+  );
+  return result.rows.map((row) => row.data);
+}
+
+export async function loadState(tenantId?: string, storeId?: string): Promise<AppState> {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   await initializePostgres();
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    if (!(await hasPersistedState(client))) {
-      const legacy = await loadLegacyJsonState();
+    if (!(await hasPersistedState(client, scope, storeScope))) {
+      const legacy = scope === DEFAULT_TENANT_ID ? await loadLegacyJsonState() : null;
       if (!legacy) assertProductionBootstrapPasswordConfigured();
       const initial = legacy || createInitialState({ includeCrmDemoData: false });
-      await writeStateToPostgres(client, initial);
+      if (scope !== DEFAULT_TENANT_ID && !legacy) initial.systemUsers = [];
+      await writeStateToPostgres(client, initial, scope, storeScope);
       await touchStateRevision(client);
     }
-    const state = await readStateFromPostgres(client);
+    await ensureTenantMemberships(client, scope, storeScope);
+    const state = await readStateFromPostgres(client, scope, storeScope);
     await client.query("COMMIT");
     return state;
   } catch (error) {
@@ -1477,20 +1815,24 @@ export async function loadState(): Promise<AppState> {
   }
 }
 
-export async function loadStateCollections(state: AppState, keys: CollectionKey[]): Promise<AppState> {
+export async function loadStateCollections(state: AppState, keys: CollectionKey[], tenantId?: string, storeId?: string): Promise<AppState> {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   if (!keys.length) return state;
   await initializePostgres();
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    if (!(await hasPersistedState(client))) {
-      const legacy = await loadLegacyJsonState();
+    if (!(await hasPersistedState(client, scope, storeScope))) {
+      const legacy = scope === DEFAULT_TENANT_ID ? await loadLegacyJsonState() : null;
       if (!legacy) assertProductionBootstrapPasswordConfigured();
       const initial = legacy || createInitialState({ includeCrmDemoData: false });
-      await writeStateToPostgres(client, initial);
+      if (scope !== DEFAULT_TENANT_ID && !legacy) initial.systemUsers = [];
+      await writeStateToPostgres(client, initial, scope, storeScope);
       await touchStateRevision(client);
     }
-    const nextState = await readStateCollectionsFromPostgres(client, state, keys);
+    await ensureTenantMemberships(client, scope, storeScope);
+    const nextState = await readStateCollectionsFromPostgres(client, state, keys, scope, storeScope);
     await client.query("COMMIT");
     return nextState;
   } catch (error) {
@@ -1501,14 +1843,16 @@ export async function loadStateCollections(state: AppState, keys: CollectionKey[
   }
 }
 
-export async function saveState(state: AppState) {
+export async function saveState(state: AppState, tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   return enqueueStateSave(async () => {
     await initializePostgres();
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
       await lockTransactionForStateWrite(client);
-      await writeStateToPostgres(client, state);
+      await writeStateToPostgres(client, state, scope, storeScope);
       await touchStateRevision(client);
       await client.query("COMMIT");
     } catch (error) {
@@ -1520,14 +1864,16 @@ export async function saveState(state: AppState) {
   });
 }
 
-export async function saveStateCollections(state: AppState, keys: CollectionKey[]) {
+export async function saveStateCollections(state: AppState, keys: CollectionKey[], tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   return enqueueStateSave(async () => {
     await initializePostgres();
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
       await lockTransactionForStateWrite(client);
-      await writeCollectionsToPostgres(client, state, keys);
+      await writeCollectionsToPostgres(client, state, keys, scope, storeScope);
       await touchStateRevision(client);
       await client.query("COMMIT");
     } catch (error) {
@@ -1539,14 +1885,16 @@ export async function saveStateCollections(state: AppState, keys: CollectionKey[
   });
 }
 
-export async function saveStateRecords(records: StateRecordSave[], transactionHook?: StateRecordTransactionHook) {
+export async function saveStateRecords(records: StateRecordSave[], transactionHook?: StateRecordTransactionHook, tenantId?: string, storeId?: string) {
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   return enqueueStateSave(async () => {
     await initializePostgres();
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
       await lockTransactionForStateWrite(client);
-      await upsertCollectionRecords(client, records);
+      await upsertCollectionRecords(client, records, scope, storeScope);
       await transactionHook?.(client);
       await touchStateRevision(client);
       await client.query("COMMIT");
@@ -1559,14 +1907,26 @@ export async function saveStateRecords(records: StateRecordSave[], transactionHo
   });
 }
 
-export async function createManualBackup(): Promise<{ file: string }> {
+function scopedBackupId(baseId: string, tenantId?: string) {
+  const scope = scopedTenantId(tenantId);
+  return scope === DEFAULT_TENANT_ID ? baseId : `${encodeURIComponent(scope)}::${baseId}`;
+}
+
+function backupScopeSql(tenantId?: string) {
+  const scope = scopedTenantId(tenantId);
+  return scope === DEFAULT_TENANT_ID
+    ? { sql: "id NOT LIKE $1", values: ["%::%"] }
+    : { sql: "id LIKE $1", values: [`${encodeURIComponent(scope)}::%`] };
+}
+
+export async function createManualBackup(tenantId?: string): Promise<{ file: string }> {
   await initializePostgres();
   const client = await getPool().connect();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupId = `postgres-backup-${stamp}`;
+  const backupId = scopedBackupId(`postgres-backup-${stamp}`, tenantId);
   try {
     await client.query("BEGIN");
-    const snapshot = await snapshotState(client);
+    const snapshot = await snapshotState(client, tenantId);
     await client.query(
       "INSERT INTO gpu_db_backups (id, snapshot) VALUES ($1, $2::jsonb)",
       [backupId, JSON.stringify(snapshot)],
@@ -1581,14 +1941,16 @@ export async function createManualBackup(): Promise<{ file: string }> {
   }
 }
 
-export async function listBackups(): Promise<Array<{ name: string; size: number; createdAt: string }>> {
+export async function listBackups(tenantId?: string): Promise<Array<{ name: string; size: number; createdAt: string }>> {
   await initializePostgres();
+  const scope = backupScopeSql(tenantId);
   const result = await getPool().query<{ id: string; size: string; created_at: Date }>(`
     SELECT id, pg_column_size(snapshot)::text AS size, created_at
     FROM gpu_db_backups
+    WHERE ${scope.sql}
     ORDER BY created_at DESC
     LIMIT 100
-  `);
+  `, scope.values);
   return result.rows.map((row) => ({
     name: row.id,
     size: Number(row.size || 0),
@@ -1606,63 +1968,82 @@ export async function writeDownloadedBackup(state: AppState): Promise<string> {
 
 /** Claim a daily notification before delivery. A successful report is never sent twice; a failed
  * delivery may be retried, and a stale in-progress delivery becomes retryable after 30 minutes. */
-export async function claimDailyNotification(reportDate: string, notificationType: string) {
+export async function claimDailyNotification(reportDate: string, notificationType: string, tenantId?: string, storeId?: string) {
   await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   const result = await getPool().query<{ report_date: string }>(`
-    INSERT INTO gpu_daily_notifications (report_date, notification_type, status, attempted_at)
-    VALUES ($1, $2, 'sending', NOW())
-    ON CONFLICT (report_date, notification_type) DO UPDATE SET
+    INSERT INTO gpu_daily_notifications (tenant_id, store_id, report_date, notification_type, status, attempted_at)
+    VALUES ($1, $2, $3, $4, 'sending', NOW())
+    ON CONFLICT (tenant_id, store_id, report_date, notification_type) DO UPDATE SET
       status = 'sending', attempted_at = NOW(), error_message = NULL
     WHERE gpu_daily_notifications.status = 'failed'
        OR (gpu_daily_notifications.status = 'sending' AND gpu_daily_notifications.attempted_at < NOW() - INTERVAL '30 minutes')
     RETURNING report_date
-  `, [reportDate, notificationType]);
+  `, [scope, storeScope, reportDate, notificationType]);
   return result.rowCount === 1;
 }
 
-export async function markDailyNotificationSent(reportDate: string, notificationType: string, payload: unknown) {
+export async function markDailyNotificationSent(reportDate: string, notificationType: string, payload: unknown, tenantId?: string, storeId?: string) {
   await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   await getPool().query(`
     UPDATE gpu_daily_notifications
-    SET status = 'sent', sent_at = NOW(), payload = $3::jsonb, error_message = NULL
-    WHERE report_date = $1 AND notification_type = $2
-  `, [reportDate, notificationType, JSON.stringify(payload)]);
+    SET status = 'sent', sent_at = NOW(), payload = $5::jsonb, error_message = NULL
+    WHERE tenant_id = $1 AND store_id = $2 AND report_date = $3 AND notification_type = $4
+  `, [scope, storeScope, reportDate, notificationType, JSON.stringify(payload)]);
 }
 
-export async function markDailyNotificationFailed(reportDate: string, notificationType: string, errorMessage: string) {
+export async function markDailyNotificationFailed(reportDate: string, notificationType: string, errorMessage: string, tenantId?: string, storeId?: string) {
   await initializePostgres();
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   await getPool().query(`
     UPDATE gpu_daily_notifications
-    SET status = 'failed', error_message = $3
-    WHERE report_date = $1 AND notification_type = $2
-  `, [reportDate, notificationType, errorMessage.slice(0, 2000)]);
+    SET status = 'failed', error_message = $5
+    WHERE tenant_id = $1 AND store_id = $2 AND report_date = $3 AND notification_type = $4
+  `, [scope, storeScope, reportDate, notificationType, errorMessage.slice(0, 2000)]);
 }
 
-export async function getDailyClosing(date: string): Promise<DailyClosing | null> {
+function normalizeDailyClosingDate(value: string) {
+  const date = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+}
+
+export async function getDailyClosing(date: string, tenantId?: string, storeId?: string): Promise<DailyClosing | null> {
   await initializePostgres();
-  const result = await getPool().query<{ data: DailyClosing }>("SELECT data FROM gpu_daily_closings WHERE date = $1", [date]);
+  const normalizedDate = normalizeDailyClosingDate(date);
+  if (!normalizedDate) return null;
+  const result = await getPool().query<{ data: DailyClosing }>("SELECT data FROM gpu_daily_closings WHERE tenant_id = $1 AND store_id = $2 AND date = $3", [scopedTenantId(tenantId), scopedStoreId(storeId), normalizedDate]);
   return result.rows[0]?.data || null;
 }
 
-export async function listDailyClosings(limit = 14): Promise<DailyClosing[]> {
+export async function listDailyClosings(limit = 14, tenantId?: string, storeId?: string): Promise<DailyClosing[]> {
   await initializePostgres();
   const safeLimit = Math.max(1, Math.min(90, Math.floor(Number(limit) || 14)));
   const result = await getPool().query<{ data: DailyClosing }>(
-    "SELECT data FROM gpu_daily_closings ORDER BY date DESC LIMIT $1",
-    [safeLimit],
+    `SELECT data FROM gpu_daily_closings
+      WHERE tenant_id = $1 AND store_id = $2
+      ORDER BY date DESC LIMIT $3`,
+    [scopedTenantId(tenantId), scopedStoreId(storeId), safeLimit],
   );
   return result.rows.map((row) => row.data);
 }
 
-export async function saveDailyClosing(closing: DailyClosing): Promise<DailyClosing> {
+export async function saveDailyClosing(closing: DailyClosing, tenantId?: string, storeId?: string): Promise<DailyClosing> {
   await initializePostgres();
+  const normalizedDate = normalizeDailyClosingDate(closing.date);
+  if (!normalizedDate) throw new Error("日结日期必须是 YYYY-MM-DD");
+  const scope = scopedTenantId(tenantId);
+  const storeScope = scopedStoreId(storeId);
   const result = await getPool().query<{ data: DailyClosing }>(`
-    INSERT INTO gpu_daily_closings (date, data, updated_at) VALUES ($1, $2::jsonb, NOW())
-    ON CONFLICT (date) DO NOTHING
+    INSERT INTO gpu_daily_closings (tenant_id, store_id, date, data, updated_at) VALUES ($1, $2, $3, $4::jsonb, NOW())
+    ON CONFLICT (tenant_id, store_id, date) DO NOTHING
     RETURNING data
-  `, [closing.date, JSON.stringify(closing)]);
+  `, [scope, storeScope, normalizedDate, JSON.stringify(closing)]);
   if (result.rows[0]?.data) return result.rows[0].data;
-  return (await getDailyClosing(closing.date)) || closing;
+  return (await getDailyClosing(closing.date, tenantId, storeId)) || closing;
 }
 
 export const dataFilePath = "postgresql:DATABASE_URL";

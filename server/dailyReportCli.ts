@@ -3,6 +3,7 @@ import { buildDailyBusinessReport, buildFeishuDailyAiSummaryMessage } from "./da
 import { notifyFeishuDailyReport } from "./feishu.ts";
 import { getDashboardAiInsights } from "./aiInsights.ts";
 import { storeDate } from "../src/utils/storeTime.ts";
+import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
 
 const args = new Set(process.argv.slice(2));
 const dateArg = process.argv.slice(2).find(arg => arg.startsWith("--date="));
@@ -11,11 +12,13 @@ const dryRun = args.has("--dry-run");
 const testMode = args.has("--test");
 const notificationType = "business_daily_report";
 const cutoff = process.env.FEISHU_DAILY_REPORT_CUTOFF || "20:00";
+const tenantId = process.env.TENANT_ID?.trim() || DEFAULT_TENANT_ID;
+const storeId = process.env.STORE_ID?.trim() || DEFAULT_STORE_ID;
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) throw new Error("日报日期必须是 YYYY-MM-DD");
 if (!/^\d{2}:\d{2}$/.test(cutoff)) throw new Error("FEISHU_DAILY_REPORT_CUTOFF 必须是 HH:mm");
 
-const state = await loadState();
+const state = await loadState(tenantId, storeId);
 const report = buildDailyBusinessReport(state, reportDate, cutoff);
 const ai = await getDashboardAiInsights(state);
 const text = `${testMode ? "【测试推送】\n" : ""}${buildFeishuDailyAiSummaryMessage(report, ai)}`;
@@ -36,7 +39,7 @@ if (testMode) {
   process.exit(0);
 }
 
-if (!await claimDailyNotification(reportDate, notificationType)) {
+if (!await claimDailyNotification(reportDate, notificationType, tenantId, storeId)) {
   console.log(`[daily-report] ${reportDate} 已发送或正在发送，跳过重复推送`);
   process.exit(0);
 }
@@ -44,10 +47,10 @@ if (!await claimDailyNotification(reportDate, notificationType)) {
 try {
   const result = await notifyFeishuDailyReport(text);
   if (result.sent === false) throw new Error(`飞书投递失败: ${result.reason}`);
-  await markDailyNotificationSent(reportDate, notificationType, { report, ai });
+  await markDailyNotificationSent(reportDate, notificationType, { report, ai }, tenantId, storeId);
   console.log(`[daily-report] ${reportDate} 已发送`);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  await markDailyNotificationFailed(reportDate, notificationType, message);
+  await markDailyNotificationFailed(reportDate, notificationType, message, tenantId, storeId);
   throw error;
 }

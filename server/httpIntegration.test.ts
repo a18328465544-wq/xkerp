@@ -124,6 +124,98 @@ test("a configured login can reach finance only by its effective menu permission
   }
 });
 
+test("PostgreSQL-backed inventory pages survive a state revision change", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const { createApp } = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: process.env.BACKEND_TEST_USERNAME,
+        password: process.env.BACKEND_TEST_PASSWORD,
+      }),
+    });
+    assert.equal(login.status, 200);
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(sessionCookie);
+
+    // Reproduce the production sequence: another committed write advances the
+    // revision before this direct PostgreSQL list route executes.
+    await withDatabaseTransaction(async (client) => {
+      await client.query(`
+        INSERT INTO gpu_app_meta (key, value, updated_at) VALUES ('stateRevision', '1'::jsonb, NOW())
+        ON CONFLICT (key) DO UPDATE SET
+          value = to_jsonb(COALESCE((gpu_app_meta.value #>> '{}')::bigint, 0) + 1),
+          updated_at = NOW()
+      `);
+    });
+
+    const inventory = await fetch(`${baseUrl}/api/inventory/items?page=1&pageSize=20&activeOnly=true&sortKey=entryTime&sortDirection=desc`, {
+      headers: { cookie: sessionCookie },
+    });
+    assert.equal(inventory.status, 200);
+    const payload = await inventory.json() as { data?: unknown[]; meta?: { page?: number } };
+    assert.ok(Array.isArray(payload.data));
+    assert.equal(payload.meta?.page, 1);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("customer quick-create is immediately searchable through the normalized CRM picker", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const { createApp } = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  const unique = `HTTP客户${Date.now()}`;
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: process.env.BACKEND_TEST_USERNAME,
+        password: process.env.BACKEND_TEST_PASSWORD,
+      }),
+    });
+    assert.equal(login.status, 200);
+    const loginPayload = await login.json() as { data?: { csrfToken?: string } };
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    const csrfToken = loginPayload.data?.csrfToken;
+    assert.ok(sessionCookie);
+    assert.ok(csrfToken);
+
+    const created = await fetch(`${baseUrl}/api/customers`, {
+      method: "POST",
+      headers: { cookie: sessionCookie, "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({ name: unique, contact: `139${String(Date.now()).slice(-8)}`, firstChannel: "到店" }),
+    });
+    assert.equal(created.status, 201);
+    const createdPayload = await created.json() as { data?: { id?: string } };
+    assert.ok(createdPayload.data?.id);
+
+    const salesSearch = await fetch(`${baseUrl}/api/sales/customers?page=1&pageSize=200&keyword=${encodeURIComponent(unique)}`, {
+      headers: { cookie: sessionCookie },
+    });
+    assert.equal(salesSearch.status, 200);
+    const salesSearchPayload = await salesSearch.json() as { data?: { items?: Array<{ legacyCustomer?: { id?: string }; displayName?: string }> } };
+    assert.ok(salesSearchPayload.data?.items?.some((item) => item.legacyCustomer?.id === createdPayload.data?.id || item.displayName === unique));
+
+    const search = await fetch(`${baseUrl}/api/gpu_erp/crm/accounts?page=1&pageSize=200&role=customer&keyword=${encodeURIComponent(unique)}`, {
+      headers: { cookie: sessionCookie },
+    });
+    assert.equal(search.status, 200);
+    const searchPayload = await search.json() as { data?: { items?: Array<{ legacyCustomer?: { id?: string }; displayName?: string }> } };
+    assert.ok(searchPayload.data?.items?.some((item) => item.legacyCustomer?.id === createdPayload.data?.id || item.displayName === unique));
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("purchase history edits require a fresh record version over authenticated HTTP", {
   skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
 }, async () => {
@@ -177,7 +269,7 @@ test("expired PostgreSQL sessions are pruned in one bounded cleanup", {
   const tokenHash = `expired-session-${Date.now()}`;
   await withDatabaseTransaction(async (client) => {
     await client.query(
-      "INSERT INTO gpu_sessions (token_hash, user_id, expires_at) VALUES ($1, $2, NOW() - INTERVAL '1 day')",
+      "INSERT INTO gpu_sessions (token_hash, user_id, tenant_id, store_id, expires_at) VALUES ($1, $2, 'tenant_default', 'store_default', NOW() - INTERVAL '1 day')",
       [tokenHash, "USR-EXPIRED"],
     );
   });

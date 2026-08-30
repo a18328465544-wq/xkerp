@@ -178,6 +178,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   }
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices") return [];
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices/outbound") return ["salesInvoices", "inventory", "products"];
+  if (method.toUpperCase() === "GET" && path === "/api/sales/product-candidates") return ["salesInvoices", "inventory", "products"];
   if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return ["inventory", "inspections"];
   if (method.toUpperCase() === "GET" && path === "/api/aftersales/workspace") return ["aftersales", "inventory", "salesInvoices"];
   if (method.toUpperCase() === "GET" && path === "/api/returns/reference") {

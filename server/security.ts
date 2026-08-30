@@ -6,11 +6,12 @@ const PASSWORD_PREFIX = "scrypt";
 const KEY_LENGTH = 64;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
-export type PersistedSession = { userId: string; expiresAt: number };
+export type PersistedSession = { userId: string; tenantId?: string; storeId?: string; expiresAt: number };
 export type SessionStore = {
   create(tokenHash: string, session: PersistedSession): Promise<void>;
   resolve(tokenHash: string): Promise<PersistedSession | null>;
   revoke(tokenHash: string): Promise<void>;
+  revokeUserSessions?(userId: string, tenantId?: string): Promise<number>;
   cleanupExpired(expiresBefore: number): Promise<number>;
 };
 
@@ -86,10 +87,10 @@ export function createSessionManager(store: SessionStore, options: { cleanupInte
     return cleanupPromise;
   };
   return {
-    async create(userId: string) {
+    async create(userId: string, scope: { tenantId?: string; storeId?: string } = {}) {
       await cleanupExpired().catch(() => 0);
       const token = randomBytes(32).toString("hex");
-      await store.create(hashSessionToken(token), { userId, expiresAt: now() + SESSION_TTL_MS });
+      await store.create(hashSessionToken(token), { userId, tenantId: scope.tenantId, storeId: scope.storeId, expiresAt: now() + SESSION_TTL_MS });
       return token;
     },
     async resolve(token: string | null | undefined) {
@@ -99,6 +100,9 @@ export function createSessionManager(store: SessionStore, options: { cleanupInte
     },
     async revoke(token: string | null | undefined) {
       if (token) await store.revoke(hashSessionToken(token));
+    },
+    async revokeUserSessions(userId: string, tenantId?: string) {
+      return store.revokeUserSessions ? store.revokeUserSessions(userId, tenantId) : 0;
     },
     cleanupExpired: () => cleanupExpired(true),
   };

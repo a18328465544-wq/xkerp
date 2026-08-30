@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {adaptSalesCustomer, adaptSalesCustomers, adaptSalesInventoryCandidate, toCreateSalesRequest} from "./sales.adapter";
+import {adaptSalesCustomer, adaptSalesCustomers, adaptSalesInventoryCandidate, adaptSalesProductCandidate, toCreateSalesRequest} from "./sales.adapter";
 import {createSalesDefaults} from "@/src/features/sales/sales.defaults";
 
 test("sales customer adapter uses legacy archive id and blocks unmapped主体", () => {
@@ -38,6 +38,28 @@ test("sales inventory adapter hides cost without permission and gates saleable s
   assert.equal(available.costPrice, undefined);
   const locked = adaptSalesInventoryCandidate({id: "KC-2", productId: "P-1", productName: "RTX 4090", status: "已锁定", sn: "SN-2"}, {showCost: true, showProfit: true});
   assert.equal(locked.saleable, false);
+});
+
+test("sales product candidate adapter keeps product quantity and reference sell price", () => {
+  const candidate = adaptSalesProductCandidate({
+    id: "P-1",
+    productId: "P-1",
+    productName: "英伟达 RTX 4090 FE 24G",
+    brand: "英伟达",
+    model: "RTX 4090 FE",
+    vram: "24G",
+    inventoryQuantity: 10,
+    reservedQuantity: 3,
+    availableQuantity: 7,
+    estimatedSellPrice: 12800,
+    saleable: true,
+  }, {showCost: false});
+  assert.equal(candidate.productName, "英伟达 RTX 4090 FE 24G");
+  assert.equal(candidate.availableQuantity, 7);
+  assert.equal(candidate.reservedQuantity, 3);
+  assert.equal(candidate.estimatedSellPrice, 12800);
+  assert.equal(candidate.costPrice, undefined);
+  assert.equal("serialNumber" in candidate, false);
 });
 
 test("sales request adapter expands quantity and calculates receivable", () => {

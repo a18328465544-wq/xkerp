@@ -5,7 +5,7 @@ import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {DashboardSection, ErpDataTable, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
-import {ApiError, queryKeys, salesApi} from "@/src/services/api";
+import {ApiError, createIdempotencyKey, queryKeys, salesApi} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -46,6 +46,7 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
   const [cameraOpen, setCameraOpen] = useState(false);
   const [page, setPage] = useState(1);
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const outboundIdempotencyKeyRef = useRef(createIdempotencyKey("sales-outbound"));
   const pageSize = 20;
   const invoices = query.data?.invoices || [];
   const filtered = useMemo(() => {
@@ -61,12 +62,14 @@ function SalesOutboundContent({session, query, onAuthExpired}: {session: AuthSes
     setScanCodes("");
     setScanInput("");
     setRemarks("");
+    outboundIdempotencyKeyRef.current = createIdempotencyKey("sales-outbound");
   }, [setInvoiceId]);
   const columns = useMemo(() => createSalesOutboundColumns(selectInvoice), [selectInvoice]);
   const mutation = useMutation({mutationFn: ({manual}: {manual: boolean}) => {
     if (!selectedInvoice) throw new Error("请选择待出库销售单");
-    return salesApi.confirmOutbound(selectedInvoice.id, {handler: session.user.displayName, codes: verification.ready ? scanCodes.split(/[\n,，\s]+/).filter(Boolean) : [], manual, remarks});
+    return salesApi.confirmOutbound(selectedInvoice.id, {handler: session.user.displayName, codes: verification.ready ? scanCodes.split(/[\n,，\s]+/).filter(Boolean) : [], manual, remarks}, undefined, outboundIdempotencyKeyRef.current);
   }, onSuccess: (result) => {
+    outboundIdempotencyKeyRef.current = createIdempotencyKey("sales-outbound");
     toast.success(`${result.invoiceNo} 已完成销售出库`);
     setScanCodes(""); setScanInput(""); setRemarks(""); setInvoiceId(null);
     void queryClient.invalidateQueries({queryKey: queryKeys.sales.all()});

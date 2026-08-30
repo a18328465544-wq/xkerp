@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AppState } from "./store.ts";
 import { getAiInsightsCache, saveAiInsightsCache } from "./db.ts";
+import { getCurrentTenantContext } from "./requestTenantContext.ts";
 import { storeDate, storeDateAfterDays, storeDateDiffDays } from "../src/utils/storeTime.ts";
 
 export type AiInsightSeverity = "high" | "medium" | "low";
@@ -293,10 +294,11 @@ async function askDeepSeek(snapshot: AiBusinessSnapshot) {
 }
 
 export async function getDashboardAiInsights(state: AppState, options: { force?: boolean } = {}): Promise<AiInsightsPayload> {
+  const tenantId = getCurrentTenantContext()?.tenantId;
   const snapshot = buildAiBusinessSnapshot(state);
   const sourceHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
   const now = new Date();
-  const cached = await getAiInsightsCache(INSIGHT_SCOPE);
+  const cached = await getAiInsightsCache(INSIGHT_SCOPE, tenantId);
   if (!options.force && cached && cached.sourceHash === sourceHash && new Date(cached.expiresAt).getTime() > now.getTime()) {
     return cached.payload as AiInsightsPayload;
   }
@@ -327,6 +329,6 @@ export async function getDashboardAiInsights(state: AppState, options: { force?:
     expiresAt,
     ...(source === "ai" ? { model: process.env.AI_MODEL?.trim() } : {}),
   };
-  await saveAiInsightsCache({ scope: INSIGHT_SCOPE, sourceHash, payload, generatedAt: payload.generatedAt, expiresAt, provider: process.env.AI_PROVIDER?.trim() || "rules", model: payload.model || "rules" });
+  await saveAiInsightsCache({ scope: INSIGHT_SCOPE, sourceHash, payload, generatedAt: payload.generatedAt, expiresAt, provider: process.env.AI_PROVIDER?.trim() || "rules", model: payload.model || "rules" }, tenantId);
   return payload;
 }

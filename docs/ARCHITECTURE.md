@@ -10,6 +10,8 @@
 - [docs/OPEN_INVENTORY_API.md](./OPEN_INVENTORY_API.md)：开放库存 API 和外部价格同步接口。
 - [docs/上线前测试报告.md](./上线前测试报告.md)：上线前测试记录。
 - [docs/RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)：发布门禁、备份演练和上线后验收。
+- [docs/COMMERCIALIZATION_READINESS.md](./COMMERCIALIZATION_READINESS.md)：P0–P2 商业化收口、迁移顺序和外部前置条件。
+- [docs/COMMERCIALIZATION_API_GAP.md](./COMMERCIALIZATION_API_GAP.md)：尚未具备的身份、计费、导出和生态 API 能力。
 
 ## 1. 系统定位
 
@@ -298,6 +300,17 @@ updated_at timestamptz not null
 - `bulkUpsertRows`：批量 upsert，避免逐行 SQL 导致提交变慢。
 - `appendOnlyCollection`：日志等追加型集合只写新增记录。
 - `stateRevision`：每次业务变更递增，用于多实例缓存失效。
+
+### 7.4 商业化控制面
+
+商业化控制面位于 `server/commercialRepository.ts`、`server/commercialSchema.ts` 和
+`server/routes/commercial.ts`，不改变采购、销售、库存和财务领域动作。它负责企业/门店
+作用域、成员关系、订阅套餐、席位与媒体/AI 用量、租户导出和诊断计数。核心单据写入
+仍由 `server/store.ts` 和状态补丁负责；幂等键与库存占用在同一 PostgreSQL 事务中完成。
+
+生产仍要求单个 PM2 fork，直到进程内状态投影和会话被共享化。商业化控制面具备代码级
+门禁，但支付 webhook、外部告警、异地备份、SSO 和多区域属于部署/供应商前置条件，
+不在本地代码中伪造实现。
 - PostgreSQL 会话级咨询锁：跨实例串行化读、校验和写入，防止并发写入基于同一份旧余额或旧库存计算。
 
 开发注意：

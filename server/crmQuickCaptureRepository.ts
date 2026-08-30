@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import type { CrmLead, CrmTask, QuickCaptureParseResult, QuickCaptureSourceType } from "../src/types.ts";
 import { withDatabaseTransaction } from "./db.ts";
+import { currentCrmTenantId } from "./crmTenant.ts";
 
 type QuickCaptureAuditStatus = "parsed" | "confirmed" | "failed";
 
@@ -99,29 +100,32 @@ export async function saveQuickCaptureAudit(input: QuickCaptureAuditInput) {
 }
 
 export async function saveQuickCaptureAuditInTransaction(client: PoolClient, input: QuickCaptureAuditInput) {
+  const tenantId = currentCrmTenantId();
   await client.query(
     `INSERT INTO gpu_crm_quick_capture_audits
-       (id, raw_text, source_type, parsed_payload, status, model_version, source_page, actor_id)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, 'crm', $7)
+       (id, tenant_id, raw_text, source_type, parsed_payload, status, model_version, source_page, actor_id)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, 'crm', $8)
      ON CONFLICT (id) DO UPDATE SET
        raw_text = EXCLUDED.raw_text,
        source_type = EXCLUDED.source_type,
        parsed_payload = EXCLUDED.parsed_payload,
        status = EXCLUDED.status,
        model_version = EXCLUDED.model_version,
-       actor_id = EXCLUDED.actor_id`,
-    [input.id, input.rawText, input.sourceType, JSON.stringify(input.parsed), input.status || "parsed", input.model || null, input.actorId],
+       actor_id = EXCLUDED.actor_id
+     WHERE gpu_crm_quick_capture_audits.tenant_id = EXCLUDED.tenant_id`,
+    [input.id, tenantId, input.rawText, input.sourceType, JSON.stringify(input.parsed), input.status || "parsed", input.model || null, input.actorId],
   );
 }
 
 export async function findQuickCaptureAudit(id: string): Promise<QuickCaptureAuditRecord | null> {
   return withDatabaseTransaction(async client => {
+    const tenantId = currentCrmTenantId();
     const result = await client.query<Record<string, unknown>>(
       `SELECT id, raw_text, source_type, status, actor_id, lead_id
        FROM gpu_crm_quick_capture_audits
-       WHERE id = $1
+       WHERE id = $1 AND tenant_id = $2
        LIMIT 1`,
-      [id],
+      [id, tenantId],
     );
     const row = result.rows[0];
     if (!row) return null;
@@ -138,32 +142,37 @@ export async function findQuickCaptureAudit(id: string): Promise<QuickCaptureAud
 
 export async function findLeadByIdempotencyKey(idempotencyKey: string) {
   return withDatabaseTransaction(async client => {
+    const tenantId = currentCrmTenantId();
+    const scopedKey = tenantId === "tenant_default" ? idempotencyKey : `${tenantId}:${idempotencyKey}`;
     const result = await client.query<Record<string, unknown>>(
       `SELECT l.*, a.legacy_customer_id, a.display_name AS customer_name,
               matched.legacy_customer_id AS matched_legacy_customer_id
        FROM gpu_crm_leads l
-       JOIN gpu_crm_accounts a ON a.id = l.account_id
-       LEFT JOIN gpu_crm_accounts matched ON matched.id = l.matched_account_id
-       WHERE l.idempotency_key = $1
+       JOIN gpu_crm_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
+       LEFT JOIN gpu_crm_accounts matched ON matched.id = l.matched_account_id AND matched.tenant_id = l.tenant_id
+       WHERE l.idempotency_key = $1 AND l.tenant_id = $2
        LIMIT 1`,
-      [idempotencyKey],
+      [scopedKey, tenantId],
     );
     return result.rows[0] ? mapLead(result.rows[0]) : null;
   });
 }
 
 export async function insertQuickCaptureLead(client: PoolClient, input: QuickCaptureLeadInsert): Promise<CrmLead> {
+  const tenantId = currentCrmTenantId();
+  const scopedKey = tenantId === "tenant_default" ? input.idempotencyKey : `${tenantId}:${input.idempotencyKey}`;
   const result = await client.query<Record<string, unknown>>(
     `INSERT INTO gpu_crm_leads
-       (id, account_id, matched_account_id, source_type, source, intent_type, product_category,
+       (id, tenant_id, account_id, matched_account_id, source_type, source, intent_type, product_category,
         product_name, product_model, product_id, quantity, expected_price, quoted_price,
         transaction_type, delivery_method, follow_up_at, priority, stage, tags, note, raw_text,
         confidence, missing_fields, conflicts, idempotency_key, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-             $18, $19, $20, $21, $22, $23::jsonb, $24::jsonb, $25, $26)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+             $19, $20, $21, $22, $23, $24::jsonb, $25::jsonb, $26, $27)
      RETURNING *`,
     [
       input.id,
+      tenantId,
       input.accountId,
       input.matchedAccountId || null,
       input.sourceType,
@@ -187,7 +196,7 @@ export async function insertQuickCaptureLead(client: PoolClient, input: QuickCap
       input.confidence,
       JSON.stringify(input.missingFields || []),
       JSON.stringify(input.conflicts || []),
-      input.idempotencyKey,
+      scopedKey,
       input.createdBy,
     ],
   );
@@ -197,12 +206,13 @@ export async function insertQuickCaptureLead(client: PoolClient, input: QuickCap
 }
 
 export async function insertQuickCaptureTask(client: PoolClient, input: QuickCaptureTaskInsert): Promise<CrmTask> {
+  const tenantId = currentCrmTenantId();
   const result = await client.query<Record<string, unknown>>(
     `INSERT INTO gpu_crm_tasks
-       (id, lead_id, account_id, task_type, title, due_at, status, assignee_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (id, tenant_id, lead_id, account_id, task_type, title, due_at, status, assignee_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [input.id, input.leadId, input.accountId, input.taskType, input.title, toDatabaseDate(input.dueAt), input.status || "待处理", input.assignee || null, input.createdBy],
+    [input.id, tenantId, input.leadId, input.accountId, input.taskType, input.title, toDatabaseDate(input.dueAt), input.status || "待处理", input.assignee || null, input.createdBy],
   );
   const row = result.rows[0];
   if (!row) throw new Error("创建 CRM 提醒任务失败");
@@ -213,23 +223,26 @@ export async function confirmQuickCaptureAuditInTransaction(
   client: PoolClient,
   input: { id: string; finalPayload: unknown; status: QuickCaptureAuditStatus; leadId?: string },
 ) {
+  const tenantId = currentCrmTenantId();
   await client.query(
     `UPDATE gpu_crm_quick_capture_audits
      SET final_payload = $2::jsonb,
          status = $3,
          lead_id = COALESCE($4, lead_id),
          confirmed_at = CASE WHEN $3 = 'confirmed' THEN NOW() ELSE confirmed_at END
-     WHERE id = $1`,
-    [input.id, JSON.stringify(input.finalPayload), input.status, input.leadId || null],
+     WHERE id = $1 AND tenant_id = $5`,
+    [input.id, JSON.stringify(input.finalPayload), input.status, input.leadId || null, tenantId],
   );
 }
 
 export async function listQuickCaptureLeads(options: { page?: number; pageSize?: number; keyword?: string; stage?: string } = {}) {
   return withDatabaseTransaction(async client => {
+    const tenantId = currentCrmTenantId();
     const page = Math.max(1, Math.floor(Number(options.page || 1)));
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(options.pageSize || 20))));
     const values: unknown[] = [];
-    const clauses = ["l.stage NOT IN ('已关闭')"];
+    const clauses = ["l.stage NOT IN ('已关闭')", `l.tenant_id = $${values.length + 1}`];
+    values.push(tenantId);
     const bind = (value: unknown) => {
       values.push(value);
       return `$${values.length}`;
@@ -241,14 +254,14 @@ export async function listQuickCaptureLeads(options: { page?: number; pageSize?:
       `SELECT l.*, a.legacy_customer_id, a.display_name AS customer_name,
               matched.legacy_customer_id AS matched_legacy_customer_id
        FROM gpu_crm_leads l
-       JOIN gpu_crm_accounts a ON a.id = l.account_id
-       LEFT JOIN gpu_crm_accounts matched ON matched.id = l.matched_account_id
+       JOIN gpu_crm_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
+       LEFT JOIN gpu_crm_accounts matched ON matched.id = l.matched_account_id AND matched.tenant_id = l.tenant_id
        WHERE ${where}
        ORDER BY l.priority DESC, l.updated_at DESC, l.id DESC
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, pageSize, (page - 1) * pageSize],
     );
-    const count = await client.query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM gpu_crm_leads l JOIN gpu_crm_accounts a ON a.id = l.account_id WHERE ${where}`, values);
+    const count = await client.query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM gpu_crm_leads l JOIN gpu_crm_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id WHERE ${where}`, values);
     return {
       items: rows.rows.map(mapLead),
       meta: { page, pageSize, total: Number(count.rows[0]?.total || 0) },

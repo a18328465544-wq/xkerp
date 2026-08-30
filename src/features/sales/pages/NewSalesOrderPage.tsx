@@ -6,14 +6,14 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {CustomerPicker} from "@/src/components/domain";
-import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPartnerQuickCreateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
-import {ApiError, partnersApi, queryKeys, salesApi} from "@/src/services/api";
+import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPartnerQuickCreateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
+import {ApiError, createIdempotencyKey, partnersApi, queryKeys, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
-import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate} from "@/src/types/sales";
+import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesProductCandidate} from "@/src/types/sales";
 import type {PartnerQuickCreateValues} from "@/src/lib/partnerQuickCreate";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
-import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
 import {createSalesDefaults, createSalesLineDefaults} from "@/src/features/sales/sales.defaults";
 import {calculateSalesAmounts} from "@/src/features/sales/sales.calculations";
 import {salesOrderSchema} from "@/src/features/sales/sales.schema";
@@ -28,7 +28,7 @@ const salesChannels: SalesChannel[] = ["到店", "闲鱼", "抖音", "小红书"
 type SalesOrderDraft = {
   values: SalesFormValues;
   selectedCustomer: SalesCustomerOption | null;
-  selectedCandidatesByIndex?: Array<SalesInventoryCandidate | null>;
+  selectedCandidatesByIndex?: Array<SalesProductCandidate | null>;
 };
 
 function errorText(error: unknown) {
@@ -59,7 +59,9 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const permissions = session.permissions || permissionDefaults;
   const allowedMenus = permissions.allowedMenus;
   const hasAllPermissions = allowedMenus.includes("all");
-  const canReadCustomers = hasAllPermissions || allowedMenus.includes("crm");
+  // The sales picker reads the canonical customer archive and is part of the
+  // sales_add workflow. CRM menu access is not a prerequisite for order entry.
+  const canReadCustomers = hasAllPermissions || allowedMenus.includes("sales_add");
   const canCreateCustomer = hasAllPermissions || allowedMenus.includes("customers");
   const canReadInventory = hasAllPermissions || allowedMenus.includes("inventory");
   const canReadSettlementAccounts = hasAllPermissions || allowedMenus.includes("settlement_accounts");
@@ -77,7 +79,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const [selectedCustomer, setSelectedCustomer] = useState<SalesCustomerOption | null>(() => restoredDraft?.selectedCustomer || null);
   const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
   const [customerCreate, setCustomerCreate] = useState<{initialName: string} | null>(null);
-  const [selectedCandidates, setSelectedCandidates] = useState<Record<string, SalesInventoryCandidate | null>>(() => Object.fromEntries(fields.map((field, index) => [field.id, restoredDraft?.selectedCandidatesByIndex?.[index] || null])) as Record<string, SalesInventoryCandidate | null>);
+  const [selectedCandidates, setSelectedCandidates] = useState<Record<string, SalesProductCandidate | null>>(() => Object.fromEntries(fields.map((field, index) => [field.id, restoredDraft?.selectedCandidatesByIndex?.[index] || null])) as Record<string, SalesProductCandidate | null>);
   const [customerKeyword, setCustomerKeyword] = useState("");
   const [inventoryKeywords, setInventoryKeywords] = useState<Record<string, string>>({});
   const [activeInventoryFieldId, setActiveInventoryFieldId] = useState<string | null>(null);
@@ -85,13 +87,15 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const activeInventoryKeyword = activeInventoryFieldId ? inventoryKeywords[activeInventoryFieldId] || "" : "";
   const debouncedInventoryKeyword = useDebouncedValue(activeInventoryKeyword);
   const customerQuery = useQuery({queryKey: queryKeys.sales.customers(debouncedCustomerKeyword), queryFn: ({signal}) => salesApi.searchCustomers(debouncedCustomerKeyword, signal), enabled: Boolean(session) && canReadCustomers && !selectedCustomer, retry: false, staleTime: 30_000});
-  const inventoryQuery = useQuery({queryKey: queryKeys.sales.inventoryCandidates(debouncedInventoryKeyword), queryFn: ({signal}) => salesApi.searchInventory(debouncedInventoryKeyword, {showCost, showProfit: permissions.showProfit}, signal), enabled: Boolean(session) && canReadInventory && Boolean(activeInventoryFieldId), retry: false, staleTime: 15_000});
+  const inventoryQuery = useQuery({queryKey: queryKeys.sales.productCandidates(debouncedInventoryKeyword), queryFn: ({signal}) => salesApi.searchProductCandidates(debouncedInventoryKeyword, {showCost, showProfit: permissions.showProfit}, signal), enabled: Boolean(session) && canReadInventory && Boolean(activeInventoryFieldId), retry: false, staleTime: 15_000});
   const accountQuery = useQuery({queryKey: queryKeys.sales.settlementAccounts(), queryFn: ({signal}) => salesApi.settlementAccounts(signal), enabled: Boolean(session) && canReadSettlementAccounts, retry: false, staleTime: 30_000});
   const [serverError, setServerError] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const submitLock = useRef(false);
+  const createIdempotencyKeyRef = useRef(createIdempotencyKey("sales-create"));
   const isDirty = formState.isDirty || restoredDraftActive;
+  // 录单页使用实时工作区草稿，离开或切换时不拦截；回到标签页即可继续录入。
   useEffect(() => {
     const persist = () => {
       if (!formState.isDirty && !restoredDraftActive) {
@@ -104,12 +108,9 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     const subscription = form.watch(persist);
     return () => subscription.unsubscribe();
   }, [discardDraft, fields, form, formState.isDirty, restoredDraftActive, saveDraft, selectedCandidates, selectedCustomer]);
-  useErpDirtyGuard(isDirty);
-  useWorkspaceTabDirty("sales_add", isDirty);
-
   const createMutation = useMutation({mutationFn: (payload: {values: SalesFormValues}) => {
     const account = accountQuery.data?.find((item) => item.id === payload.values.settlementAccountId);
-    return salesApi.create(payload.values, account);
+    return salesApi.create(payload.values, account, undefined, createIdempotencyKeyRef.current);
   }});
   const customerCreateMutation = useMutation({mutationFn: (values: PartnerQuickCreateValues) => partnersApi.createCustomer({name: values.name, contact: values.contact, channel: values.channel, remarks: values.remarks})});
 
@@ -151,22 +152,23 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     setValue("customerName", "", {shouldDirty: true, shouldValidate: true});
     setValue("contact", "", {shouldDirty: true});
   };
-  const selectCandidate = (fieldId: string, index: number, option: SalesInventoryCandidate) => {
-    const duplicate = values.items.some((item, itemIndex) => itemIndex !== index && item.inventoryId === option.id);
+  const selectCandidate = (fieldId: string, index: number, option: SalesProductCandidate) => {
+    const duplicate = values.items.some((item, itemIndex) => itemIndex !== index && item.productId && item.productId === option.productId);
     if (duplicate) {
-      setError(`items.${index}.productId`, {type: "duplicate", message: "同一张库存候选不能重复添加"});
-      toast.error("这张库存候选已经添加到销售单");
+      setError(`items.${index}.productId`, {type: "duplicate", message: "同一商品已添加，请直接修改已有行数量"});
+      toast.error("同一商品已添加，请直接修改已有行数量");
       return;
     }
     setSelectedCandidates((current) => ({...current, [fieldId]: option}));
     setInventoryKeywords((current) => ({...current, [fieldId]: ""}));
-    setValue(`items.${index}.inventoryId`, option.id, {shouldDirty: true, shouldValidate: true});
+    // A sales order reserves a product quantity; the physical inventory/SN is chosen at outbound.
+    setValue(`items.${index}.inventoryId`, "", {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.productId`, option.productId, {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.productName`, option.productName, {shouldDirty: true, shouldValidate: true});
     setValue(`items.${index}.brand`, option.brand, {shouldDirty: true});
     setValue(`items.${index}.model`, option.model, {shouldDirty: true});
     setValue(`items.${index}.vram`, option.vram, {shouldDirty: true});
-    setValue(`items.${index}.condition`, option.condition, {shouldDirty: true});
+    setValue(`items.${index}.condition`, option.condition || "出库核验", {shouldDirty: true});
     if (showCost && option.costPrice !== undefined) setValue(`items.${index}.costPrice`, option.costPrice, {shouldDirty: true});
     if (option.estimatedSellPrice && !getValues(`items.${index}.sellPrice`)) setValue(`items.${index}.sellPrice`, Math.round(option.estimatedSellPrice), {shouldDirty: true});
     clearErrors(`items.${index}.productId`);
@@ -209,6 +211,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     }
     try {
       const result = await createMutation.mutateAsync({values: submitted});
+      createIdempotencyKeyRef.current = createIdempotencyKey("sales-create");
       setSuccessMessage(`销售单 ${result.invoiceNo || "已创建"} 已提交，当前状态：${result.outboundStatus || "待出库"}`);
       toast.success("销售单已提交，等待出库绑定 SN");
       discardDraft();
@@ -240,7 +243,6 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     toast.error(message);
   };
   const leave = () => { window.history.back(); };
-  const blocker = useWorkspaceTabBlocker(isDirty);
   const customerError = !canReadCustomers ? "当前账号没有客户搜索权限" : customerQuery.error ? (customerQuery.error instanceof ApiError && customerQuery.error.isForbidden ? "当前账号没有客户搜索权限" : errorText(customerQuery.error)) : undefined;
   const customerOptions = useMemo(() => {
     const recentRank = new Map(recentCustomerIds.map((id, index) => [id, index]));
@@ -251,7 +253,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const refreshInventoryCandidates = () => {
     setServerError(null);
     setConflictError(false);
-    void queryClient.invalidateQueries({queryKey: queryKeys.sales.inventoryCandidates(debouncedInventoryKeyword)}).then(() => inventoryQuery.refetch());
+    void queryClient.invalidateQueries({queryKey: queryKeys.sales.productCandidates(debouncedInventoryKeyword)}).then(() => inventoryQuery.refetch());
   };
 
   return <ErpTransactionPageFrame>
@@ -274,7 +276,6 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       </ErpTransactionColumns>
     </form>
     <ErpPartnerQuickCreateDialog open={Boolean(customerCreate)} target="customer" initialName={customerCreate?.initialName || ""} pending={customerCreateMutation.isPending} error={customerCreateMutation.error ? customerQuickCreateError(customerCreateMutation.error) : undefined} onOpenChange={(open) => {if (!open) {setCustomerCreate(null); customerCreateMutation.reset();}}} onSubmit={submitCustomerCreate} />
-    <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
     </ErpPageContent>
   </ErpTransactionPageFrame>;
 }

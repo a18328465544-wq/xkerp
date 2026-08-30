@@ -233,6 +233,31 @@ export interface SalesInventoryCandidate {
   unavailableReason?: string;
 }
 
+/** Product-level sales picker option. Physical SN binding happens at outbound. */
+export interface SalesProductCandidate {
+  id: string;
+  productId: string;
+  productName: string;
+  category: string;
+  brand: string;
+  model: string;
+  version: string;
+  vram: string;
+  condition: string;
+  warehouse: string;
+  inventoryStatus: string;
+  inventoryQuantity: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  costPrice?: number;
+  estimatedSellPrice?: number;
+  entryTime: string;
+  inventoryDays: number;
+  imageUrl?: string;
+  saleable: boolean;
+  unavailableReason?: string;
+}
+
 export interface SalesSettlementAccountOption {
   id: string;
   name: string;

@@ -5,6 +5,12 @@ type SnapshotDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
   requireAnyMenu: (menuIds: string[]) => RequestHandler;
   publicStatePatch: (req: Request, keys: StateCollectionKey[]) => Record<string, unknown>;
+  /**
+   * Snapshot reads use the process cache, so callers must be able to refresh that
+   * cache before the permission guard and response projection run. This keeps
+   * collection-backed snapshots consistent with SQL-backed list routes.
+   */
+  refreshState?: RequestHandler;
 };
 
 type SnapshotRoute = {
@@ -52,7 +58,10 @@ export function registerDomainSnapshotRoutes(app: Express, dependencies: Snapsho
     const permission = route.menus.length === 1
       ? dependencies.requireMenu(route.menus[0]!)
       : dependencies.requireAnyMenu(route.menus);
-    app.get(route.path, permission, (req, res) => {
+    const middleware = dependencies.refreshState
+      ? [dependencies.refreshState, permission]
+      : [permission];
+    app.get(route.path, ...middleware, (req, res) => {
       res.json({ data: dependencies.publicStatePatch(req, route.keys) });
     });
   }

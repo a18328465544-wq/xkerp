@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { CustomerCard } from "../src/types.ts";
+import { currentCrmTenantId, scopedCrmSourceId } from "./crmTenant.ts";
 
 export type CrmCustomerSyncMode = "created" | "updated";
 
@@ -33,13 +34,19 @@ export function normalizeCrmAccountName(value: unknown) {
   return String(value ?? "").trim().toLocaleLowerCase("zh-CN").replace(/\s+/g, " ");
 }
 
-export function crmCustomerAccountId(customerId: string) {
-  return `CRM-${stableHash(`customer:${customerId}`).slice(0, 16)}`;
+export function crmCustomerAccountId(customerId: string, tenantId = currentCrmTenantId()) {
+  const key = tenantId === "tenant_default" ? `customer:${customerId}` : `${tenantId}:customer:${customerId}`;
+  return `CRM-${stableHash(key).slice(0, 16)}`;
+}
+
+export function canReuseMappedCrmCustomerAccount(customerId: string, mappedLegacyCustomerId?: string | null) {
+  return !mappedLegacyCustomerId || mappedLegacyCustomerId === customerId;
 }
 
 export function buildCrmCustomerProjection(
   customer: Pick<CustomerCard, "id" | "name" | "phone" | "wechat" | "qq" | "city" | "company" | "contact" | "source" | "firstChannel" | "level" | "owner" | "remarks" | "type">,
   mode: CrmCustomerSyncMode,
+  tenantId = currentCrmTenantId(),
 ): CrmCustomerProjection {
   const displayName = String(customer.name || "").trim();
   const primaryPhone = String(customer.phone || customer.contact || "").trim() || undefined;
@@ -59,11 +66,12 @@ export function buildCrmCustomerProjection(
     owner: customer.owner || "",
     remarks: customer.remarks || "",
   }));
-  const idempotencyKey = `legacy:crm_customer:${mode}:${customer.id}:${sourceHash}`;
+  const scopedSourceId = scopedCrmSourceId("customer", customer.id, tenantId);
+  const idempotencyKey = `legacy:crm_customer:${mode}:${scopedSourceId}:${sourceHash}`;
 
   return {
-    accountId: crmCustomerAccountId(customer.id),
-    contactId: `CRM-CONTACT-${stableHash(`customer:${customer.id}`).slice(0, 16)}`,
+    accountId: crmCustomerAccountId(customer.id, tenantId),
+    contactId: `CRM-CONTACT-${stableHash(tenantId === "tenant_default" ? `customer:${customer.id}` : `${tenantId}:customer:${customer.id}`).slice(0, 16)}`,
     displayName,
     normalizedName: normalizeCrmAccountName(displayName),
     source,
@@ -83,25 +91,43 @@ export function buildCrmCustomerProjection(
   };
 }
 
-async function findExistingAccountId(client: PoolClient, customerId: string) {
-  const mapped = await client.query<{ account_id: string }>(
-    `SELECT account_id
-     FROM gpu_crm_legacy_map
-     WHERE source_type = 'customer' AND source_id = $1
-     LIMIT 1`,
-    [customerId],
-  );
-  if (mapped.rows[0]?.account_id) return mapped.rows[0].account_id;
-
+async function findExistingAccountId(client: PoolClient, customerId: string, tenantId: string) {
   const legacy = await client.query<{ id: string }>(
     `SELECT id
      FROM gpu_crm_accounts
      WHERE legacy_customer_id = $1
+       AND tenant_id = $2
+       AND deleted_at IS NULL
      ORDER BY updated_at DESC, id ASC
      LIMIT 1`,
-    [customerId],
+    [customerId, tenantId],
   );
-  return legacy.rows[0]?.id;
+  if (legacy.rows[0]?.id) return legacy.rows[0].id;
+
+  const scopedSourceId = scopedCrmSourceId("customer", customerId, tenantId);
+  const mapped = await client.query<{ account_id: string; legacy_customer_id: string | null }>(
+    `SELECT legacy_map.account_id, account.legacy_customer_id
+     FROM gpu_crm_legacy_map legacy_map
+     JOIN gpu_crm_accounts account
+       ON account.id = legacy_map.account_id
+      AND account.tenant_id = legacy_map.tenant_id
+      AND account.deleted_at IS NULL
+     WHERE legacy_map.source_type = 'customer'
+       AND legacy_map.source_id = $1
+       AND legacy_map.tenant_id = $2
+     LIMIT 1`,
+    [scopedSourceId, tenantId],
+  );
+  const mappedRow = mapped.rows[0];
+  // Older deduplicating migrations could map several customer archive ids to
+  // one CRM account. Reusing that account here would overwrite its canonical
+  // legacy_customer_id and make the previously-linked customer disappear from
+  // sales search. Allocate this customer its deterministic one-to-one account
+  // unless the mapped account is unclaimed or already belongs to this archive.
+  if (mappedRow?.account_id && canReuseMappedCrmCustomerAccount(customerId, mappedRow.legacy_customer_id)) {
+    return mappedRow.account_id;
+  }
+  return undefined;
 }
 
 /**
@@ -115,13 +141,14 @@ export async function upsertCrmCustomerAccount(
   actorId?: string,
   options: { writeTimeline?: boolean } = {},
 ) {
-  const projection = buildCrmCustomerProjection(customer, mode);
-  const accountId = (await findExistingAccountId(client, customer.id)) || projection.accountId;
+  const tenantId = currentCrmTenantId();
+  const projection = buildCrmCustomerProjection(customer, mode, tenantId);
+  const accountId = (await findExistingAccountId(client, customer.id, tenantId)) || projection.accountId;
 
   await client.query(
     `INSERT INTO gpu_crm_accounts
-       (id, account_type, display_name, normalized_name, status, level, owner_id, source, primary_phone, primary_wechat, primary_qq, city, company_name, notes, legacy_customer_id)
-     VALUES ($1, 'individual', $2, $3, 'active', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       (id, tenant_id, account_type, display_name, normalized_name, status, level, owner_id, source, primary_phone, primary_wechat, primary_qq, city, company_name, notes, legacy_customer_id)
+     VALUES ($1, $2, 'individual', $3, $4, 'active', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      ON CONFLICT (id) DO UPDATE SET
        display_name = EXCLUDED.display_name,
        normalized_name = EXCLUDED.normalized_name,
@@ -137,9 +164,11 @@ export async function upsertCrmCustomerAccount(
        notes = EXCLUDED.notes,
        legacy_customer_id = EXCLUDED.legacy_customer_id,
        updated_at = NOW(),
-       deleted_at = NULL`,
+       deleted_at = NULL
+     WHERE gpu_crm_accounts.tenant_id = EXCLUDED.tenant_id`,
     [
       accountId,
+      tenantId,
       projection.displayName,
       projection.normalizedName,
       projection.level || null,
@@ -156,32 +185,33 @@ export async function upsertCrmCustomerAccount(
   );
 
   await client.query(
-    `INSERT INTO gpu_crm_account_roles (account_id, role)
-     VALUES ($1, 'customer')
+    `INSERT INTO gpu_crm_account_roles (account_id, tenant_id, role)
+     VALUES ($1, $2, 'customer')
      ON CONFLICT (account_id, role) DO NOTHING`,
-    [accountId],
+    [accountId, tenantId],
   );
 
   await client.query(
-    `INSERT INTO gpu_crm_legacy_map (source_type, source_id, account_id, source_hash)
-     VALUES ('customer', $1, $2, $3)
+    `INSERT INTO gpu_crm_legacy_map (source_type, source_id, tenant_id, account_id, source_hash)
+     VALUES ('customer', $1, $2, $3, $4)
      ON CONFLICT (source_type, source_id) DO UPDATE SET
+       tenant_id = EXCLUDED.tenant_id,
        account_id = EXCLUDED.account_id,
        source_hash = EXCLUDED.source_hash,
        migrated_at = NOW()`,
-    [customer.id, accountId, projection.sourceHash],
+    [scopedCrmSourceId("customer", customer.id, tenantId), tenantId, accountId, projection.sourceHash],
   );
 
   await client.query(
     `UPDATE gpu_crm_contacts
      SET is_primary = FALSE, updated_at = NOW()
-     WHERE account_id = $1 AND id <> $2`,
-    [accountId, projection.contactId],
+     WHERE account_id = $1 AND tenant_id = $3 AND id <> $2`,
+    [accountId, projection.contactId, tenantId],
   );
   await client.query(
     `INSERT INTO gpu_crm_contacts
-       (id, account_id, name, phone, wechat, qq, contact_role, is_primary, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8)
+       (id, tenant_id, account_id, name, phone, wechat, qq, contact_role, is_primary, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9)
      ON CONFLICT (id) DO UPDATE SET
        account_id = EXCLUDED.account_id,
        name = EXCLUDED.name,
@@ -191,9 +221,11 @@ export async function upsertCrmCustomerAccount(
        contact_role = EXCLUDED.contact_role,
        is_primary = TRUE,
        notes = EXCLUDED.notes,
-       updated_at = NOW()`,
+       updated_at = NOW()
+     WHERE gpu_crm_contacts.tenant_id = EXCLUDED.tenant_id`,
     [
       projection.contactId,
+      tenantId,
       accountId,
       projection.displayName,
       projection.primaryPhone || null,
@@ -207,14 +239,15 @@ export async function upsertCrmCustomerAccount(
   if (options.writeTimeline !== false) {
     await client.query(
       `INSERT INTO gpu_crm_timeline_events
-         (id, account_id, event_type, source_type, source_id, summary, payload, actor_id, idempotency_key)
-       VALUES ($1, $2, $3, 'legacy_customer', $4, $5, $6::jsonb, $7, $8)
+         (id, tenant_id, account_id, event_type, source_type, source_id, summary, payload, actor_id, idempotency_key)
+       VALUES ($1, $2, $3, $4, 'legacy_customer', $5, $6, $7::jsonb, $8, $9)
        ON CONFLICT (idempotency_key) DO NOTHING`,
       [
         projection.eventId,
+        tenantId,
         accountId,
         projection.eventType,
-        customer.id,
+        scopedCrmSourceId("customer", customer.id, tenantId),
         mode === "created" ? `新增客户：${projection.displayName}` : `更新客户档案：${projection.displayName}`,
         JSON.stringify({ legacyCustomerId: customer.id, mode, sourceHash: projection.sourceHash }),
         actorId || null,

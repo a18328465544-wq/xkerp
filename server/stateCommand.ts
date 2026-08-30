@@ -12,7 +12,11 @@ export type StateCommandPatch = {
 };
 
 export type StateCommandPrepare<T> = (data: T) => void | Promise<void>;
-export type StateCommandTransactionHook<T> = (client: Parameters<StateRecordTransactionHook>[0], data: T) => void | Promise<unknown>;
+export type StateCommandTransactionHook<T> = (
+  client: Parameters<StateRecordTransactionHook>[0],
+  data: T,
+  patch?: StateCommandPatch,
+) => void | Promise<unknown>;
 
 export type StateCommandResult<T> = StateCommandPatch & { data: T };
 
@@ -39,7 +43,7 @@ export async function runStateCommand<T>(
       ...stateMergeRecords(stateMerge),
       ...stateDeleteRecords(stateDelete),
     ],
-    transactionHook ? (client) => transactionHook(client, data) : undefined,
+    transactionHook ? (client) => transactionHook(client, data, {stateMerge, stateDelete}) : undefined,
   );
   return { data, stateMerge, stateDelete };
 }

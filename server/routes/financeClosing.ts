@@ -4,7 +4,7 @@ import { buildDailyBusinessReport } from "../dailyReport.ts";
 import { storeDate, storeDateTime } from "../../src/utils/storeTime.ts";
 import type { DailyClosing, SystemUserAccount } from "../../src/types.ts";
 
-type FinanceRequest = Request & { authUser?: SystemUserAccount };
+type FinanceRequest = Request & { authUser?: SystemUserAccount; tenantId?: string; storeId?: string };
 
 type FinanceClosingDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -18,11 +18,11 @@ export function registerFinanceClosingRoutes(app: Express, dependencies: Finance
 
   app.get("/api/finance/daily-closing", financeMenu, dependencies.asyncRoute(async (req: FinanceRequest, res) => {
     const date = String(req.query.date || storeDate());
-    res.json({ data: await getDailyClosing(date) });
+    res.json({ data: await getDailyClosing(date, req.tenantId, req.storeId) });
   }));
 
   app.get("/api/finance/daily-closings", financeMenu, dependencies.asyncRoute(async (req: FinanceRequest, res) => {
-    res.json({ data: await listDailyClosings(Number(req.query.limit || 14)) });
+    res.json({ data: await listDailyClosings(Number(req.query.limit || 14), req.tenantId, req.storeId) });
   }));
 
   app.post("/api/finance/daily-closing", financeMenu, dependencies.asyncRoute(async (req: FinanceRequest, res) => {
@@ -31,7 +31,7 @@ export function registerFinanceClosingRoutes(app: Express, dependencies: Finance
       dependencies.sendValidationError(req, res, "日结日期必须是 YYYY-MM-DD");
       return;
     }
-    const current = await loadState();
+    const current = await loadState(req.tenantId, req.storeId);
     const report = buildDailyBusinessReport(current, date, "23:59");
     const closing: DailyClosing = {
       id: `RJ-${date.replace(/-/g, "")}`,
@@ -51,6 +51,6 @@ export function registerFinanceClosingRoutes(app: Express, dependencies: Finance
         accountReconciliationDifferences: report.accountReconciliationDifferences,
       },
     };
-    res.status(201).json({ data: await saveDailyClosing(closing) });
+    res.status(201).json({ data: await saveDailyClosing(closing, req.tenantId, req.storeId) });
   }));
 }

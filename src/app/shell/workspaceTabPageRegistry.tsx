@@ -96,6 +96,12 @@ function decodePathPart(value: string) {
 }
 
 export function resolveWorkspaceTabPage(pathname: string): WorkspaceTabPageDescriptor | null {
+  // Exact static routes must win over dynamic detail patterns. Without this
+  // precedence, `/purchase/new` is parsed as a purchase detail with id `new`,
+  // which mounts a hidden detail page and triggers a bogus detail request.
+  const staticPageDescriptor = staticPages[pathname];
+  if (staticPageDescriptor) return staticPageDescriptor;
+
   const purchaseEdit = pathname.match(/^\/purchase\/([^/]+)\/edit$/);
   if (purchaseEdit) {
     const purchaseId = decodePathPart(purchaseEdit[1] || "");
@@ -106,5 +112,5 @@ export function resolveWorkspaceTabPage(pathname: string): WorkspaceTabPageDescr
     const purchaseId = decodePathPart(purchaseDetail[1] || "");
     return staticPage(`purchase-detail:${purchaseId}`, () => <PurchaseDetailPage purchaseId={purchaseId} />);
   }
-  return staticPages[pathname] || null;
+  return null;
 }

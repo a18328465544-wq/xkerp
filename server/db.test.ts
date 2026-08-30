@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PoolClient } from "pg";
-import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildFinanceProfitFlowQuery, buildFinanceRecordPageQuery, buildInventoryPageQuery, buildInvoicePageQuery, buildLogPageQuery, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
+import { BULK_UPSERT_CHUNK_SIZE, appendOnlyCollection, assertProductionBootstrapPasswordConfigured, assertTestDatabaseConfigured, buildDeleteMissingRowsQuery, buildFinanceProfitFlowQuery, buildFinanceRecordPageQuery, buildInventoryPageQuery, buildInvoicePageQuery, buildLogPageQuery, buildPasswordUpgradeBatches, bulkUpsertRows, getCollectionTablesForKeys, resolveDatabaseUrl } from "./db.ts";
 
 test("production bootstrap password is required only when initializing an empty database", () => {
   assert.doesNotThrow(() => assertProductionBootstrapPasswordConfigured({ NODE_ENV: "development" }));
@@ -61,6 +61,33 @@ test("collection sync can clear an empty collection explicitly", () => {
     sql: 'DELETE FROM "gpu_products"',
     values: [],
   });
+});
+
+test("collection sync scope never deletes rows from another tenant or store", () => {
+  const query = buildDeleteMissingRowsQuery("gpu_products", ["SP-001"], "tenant_a", "store_b");
+  assert.match(query.sql, /tenant_id = \$1 AND store_id = \$2/);
+  assert.match(query.sql, /id = ANY\(\$3::text\[\]\)/);
+  assert.deepEqual(query.values, ["tenant_a", "store_b", ["SP-001"]]);
+  const clear = buildDeleteMissingRowsQuery("gpu_products", [], "tenant_a", "store_b");
+  assert.equal(clear.sql, 'DELETE FROM "gpu_products" WHERE tenant_id = $1 AND store_id = $2');
+  assert.deepEqual(clear.values, ["tenant_a", "store_b"]);
+});
+
+test("indexed pages include both tenant and store predicates", () => {
+  const inventory = buildInventoryPageQuery({tenantId: "tenant_a", storeId: "store_b", keyword: "4090"});
+  assert.deepEqual(inventory.values, ["tenant_a", "store_b", "%4090%"]);
+  assert.match(inventory.where, /tenant_id = \$1/);
+  assert.match(inventory.where, /store_id = \$2/);
+
+  const logs = buildLogPageQuery({tenantId: "tenant_a", storeId: "store_b", keyword: "登录"});
+  assert.deepEqual(logs.values, ["tenant_a", "store_b", "%登录%"]);
+  assert.match(logs.where, /tenant_id = \$1/);
+  assert.match(logs.where, /store_id = \$2/);
+
+  const invoices = buildInvoicePageQuery("sales", {tenantId: "tenant_a", storeId: "store_b", keyword: "XS-1"});
+  assert.deepEqual(invoices.values, ["tenant_a", "store_b", "%XS-1%"]);
+  assert.match(invoices.where, /tenant_id = \$1/);
+  assert.match(invoices.where, /store_id = \$2/);
 });
 
 test("indexed inventory query applies filters and caps server-side pagination", () => {
@@ -200,6 +227,22 @@ test("bulk upsert issues no query for an empty collection", async () => {
   const { client, calls } = createFakeClient();
   await bulkUpsertRows(client, "gpu_logs", []);
   assert.equal(calls.length, 0);
+});
+
+test("password upgrades preserve the tenant and store scope of every account", () => {
+  const batches = buildPasswordUpgradeBatches([
+    {id: "U-DEFAULT", data: {id: "U-DEFAULT", username: "default", password: "legacy-default", displayName: "Default", role: "老板", enabled: true}, tenantId: "tenant_default", storeId: "store_default"},
+    {id: "U-SECOND", data: {id: "U-SECOND", username: "second", password: "legacy-second", displayName: "Second", role: "店员", enabled: true}, tenantId: "tenant_second", storeId: "store_second"},
+    {id: "U-HASHED", data: {id: "U-HASHED", username: "hashed", password: "scrypt$already-hashed", displayName: "Hashed", role: "店员", enabled: true}, tenantId: "tenant_second", storeId: "store_second"},
+  ]);
+  assert.deepEqual(batches.map(({tenantId, storeId}) => ({tenantId, storeId})), [
+    {tenantId: "tenant_default", storeId: "store_default"},
+    {tenantId: "tenant_second", storeId: "store_second"},
+  ]);
+  assert.equal(batches[0]?.rows[0]?.id, "U-DEFAULT");
+  assert.equal(batches[1]?.rows[0]?.id, "U-SECOND");
+  assert.match(batches[0]?.rows[0]?.json || "", /scrypt\$/);
+  assert.match(batches[1]?.rows[0]?.json || "", /scrypt\$/);
 });
 
 test("append-only collection inserts only new rows and never rewrites existing ones", async () => {

@@ -61,9 +61,9 @@ export const salesOrderSchema = z.object({
       }
     }
   }
-  const selectedInventoryIds = filledItems.map(({item}) => item.inventoryId).filter(Boolean);
-  if (new Set(selectedInventoryIds).size !== selectedInventoryIds.length) {
-    context.addIssue({code: "custom", path: ["items"], message: "同一张库存候选不能重复添加"});
+  const selectedProductIds = filledItems.map(({item}) => item.productId).filter(Boolean);
+  if (new Set(selectedProductIds).size !== selectedProductIds.length) {
+    context.addIssue({code: "custom", path: ["items"], message: "同一商品不能重复添加，请直接修改已有行数量"});
   }
   const subtotal = filledItems.reduce((sum, {item}) => sum + item.sellPrice * item.quantity, 0);
   if (value.paidAmount > subtotal) {

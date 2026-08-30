@@ -13,7 +13,7 @@ import {
 
 const projectRoot = process.cwd();
 const requiredEnv = ["DATABASE_URL", "OPEN_API_TOKEN", "BOOTSTRAP_ADMIN_PASSWORD"];
-const requiredMigrations = ["crm-foundation-v2", "operational-projections-v1"];
+const requiredMigrations = ["crm-foundation-v2", "operational-projections-v1", "commercial-foundation-v1", "commercial-hardening-v1"];
 const requiredTables = [
   "gpu_inventory",
   "gpu_purchase_invoices",
@@ -21,6 +21,16 @@ const requiredTables = [
   "gpu_finance_ledger",
   "gpu_system_users",
   "gpu_sessions",
+  "gpu_tenants",
+  "gpu_stores",
+  "gpu_tenant_memberships",
+  "gpu_subscriptions",
+  "gpu_usage_counters",
+  "gpu_idempotency_keys",
+  "gpu_inventory_reservations",
+  "gpu_inspection_versions",
+  "gpu_daily_notifications",
+  "gpu_daily_closings",
 ];
 const pm2ConfigPath = path.join(projectRoot, "ecosystem.config.cjs");
 const checks = [];

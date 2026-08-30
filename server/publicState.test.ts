@@ -77,3 +77,15 @@ test("创建采购所需的候选数据只向具备采购入口的账号开放",
   assert.ok(scoped.vendors.length > 0);
   assert.deepEqual(scoped.financeLedger, []);
 });
+
+test("malformed legacy permission settings fall back to safe role defaults", () => {
+  const state = createInitialState();
+  const clerk = state.systemUsers.find((user) => user.role === "店员");
+  assert.ok(clerk);
+  (state as unknown as { customPermissions: unknown }).customPermissions = {};
+
+  const permissions = getPermissionsForUser(state, clerk);
+  assert.deepEqual(permissions.allowedMenus, clerk.permissionOverrides?.allowedMenus || permissions.allowedMenus);
+  const scoped = publicStateForUser(state, clerk, "initial");
+  assert.ok(Array.isArray(scoped.customPermissions));
+});

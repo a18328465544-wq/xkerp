@@ -2871,6 +2871,29 @@ test("overall inventory summary groups stock and import creates persisted invent
   assert.equal(cpuRow.pendingCount, 2);
 });
 
+test("sales product availability subtracts pending model-level reservations", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products.find((item) => state.inventory.some((card) => card.productId === item.id && ["已入库", "已上架"].includes(card.status)));
+  const templateInvoice = state.salesInvoices[0];
+  assert.ok(product);
+  assert.ok(templateInvoice);
+  const before = actions.getInventorySummary({keyword: product.name, activeOnly: true, includeSold: false}).find((row) => row.productId === product.id);
+  assert.ok(before);
+  assert.ok(templateInvoice.items[0]);
+  state.salesInvoices.unshift({
+    ...templateInvoice,
+    id: "XS-RESERVE-TEST",
+    invoiceNo: "XS-RESERVE-TEST",
+    outboundStatus: "待出库",
+    items: [{...templateInvoice.items[0], productId: product.id, productName: product.name, inventoryId: "", sn: "", quantity: 1}],
+  });
+  const after = actions.getInventorySummary({keyword: product.name, activeOnly: true, includeSold: false}).find((row) => row.productId === product.id);
+  assert.ok(after);
+  assert.equal(after.reservedCount, (before.reservedCount || 0) + 1);
+  assert.equal(after.availableForSalesCount, Math.max(0, before.availableCount - (before.reservedCount || 0) - 1));
+});
+
 // --- 上线前补充:毛利权威成本、SN 唯一性、单号防重号 ---
 
 function buildPurchaseItem(product: ProductTemplate, sn: string, buyPrice = 3000): PurchaseItem {

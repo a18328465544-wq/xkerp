@@ -28,7 +28,7 @@ export type {
   InventoryView,
 } from "./inventory";
 export {inventoryStatuses} from "./inventory";
-export type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesInvoice, SalesInvoiceResult, SalesItem, SalesLineFormValue, SalesOrderAmounts, SalesPartnerType, SalesPaymentMethod, SalesSettlementAccountOption} from "./sales";
+export type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesInvoice, SalesInvoiceResult, SalesItem, SalesLineFormValue, SalesOrderAmounts, SalesPartnerType, SalesPaymentMethod, SalesProductCandidate, SalesSettlementAccountOption} from "./sales";
 export type {
   PurchaseCondition,
   PurchaseCreateResult,
