@@ -4,10 +4,10 @@ import {customersApi} from "./customers";
 
 function response(payload: unknown, status = 200) {return new Response(JSON.stringify(payload), {status, headers: {"Content-Type": "application/json"}});}
 
-test("customer directory reads its feature-scoped snapshot", async () => {
+test("customer directory reads its server-paginated endpoint", async () => {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (input) => {assert.equal(input, "/api/customers"); return response({data: {customers: [{id: "KH-1", name: "张三"}]}});};
-  try {const result = await customersApi.list({showProfit: false}); assert.equal(result.customers[0]?.id, "KH-1"); assert.equal("inventory" in result, false);} finally {globalThis.fetch = previousFetch;}
+  globalThis.fetch = async (input) => {assert.equal(input, "/api/customers/page?page=1&pageSize=20&keyword=%E5%BC%A0%E4%B8%89"); return response({data: {items: [{id: "KH-1", name: "张三"}]}, meta: {page: 1, pageSize: 20, total: 1, summary: {coreCount: 0, receivable: 0, payable: 0}}});};
+  try {const result = await customersApi.list({keyword: "张三", type: "all", channel: "all", level: "all", page: 1, pageSize: 20}, [], {showProfit: false}); assert.equal(result.customers[0]?.id, "KH-1"); assert.equal(result.total, 1); assert.equal("inventory" in result, false);} finally {globalThis.fetch = previousFetch;}
 });
 
 test("customer update uses the existing CRM patch endpoint", async () => {

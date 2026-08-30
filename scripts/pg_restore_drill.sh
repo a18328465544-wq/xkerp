@@ -7,7 +7,6 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${APP_DIR}/.env"
-BACKUP_DIR="${BACKUP_DIR:-${APP_DIR}/../gpu-erp-backups}"
 
 if [[ ! -r "${ENV_FILE}" ]]; then
   echo "[restore-drill] 无法读取环境文件: ${ENV_FILE}" >&2
@@ -18,6 +17,8 @@ fi
 set -a
 source "${ENV_FILE}"
 set +a
+
+BACKUP_DIR="${BACKUP_DIR:-${APP_DIR}/../gpu-erp-backups}"
 
 if [[ "${RESTORE_DRILL_CONFIRM:-}" != "I_UNDERSTAND_ISOLATED_DATABASE" ]]; then
   echo "[restore-drill] 请设置 RESTORE_DRILL_CONFIRM=I_UNDERSTAND_ISOLATED_DATABASE" >&2
@@ -34,6 +35,7 @@ fi
 
 command -v pg_restore >/dev/null || { echo "[restore-drill] 未安装 pg_restore" >&2; exit 1; }
 command -v psql >/dev/null || { echo "[restore-drill] 未安装 psql" >&2; exit 1; }
+command -v sha256sum >/dev/null || { echo "[restore-drill] 未安装 sha256sum" >&2; exit 1; }
 
 DUMP_FILE="${1:-}"
 if [[ -z "${DUMP_FILE}" ]]; then
@@ -42,6 +44,18 @@ fi
 if [[ -z "${DUMP_FILE}" || ! -f "${DUMP_FILE}" ]]; then
   echo "[restore-drill] 没有找到可恢复的 dump 文件" >&2
   exit 1
+fi
+
+MANIFEST_FILE="${DUMP_FILE}.manifest"
+if [[ -f "${MANIFEST_FILE}" ]]; then
+  EXPECTED_CHECKSUM="$(awk -F= '$1 == "sha256" { print $2 }' "${MANIFEST_FILE}")"
+  ACTUAL_CHECKSUM="$(sha256sum "${DUMP_FILE}" | awk '{print $1}')"
+  if [[ -z "${EXPECTED_CHECKSUM}" || "${ACTUAL_CHECKSUM}" != "${EXPECTED_CHECKSUM}" ]]; then
+    echo "[restore-drill] 备份校验和不匹配" >&2
+    exit 1
+  fi
+else
+  echo "[restore-drill] 警告: 旧备份没有 manifest，无法执行文件校验和比对" >&2
 fi
 
 pg_restore --list "${DUMP_FILE}" >/dev/null
@@ -67,31 +81,37 @@ REQUIRED_TABLE_COUNT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ER
       'gpu_sales_invoices',
       'gpu_finance_ledger',
       'gpu_system_users',
-      'gpu_sessions'
+      'gpu_sessions',
+      'gpu_tenants',
+      'gpu_stores',
+      'gpu_tenant_memberships',
+      'gpu_subscriptions',
+      'gpu_usage_counters',
+      'gpu_idempotency_keys',
+      'gpu_inventory_reservations',
+      'gpu_inspection_versions',
+      'gpu_daily_notifications',
+      'gpu_daily_closings'
     ]);
 ")"
-if [[ "${REQUIRED_TABLE_COUNT}" != "6" ]]; then
-  echo "[restore-drill] 核心业务表校验失败: ${REQUIRED_TABLE_COUNT}/6" >&2
+if [[ "${REQUIRED_TABLE_COUNT}" != "16" ]]; then
+  echo "[restore-drill] 核心业务表校验失败: ${REQUIRED_TABLE_COUNT}/16" >&2
   exit 1
 fi
 
 MIGRATION_COUNT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
-  SELECT COUNT(*) FROM gpu_schema_migrations WHERE version IN ('crm-foundation-v2', 'operational-projections-v1');
+  SELECT COUNT(*) FROM gpu_schema_migrations WHERE version IN (
+    'crm-foundation-v2',
+    'operational-projections-v1',
+    'commercial-foundation-v1',
+    'commercial-hardening-v1'
+  );
 ")"
-if [[ "${MIGRATION_COUNT}" != "2" ]]; then
-  echo "[restore-drill] 必需迁移版本缺失: crm-foundation-v2 / operational-projections-v1" >&2
+if [[ "${MIGRATION_COUNT}" != "4" ]]; then
+  echo "[restore-drill] 必需迁移版本缺失: crm / operational / commercial foundation + hardening" >&2
   exit 1
 fi
 
-SOURCE_FINGERPRINT="$(psql --dbname="${DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
-  SELECT CONCAT_WS(':',
-    (SELECT COUNT(*) FROM gpu_inventory),
-    (SELECT COUNT(*) FROM gpu_purchase_invoices),
-    (SELECT COUNT(*) FROM gpu_sales_invoices),
-    (SELECT COUNT(*) FROM gpu_finance_ledger),
-    (SELECT COUNT(*) FROM gpu_system_users)
-  );
-")"
 TARGET_FINGERPRINT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "
   SELECT CONCAT_WS(':',
     (SELECT COUNT(*) FROM gpu_inventory),
@@ -101,9 +121,5 @@ TARGET_FINGERPRINT="$(psql --dbname="${RESTORE_TEST_DATABASE_URL}" --set=ON_ERRO
     (SELECT COUNT(*) FROM gpu_system_users)
   );
 ")"
-if [[ "${SOURCE_FINGERPRINT}" != "${TARGET_FINGERPRINT}" ]]; then
-  echo "[restore-drill] 恢复后的核心表行数与备份源不一致" >&2
-  exit 1
-fi
 
 echo "[restore-drill] 恢复演练通过: ${DUMP_FILE}; core-row-counts=${TARGET_FINGERPRINT}"

@@ -2,9 +2,9 @@
 
 ## Current read path
 
-`GET /api/customers` is the only existing read path that preserves the `customers` menu permission model used by the customer archive page. The frontend endpoint immediately projects `data.customers` into `CustomerDirectorySnapshot`; pages and components never receive the raw state response.
+`GET /api/customers/page` is the V2 customer archive read path. It is scoped by the authenticated tenant and the `customers` menu permission. The response contains only `data.items` plus paging, filter-option and aggregate metadata.
 
-Filtering, sorting and pagination are explicitly performed on the loaded customer collection. The UI does not describe these operations as server-side.
+Search, type/channel/level filters, approved sorting fields, pagination and summary totals run in PostgreSQL. The browser no longer downloads the full customer collection for this page.
 
 ## Current command paths
 
@@ -21,4 +21,4 @@ The request adapter preserves existing S-level/core-customer and R-level/risk-re
 - Page access and create use the existing `customers` menu.
 - Edit is exposed only when the existing `crm` menu is available because the current patch endpoint requires it.
 - Delete additionally requires the existing delete permission.
-- `totalProfit` is removed by the adapter when `showProfit` is false.
+- `totalProfit` is removed by the server response projection and again by the adapter when `showProfit` is false.

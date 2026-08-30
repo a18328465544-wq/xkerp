@@ -205,6 +205,14 @@ test("customer quick-create is immediately searchable through the normalized CRM
     const salesSearchPayload = await salesSearch.json() as { data?: { items?: Array<{ legacyCustomer?: { id?: string }; displayName?: string }> } };
     assert.ok(salesSearchPayload.data?.items?.some((item) => item.legacyCustomer?.id === createdPayload.data?.id || item.displayName === unique));
 
+    const directorySearch = await fetch(`${baseUrl}/api/customers/page?page=1&pageSize=20&keyword=${encodeURIComponent(unique)}`, {
+      headers: { cookie: sessionCookie },
+    });
+    assert.equal(directorySearch.status, 200);
+    const directoryPayload = await directorySearch.json() as { data?: { items?: Array<{ id?: string; name?: string }> }; meta?: { total?: number } };
+    assert.ok(directoryPayload.data?.items?.some((item) => item.id === createdPayload.data?.id || item.name === unique));
+    assert.equal(directoryPayload.meta?.total, 1);
+
     const search = await fetch(`${baseUrl}/api/gpu_erp/crm/accounts?page=1&pageSize=200&role=customer&keyword=${encodeURIComponent(unique)}`, {
       headers: { cookie: sessionCookie },
     });

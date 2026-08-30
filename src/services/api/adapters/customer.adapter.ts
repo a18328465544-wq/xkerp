@@ -19,6 +19,12 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function numberValueOr(value: unknown, fallback: number) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function normalizeLevel(value: unknown): CustomerLevel {
   const raw = text(value);
   if (customerLevels.includes(raw as CustomerLevel)) return raw as CustomerLevel;
@@ -73,13 +79,23 @@ export function adaptCustomer(value: unknown, permissions: {showProfit: boolean}
 
 export function adaptCustomerDirectory(response: CustomerDirectoryResponseDto, permissions: {showProfit: boolean}): CustomerDirectorySnapshot {
   const state = record(response.data);
-  const rows = Array.isArray(state.customers) ? state.customers : [];
+  const meta = record(response.meta);
+  const summary = record(meta.summary);
+  const rows = Array.isArray(state.items) ? state.items : Array.isArray(state.customers) ? state.customers : [];
   const customers = rows.map((item) => adaptCustomer(item, permissions)).filter((item) => Boolean(item.id));
   return {
     customers,
-    channels: Array.from(new Set(customers.map((item) => item.source).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
-    types: Array.from(new Set(customers.map((item) => item.type).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    channels: Array.isArray(meta.channels) ? meta.channels.map((item) => text(item)).filter(Boolean) : Array.from(new Set(customers.map((item) => item.source).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    types: Array.isArray(meta.types) ? meta.types.map((item) => text(item)).filter(Boolean) : Array.from(new Set(customers.map((item) => item.type).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
     levels: customerLevels.filter((level) => customers.some((item) => item.level === level)),
+    page: Math.max(1, numberValueOr(meta.page, 1)),
+    pageSize: Math.max(1, numberValueOr(meta.pageSize, Math.max(customers.length, 20))),
+    total: Math.max(0, numberValueOr(meta.total, customers.length)),
+    summary: {
+      coreCount: Math.max(0, numberValueOr(summary.coreCount, customers.filter((item) => item.isCoreCustomer || item.level === "S级").length)),
+      receivable: Math.max(0, numberValueOr(summary.receivable, customers.reduce((total, item) => total + item.receivableBalance, 0))),
+      payable: Math.max(0, numberValueOr(summary.payable, customers.reduce((total, item) => total + item.payableBalance, 0))),
+    },
   };
 }
 

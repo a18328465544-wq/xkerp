@@ -72,7 +72,7 @@ export const queryKeys = {
   },
   customers: {
     all: () => ["customers"] as const,
-    directory: (access: {showProfit: boolean}) => ["customers", "directory", access] as const,
+    directory: (access: {showProfit: boolean}, filters: unknown, sorting: unknown) => ["customers", "directory", access, filters, sorting] as const,
   },
   vendors: {
     all: () => ["vendors"] as const,

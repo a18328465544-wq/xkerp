@@ -2,10 +2,22 @@ import {adaptCustomerDirectory, adaptCustomerMutation, toCustomerCreateRequest, 
 import {apiRequest} from "../client";
 import type {CustomerDirectoryResponseDto, CustomerMutationResponseDto} from "../dto/customer.dto";
 import type {CustomerDirectorySnapshot, CustomerRecordFormValues} from "@/src/types/customer";
+import type {CustomerDirectoryFilters} from "@/src/types/customer";
+import type {SortingState} from "@tanstack/react-table";
 
 export const customersApi = {
-  async list(permissions: {showProfit: boolean}, signal?: AbortSignal): Promise<CustomerDirectorySnapshot> {
-    const response = await apiRequest<CustomerDirectoryResponseDto>("/api/customers", {signal});
+  async list(filters: CustomerDirectoryFilters, sorting: SortingState, permissions: {showProfit: boolean}, signal?: AbortSignal): Promise<CustomerDirectorySnapshot> {
+    const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize)});
+    if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+    if (filters.type !== "all") params.set("type", filters.type);
+    if (filters.channel !== "all") params.set("channel", filters.channel);
+    if (filters.level !== "all") params.set("level", filters.level);
+    const sort = sorting[0];
+    if (sort) {
+      params.set("sortKey", sort.id);
+      params.set("sortDirection", sort.desc ? "desc" : "asc");
+    }
+    const response = await apiRequest<CustomerDirectoryResponseDto>(`/api/customers/page?${params.toString()}`, {signal});
     return adaptCustomerDirectory(response, permissions);
   },
 

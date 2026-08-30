@@ -64,6 +64,10 @@ export interface CustomerDirectorySnapshot {
   channels: string[];
   types: string[];
   levels: CustomerLevel[];
+  page: number;
+  pageSize: number;
+  total: number;
+  summary: {coreCount: number; receivable: number; payable: number};
 }
 
 export interface CustomerDirectoryFilters {

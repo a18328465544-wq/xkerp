@@ -82,6 +82,7 @@ import {assertStateRuntimeMode} from "./runtimeConfig.ts";
 import {registerInventoryJourneyRoutes} from "./routes/inventoryJourney.ts";
 import { registerSalesProductCandidateRoutes } from "./routes/salesProductCandidates.ts";
 import { registerSalesCustomerRoutes } from "./routes/salesCustomers.ts";
+import {registerCustomerDirectoryRoutes} from "./routes/customerDirectory.ts";
 import { registerProductLedgerRoutes } from "./routes/productLedger.ts";
 import {createDomainSnapshotRefresh} from "./routes/domainSnapshotRefresh.ts";
 import { registerCommercialRoutes } from "./routes/commercial.ts";
@@ -1492,6 +1493,7 @@ registerInventoryJourneyRoutes(app, {
 });
 registerSalesProductCandidateRoutes(app, {requireMenu, getInventorySummary: (req, query) => actions(req as AuthRequest).getInventorySummary(query), permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser), storeDateDiffDays});
 registerSalesCustomerRoutes(app, {requireMenu});
+registerCustomerDirectoryRoutes(app, {requireMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
 registerProductLedgerRoutes(app, {
   requireMenu,
   getState: () => state,
