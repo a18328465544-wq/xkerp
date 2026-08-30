@@ -263,5 +263,5 @@ export interface PurchaseDetail {
   inspectionCount: number;
   completedReturnCount: number | null;
   paymentCount: number | null;
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-detail";
 }

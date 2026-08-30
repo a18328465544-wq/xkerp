@@ -18,7 +18,7 @@ export const assemblyApi = {
     return adaptAssemblyList(await apiRequest<AssemblyResponseDto>(`/api/assembly-operations?${params.toString()}`, {signal}), permissions);
   },
   async referenceData(permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
-    return adaptAssemblyReferenceData(await apiRequest<AssemblyResponseDto>("/api/products", {signal}), permissions);
+    return adaptAssemblyReferenceData(await apiRequest<AssemblyResponseDto>("/api/assembly-operations/reference", {signal}), permissions);
   },
   async create(values: AssemblyFormValues, permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
     const response = await apiRequest<AssemblyResponseDto>("/api/assembly-operations", {method: "POST", body: JSON.stringify(toAssemblyCreateRequest(values, permissions)), signal});
@@ -31,4 +31,3 @@ export const assemblyApi = {
     return adaptAssemblyOperation(response.data, permissions);
   },
 };
-

@@ -48,18 +48,19 @@ test("product quick-create redacts reference prices when the account cannot view
   }
 });
 
-test("product library list consumes the real /api/products snapshot through the adapter", async () => {
+test("product library list consumes the server-paged /api/products projection", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
-    assert.equal(input, "/api/products");
+    assert.equal(input, "/api/products?page=1&pageSize=20&category=%E6%98%BE%E5%8D%A1");
     assert.equal(init?.method, undefined);
-    return new Response(JSON.stringify({data: {products: [{id: "SP-LIST", name: "微星 RTX 5090", category: "显卡", brand: "微星", model: "RTX 5090", version: "魔龙", vram: "32G", refBuyPrice: 20000, refSellPrice: 23000, currentStock: 3}]}}), {status: 200, headers: {"Content-Type": "application/json"}});
+    return new Response(JSON.stringify({data: {products: [{id: "SP-LIST", name: "微星 RTX 5090", category: "显卡", brand: "微星", model: "RTX 5090", version: "魔龙", vram: "32G", refBuyPrice: 20000, refSellPrice: 23000, currentStock: 3}]}, meta: {page: 1, pageSize: 20, total: 1, summary: {stockedTemplates: 1, stockUnits: 3}, facets: {categories: ["显卡"], brands: ["微星"]}}}), {status: 200, headers: {"Content-Type": "application/json"}});
   };
   try {
-    const result = await productsApi.list({showCost: true, showProfit: false});
+    const result = await productsApi.list({keyword: "", category: "显卡", brand: "all", page: 1, pageSize: 20}, [], {showCost: true, showProfit: false});
     assert.equal(result.products[0]?.id, "SP-LIST");
     assert.equal(result.products[0]?.refBuyPrice, 20000);
     assert.equal(result.products[0]?.refSellPrice, undefined);
+    assert.equal(result.meta?.summary.stockUnits, 3);
   } finally {
     globalThis.fetch = previousFetch;
   }

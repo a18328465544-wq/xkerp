@@ -174,7 +174,23 @@ export interface SalesOutboundInvoice {
 export interface SalesOutboundDataset {
   invoices: SalesOutboundInvoice[];
   inventory: SalesOutboundInventoryItem[];
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-page";
+  meta?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    summary: {
+      pendingItemCount: number;
+      pendingAmount: number;
+    };
+  };
+}
+
+export interface SalesOutboundFilters {
+  keyword: string;
+  page: number;
+  pageSize: number;
 }
 
 export interface SalesOutboundVerificationRow {
@@ -192,6 +208,26 @@ export interface SalesOutboundVerification {
   unknownCodes: string[];
   duplicateCodes: string[];
   ready: boolean;
+}
+
+export interface SalesOutboundPreflightRow {
+  lineId: string;
+  productName: string;
+  inventoryId: string;
+  serialNumber: string;
+  matched: boolean;
+  reason: string;
+}
+
+export interface SalesOutboundPreflightResult {
+  invoiceId: string;
+  invoiceNo: string;
+  expectedCount: number;
+  matchedCount: number;
+  ready: boolean;
+  unknownCodes: string[];
+  duplicateCodes: string[];
+  rows: SalesOutboundPreflightRow[];
 }
 
 export interface SalesOutboundRequest {

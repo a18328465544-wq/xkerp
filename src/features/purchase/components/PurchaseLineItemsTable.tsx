@@ -7,7 +7,7 @@ import {formatCurrency} from "@/src/lib/format";
 import {productDisplayName} from "@/src/lib/productName";
 import type {PurchaseFormValues, PurchaseLineFormValue, PurchaseProductOption} from "@/src/types/purchase";
 
-export function PurchaseLineItemsTable({control, fields, items, products, canEnterCost, showProfit, canCreateProduct, disabled, onProductSelect, onProductClear, onAdd, onRemove, onOpenCreateProduct}: {
+export function PurchaseLineItemsTable({control, fields, items, products, canEnterCost, showProfit, canCreateProduct, disabled, productsLoading, onProductKeywordChange, onProductSelect, onProductClear, onAdd, onRemove, onOpenCreateProduct}: {
   control: Control<PurchaseFormValues>;
   fields: FieldArrayWithId<PurchaseFormValues, "items", "id">[];
   items: PurchaseLineFormValue[];
@@ -17,6 +17,8 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
   showProfit: boolean;
   canCreateProduct?: boolean;
   disabled?: boolean;
+  productsLoading?: boolean;
+  onProductKeywordChange?: (keyword: string) => void;
   onProductSelect: (index: number, productId: string) => void;
   onProductClear: (index: number) => void;
   onAdd: () => void;
@@ -50,7 +52,7 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
           const expectedProfit = (item.estSellPrice - item.buyPrice) * item.quantity;
           return <tr key={field.id} className="group align-middle last:[&>td]:border-b-0 hover:bg-[var(--erp-color-surface-muted)]/60">
             <td className="sticky left-0 erp-content-sticky-layer border-b border-r border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2 group-hover:bg-[var(--erp-color-surface-muted)]">
-              <Controller control={control} name={`items.${index}.productId` as const} render={({field: input}) => <Select searchable searchPlaceholder="搜索商品…" emptyText="没有找到匹配的商品规格" className="min-w-0" value={input.value} options={productOptions} onValueChange={(value) => { input.onChange(value); handleProductSelect(index, value); }} onClear={() => onProductClear(index)} quickCreateAction={canCreateProduct && onOpenCreateProduct ? {label: "新建商品", onClick: (searchText) => onOpenCreateProduct(index, searchText || item.productName), disabled} : undefined} disabled={disabled || (!products.length && !(canCreateProduct && onOpenCreateProduct))} placeholder={products.length ? "选择商品规格" : "搜索或新建商品"} aria-label={`第 ${index + 1} 行商品`} aria-invalid={missingProductIdentity} />} />
+              <Controller control={control} name={`items.${index}.productId` as const} render={({field: input}) => <Select searchable searchPlaceholder="搜索商品…" emptyText="没有找到匹配的商品规格" className="min-w-0" value={input.value} options={productOptions} searchLoading={productsLoading} onSearchValueChange={onProductKeywordChange} onValueChange={(value) => { input.onChange(value); handleProductSelect(index, value); }} onClear={() => onProductClear(index)} quickCreateAction={canCreateProduct && onOpenCreateProduct ? {label: "新建商品", onClick: (searchText) => onOpenCreateProduct(index, searchText || item.productName), disabled} : undefined} disabled={disabled || (!products.length && !(canCreateProduct && onOpenCreateProduct))} placeholder={products.length ? "选择商品规格" : "搜索或新建商品"} aria-label={`第 ${index + 1} 行商品`} aria-invalid={missingProductIdentity} />} />
             </td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">{canEnterCost ? <Controller control={control} name={`items.${index}.buyPrice` as const} render={({field: input}) => <ErpAmountInput value={input.value} onBlur={input.onBlur} onValueChange={(detail) => input.onChange(detail.floatValue || 0)} disabled={disabled} aria-label={`第 ${index + 1} 行进货价`} />} /> : <span className="flex h-10 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-2 text-xs text-[var(--erp-color-text-muted)]">不可录入</span>}</td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">{showProfit ? <Controller control={control} name={`items.${index}.estSellPrice` as const} render={({field: input}) => <ErpAmountInput value={input.value} onBlur={input.onBlur} onValueChange={(detail) => input.onChange(detail.floatValue || 0)} disabled={disabled} aria-label={`第 ${index + 1} 行预估售价`} />} /> : <span className="flex h-10 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-2 text-xs text-[var(--erp-color-text-muted)]">—</span>}</td>

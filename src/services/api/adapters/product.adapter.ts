@@ -58,12 +58,19 @@ export function adaptProduct(value: unknown, permissions: Pick<PermissionModel, 
 
 export function adaptProductLibrary(response: ProductLibraryResponseDto, permissions: Pick<PermissionModel, "showCost" | "showProfit">): ProductLibrarySnapshot {
   const payload = record(response.data);
+  const meta = record(response.meta);
+  const summary = record(meta.summary);
+  const facets = record(meta.facets);
   const rawProducts = Array.isArray(payload.products) ? payload.products : [];
   const products = rawProducts.map((item) => adaptProduct(item, permissions)).filter((item) => Boolean(item.id));
+  const page = Math.max(1, number(meta.page, 1));
+  const pageSize = Math.max(1, number(meta.pageSize, 20));
+  const total = Math.max(0, number(meta.total));
   return {
     products,
-    categories: Array.from(new Set(products.map((item) => item.category))),
-    brands: Array.from(new Set(products.map((item) => item.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    categories: Array.isArray(facets.categories) ? facets.categories.map(category) : Array.from(new Set(products.map((item) => item.category))),
+    brands: Array.isArray(facets.brands) ? facets.brands.map((item) => text(item)).filter(Boolean) : Array.from(new Set(products.map((item) => item.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    ...(response.meta ? {meta: {page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), summary: {stockedTemplates: Math.max(0, number(summary.stockedTemplates)), stockUnits: Math.max(0, number(summary.stockUnits))}}} : {}),
   };
 }
 

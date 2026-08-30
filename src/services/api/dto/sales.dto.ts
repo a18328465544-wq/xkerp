@@ -59,6 +59,10 @@ export interface SalesOutboundResponseDto {
   stateDelete?: unknown;
 }
 
+export interface SalesOutboundPreflightResponseDto {
+  data?: unknown;
+}
+
 export interface SalesOutboundRequestDto {
   handler: string;
   codes: string[];

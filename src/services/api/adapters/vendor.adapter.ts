@@ -68,12 +68,19 @@ export function adaptVendor(value: unknown, permissions: {showProfit: boolean}):
 
 export function adaptVendorDirectory(response: VendorDirectoryResponseDto, permissions: {showProfit: boolean}): VendorDirectorySnapshot {
   const state = record(response.data);
+  const meta = record(response.meta);
+  const summary = record(meta.summary);
+  const facets = record(meta.facets);
   const rows = Array.isArray(state.vendors) ? state.vendors : [];
   const vendors = rows.map((item) => adaptVendor(item, permissions)).filter((item) => Boolean(item.id));
+  const page = Math.max(1, numberValue(meta.page) || 1);
+  const pageSize = Math.max(1, numberValue(meta.pageSize) || 20);
+  const total = Math.max(0, numberValue(meta.total));
   return {
     vendors,
-    types: vendorTypes.filter((type) => vendors.some((item) => item.type === type)),
-    levels: vendorLevels.filter((level) => vendors.some((item) => item.level === level)),
+    types: vendorTypes.filter((type) => Array.isArray(facets.types) ? facets.types.includes(type) : vendors.some((item) => item.type === type)),
+    levels: vendorLevels.filter((level) => Array.isArray(facets.levels) ? facets.levels.includes(level) : vendors.some((item) => item.level === level)),
+    ...(response.meta ? {meta: {page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), summary: {coreCount: Math.max(0, numberValue(summary.coreCount)), payable: Math.max(0, numberValue(summary.payable)), receivable: Math.max(0, numberValue(summary.receivable)), credit: Math.max(0, numberValue(summary.credit))}}} : {}),
   };
 }
 

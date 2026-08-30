@@ -54,18 +54,21 @@ test("sales outbound adapter exposes only pending invoices and sellable inventor
       {id: "S-2", invoiceNo: "XS-2", outboundStatus: "已出库", items: []},
       {id: "S-3", invoiceNo: "XS-3", items: [{inventoryId: "KC-2", productId: "P-1", productName: "RTX 4090", sellPrice: 10000}]},
     ],
-  }};
+  }, meta: {page: 1, pageSize: 20, total: 1, summary: {pendingItemCount: 1, pendingAmount: 10000}}};
   const dataset = adaptSalesOutboundState(response);
+  assert.equal(dataset.source, "database-page");
+  assert.equal(dataset.meta?.total, 1);
+  assert.equal(dataset.meta?.summary.pendingAmount, 10000);
   assert.deepEqual(dataset.invoices.map((item) => item.invoiceNo), ["XS-1"]);
   assert.deepEqual(dataset.inventory.map((item) => item.id), ["KC-1"]);
   assert.equal(dataset.invoices[0]?.lines[0]?.productIdentityKey, dataset.inventory[0]?.productIdentityKey);
   assert.equal("costPrice" in dataset.inventory[0]!, false);
 });
 
-test("sales outbound request adapter trims and deduplicates scan codes", () => {
+test("sales outbound request adapter trims but preserves repeated scans for server validation", () => {
   assert.deepEqual(toSalesOutboundRequestDto({handler: " 仓库小李 ", codes: [" KC-1 ", "KC-1", "", "SN-2"], manual: false, remarks: " 已复核 "}), {
     handler: "仓库小李",
-    codes: ["KC-1", "SN-2"],
+    codes: ["KC-1", "KC-1", "SN-2"],
     manual: false,
     remarks: "已复核",
   });

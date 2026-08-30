@@ -19,7 +19,7 @@ export function adaptFinanceDashboardDataset(response: FinanceDashboardResponseD
   const purchases = collection(state.purchaseInvoices).map(record).map((item) => ({date: datePart(item.date), ...(access.showCost ? {totalCost: Math.max(0, numberValue(item.totalCost))} : {}), unpaid: Math.max(0, numberValue(item.unpaidAmount))}));
   const returns = access.canViewReturns ? collection(state.returnOrders).map(record).map((item) => {const saleSnapshot = record(item.sourceSalesItemSnapshot); const purchaseSnapshot = record(item.sourcePurchaseItemSnapshot); return {date: datePart(item.date), status: text(item.status), type: text(item.type), amount: Math.max(0, numberValue(item.amount)), ...(access.showCost ? {salesCost: Math.max(0, numberValue(saleSnapshot.costPrice)), purchaseCost: Math.max(0, numberValue(purchaseSnapshot.buyPrice))} : {})};}) : [];
   const inventory = collection(state.inventory).map(record).map((item) => ({status: text(item.status), ...(access.showCost ? {cost: Math.max(0, numberValue(item.costPrice))} : {}), entryDate: datePart(item.entryTime), salesDate: optionalText(item.salesTime)?.slice(0, 10)}));
-  return {accounts, flows, reviewStatuses, sales, purchases, returns, inventory, access, source: "state-snapshot"};
+  return {accounts, flows, reviewStatuses, sales, purchases, returns, inventory, access, source: text(record(response.meta).source) === "database-dashboard" ? "database-dashboard" : "state-snapshot"};
 }
 
 export function buildFinanceDashboard(dataset: FinanceDashboardDataset, range: FinanceDateRange, today: string): FinanceDashboardView {

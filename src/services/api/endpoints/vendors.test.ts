@@ -4,10 +4,10 @@ import {vendorsApi} from "./vendors";
 
 function response(payload: unknown, status = 200) {return new Response(JSON.stringify(payload), {status, headers: {"Content-Type": "application/json"}});}
 
-test("vendor directory reads its feature-scoped snapshot", async () => {
+test("vendor directory sends server paging and reads the scoped page", async () => {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (input) => {assert.equal(input, "/api/vendors"); return response({data: {vendors: [{id: "GY-1", name: "同行"}]}});};
-  try {const result = await vendorsApi.list({showProfit: false}); assert.equal(result.vendors[0]?.id, "GY-1"); assert.equal("inventory" in result, false);} finally {globalThis.fetch = previousFetch;}
+  globalThis.fetch = async (input) => {assert.equal(input, "/api/vendors?page=1&pageSize=20&keyword=%E5%90%8C%E8%A1%8C"); return response({data: {vendors: [{id: "GY-1", name: "同行"}]}, meta: {page: 1, pageSize: 20, total: 1, summary: {}, facets: {types: ["上游供应商"], levels: ["C级"]}}});};
+  try {const result = await vendorsApi.list({keyword: "同行", type: "all", level: "all", balance: "all", page: 1, pageSize: 20}, [], {showProfit: false}); assert.equal(result.vendors[0]?.id, "GY-1"); assert.equal(result.meta?.total, 1); assert.equal("inventory" in result, false);} finally {globalThis.fetch = previousFetch;}
 });
 
 test("vendor update uses the existing PUT endpoint", async () => {

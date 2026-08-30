@@ -18,7 +18,7 @@ export const queryKeys = {
   sales: {
     all: () => ["sales"] as const,
     list: (access: {userId: string; showCost: boolean; showProfit: boolean}, filters?: unknown) => ["sales", "list", access, filters] as const,
-    outbound: (userId: string) => ["sales", "outbound", userId] as const,
+    outbound: (userId: string, filters: unknown) => ["sales", "outbound", userId, filters] as const,
     customers: (keyword: string) => ["sales", "customers", keyword] as const,
     inventoryCandidates: (keyword: string) => ["sales", "inventory-candidates", keyword] as const,
     productCandidates: (keyword: string) => ["sales", "product-candidates", keyword] as const,
@@ -35,6 +35,8 @@ export const queryKeys = {
     all: () => ["purchase"] as const,
     list: (access: {userId: string; showCost: boolean; showProfit: boolean}, filters?: unknown) => ["purchase", "list", access, filters] as const,
     referenceData: () => ["purchase", "reference-data"] as const,
+    productSearch: (keyword: string) => ["purchase", "reference-data", "products", keyword] as const,
+    sourceSearch: (keyword: string) => ["purchase", "reference-data", "sources", keyword] as const,
     detail: (id: string) => ["purchase", "detail", id] as const,
   },
   backup: {
@@ -43,7 +45,7 @@ export const queryKeys = {
   },
   returns: {
     all: () => ["returns"] as const,
-    reference: () => ["returns", "reference"] as const,
+    reference: (filters: unknown = {}) => ["returns", "reference", filters] as const,
     salesList: (filters: SalesReturnListFilters) => ["returns", "sales", "list", filters] as const,
     purchaseList: (filters: SalesReturnListFilters) => ["returns", "purchase", "list", filters] as const,
   },
@@ -53,7 +55,7 @@ export const queryKeys = {
   },
   products: {
     all: () => ["products"] as const,
-    list: (access: {showCost: boolean; showProfit: boolean}) => ["products", "list", access] as const,
+    list: (access: {showCost: boolean; showProfit: boolean}, filters: unknown, sorting: unknown) => ["products", "list", access, filters, sorting] as const,
   },
   quotes: {
     all: () => ["quotes"] as const,
@@ -76,7 +78,7 @@ export const queryKeys = {
   },
   vendors: {
     all: () => ["vendors"] as const,
-    directory: (access: {showProfit: boolean}) => ["vendors", "directory", access] as const,
+    directory: (access: {showProfit: boolean}, filters: unknown, sorting: unknown) => ["vendors", "directory", access, filters, sorting] as const,
   },
   aftersales: {
     all: () => ["aftersales"] as const,
@@ -84,7 +86,7 @@ export const queryKeys = {
   },
   finance: {
     all: () => ["finance"] as const,
-    dashboard: (access: FinanceDashboardAccess) => ["finance", "dashboard", access] as const,
+    dashboard: (access: FinanceDashboardAccess, range?: unknown) => ["finance", "dashboard", access, range] as const,
     accounts: () => ["finance", "accounts"] as const,
     accountLedger: (accountId: string) => ["finance", "accounts", accountId, "ledger"] as const,
     ledger: (filters: unknown) => ["finance", "ledger", filters] as const,

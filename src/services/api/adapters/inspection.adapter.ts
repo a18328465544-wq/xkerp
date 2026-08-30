@@ -134,7 +134,7 @@ function adaptHistory(dto: Record<string, unknown>, inventoryById: Map<string, R
   };
 }
 
-export function adaptInspectionWorkspace(response: {data?: unknown}): InspectionWorkspace {
+export function adaptInspectionWorkspace(response: {data?: unknown; meta?: unknown}): InspectionWorkspace {
   const state = record(response.data);
   const inventory = collection(state, "inventory");
   const inspections = collection(state, "inspections");
@@ -154,7 +154,7 @@ export function adaptInspectionWorkspace(response: {data?: unknown}): Inspection
     .map((item) => adaptHistory(item, inventoryById))
     .filter((item) => Boolean(item.id))
     .sort((left, right) => right.inspectTime.localeCompare(left.inspectTime) || right.id.localeCompare(left.id));
-  return {candidates, history, source: "state-snapshot"};
+  return {candidates, history, source: text(record(response.meta).source) === "database-workspace" ? "database-workspace" : "state-snapshot"};
 }
 
 export function toInspectionCreateRequestDto(values: InspectionFormValues): InspectionCreateRequestDto {

@@ -44,7 +44,7 @@ export function adaptAftersalesWorkspace(response: AftersalesStateResponseDto): 
     const active = items.find((item) => item.serialNumber === serialNumber && ["待处理", "检测中"].includes(item.status));
     return [{inventoryId: text(card.id), productName: text(card.productName, text(card.model, "未记录商品")), serialNumber, saleInvoiceNo: text(invoice.invoiceNo, text(invoice.id)), customerId: optionalText(invoice.customerId), customerName: text(invoice.customerName, "未记录客户"), contact: text(invoice.contact), model: optionalText(card.model), saleDate: optionalText(invoice.date), activeClaimId: active?.id}];
   }).filter((item) => Boolean(item.inventoryId && item.saleInvoiceNo && item.serialNumber));
-  return {items, candidates, source: "state-snapshot"};
+  return {items, candidates, source: text(record(response.meta).source) === "database-workspace" ? "database-workspace" : "state-snapshot"};
 }
 
 export function adaptAftersalesMutation(response: AftersalesMutationResponseDto) {

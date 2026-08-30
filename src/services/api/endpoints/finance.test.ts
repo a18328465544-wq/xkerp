@@ -4,9 +4,9 @@ import {financeApi} from "./finance";
 
 test("finance dashboard reads its feature-scoped snapshot", async () => {
   const previous = globalThis.fetch;
-  globalThis.fetch = async (input) => {assert.equal(input, "/api/finance/dashboard"); return new Response(JSON.stringify({data: {settlementAccounts: []}}), {status: 200, headers: {"Content-Type": "application/json"}});};
+  globalThis.fetch = async (input) => {assert.equal(input, "/api/finance/dashboard?startDate=2026-08-01&endDate=2026-08-07"); return new Response(JSON.stringify({data: {settlementAccounts: []}}), {status: 200, headers: {"Content-Type": "application/json"}});};
   try {
-    const result = await financeApi.dashboard({showCost: false, showProfit: true, canViewAccounts: false, canViewSettlementLedger: false, canViewReturns: false});
+    const result = await financeApi.dashboard({showCost: false, showProfit: true, canViewAccounts: false, canViewSettlementLedger: false, canViewReturns: false}, {startDate: "2026-08-01", endDate: "2026-08-07"});
     assert.equal(result.source, "state-snapshot");
   } finally {globalThis.fetch = previous;}
 });

@@ -17,6 +17,16 @@ export const purchaseApi = {
     return adaptPurchaseReferenceData(response, permissions);
   },
 
+  async searchProducts(keyword: string, permissions: PurchaseReferencePermissions, signal?: AbortSignal) {
+    const response = await apiRequest<PurchaseReferenceStateResponseDto>(`/api/purchase-invoices/reference/products?keyword=${encodeURIComponent(keyword)}`, {signal});
+    return adaptPurchaseReferenceData(response, permissions).products;
+  },
+
+  async searchSources(keyword: string, permissions: PurchaseReferencePermissions, signal?: AbortSignal) {
+    const response = await apiRequest<PurchaseReferenceStateResponseDto>(`/api/purchase-invoices/reference/sources?keyword=${encodeURIComponent(keyword)}`, {signal});
+    return adaptPurchaseReferenceData(response, permissions).sources;
+  },
+
   async create(values: PurchaseFormValues, account?: PurchaseSettlementAccountOption, signal?: AbortSignal, idempotencyKey?: string): Promise<PurchaseCreateResult> {
     const request = toPurchaseRequestDto(values, account);
     const response = await apiRequest<PurchaseCreateResponseDto>("/api/purchase-invoices", {method: "POST", body: JSON.stringify(request), signal, headers: idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined});

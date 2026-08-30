@@ -115,6 +115,26 @@ export interface StoreActionContext {
   requestId?: string;
 }
 
+export interface SalesOutboundPreflightRow {
+  lineId: string;
+  productName: string;
+  inventoryId?: string;
+  serialNumber?: string;
+  matched: boolean;
+  reason: string;
+}
+
+export interface SalesOutboundPreflightResult {
+  invoiceId: string;
+  invoiceNo: string;
+  expectedCount: number;
+  matchedCount: number;
+  ready: boolean;
+  unknownCodes: string[];
+  duplicateCodes: string[];
+  rows: SalesOutboundPreflightRow[];
+}
+
 const PRODUCT_STOCK_EXCLUDED_STATUSES = new Set<CardStatus>(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
 const NON_OPERATING_INCOME_TYPES = new Set<string>(["赔偿收入", "返点收入", "配件销售", "利息收入", "其他收入"]);
 const NON_OPERATING_EXPENSE_TYPES = new Set<string>(["员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待", "其他支出"]);
@@ -4505,27 +4525,61 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     return existing;
   };
 
-  const confirmSalesOutbound = (
+  const prepareSalesOutbound = (
     id: string,
     input: { handler: string; codes?: string[]; manual?: boolean; remarks?: string },
   ) => {
     const invoice = state.salesInvoices.find((item) => item.id === id || item.invoiceNo === id);
     if (!invoice) throw new NotFoundError(`销售单不存在: ${id}`);
-    if (invoice.outboundStatus === "已出库") return invoice;
+    if (invoice.outboundStatus === "已出库") {
+      return {
+        invoice,
+        selectedOutboundItems: [],
+        preview: {
+          invoiceId: invoice.id,
+          invoiceNo: invoice.invoiceNo,
+          expectedCount: invoice.items.length,
+          matchedCount: invoice.items.length,
+          ready: true,
+          unknownCodes: [],
+          duplicateCodes: [],
+          rows: invoice.items.map((item, index) => ({
+            lineId: item.inventoryId || `${invoice.id}-line-${index + 1}`,
+            productName: item.productName,
+            inventoryId: item.inventoryId || undefined,
+            serialNumber: item.sn || undefined,
+            matched: true,
+            reason: "销售单已完成出库",
+          })),
+        } satisfies SalesOutboundPreflightResult,
+      };
+    }
     if (input.manual && !input.remarks?.trim()) {
       throw new ValidationError("手动确认出库必须填写原因，例如扫码设备异常、门店自提复核等");
     }
     const productIdentityIndex = createProductIdentityIndex(state.products);
 
-    const normalizedCodes = Array.from(new Set((input.codes || []).map((code) => code.trim()).filter(Boolean)));
+    const rawCodes = (input.codes || []).map((code) => code.trim()).filter(Boolean);
+    const seenCodes = new Set<string>();
+    const normalizedCodes: string[] = [];
+    const duplicateCodes: string[] = [];
+    rawCodes.forEach((code) => {
+      const normalized = code.toLocaleLowerCase("zh-CN");
+      if (seenCodes.has(normalized)) {
+        if (!duplicateCodes.some((item) => item.toLocaleLowerCase("zh-CN") === normalized)) duplicateCodes.push(code);
+        return;
+      }
+      seenCodes.add(normalized);
+      normalizedCodes.push(code);
+    });
     const codeSet = new Set(normalizedCodes.map((code) => code.toLowerCase()));
     const inventoryIndexById = new Map(state.inventory.map((card, index) => [card.id, index]));
 
     const usedInventoryIds = new Set<string>();
     const selectedOutboundItems: Array<{ item: SalesInvoice["items"][number]; cardIndex: number; card: CardInventory }> = [];
-    const missingItems: SalesInvoice["items"] = [];
+    const missingItems: Array<{ item: SalesInvoice["items"][number]; index: number; reason: string }> = [];
 
-    for (const item of invoice.items) {
+    for (const [itemIndex, item] of invoice.items.entries()) {
       let cardIndex: number | undefined;
       let card: CardInventory | undefined;
 
@@ -4533,7 +4587,8 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
         cardIndex = inventoryIndexById.get(item.inventoryId);
         card = cardIndex === undefined ? undefined : state.inventory[cardIndex];
         if (card && usedInventoryIds.has(card.id)) {
-          throw new ConflictError(`销售单重复绑定库存卡: ${card.id}`);
+          missingItems.push({item, index: itemIndex, reason: `销售单重复绑定库存卡 ${card.id}`});
+          continue;
         }
         const scannedLegacyCard = [
           item.inventoryId,
@@ -4541,7 +4596,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
           card?.sn,
         ].filter(Boolean).some((code) => codeSet.has(String(code).toLowerCase()));
         if (!input.manual && !scannedLegacyCard) {
-          missingItems.push(item);
+          missingItems.push({item, index: itemIndex, reason: "请扫描该销售行已绑定的库存卡"});
           continue;
         }
       } else {
@@ -4559,21 +4614,75 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
       }
 
       if (cardIndex === undefined || !card) {
-        missingItems.push(item);
+        missingItems.push({item, index: itemIndex, reason: input.manual ? "当前没有可匹配的可售库存" : "请扫描同型号可售库存卡"});
         continue;
       }
       if (!input.manual && !item.inventoryId && ![card.id, card.sn].filter(Boolean).some((code) => codeSet.has(String(code).toLowerCase()))) {
-        missingItems.push(item);
+        missingItems.push({item, index: itemIndex, reason: "扫码内容未匹配到该销售商品"});
         continue;
       }
       selectedOutboundItems.push({ item, cardIndex, card });
       usedInventoryIds.add(card.id);
     }
 
-    if (missingItems.length > 0) {
-      throw new ConflictError(input.manual
-        ? `可出库库存不足，还有 ${missingItems.length} 件销售商品无法匹配库存`
-        : `还有 ${missingItems.length} 件销售商品未扫码确认`);
+    const recognizedCodes = new Set<string>();
+    selectedOutboundItems.forEach(({card}) => {
+      [card.id, card.sn].filter(Boolean).forEach((code) => {
+        const normalized = String(code).toLocaleLowerCase("zh-CN");
+        if (codeSet.has(normalized)) recognizedCodes.add(normalized);
+      });
+    });
+    const unknownCodes = normalizedCodes.filter((code) => !recognizedCodes.has(code.toLocaleLowerCase("zh-CN")));
+    const missingByIndex = new Map(missingItems.map((entry) => [entry.index, entry]));
+    const selectedByItem = new Map(selectedOutboundItems.map((entry) => [entry.item, entry]));
+    const rows: SalesOutboundPreflightRow[] = invoice.items.map((item, index) => {
+      const selected = selectedByItem.get(item);
+      const missing = missingByIndex.get(index);
+      return {
+        lineId: item.inventoryId || `${invoice.id}-line-${index + 1}`,
+        productName: item.productName,
+        inventoryId: selected?.card.id,
+        serialNumber: selected?.card.sn,
+        matched: Boolean(selected),
+        reason: selected ? "服务器已匹配可售库存" : missing?.reason || "未匹配库存",
+      };
+    });
+    const preview: SalesOutboundPreflightResult = {
+      invoiceId: invoice.id,
+      invoiceNo: invoice.invoiceNo,
+      expectedCount: rows.length,
+      matchedCount: selectedOutboundItems.length,
+      ready: rows.length > 0 && missingItems.length === 0 && (input.manual || (unknownCodes.length === 0 && duplicateCodes.length === 0)),
+      unknownCodes,
+      duplicateCodes,
+      rows,
+    };
+
+    return {invoice, selectedOutboundItems, preview};
+  };
+
+  const previewSalesOutbound = (
+    id: string,
+    input: { handler: string; codes?: string[]; manual?: boolean; remarks?: string },
+  ) => prepareSalesOutbound(id, input).preview;
+
+  const confirmSalesOutbound = (
+    id: string,
+    input: { handler: string; codes?: string[]; manual?: boolean; remarks?: string },
+  ) => {
+    const {invoice, selectedOutboundItems, preview} = prepareSalesOutbound(id, input);
+    if (invoice.outboundStatus === "已出库") return invoice;
+
+    if (!preview.ready) {
+      const missingCount = preview.rows.filter((row) => !row.matched).length;
+      const message = input.manual
+        ? `可出库库存不足，还有 ${missingCount} 件销售商品无法匹配库存`
+        : preview.duplicateCodes.length > 0
+          ? `检测到 ${preview.duplicateCodes.length} 个重复扫码内容，请清理后重试`
+          : preview.unknownCodes.length > 0
+            ? `检测到 ${preview.unknownCodes.length} 个无效库存 ID / SN，请核对后重试`
+            : `还有 ${missingCount} 件销售商品未扫码确认`;
+      throw new ConflictError(message, preview);
     }
 
     const outboundTime = nowStamp();
@@ -6496,6 +6605,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     updateSalesInvoice,
     deleteSalesInvoice,
     confirmSalesOutbound,
+    previewSalesOutbound,
     addAftersalesClaim,
     updateAftersalesStatus,
     updateMarketPrice,

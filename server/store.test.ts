@@ -597,8 +597,16 @@ test("sales invoice records model first and outbound confirmation binds SN then 
 
   assert.throws(
     () => actions.confirmSalesOutbound(invoice.id, { handler: "仓库小李", codes: ["WRONG-SN"] }),
-    /未扫码确认/,
+    /无效库存 ID \/ SN/,
   );
+  const rejectedPreview = actions.previewSalesOutbound(invoice.id, { handler: "仓库小李", codes: ["WRONG-SN"] });
+  assert.equal(rejectedPreview.ready, false);
+  assert.equal(rejectedPreview.matchedCount, 0);
+  assert.deepEqual(rejectedPreview.unknownCodes, ["WRONG-SN"]);
+  assert.equal(rejectedPreview.rows[0]?.matched, false);
+  const acceptedPreview = actions.previewSalesOutbound(invoice.id, { handler: "仓库小李", codes: [card.sn] });
+  assert.equal(acceptedPreview.ready, true);
+  assert.equal(acceptedPreview.matchedCount, 1);
   const outbound = actions.confirmSalesOutbound(invoice.id, { handler: "仓库小李", codes: [card.sn] });
   assert.equal(outbound.outboundStatus, "已出库");
   assert.equal(outbound.items[0].inventoryId, card.id);

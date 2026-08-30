@@ -66,7 +66,19 @@ export function filterFinanceTransferCollection(snapshot: FinanceTransferItem[],
 }
 
 export function adaptFinanceTransferCollection(response: FinanceTransferListResponseDto, filters: FinanceTransferFilters) {
-  return filterFinanceTransferCollection(adaptFinanceTransferSnapshot(response), filters);
+  const meta = record(response.meta);
+  const items = adaptFinanceTransferSnapshot(response);
+  if (text(meta.source) !== "database-page") return filterFinanceTransferCollection(items, filters);
+  return {
+    items,
+    total: Math.max(items.length, Math.floor(amount(meta.total))),
+    totalAmount: amount(meta.totalAmount),
+    totalFee: amount(meta.totalFee),
+    totalReceived: amount(meta.totalReceived),
+    page: Math.max(1, Math.floor(amount(meta.page) || filters.page)),
+    pageSize: Math.max(1, Math.floor(amount(meta.pageSize) || filters.pageSize)),
+    source: "database-page" as const,
+  };
 }
 
 export function toFinanceTransferRequest(values: FinanceTransferFormValues, handler: string): FinanceTransferRequestDto {

@@ -69,8 +69,9 @@ import {
   QuickCaptureValidationError,
 } from "./crmQuickCapture.ts";
 import { buildCustomerLeadPreview, normalizeCustomerLeadInput } from "./crmCustomerLead.ts";
-import { buildCustomerFundsSnapshot } from "./customerFunds.ts";
-import { registerDomainSnapshotRoutes } from "./routes/domainSnapshots.ts";
+import { registerMasterDataRoutes } from "./routes/masterData.ts";
+import { registerPurchaseReadRoutes } from "./routes/purchaseRead.ts";
+import { registerOperationalReadRoutes } from "./routes/operationalReads.ts";
 import { registerFinanceClosingRoutes } from "./routes/financeClosing.ts";
 import {registerPagedRecordRoutes} from "./routes/pagedRecords.ts";
 import { registerSystemRoutes } from "./routes/system.ts";
@@ -82,9 +83,9 @@ import {assertStateRuntimeMode} from "./runtimeConfig.ts";
 import {registerInventoryJourneyRoutes} from "./routes/inventoryJourney.ts";
 import { registerSalesProductCandidateRoutes } from "./routes/salesProductCandidates.ts";
 import { registerSalesCustomerRoutes } from "./routes/salesCustomers.ts";
+import {registerSalesOutboundRoutes} from "./routes/salesOutbound.ts";
 import {registerCustomerDirectoryRoutes} from "./routes/customerDirectory.ts";
 import { registerProductLedgerRoutes } from "./routes/productLedger.ts";
-import {createDomainSnapshotRefresh} from "./routes/domainSnapshotRefresh.ts";
 import { registerCommercialRoutes } from "./routes/commercial.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.ts";
@@ -1241,8 +1242,10 @@ function requireReturnTypeFromRecord(req: AuthRequest, res: express.Response, ne
   next();
 }
 
-registerDomainSnapshotRoutes(app, {requireMenu, requireAnyMenu, publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys), refreshState: createDomainSnapshotRefresh({getDatabaseRevision: getStateRevision, getStateRevision: () => stateRevision, reloadState: (req) => reloadRequestStateFromDatabase(req as AuthRequest)})});
 registerPagedRecordRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getScopedPermissions(state, (req as AuthRequest).authUser)});
+registerMasterDataRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
+registerPurchaseReadRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser), getStoreDate: storeDate});
+registerOperationalReadRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
 
 registerSystemRoutes(app, {
   dataFilePath,
@@ -1493,6 +1496,7 @@ registerInventoryJourneyRoutes(app, {
 });
 registerSalesProductCandidateRoutes(app, {requireMenu, getInventorySummary: (req, query) => actions(req as AuthRequest).getInventorySummary(query), permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser), storeDateDiffDays});
 registerSalesCustomerRoutes(app, {requireMenu});
+registerSalesOutboundRoutes(app, {requireMenu});
 registerCustomerDirectoryRoutes(app, {requireMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
 registerProductLedgerRoutes(app, {
   requireMenu,
@@ -1700,15 +1704,13 @@ app.delete("/api/gpu_erp/finance/settlement-account/:id", requireMenu("settlemen
 }));
 
 registerFinanceReadModelRoutes(app, {
-  state,
   requireMenu,
-  publicStatePatch: (req, keys) => publicStatePatch(req as AuthRequest, keys),
-  buildCustomerFundsSnapshot,
   getStoreDate: storeDate,
   startOfMonth: (date) => startOfMonth(date),
   addDateDays: (date, days) => addDateDays(date, days),
   ok,
   sendValidationError: (req, res, message) => sendApiError(req as AuthRequest, res, 400, "VALIDATION_ERROR", message),
+  permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser),
 });
 
 app.post("/api/gpu_erp/finance/payment-in/create", requireMenu("payment_in"), asyncRoute(async (req, res) => {
@@ -2222,14 +2224,6 @@ app.get("/api/gpu_erp/crm/summary", requireMenu("crm"), (req, res) => {
   res.json({ data: actions(req).getCrmSummary(req.query as Record<string, string>) });
 });
 
-app.get(
-  "/api/products",
-  requireAnyMenu(["products", "purchase_add", "sales_add", "assembly", "quotes", "finance_reports"]),
-  (_req, res) => {
-    res.json(ok(productLibraryStateData({ loaded: true })));
-  },
-);
-
 app.post("/api/products", requireMenu("products"), asyncRoute(async (req, res) => {
   const created = await persistProductImages(req, actions(req).addProductTemplate(req.body));
   const stateMerge = productTemplateMerge(req, created);
@@ -2411,25 +2405,6 @@ app.put("/api/inspections/:id", requireMenu("inspections"), requireHistoryEditPe
   res.json(okMerge(updated, stateMerge));
 }));
 
-app.get("/api/assembly-operations", requireMenu("assembly"), (req, res) => {
-  const keyword = String(req.query.search || "").trim().toLowerCase();
-  const filtered = state.assemblyOperations.filter((item) => {
-    const matchType = !req.query.type || item.type === req.query.type;
-    const matchHandler = !req.query.handler || item.handler === req.query.handler;
-    const matchKeyword = matchesKeyword([
-      item.id,
-      item.beforeSn,
-      item.beforeProductName,
-      item.afterSn,
-      item.afterProductName,
-      ...item.beforeParts.map((part) => `${part.partName} ${part.sn}`),
-      ...item.afterParts.map((part) => `${part.partName} ${part.sn}`)
-    ], keyword);
-    return matchType && matchHandler && matchKeyword;
-  });
-  res.json(paginated(filtered, req));
-});
-
 app.post("/api/assembly-operations", requireMenu("assembly"), asyncRoute(async (req, res) => {
   const created = actions(req).createAssemblyOperation(req.body);
   const stateMerge = assemblyOperationMerge(created);
@@ -2523,6 +2498,11 @@ app.delete("/api/sales-invoices/:id", requireMenu("sales_list"), requireDeletePe
   res.status(deleted ? 200 : 404).json(okMerge(deleted, stateMerge, stateDelete));
 }));
 
+app.post("/api/sales-invoices/:id/outbound/preflight", requireMenu("sales_outbound"), requireManualOutboundPermission, asyncRoute(async (req, res) => {
+  const preview = actions(req as AuthRequest).previewSalesOutbound(req.params.id!, req.body);
+  res.json(ok(preview));
+}));
+
 app.post("/api/sales-invoices/:id/outbound", requireMenu("sales_outbound"), requireManualOutboundPermission, asyncRoute(async (req, res) => {
   const authRequest = req as AuthRequest;
   const idempotency = await claimMutationIdempotency(authRequest);
@@ -2543,28 +2523,6 @@ app.post("/api/sales-invoices/:id/outbound", requireMenu("sales_outbound"), requ
     throw error;
   }
 }));
-
-app.get("/api/returns", requireAnyMenu([...returnMenuIds]), (req: AuthRequest, res) => {
-  const type = String(req.query.type || "");
-  const status = String(req.query.status || "");
-  const keyword = String(req.query.keyword || "").trim().toLowerCase();
-  const items = state.returnOrders
-    .filter((item) => canAccessReturnType(req, item.type))
-    .filter((item) => !type || item.type === type)
-    .filter((item) => !status || item.status === status)
-    .filter((item) => {
-      return matchesKeyword([
-        item.returnNo,
-        item.relatedDocNo,
-        item.productName,
-        item.sn,
-        item.partyName,
-        item.reason,
-        item.remarks,
-      ], keyword);
-    });
-  res.json(ok(paginated(items, req)));
-});
 
 app.post("/api/returns", requireAnyMenu([...returnMenuIds]), asyncRoute(async (req: AuthRequest, res) => {
   if (!canAccessReturnType(req, req.body?.type)) {
@@ -2877,7 +2835,7 @@ app.use((err: unknown, req: AuthRequest, res: express.Response, _next: express.N
     return;
   }
   if (err instanceof AppError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
+    res.status(err.status).json({ error: { code: err.code, message: err.message, requestId, ...(err.details === undefined ? {} : { details: err.details }) } });
     return;
   }
   if (err instanceof QuickCaptureValidationError) {

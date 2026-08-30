@@ -278,7 +278,7 @@ function adaptDetailPayment(value: Record<string, unknown>): PurchaseDetailPayme
 }
 
 export function adaptPurchaseDetailState(
-  response: {data?: unknown},
+  response: {data?: unknown; meta?: unknown},
   purchaseId: string,
   permissions: PurchaseDetailPermissions,
 ): PurchaseDetail | null {
@@ -315,7 +315,7 @@ export function adaptPurchaseDetailState(
     inspectionCount: inspectionIds.size,
     completedReturnCount,
     paymentCount: permissions.canReadPayments ? paymentValues.length : null,
-    source: "state-snapshot",
+    source: text(record(response.meta).source) === "database-detail" ? "database-detail" : "state-snapshot",
   };
 }
 
@@ -390,6 +390,7 @@ function adaptSettlementAccount(value: Record<string, unknown>): PurchaseSettlem
 
 export function adaptPurchaseReferenceData(response: PurchaseReferenceStateResponseDto, permissions: PurchaseReferencePermissions): PurchaseReferenceData {
   const state = record(response.data);
+  const meta = record(response.meta);
   const dayKey = storeDate().replaceAll("-", "");
   const invoiceHead = `JH-${dayKey}-`;
   const maxDailySequence = collection(state, "purchaseInvoices").reduce((maximum, invoice) => {
@@ -410,7 +411,7 @@ export function adaptPurchaseReferenceData(response: PurchaseReferenceStateRespo
     : [];
   const warehouses = Array.from(new Set(collection(state, "inventory").map((item) => text(item.warehouseLocation).trim()).filter(Boolean))).sort();
   return {
-    nextInvoiceNo: `${invoiceHead}${String(maxDailySequence + 1).padStart(3, "0")}`,
+    nextInvoiceNo: text(meta.nextInvoiceNo) || `${invoiceHead}${String(maxDailySequence + 1).padStart(3, "0")}`,
     products,
     sources,
     settlementAccounts,

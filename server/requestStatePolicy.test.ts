@@ -26,18 +26,14 @@ test("reads participate in revision checks while HEAD and OPTIONS remain lightwe
   assert.equal(shouldReloadStateFromDatabase("OPTIONS", "/api/products"), false);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/items"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/customers/page"), []);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/vendors"), []);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/products"), []);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/sales-invoices/outbound"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/logs"), []);
 });
 
-test("customer funds reads only the collections required by its projection", () => {
-  assert.deepEqual(getReloadKeysForRequest("GET", "/api/gpu_erp/finance/customer-funds"), [
-    "purchaseInvoices",
-    "salesInvoices",
-    "customers",
-    "vendors",
-    "paymentInRecords",
-    "paymentOutRecords",
-  ]);
+test("customer funds reads directly from the database without warming the process cache", () => {
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/gpu_erp/finance/customer-funds"), []);
 });
 
 test("business writes attach fresh state when route payload omitted it", () => {

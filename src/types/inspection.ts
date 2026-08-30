@@ -69,7 +69,7 @@ export interface InspectionHistoryItem {
 export interface InspectionWorkspace {
   candidates: InspectionCandidate[];
   history: InspectionHistoryItem[];
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-workspace";
 }
 
 export interface InspectionFormValues {

@@ -158,13 +158,12 @@ export function getStatePatchKeysForRequest(method: string, path: string): State
 }
 
 export function getReloadKeysForRequest(method: string, path: string): StateCollectionKey[] | null {
+  if (method.toUpperCase() === "GET" && path === "/api/products") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/vendors") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers/page") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers") return ["customers"];
-  if (method.toUpperCase() === "GET" && path === "/api/vendors") return ["vendors"];
-  if (method.toUpperCase() === "GET" && path === "/api/finance/dashboard") {
-    return ["settlementAccounts", "settlementLedger", "financeLedger", "salesInvoices", "purchaseInvoices", "returnOrders", "inventory"];
-  }
-  if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/account-transfers") return ["accountTransfers"];
+  if (method.toUpperCase() === "GET" && path === "/api/finance/dashboard") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/account-transfers") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/settlement-ledger") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-ins") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-outs") return [];
@@ -172,19 +171,19 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/finance/commissions") return [];
   if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices") return [];
   if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices/reference") {
-    return ["products", "purchaseInvoices", "customers", "vendors", "settlementAccounts", "inventory"];
+    return [];
   }
+  if (method.toUpperCase() === "GET" && (path === "/api/purchase-invoices/reference/products" || path === "/api/purchase-invoices/reference/sources")) return [];
   if (method.toUpperCase() === "GET" && path === "/api/purchase-invoices/detail") {
-    return ["purchaseInvoices", "inventory", "inspections", "paymentOutRecords", "returnOrders"];
+    return [];
   }
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices") return [];
-  if (method.toUpperCase() === "GET" && path === "/api/sales-invoices/outbound") return ["salesInvoices", "inventory", "products"];
+  if (method.toUpperCase() === "GET" && path === "/api/sales-invoices/outbound") return [];
   if (method.toUpperCase() === "GET" && path === "/api/sales/product-candidates") return ["salesInvoices", "inventory", "products"];
-  if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return ["inventory", "inspections"];
-  if (method.toUpperCase() === "GET" && path === "/api/aftersales/workspace") return ["aftersales", "inventory", "salesInvoices"];
-  if (method.toUpperCase() === "GET" && path === "/api/returns/reference") {
-    return ["products", "purchaseInvoices", "salesInvoices", "inventory", "paymentOutRecords", "settlementAccounts"];
-  }
+  if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return [];
+  if (method.toUpperCase() === "GET" && (path === "/api/assembly-operations" || path === "/api/assembly-operations/reference")) return [];
+  if (method.toUpperCase() === "GET" && path === "/api/aftersales/workspace") return [];
+  if (method.toUpperCase() === "GET" && (path === "/api/returns" || path === "/api/returns/reference")) return [];
   // These list routes query PostgreSQL directly and must not deserialize the same collection
   // into the process cache before executing their indexed, server-side paginated query.
   if (method.toUpperCase() === "POST" && path === "/api/gpu_erp/crm/quick-capture/parse") return ["customers", "products"];
@@ -196,7 +195,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/open/inventory/items") return [];
   if (method.toUpperCase() === "GET" && path === "/api/logs") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/customer-funds") {
-    return ["purchaseInvoices", "salesInvoices", "customers", "vendors", "paymentInRecords", "paymentOutRecords"];
+    return [];
   }
   const keys = getPersistenceKeysForRequest(method, path);
   if (!keys?.length) return keys;

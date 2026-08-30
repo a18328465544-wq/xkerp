@@ -1,7 +1,7 @@
 import {apiRequest} from "../client";
-import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesProductCandidates, adaptSalesSettlementAccounts, toSalesOutboundRequestDto} from "../adapters/sales.adapter";
-import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesListStateResponseDto, SalesOutboundResponseDto, SalesProductCandidatesResponseDto, SalesSettlementAccountsResponseDto} from "../dto/sales.dto";
-import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesOutboundDataset, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
+import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesOutboundPreflight, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesProductCandidates, adaptSalesSettlementAccounts, toSalesOutboundRequestDto} from "../adapters/sales.adapter";
+import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesListStateResponseDto, SalesOutboundPreflightResponseDto, SalesOutboundResponseDto, SalesProductCandidatesResponseDto, SalesSettlementAccountsResponseDto} from "../dto/sales.dto";
+import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesOutboundDataset, SalesOutboundFilters, SalesOutboundPreflightResult, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
 import {toCreateSalesRequest} from "../adapters/sales.adapter";
 import type {SalesApiPermissions} from "../adapters/sales.adapter";
 
@@ -39,8 +39,10 @@ export const salesApi = {
     return {items, source: "database-page"};
   },
 
-  async outbound(signal?: AbortSignal): Promise<SalesOutboundDataset> {
-    const response = await apiRequest<SalesListStateResponseDto>("/api/sales-invoices/outbound", {signal});
+  async outbound(filters: SalesOutboundFilters, signal?: AbortSignal): Promise<SalesOutboundDataset> {
+    const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize)});
+    if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+    const response = await apiRequest<SalesListStateResponseDto>(`/api/sales-invoices/outbound?${params.toString()}`, {signal});
     return adaptSalesOutboundState(response);
   },
 
@@ -48,6 +50,12 @@ export const salesApi = {
     const request = toSalesOutboundRequestDto(values);
     const response = await apiRequest<SalesOutboundResponseDto>(`/api/sales-invoices/${encodeURIComponent(invoiceId)}/outbound`, {method: "POST", body: JSON.stringify(request), signal, headers: idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined});
     return adaptSalesOutboundResult(response.data);
+  },
+
+  async preflightOutbound(invoiceId: string, values: SalesOutboundRequest, signal?: AbortSignal): Promise<SalesOutboundPreflightResult> {
+    const request = toSalesOutboundRequestDto(values);
+    const response = await apiRequest<SalesOutboundPreflightResponseDto>(`/api/sales-invoices/${encodeURIComponent(invoiceId)}/outbound/preflight`, {method: "POST", body: JSON.stringify(request), signal});
+    return adaptSalesOutboundPreflight(response.data);
   },
 
   async searchCustomers(keyword: string, signal?: AbortSignal): Promise<SalesCustomerOption[]> {

@@ -7,7 +7,7 @@ import {adaptFinanceProfitFlows} from "../adapters/finance-profit.adapter";
 import type {FinanceProfitFlowsResponseDto} from "../dto/finance-profit.dto";
 
 export const financeApi = {
-  async dashboard(access: FinanceDashboardAccess, signal?: AbortSignal) {return adaptFinanceDashboardDataset(await apiRequest<FinanceDashboardResponseDto>("/api/finance/dashboard", {signal}), access);},
+  async dashboard(access: FinanceDashboardAccess, range: FinanceDateRange, signal?: AbortSignal) {const params = new URLSearchParams({startDate: range.startDate, endDate: range.endDate}); return adaptFinanceDashboardDataset(await apiRequest<FinanceDashboardResponseDto>(`/api/finance/dashboard?${params.toString()}`, {signal}), access);},
   async profitFlows(range: FinanceDateRange, signal?: AbortSignal) {
     const params = new URLSearchParams();
     if (range.startDate) params.set("dateStart", range.startDate);

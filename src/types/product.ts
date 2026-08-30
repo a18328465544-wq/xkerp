@@ -24,6 +24,13 @@ export interface ProductLibrarySnapshot {
   products: ProductLibraryItem[];
   categories: ProductCategory[];
   brands: string[];
+  meta?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    summary: {stockedTemplates: number; stockUnits: number};
+  };
 }
 
 export interface ProductTemplateFormValues {

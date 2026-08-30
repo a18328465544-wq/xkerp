@@ -45,7 +45,7 @@ export interface FinanceDashboardDataset {
   returns: Array<{date: string; status: string; type: string; amount?: number; salesCost?: number; purchaseCost?: number}>;
   inventory: Array<{status: string; cost?: number; entryDate: string; salesDate?: string}>;
   access: FinanceDashboardAccess;
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-dashboard";
 }
 
 export interface FinanceDateRange {startDate: string; endDate: string;}

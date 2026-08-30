@@ -1,12 +1,17 @@
 import {apiRequest} from "../client";
-import {adaptFinanceTransferMutation, adaptFinanceTransferSnapshot, toFinanceTransferRequest} from "../adapters/finance-transfer.adapter";
+import {adaptFinanceTransferCollection, adaptFinanceTransferMutation, toFinanceTransferRequest} from "../adapters/finance-transfer.adapter";
 import type {FinanceTransferListResponseDto, FinanceTransferMutationResponseDto} from "../dto/finance-transfer.dto";
-import type {FinanceTransferFormValues} from "@/src/types/finance-transfer";
+import type {FinanceTransferFilters, FinanceTransferFormValues} from "@/src/types/finance-transfer";
 
 export const financeTransfersApi = {
-  async listAll(signal?: AbortSignal) {
-    const response = await apiRequest<FinanceTransferListResponseDto>("/api/gpu_erp/finance/account-transfers", {signal});
-    return adaptFinanceTransferSnapshot(response);
+  async list(filters: FinanceTransferFilters, signal?: AbortSignal) {
+    const params = new URLSearchParams({page: String(filters.page), pageSize: String(filters.pageSize), accountId: filters.accountId});
+    if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+    if (filters.handler.trim()) params.set("handler", filters.handler.trim());
+    if (filters.startDate) params.set("startDate", filters.startDate);
+    if (filters.endDate) params.set("endDate", filters.endDate);
+    const response = await apiRequest<FinanceTransferListResponseDto>(`/api/gpu_erp/finance/account-transfers?${params.toString()}`, {signal});
+    return adaptFinanceTransferCollection(response, filters);
   },
   async create(values: FinanceTransferFormValues, handler: string, signal?: AbortSignal) {
     const response = await apiRequest<FinanceTransferMutationResponseDto>("/api/gpu_erp/finance/account-transfer/create", {method: "POST", body: JSON.stringify(toFinanceTransferRequest(values, handler)), signal});

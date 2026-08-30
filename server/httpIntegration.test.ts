@@ -108,6 +108,35 @@ test("a configured login can reach finance only by its effective menu permission
     });
     const expectedStatus = loginPayload.data?.user?.role === "老板" ? 200 : 403;
     assert.equal(finance.status, expectedStatus);
+    const dashboard = await fetch(`${baseUrl}/api/finance/dashboard?startDate=2026-07-01&endDate=2026-07-31`, {headers: {cookie: sessionCookie}});
+    assert.equal(dashboard.status, expectedStatus);
+    if (expectedStatus === 200) {
+      const dashboardPayload = await dashboard.json() as {data?: {settlementAccounts?: unknown[]; settlementLedger?: unknown[]; salesInvoices?: unknown[]; purchaseInvoices?: unknown[]; inventory?: unknown[]}; meta?: {source?: string; startDate?: string; endDate?: string}};
+      assert.ok(Array.isArray(dashboardPayload.data?.settlementAccounts));
+      assert.ok(Array.isArray(dashboardPayload.data?.settlementLedger));
+      assert.ok(Array.isArray(dashboardPayload.data?.salesInvoices));
+      assert.ok(Array.isArray(dashboardPayload.data?.purchaseInvoices));
+      assert.ok(Array.isArray(dashboardPayload.data?.inventory));
+      assert.equal(dashboardPayload.meta?.source, "database-dashboard");
+      assert.equal(dashboardPayload.meta?.startDate, "2026-07-01");
+      assert.equal(dashboardPayload.meta?.endDate, "2026-07-31");
+
+      const transfers = await fetch(`${baseUrl}/api/gpu_erp/finance/account-transfers?page=1&pageSize=5&accountId=all`, {headers: {cookie: sessionCookie}});
+      assert.equal(transfers.status, 200);
+      const transferPayload = await transfers.json() as {data?: {accountTransfers?: unknown[]}; meta?: {source?: string; pageSize?: number; total?: number}};
+      assert.ok(Array.isArray(transferPayload.data?.accountTransfers));
+      assert.equal(transferPayload.meta?.source, "database-page");
+      assert.equal(transferPayload.meta?.pageSize, 5);
+      assert.equal(typeof transferPayload.meta?.total, "number");
+
+      const customerFunds = await fetch(`${baseUrl}/api/gpu_erp/finance/customer-funds?startDate=2026-07-01&endDate=2026-07-31&trendStartDate=2026-07-25&trendEndDate=2026-07-31`, {headers: {cookie: sessionCookie}});
+      assert.equal(customerFunds.status, 200);
+      const customerFundsPayload = await customerFunds.json() as {data?: {rows?: unknown[]; trend?: unknown[]; currentBalance?: {net?: number}; generatedAt?: string}};
+      assert.ok(Array.isArray(customerFundsPayload.data?.rows));
+      assert.ok(Array.isArray(customerFundsPayload.data?.trend));
+      assert.equal(typeof customerFundsPayload.data?.currentBalance?.net, "number");
+      assert.equal(typeof customerFundsPayload.data?.generatedAt, "string");
+    }
 
     const metrics = await fetch(`${baseUrl}/api/ops/metrics`, {
       headers: { cookie: sessionCookie },
@@ -161,6 +190,200 @@ test("PostgreSQL-backed inventory pages survive a state revision change", {
     const payload = await inventory.json() as { data?: unknown[]; meta?: { page?: number } };
     assert.ok(Array.isArray(payload.data));
     assert.equal(payload.meta?.page, 1);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("sales outbound pool is PostgreSQL paged and omits cost and profit fields", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const {createApp} = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({username: process.env.BACKEND_TEST_USERNAME, password: process.env.BACKEND_TEST_PASSWORD}),
+    });
+    assert.equal(login.status, 200);
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(sessionCookie);
+
+    const outbound = await fetch(`${baseUrl}/api/sales-invoices/outbound?page=1&pageSize=5`, {headers: {cookie: sessionCookie}});
+    assert.equal(outbound.status, 200);
+    const payload = await outbound.json() as {
+      data?: {salesInvoices?: Array<Record<string, unknown>>; inventory?: Array<Record<string, unknown>>};
+      meta?: {page?: number; pageSize?: number; total?: number; summary?: {pendingItemCount?: number; pendingAmount?: number}};
+    };
+    assert.ok(Array.isArray(payload.data?.salesInvoices));
+    assert.ok(Array.isArray(payload.data?.inventory));
+    assert.equal(payload.meta?.page, 1);
+    assert.equal(payload.meta?.pageSize, 5);
+    assert.equal(typeof payload.meta?.total, "number");
+    assert.equal(typeof payload.meta?.summary?.pendingItemCount, "number");
+    for (const invoice of payload.data?.salesInvoices || []) {
+      assert.equal("totalCost" in invoice, false);
+      assert.equal("totalProfit" in invoice, false);
+      for (const item of Array.isArray(invoice.items) ? invoice.items as Array<Record<string, unknown>> : []) {
+        assert.equal("costPrice" in item, false);
+        assert.equal("profit" in item, false);
+      }
+    }
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("vendor and product master data use tenant-scoped PostgreSQL pages", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const {createApp} = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username: process.env.BACKEND_TEST_USERNAME, password: process.env.BACKEND_TEST_PASSWORD})});
+    assert.equal(login.status, 200);
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(sessionCookie);
+
+    const vendors = await fetch(`${baseUrl}/api/vendors?page=1&pageSize=5`, {headers: {cookie: sessionCookie}});
+    assert.equal(vendors.status, 200);
+    const vendorPayload = await vendors.json() as {data?: {vendors?: unknown[]}; meta?: {page?: number; pageSize?: number; total?: number; summary?: {payable?: number}; facets?: {types?: unknown[]}}};
+    assert.ok(Array.isArray(vendorPayload.data?.vendors));
+    assert.equal(vendorPayload.meta?.pageSize, 5);
+    assert.equal(typeof vendorPayload.meta?.total, "number");
+    assert.equal(typeof vendorPayload.meta?.summary?.payable, "number");
+    assert.ok(Array.isArray(vendorPayload.meta?.facets?.types));
+
+    const products = await fetch(`${baseUrl}/api/products?page=1&pageSize=5`, {headers: {cookie: sessionCookie}});
+    assert.equal(products.status, 200);
+    const productPayload = await products.json() as {data?: {products?: Array<{currentStock?: number}>}; meta?: {page?: number; pageSize?: number; total?: number; summary?: {stockUnits?: number}; facets?: {categories?: unknown[]}}};
+    assert.ok(Array.isArray(productPayload.data?.products));
+    assert.equal(productPayload.meta?.pageSize, 5);
+    assert.equal(typeof productPayload.meta?.total, "number");
+    assert.equal(typeof productPayload.meta?.summary?.stockUnits, "number");
+    assert.ok(Array.isArray(productPayload.meta?.facets?.categories));
+    for (const product of productPayload.data?.products || []) assert.equal(typeof product.currentStock, "number");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("purchase entry reference and detail use bounded PostgreSQL read models", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const {createApp} = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username: process.env.BACKEND_TEST_USERNAME, password: process.env.BACKEND_TEST_PASSWORD})});
+    assert.equal(login.status, 200);
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(sessionCookie);
+
+    const reference = await fetch(`${baseUrl}/api/purchase-invoices/reference`, {headers: {cookie: sessionCookie}});
+    assert.equal(reference.status, 200);
+    const referencePayload = await reference.json() as {data?: {products?: unknown[]; customers?: unknown[]; vendors?: unknown[]; settlementAccounts?: unknown[]; inventory?: unknown[]}; meta?: {nextInvoiceNo?: string}};
+    assert.ok(Array.isArray(referencePayload.data?.products));
+    assert.ok(Array.isArray(referencePayload.data?.customers));
+    assert.ok(Array.isArray(referencePayload.data?.vendors));
+    assert.ok(Array.isArray(referencePayload.data?.settlementAccounts));
+    assert.ok(Array.isArray(referencePayload.data?.inventory));
+    assert.match(referencePayload.meta?.nextInvoiceNo || "", /^JH-\d{8}-\d{3}$/);
+    assert.ok((referencePayload.data?.products?.length || 0) <= 40);
+
+    const products = await fetch(`${baseUrl}/api/purchase-invoices/reference/products?keyword=RTX`, {headers: {cookie: sessionCookie}});
+    assert.equal(products.status, 200);
+    const productPayload = await products.json() as {data?: {products?: unknown[]}};
+    assert.ok(Array.isArray(productPayload.data?.products));
+    assert.ok((productPayload.data?.products?.length || 0) <= 60);
+
+    const sources = await fetch(`${baseUrl}/api/purchase-invoices/reference/sources?keyword=HTTP`, {headers: {cookie: sessionCookie}});
+    assert.equal(sources.status, 200);
+    const sourcePayload = await sources.json() as {data?: {customers?: unknown[]; vendors?: unknown[]}};
+    assert.ok(Array.isArray(sourcePayload.data?.customers));
+    assert.ok(Array.isArray(sourcePayload.data?.vendors));
+    assert.ok((sourcePayload.data?.customers?.length || 0) <= 60);
+    assert.ok((sourcePayload.data?.vendors?.length || 0) <= 60);
+
+    const list = await fetch(`${baseUrl}/api/purchase-invoices?page=1&pageSize=1`, {headers: {cookie: sessionCookie}});
+    assert.equal(list.status, 200);
+    const listPayload = await list.json() as {data?: {purchaseInvoices?: Array<{id?: string; invoiceNo?: string}>}};
+    const invoice = listPayload.data?.purchaseInvoices?.[0];
+    if (invoice?.id || invoice?.invoiceNo) {
+      const detail = await fetch(`${baseUrl}/api/purchase-invoices/detail?id=${encodeURIComponent(invoice.id || invoice.invoiceNo || "")}`, {headers: {cookie: sessionCookie}});
+      assert.equal(detail.status, 200);
+      const detailPayload = await detail.json() as {data?: {purchaseInvoices?: unknown[]}; meta?: {source?: string}};
+      assert.equal(detailPayload.meta?.source, "database-detail");
+      assert.equal(detailPayload.data?.purchaseInvoices?.length, 1);
+    }
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("inspection and assembly workspaces read bounded PostgreSQL projections", {
+  skip: !integrationEnabled || !process.env.BACKEND_TEST_USERNAME || !process.env.BACKEND_TEST_PASSWORD,
+}, async () => {
+  const {createApp} = await import("./app.ts");
+  const server = createServer(createApp());
+  const baseUrl = await listenEphemeral(server);
+  try {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username: process.env.BACKEND_TEST_USERNAME, password: process.env.BACKEND_TEST_PASSWORD})});
+    assert.equal(login.status, 200);
+    const sessionCookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(sessionCookie);
+
+    const inspections = await fetch(`${baseUrl}/api/inspections/workspace`, {headers: {cookie: sessionCookie}});
+    assert.equal(inspections.status, 200);
+    const inspectionPayload = await inspections.json() as {data?: {inventory?: unknown[]; inspections?: unknown[]}; meta?: {source?: string; candidateLimit?: number; historyLimit?: number}};
+    assert.ok(Array.isArray(inspectionPayload.data?.inventory));
+    assert.ok(Array.isArray(inspectionPayload.data?.inspections));
+    assert.equal(inspectionPayload.meta?.source, "database-workspace");
+    assert.equal(inspectionPayload.meta?.candidateLimit, 300);
+
+    const assemblyList = await fetch(`${baseUrl}/api/assembly-operations?page=1&pageSize=5`, {headers: {cookie: sessionCookie}});
+    assert.equal(assemblyList.status, 200);
+    const assemblyPayload = await assemblyList.json() as {data?: unknown[]; meta?: {page?: number; pageSize?: number; total?: number; source?: string}};
+    assert.ok(Array.isArray(assemblyPayload.data));
+    assert.equal(assemblyPayload.meta?.pageSize, 5);
+    assert.equal(typeof assemblyPayload.meta?.total, "number");
+    assert.equal(assemblyPayload.meta?.source, "database-page");
+
+    const assemblyReference = await fetch(`${baseUrl}/api/assembly-operations/reference`, {headers: {cookie: sessionCookie}});
+    assert.equal(assemblyReference.status, 200);
+    const referencePayload = await assemblyReference.json() as {data?: {inventory?: unknown[]; products?: unknown[]}; meta?: {source?: string}};
+    assert.ok(Array.isArray(referencePayload.data?.inventory));
+    assert.ok(Array.isArray(referencePayload.data?.products));
+    assert.equal(referencePayload.meta?.source, "database-reference");
+
+    const aftersales = await fetch(`${baseUrl}/api/aftersales/workspace`, {headers: {cookie: sessionCookie}});
+    assert.equal(aftersales.status, 200);
+    const aftersalesPayload = await aftersales.json() as {data?: {aftersales?: unknown[]; inventory?: unknown[]; salesInvoices?: unknown[]}; meta?: {source?: string}};
+    assert.ok(Array.isArray(aftersalesPayload.data?.aftersales));
+    assert.ok(Array.isArray(aftersalesPayload.data?.inventory));
+    assert.ok(Array.isArray(aftersalesPayload.data?.salesInvoices));
+    assert.equal(aftersalesPayload.meta?.source, "database-workspace");
+
+    const returns = await fetch(`${baseUrl}/api/returns?page=1&pageSize=5`, {headers: {cookie: sessionCookie}});
+    assert.equal(returns.status, 200);
+    const returnPayload = await returns.json() as {data?: {data?: unknown[]; meta?: {pageSize?: number; total?: number}}; meta?: {source?: string}};
+    assert.ok(Array.isArray(returnPayload.data?.data));
+    assert.equal(returnPayload.data?.meta?.pageSize, 5);
+    assert.equal(typeof returnPayload.data?.meta?.total, "number");
+    assert.equal(returnPayload.meta?.source, "database-page");
+
+    const returnReference = await fetch(`${baseUrl}/api/returns/reference?type=purchase&keyword=HTTP`, {headers: {cookie: sessionCookie}});
+    assert.equal(returnReference.status, 200);
+    const returnReferencePayload = await returnReference.json() as {data?: {products?: unknown[]; purchaseInvoices?: unknown[]; salesInvoices?: unknown[]; inventory?: unknown[]}; meta?: {source?: string}};
+    assert.ok(Array.isArray(returnReferencePayload.data?.products));
+    assert.ok(Array.isArray(returnReferencePayload.data?.purchaseInvoices));
+    assert.ok(Array.isArray(returnReferencePayload.data?.salesInvoices));
+    assert.ok(Array.isArray(returnReferencePayload.data?.inventory));
+    assert.equal(returnReferencePayload.meta?.source, "database-reference");
+    assert.equal(returnReferencePayload.data?.salesInvoices?.length, 0);
   } finally {
     await closeServer(server);
   }

@@ -1,21 +1,22 @@
 import type { Express, Request, RequestHandler } from "express";
-import type { StateCollectionKey } from "../db.ts";
-import type { AppState } from "../store.ts";
-import type { buildCustomerFundsSnapshot } from "../customerFunds.ts";
+import {getFinanceDashboard, listAccountTransfers} from "../financeDashboardRepository.ts";
+import {getCustomerFundsSnapshot} from "../customerFundsRepository.ts";
 
-type FinanceRequest = Request & { authUser?: unknown };
+type FinanceRequest = Request & { authUser?: unknown; tenantId?: string; storeId?: string };
 
 type FinanceReadModelDependencies = {
-  state: AppState;
   requireMenu: (menuId: string) => RequestHandler;
-  publicStatePatch: (req: FinanceRequest, keys: StateCollectionKey[]) => Record<string, unknown>;
-  buildCustomerFundsSnapshot: typeof buildCustomerFundsSnapshot;
   getStoreDate: () => string;
   startOfMonth: (date: string) => string;
   addDateDays: (date: string, days: number) => string;
   ok: (data?: unknown) => unknown;
   sendValidationError: (req: FinanceRequest, res: Parameters<RequestHandler>[1], message: string) => void;
+  permissionsForRequest: (req: Request) => {showCost?: boolean; showProfit?: boolean; allowedMenus: string[]};
 };
+
+function hasMenu(permissions: {allowedMenus: string[]}, menu: string) {
+  return permissions.allowedMenus.includes("all") || permissions.allowedMenus.includes(menu);
+}
 
 function validDateKey(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -29,35 +30,49 @@ function dateRangeDays(startDate: string, endDate: string) {
 
 /** Finance read models are kept out of the composition root and expose only scoped projections. */
 export function registerFinanceReadModelRoutes(app: Express, dependencies: FinanceReadModelDependencies) {
-  app.get("/api/settlement-ledger", dependencies.requireMenu("settlement_ledger"), (req: FinanceRequest, res) => {
-    res.json(dependencies.ok({
-      settlementLedger: dependencies.publicStatePatch(req, ["settlementLedger"]).settlementLedger ?? [],
-      settlementLedgerLoaded: true,
-    }));
+  app.get("/api/finance/dashboard", dependencies.requireMenu("finance"), async (req: FinanceRequest, res, next) => {
+    try {
+      const today = dependencies.getStoreDate();
+      const startDate = String(req.query.startDate || dependencies.addDateDays(today, -6));
+      const endDate = String(req.query.endDate || today);
+      if (![startDate, endDate].every(validDateKey) || startDate > endDate || dateRangeDays(startDate, endDate) > 366) {
+        dependencies.sendValidationError(req, res, "财务总览日期范围无效或超过 366 天");
+        return;
+      }
+      const permissions = dependencies.permissionsForRequest(req);
+      res.json(await getFinanceDashboard({tenantId: req.tenantId, storeId: req.storeId}, {startDate, endDate}, {showCost: permissions.showCost === true, showProfit: permissions.showProfit === true, canViewAccounts: hasMenu(permissions, "settlement_accounts"), canViewSettlementLedger: hasMenu(permissions, "settlement_ledger"), canViewReturns: hasMenu(permissions, "return_orders") || hasMenu(permissions, "return_sales") || hasMenu(permissions, "return_purchase")}));
+    } catch (error) {next(error);}
   });
 
-  app.get("/api/gpu_erp/finance/customer-funds", dependencies.requireMenu("customer_funds"), (req: FinanceRequest, res) => {
-    const today = dependencies.getStoreDate();
-    const startDate = String(req.query.startDate || dependencies.startOfMonth(today));
-    const endDate = String(req.query.endDate || today);
-    const trendStartDate = String(req.query.trendStartDate || dependencies.addDateDays(today, -6));
-    const trendEndDate = String(req.query.trendEndDate || today);
-    const dates = [startDate, endDate, trendStartDate, trendEndDate];
-    if (dates.some((date) => !validDateKey(date)) || startDate > endDate || trendStartDate > trendEndDate) {
-      dependencies.sendValidationError(req, res, "资金往来日期范围无效");
-      return;
-    }
-    if (dateRangeDays(startDate, endDate) > 366 || dateRangeDays(trendStartDate, trendEndDate) > 366) {
-      dependencies.sendValidationError(req, res, "资金往来查询范围不能超过 366 天");
-      return;
-    }
-    res.json(dependencies.ok(dependencies.buildCustomerFundsSnapshot(dependencies.state, { today, startDate, endDate, trendStartDate, trendEndDate })));
+  app.get("/api/gpu_erp/finance/account-transfers", dependencies.requireMenu("account_transfer"), async (req: FinanceRequest, res, next) => {
+    try {
+      res.json(await listAccountTransfers({tenantId: req.tenantId, storeId: req.storeId}, {page: Number(req.query.page || 1), pageSize: Number(req.query.pageSize || 20), keyword: String(req.query.keyword || ""), accountId: String(req.query.accountId || "all"), handler: String(req.query.handler || ""), startDate: String(req.query.startDate || ""), endDate: String(req.query.endDate || "")}));
+    } catch (error) {next(error);}
   });
 
-  app.get("/api/finance-ledger", dependencies.requireMenu("finance"), (req: FinanceRequest, res) => {
-    res.json(dependencies.ok({
-      financeLedger: dependencies.publicStatePatch(req, ["financeLedger"]).financeLedger ?? [],
-      financeLedgerLoaded: true,
-    }));
+  app.get("/api/gpu_erp/finance/customer-funds", dependencies.requireMenu("customer_funds"), async (req: FinanceRequest, res, next) => {
+    try {
+      const today = dependencies.getStoreDate();
+      const startDate = String(req.query.startDate || dependencies.startOfMonth(today));
+      const endDate = String(req.query.endDate || today);
+      const trendStartDate = String(req.query.trendStartDate || dependencies.addDateDays(today, -6));
+      const trendEndDate = String(req.query.trendEndDate || today);
+      const dates = [startDate, endDate, trendStartDate, trendEndDate];
+      if (dates.some((date) => !validDateKey(date)) || startDate > endDate || trendStartDate > trendEndDate) {
+        dependencies.sendValidationError(req, res, "资金往来日期范围无效");
+        return;
+      }
+      if (dateRangeDays(startDate, endDate) > 366 || dateRangeDays(trendStartDate, trendEndDate) > 366) {
+        dependencies.sendValidationError(req, res, "资金往来查询范围不能超过 366 天");
+        return;
+      }
+      const snapshot = await getCustomerFundsSnapshot(
+        {tenantId: req.tenantId, storeId: req.storeId},
+        {today, startDate, endDate, trendStartDate, trendEndDate},
+      );
+      res.json(dependencies.ok(snapshot));
+    } catch (error) {
+      next(error);
+    }
   });
 }

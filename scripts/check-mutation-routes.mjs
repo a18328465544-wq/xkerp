@@ -44,6 +44,7 @@ const exemptions = new Map([
   ["/api/ai/copilot", "stateless AI/SSE request; no ERP state write"],
   ["/api/gpu_erp/crm/quick-capture/parse", "parse/audit preparation endpoint; confirmation is the protected mutation"],
   ["/api/gpu_erp/crm/customer/lead-preview", "pure preview endpoint; no persisted business mutation"],
+  ["/api/sales-invoices/:id/outbound/preflight", "authoritative read-only outbound validation; confirmation is the protected mutation"],
 ]);
 
 async function listTypeScriptFiles(directory) {

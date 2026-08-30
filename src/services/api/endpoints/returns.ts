@@ -20,8 +20,13 @@ export function toPurchaseReturnListQueryParams(filters: SalesReturnListFilters)
 }
 
 export const returnsApi = {
-  async reference(signal?: AbortSignal) {
-    return adaptPublicState(await apiRequest<PublicStateResponseDto>("/api/returns/reference", {signal}));
+  async reference(filters: {type?: "sales" | "purchase"; keyword?: string; selectedDocNo?: string} = {}, signal?: AbortSignal) {
+    const params = new URLSearchParams();
+    if (filters.type) params.set("type", filters.type);
+    if (filters.keyword?.trim()) params.set("keyword", filters.keyword.trim());
+    if (filters.selectedDocNo?.trim()) params.set("selectedDocNo", filters.selectedDocNo.trim());
+    const query = params.toString();
+    return adaptPublicState(await apiRequest<PublicStateResponseDto>(`/api/returns/reference${query ? `?${query}` : ""}`, {signal}));
   },
   async listSales(filters: SalesReturnListFilters, signal?: AbortSignal) {
     const params = toSalesReturnListQueryParams(filters);

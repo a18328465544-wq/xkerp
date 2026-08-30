@@ -55,6 +55,41 @@ test("sales product picker requests the product-level availability endpoint", as
   }
 });
 
+test("sales outbound requests server paging and keyword filters", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.equal(input, "/api/sales-invoices/outbound?page=2&pageSize=20&keyword=RTX+4090");
+    return new Response(JSON.stringify({data: {salesInvoices: [], inventory: [], products: []}, meta: {page: 2, pageSize: 20, total: 21, summary: {pendingItemCount: 30, pendingAmount: 300000}}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await salesApi.outbound({keyword: " RTX 4090 ", page: 2, pageSize: 20});
+    assert.equal(result.source, "database-page");
+    assert.equal(result.meta?.totalPages, 2);
+    assert.equal(result.meta?.summary.pendingItemCount, 30);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("sales outbound preflight uses the authoritative server endpoint", async () => {
+  const previousFetch = globalThis.fetch;
+  let requestedBody = "";
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, "/api/sales-invoices/S-1/outbound/preflight");
+    assert.equal(init?.method, "POST");
+    requestedBody = String(init?.body || "");
+    return new Response(JSON.stringify({data: {invoiceId: "S-1", invoiceNo: "XS-1", expectedCount: 1, matchedCount: 1, ready: true, unknownCodes: [], duplicateCodes: [], rows: [{lineId: "L-1", productName: "RTX 4090", inventoryId: "I-1", serialNumber: "SN-1", matched: true, reason: "服务器已匹配可售库存"}]}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await salesApi.preflightOutbound("S-1", {handler: "仓库", codes: ["SN-1"], manual: false, remarks: ""});
+    assert.match(requestedBody, /SN-1/);
+    assert.equal(result.ready, true);
+    assert.equal(result.rows[0]?.inventoryId, "I-1");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("sales delete endpoint encodes the invoice id and adapts the deleted document", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {

@@ -12,6 +12,7 @@ import type {ReturnOrderBatchItemInput, SalesReturnFormValues} from "@/src/types
 import type {SalesInvoice} from "@/src/types/sales";
 import {storeDate} from "@/src/utils/storeTime";
 import {useWorkspaceTabBlocker, useWorkspaceTabDirty, useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 
 const actionOptions = [{value: "退回待检测", label: "退回待检测"}, {value: "直接报废", label: "直接报废"}] as const;
 const responsibilityOptions = ["客户", "供应商", "平台", "本店", "其他"].map((value) => ({value, label: value}));
@@ -20,7 +21,8 @@ export function NewSalesReturnPage() {
   const queryClient = useQueryClient();
   const {session, status, error: authError, refresh, logout} = useAuth();
   const canAccess = createCapabilities(session).menu("return_sales") || createCapabilities(session).menu("return_orders");
-  const stateQuery = useQuery({queryKey: queryKeys.returns.reference(), queryFn: ({signal}) => returnsApi.reference(signal), enabled: canAccess, retry: false});
+  const referenceFilters = {type: "sales" as const};
+  const stateQuery = useQuery({queryKey: queryKeys.returns.reference(referenceFilters), queryFn: ({signal}) => returnsApi.reference(referenceFilters, signal), enabled: canAccess, retry: false});
 
   if (status === "loading") return <ReturnState title="正在验证退货权限" icon={<RefreshCw className="h-5 w-5 animate-spin" />} />;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
@@ -33,17 +35,23 @@ export function NewSalesReturnPage() {
 
 function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess}: {session: AuthSession; invoices: SalesInvoice[]; inventory: Array<{id: string; sn: string; salesInvoiceId?: string; status: string}>; onAuthExpired: () => void; onSuccess: () => void}) {
   const navigate = useNavigate();
-  const eligibleInvoices = useMemo(() => invoices.filter((invoice) => invoice.outboundStatus === "已出库"), [invoices]);
   const defaultValues: SalesReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", sourceSalesItemIndex: -1, productId: "", productName: "", sn: "", partyName: "", partyId: "", contact: "", amount: 0, inventoryAction: "退回待检测", reason: "", responsibility: "客户", handler: session.user.displayName, remarks: "", returnScope: "single"};
   const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: SalesReturnFormValues}>("return_sales");
   const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
   const [values, setValues] = useState<SalesReturnFormValues>(() => restoredDraft?.values || defaultValues);
+  const [invoiceKeyword, setInvoiceKeyword] = useState("");
+  const debouncedInvoiceKeyword = useDebouncedValue(invoiceKeyword.trim(), 250);
+  const remoteFilters = {type: "sales" as const, keyword: debouncedInvoiceKeyword, selectedDocNo: values.relatedDocNo};
+  const remoteReference = useQuery({queryKey: queryKeys.returns.reference(remoteFilters), queryFn: ({signal}) => returnsApi.reference(remoteFilters, signal), enabled: debouncedInvoiceKeyword.length > 0 || Boolean(values.relatedDocNo), retry: false, staleTime: 30_000});
+  const allInvoices = useMemo(() => Array.from(new Map([...(remoteReference.data?.salesInvoices || []), ...invoices].map((invoice) => [invoice.invoiceNo, invoice])).values()), [invoices, remoteReference.data?.salesInvoices]);
+  const allInventory = useMemo(() => Array.from(new Map([...(remoteReference.data?.inventory || []), ...inventory].map((card) => [card.id, card])).values()), [inventory, remoteReference.data?.inventory]);
+  const eligibleInvoices = useMemo(() => allInvoices.filter((invoice) => invoice.outboundStatus === "已出库"), [allInvoices]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const selectedInvoice = eligibleInvoices.find((invoice) => invoice.invoiceNo === values.relatedDocNo);
   const selectedItem = selectedInvoice && values.sourceSalesItemIndex >= 0 ? selectedInvoice.items[values.sourceSalesItemIndex] : undefined;
-  const selectedCard = selectedItem ? inventory.find((card) => card.id === selectedItem.inventoryId || Boolean(selectedItem.sn && card.sn === selectedItem.sn)) : undefined;
-  const invoiceLines = useMemo(() => selectedInvoice?.items.map((item, index) => ({item, index, card: inventory.find((card) => card.id === item.inventoryId || Boolean(item.sn && card.sn === item.sn))})) || [], [inventory, selectedInvoice]);
+  const selectedCard = selectedItem ? allInventory.find((card) => card.id === selectedItem.inventoryId || Boolean(selectedItem.sn && card.sn === selectedItem.sn)) : undefined;
+  const invoiceLines = useMemo(() => selectedInvoice?.items.map((item, index) => ({item, index, card: allInventory.find((card) => card.id === item.inventoryId || Boolean(item.sn && card.sn === item.sn))})) || [], [allInventory, selectedInvoice]);
   const batchLines = invoiceLines.filter((line): line is typeof line & {card: NonNullable<typeof line.card>} => Boolean(line.card));
   const missingBatchLines = invoiceLines.filter((line) => !line.card);
   const batchAmount = batchLines.reduce((sum, line) => sum + Number(line.item.sellPrice || 0), 0);
@@ -58,7 +66,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
   const setItem = (index: string) => {
     const nextIndex = Number(index);
     const item = selectedInvoice?.items[nextIndex];
-    const card = item ? inventory.find((candidate) => candidate.id === item.inventoryId || Boolean(item.sn && candidate.sn === item.sn)) : undefined;
+    const card = item ? allInventory.find((candidate) => candidate.id === item.inventoryId || Boolean(item.sn && candidate.sn === item.sn)) : undefined;
     setValues((current) => ({...current, sourceSalesItemIndex: nextIndex, sourceInventoryId: card?.id || "", productId: item?.productId || "", productName: item?.productName || "", sn: item?.sn || card?.sn || "", amount: item?.sellPrice || 0}));
   };
   const setReturnScope = (scope: "single" | "document") => {
@@ -108,7 +116,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
     <form className="flex flex-col gap-5" onSubmit={submit}>
       <ErpFormSection title="关联销售单" description="只展示已完成出库的销售单，退货金额由原销售明细自动带出。"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <label className="text-sm font-semibold">退货日期<ErpDatePicker className="mt-2" value={values.date} onChange={(date) => setValues((current) => ({...current, date}))} aria-label="退货日期" /></label>
-        <label className="text-sm font-semibold md:col-span-2">销售单号<Select searchable searchPlaceholder="搜索销售单号或客户" className="mt-2" value={values.relatedDocNo} options={eligibleInvoices.map((invoice) => ({value: invoice.invoiceNo, label: `${invoice.invoiceNo} · ${invoice.customerName}`}))} onValueChange={setInvoice} placeholder="请选择已出库销售单" aria-label="关联销售单" /></label>
+        <label className="text-sm font-semibold md:col-span-2">销售单号<Select searchable searchPlaceholder="搜索销售单号或客户" searchLoading={remoteReference.isFetching} onSearchValueChange={setInvoiceKeyword} className="mt-2" value={values.relatedDocNo} options={eligibleInvoices.map((invoice) => ({value: invoice.invoiceNo, label: `${invoice.invoiceNo} · ${invoice.customerName}`}))} onValueChange={setInvoice} placeholder="请选择已出库销售单" aria-label="关联销售单" /></label>
         <label className="text-sm font-semibold">客户<Input className="mt-2" value={selectedInvoice?.customerName || values.partyName} disabled /></label>
       </div></ErpFormSection>
       <ErpFormSection title="退货范围" description="支持单件退货，也支持把原销售单的全部可追溯商品作为一张整单退货单提交。"><div className="flex flex-wrap gap-2"><Button type="button" variant={values.returnScope === "single" ? "primary" : "secondary"} onClick={() => setReturnScope("single")}>单件退货</Button><Button type="button" variant={values.returnScope === "document" ? "primary" : "secondary"} onClick={() => setReturnScope("document")} disabled={!selectedInvoice}>整单退货</Button></div></ErpFormSection>

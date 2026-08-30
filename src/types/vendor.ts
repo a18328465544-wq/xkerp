@@ -32,6 +32,13 @@ export interface VendorDirectorySnapshot {
   vendors: VendorDirectoryItem[];
   types: VendorType[];
   levels: VendorLevel[];
+  meta?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    summary: {coreCount: number; payable: number; receivable: number; credit: number};
+  };
 }
 
 export interface VendorDirectoryFilters {

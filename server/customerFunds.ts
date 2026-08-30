@@ -18,6 +18,15 @@ export interface CustomerFundsQuery {
   trendEndDate: string;
 }
 
+export interface CustomerFundsCollections {
+  purchaseInvoices: AppState["purchaseInvoices"];
+  salesInvoices: AppState["salesInvoices"];
+  customers: AppState["customers"];
+  vendors: AppState["vendors"];
+  paymentInRecords: AppState["paymentInRecords"];
+  paymentOutRecords: AppState["paymentOutRecords"];
+}
+
 function sumCurrentBalance(rows: ReturnType<typeof buildCustomerFundsRows>) {
   const payable = rows.reduce((sum, row) => sum + row.payable, 0);
   const receivable = rows.reduce((sum, row) => sum + row.receivable, 0);
@@ -29,6 +38,10 @@ function sumCurrentBalance(rows: ReturnType<typeof buildCustomerFundsRows>) {
  * fields required by the page and never needs direct access to payment or settlement collections.
  */
 export function buildCustomerFundsSnapshot(state: AppState, query: CustomerFundsQuery): CustomerFundsSnapshot {
+  return buildCustomerFundsSnapshotFromCollections(state, query);
+}
+
+export function buildCustomerFundsSnapshotFromCollections(state: CustomerFundsCollections, query: CustomerFundsQuery): CustomerFundsSnapshot {
   const rows = buildCustomerFundsRows({
     invoices: state.purchaseInvoices,
     salesInvoices: state.salesInvoices,

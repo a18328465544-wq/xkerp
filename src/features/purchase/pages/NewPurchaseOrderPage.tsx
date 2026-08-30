@@ -21,6 +21,7 @@ import {addPurchaseProductToReferenceData, addPurchaseSourceToReferenceData} fro
 import {quickCreateError} from "@/src/features/purchase/quick-create/quick-create.errors";
 import type {PurchaseMediaStateChange} from "@/src/features/purchase/hooks/usePurchaseMediaUpload";
 import {useWorkspaceTabDraft} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 import {derivePurchaseCapabilities} from "../purchase.permissions";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -33,6 +34,10 @@ type PurchaseOrderDraft = {
   values: PurchaseFormValues;
   selectedSource: PurchaseSourceOption | null;
 };
+
+function mergeByIdentity<T extends {id: string}>(primary: T[], secondary: T[]) {
+  return Array.from(new Map([...primary, ...secondary].map((item) => [item.id, item])).values());
+}
 
 export function NewPurchaseOrderPage() {
   const {session, logout} = useAuth();
@@ -51,6 +56,12 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const {canReadCustomers, canReadVendors, canReadProducts, canCreateCustomer, canCreateVendor, canCreateProduct, canReadSettlementAccounts, canInspect, canEnterPurchaseCost} = capabilities;
   const referencePermissions = useMemo(() => ({showCost: permissions.showCost, showProfit: permissions.showProfit, canReadSettlementAccounts, canReadCustomers, canReadVendors, canReadProducts}), [canReadCustomers, canReadProducts, canReadSettlementAccounts, canReadVendors, permissions.showCost, permissions.showProfit]);
   const referenceQuery = useQuery({queryKey: queryKeys.purchase.referenceData(), queryFn: ({signal}) => purchaseApi.referenceData(referencePermissions, signal), enabled: Boolean(session), retry: false, staleTime: 30_000});
+  const [sourceKeyword, setSourceKeyword] = useState("");
+  const [productKeyword, setProductKeyword] = useState("");
+  const debouncedSourceKeyword = useDebouncedValue(sourceKeyword.trim(), 250);
+  const debouncedProductKeyword = useDebouncedValue(productKeyword.trim(), 250);
+  const sourceSearchQuery = useQuery({queryKey: queryKeys.purchase.sourceSearch(debouncedSourceKeyword), queryFn: ({signal}) => purchaseApi.searchSources(debouncedSourceKeyword, referencePermissions, signal), enabled: debouncedSourceKeyword.length > 0 && (canReadCustomers || canReadVendors), retry: false, staleTime: 30_000});
+  const productSearchQuery = useQuery({queryKey: queryKeys.purchase.productSearch(debouncedProductKeyword), queryFn: ({signal}) => purchaseApi.searchProducts(debouncedProductKeyword, referencePermissions, signal), enabled: debouncedProductKeyword.length > 0 && canReadProducts, retry: false, staleTime: 30_000});
   const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<PurchaseOrderDraft>("purchase_add");
   const [restoredDraftActive, setRestoredDraftActive] = useState(Boolean(restoredDraft));
   const form = useForm<PurchaseFormValues>({defaultValues: restoredDraft?.values || createPurchaseDefaults(operatorName), mode: "onBlur", resolver: zodResolver(purchaseOrderSchema)});
@@ -85,7 +96,11 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     const subscription = form.watch(persist);
     return () => subscription.unsubscribe();
   }, [discardDraft, form, formState.isDirty, restoredDraftActive, saveDraft, selectedSource]);
-  const referenceData = referenceQuery.data;
+  const referenceData = useMemo(() => referenceQuery.data ? {
+    ...referenceQuery.data,
+    products: mergeByIdentity(productSearchQuery.data || [], referenceQuery.data.products),
+    sources: mergeByIdentity(sourceSearchQuery.data || [], referenceQuery.data.sources),
+  } : undefined, [productSearchQuery.data, referenceQuery.data, sourceSearchQuery.data]);
   const vendorCreditAvailable = selectedSource?.partnerType === "vendor" ? selectedSource.returnCreditBalance || 0 : 0;
   const sourcePartnerType = values.sourcePartnerType;
   const selectedAccount = referenceData?.settlementAccounts.find((account) => account.id === values.settlementAccountId);
@@ -252,11 +267,11 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           <Card><CardContent>
             <div className="grid items-start gap-3 md:grid-cols-12">
               <div className="min-w-0 md:col-span-2"><p className="text-sm font-semibold">单据编号</p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 truncate font-mono text-xs font-semibold text-[var(--erp-color-text)]">{referenceData.nextInvoiceNo}</span><span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--erp-color-primary)]">未入库</span></div></div>
-              <div className="min-w-0 md:col-span-7"><PurchaseSourcePicker compact selected={selectedSource} options={referenceData.sources} disabled={createMutation.isPending} canReadCustomers={canReadCustomers} canReadVendors={canReadVendors} canCreateCustomer={canCreateCustomer} canCreateVendor={canCreateVendor} onSelect={selectSource} onClear={clearSource} onOpenCreateCustomer={(initialName) => setPartnerCreate({target: "customer", initialName: initialName || ""})} onOpenCreateVendor={(initialName) => setPartnerCreate({target: "vendor", initialName: initialName || ""})} /></div>
+              <div className="min-w-0 md:col-span-7"><PurchaseSourcePicker compact selected={selectedSource} options={referenceData.sources} disabled={createMutation.isPending} loading={sourceSearchQuery.isFetching} canReadCustomers={canReadCustomers} canReadVendors={canReadVendors} canCreateCustomer={canCreateCustomer} canCreateVendor={canCreateVendor} onKeywordChange={setSourceKeyword} onSelect={selectSource} onClear={clearSource} onOpenCreateCustomer={(initialName) => setPartnerCreate({target: "customer", initialName: initialName || ""})} onOpenCreateVendor={(initialName) => setPartnerCreate({target: "vendor", initialName: initialName || ""})} /></div>
               <label className="block text-sm font-semibold md:col-span-3">快递单号<Input {...register("expressNo")} className="mt-2 font-mono" placeholder="SF / YT / JD..." /></label>
             </div>
           </CardContent></Card>
-          <PurchaseLineItemsTable control={control} fields={fields} items={values.items || []} products={referenceData.products} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} canCreateProduct={canCreateProduct} disabled={createMutation.isPending} onProductSelect={selectProduct} onProductClear={clearProduct} onAdd={() => append(createPurchaseLineDefaults())} onRemove={remove} onOpenCreateProduct={openProductCreate} />
+          <PurchaseLineItemsTable control={control} fields={fields} items={values.items || []} products={referenceData.products} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} canCreateProduct={canCreateProduct} disabled={createMutation.isPending} productsLoading={productSearchQuery.isFetching} onProductKeywordChange={setProductKeyword} onProductSelect={selectProduct} onProductClear={clearProduct} onAdd={() => append(createPurchaseLineDefaults())} onRemove={remove} onOpenCreateProduct={openProductCreate} />
           <ErpFormSection title="采购备注与图片附件" description="集中记录谈价、包装、来源说明，并上传外观、快递或回收凭证。">
             <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
               <label className="block min-w-0 text-sm font-semibold">采购备注<Textarea {...register("remarks")} className="mt-2 min-h-32" placeholder="记录谈价、包装、来源或批量回收说明" /></label>

@@ -99,6 +99,7 @@ export function FinanceDashboardPage() {
     () => (session ? accessFor(session) : null),
     [session],
   );
+  const {range, commit} = useFinanceRange();
   const dashboardQuery = useQuery({
     queryKey: queryKeys.finance.dashboard(
       access || {
@@ -107,9 +108,9 @@ export function FinanceDashboardPage() {
         canViewAccounts: false,
         canViewSettlementLedger: false,
         canViewReturns: false,
-      },
+      }, range,
     ),
-    queryFn: ({ signal }) => financeApi.dashboard(access!, signal),
+    queryFn: ({ signal }) => financeApi.dashboard(access!, range, signal),
     enabled: Boolean(session && allowed && access),
     placeholderData: keepPreviousData,
     retry: false,
@@ -150,6 +151,8 @@ export function FinanceDashboardPage() {
       fetching={dashboardQuery.isFetching}
       error={dashboardQuery.error as Error | null}
       onRetry={() => void dashboardQuery.refetch()}
+      range={range}
+      commit={commit}
     />
   );
 }
@@ -162,6 +165,8 @@ function FinanceDashboardContent({
   fetching,
   error,
   onRetry,
+  range,
+  commit,
 }: {
   session: AuthSession;
   access: FinanceDashboardAccess;
@@ -170,10 +175,11 @@ function FinanceDashboardContent({
   fetching: boolean;
   error: Error | null;
   onRetry: () => void;
+  range: FinanceDateRange;
+  commit: (next: FinanceDateRange) => boolean;
 }) {
   const navigate = useNavigate();
   const capabilities = createCapabilities(session);
-  const { range, commit } = useFinanceRange();
   const [draftRange, setDraftRange] = useState(range);
   useEffect(() => setDraftRange(range), [range]);
   const validationError = validateFinanceRange(draftRange);

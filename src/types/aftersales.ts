@@ -45,7 +45,7 @@ export interface AftersalesCandidate {
 export interface AftersalesWorkspaceSnapshot {
   items: AftersalesListItem[];
   candidates: AftersalesCandidate[];
-  source: "state-snapshot";
+  source: "state-snapshot" | "database-workspace";
 }
 
 export interface AftersalesFilters {

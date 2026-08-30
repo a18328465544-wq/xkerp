@@ -1,7 +1,7 @@
 import {adaptInventoryItem} from "./inventory.adapter";
 import type {InventoryItemDto} from "../dto/inventory.dto";
 import type {SalesCreateRequestDto, SalesCustomerDto, SalesOutboundRequestDto, SalesProductCandidateDto, SalesSettlementAccountDto} from "../dto/sales.dto";
-import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListItem, SalesListLine, SalesOutboundDataset, SalesOutboundInventoryItem, SalesOutboundRequest, SalesOutboundResult, SalesOutboundStatus, SalesPartnerType, SalesPaymentStatus, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
+import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListItem, SalesListLine, SalesOutboundDataset, SalesOutboundInventoryItem, SalesOutboundPreflightResult, SalesOutboundRequest, SalesOutboundResult, SalesOutboundStatus, SalesPartnerType, SalesPaymentStatus, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
 import {isInventoryLinkedToSales} from "@/src/utils/inventoryRelations";
 import {createProductIdentityIndex, resolveProductIdentityKey} from "@/src/utils/productIdentity";
 import {filledSalesLines} from "@/src/features/sales/sales.calculations";
@@ -137,7 +137,7 @@ export function adaptSalesListState(response: {data?: unknown; meta?: unknown}, 
   return {items, source: "state-snapshot"};
 }
 
-export function adaptSalesOutboundState(response: {data?: unknown}): SalesOutboundDataset {
+export function adaptSalesOutboundState(response: {data?: unknown; meta?: unknown}): SalesOutboundDataset {
   const state = record(response.data);
   const products = collection(state, "products");
   const productIdentityIndex = createProductIdentityIndex(products);
@@ -203,7 +203,27 @@ export function adaptSalesOutboundState(response: {data?: unknown}): SalesOutbou
     })
     .filter((item) => Boolean(item.id))
     .sort((left, right) => right.date.localeCompare(left.date) || right.invoiceNo.localeCompare(left.invoiceNo));
-  return {invoices, inventory, source: "state-snapshot"};
+  const meta = record(response.meta);
+  const total = optionalNumber(meta.total);
+  if (total === undefined) return {invoices, inventory, source: "state-snapshot"};
+  const page = Math.max(1, numberValue(meta.page, 1));
+  const pageSize = Math.max(1, numberValue(meta.pageSize, 20));
+  const summary = record(meta.summary);
+  return {
+    invoices,
+    inventory,
+    source: "database-page",
+    meta: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      summary: {
+        pendingItemCount: Math.max(0, numberValue(summary.pendingItemCount)),
+        pendingAmount: Math.max(0, numberValue(summary.pendingAmount)),
+      },
+    },
+  };
 }
 
 export function adaptSalesOutboundResult(value: unknown): SalesOutboundResult {
@@ -217,10 +237,37 @@ export function adaptSalesOutboundResult(value: unknown): SalesOutboundResult {
   };
 }
 
+export function adaptSalesOutboundPreflight(value: unknown): SalesOutboundPreflightResult {
+  const dto = record(value);
+  const rows = Array.isArray(dto.rows) ? dto.rows.map((value, index) => {
+    const row = record(value);
+    return {
+      lineId: text(row.lineId, `line-${index + 1}`),
+      productName: text(row.productName, "未命名商品"),
+      inventoryId: text(row.inventoryId),
+      serialNumber: text(row.serialNumber),
+      matched: booleanValue(row.matched),
+      reason: text(row.reason),
+    };
+  }) : [];
+  return {
+    invoiceId: text(dto.invoiceId),
+    invoiceNo: text(dto.invoiceNo),
+    expectedCount: Math.max(0, numberValue(dto.expectedCount, rows.length)),
+    matchedCount: Math.max(0, numberValue(dto.matchedCount, rows.filter((row) => row.matched).length)),
+    ready: booleanValue(dto.ready),
+    unknownCodes: Array.isArray(dto.unknownCodes) ? dto.unknownCodes.map((item) => text(item)).filter(Boolean) : [],
+    duplicateCodes: Array.isArray(dto.duplicateCodes) ? dto.duplicateCodes.map((item) => text(item)).filter(Boolean) : [],
+    rows,
+  };
+}
+
 export function toSalesOutboundRequestDto(values: SalesOutboundRequest): SalesOutboundRequestDto {
   return {
     handler: values.handler.trim(),
-    codes: Array.from(new Set(values.codes.map((code) => code.trim()).filter(Boolean))),
+    // Preserve repeats so the server can reject duplicate physical scans instead of
+    // silently normalizing an operator mistake before the authoritative preflight.
+    codes: values.codes.map((code) => code.trim()).filter(Boolean),
     manual: values.manual,
     remarks: values.remarks.trim() || undefined,
   };

@@ -39,5 +39,5 @@ export interface FinanceTransferCollection {
   totalReceived: number;
   page: number;
   pageSize: number;
-  source: "authorized-full-state";
+  source: "authorized-full-state" | "database-page";
 }
