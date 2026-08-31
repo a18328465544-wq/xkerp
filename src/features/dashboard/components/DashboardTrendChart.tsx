@@ -35,10 +35,10 @@ export default function DashboardTrendChart({data, showProfit = true}: {data: Da
           <stop offset="100%" stopColor="var(--color-revenue)" stopOpacity={0} />
         </linearGradient>
       </defs>
-      <CartesianGrid strokeDasharray="3 5" stroke="var(--erp-color-border)" vertical={false} />
+      <CartesianGrid strokeDasharray="3 5" stroke="var(--erp-chart-grid)" vertical={false} />
       <ChartLegend />
-      <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={24} tickMargin={8} tick={{fontSize: 10, fill: "var(--erp-color-text-muted)"}} axisLine={false} tickLine={false} />
-      <YAxis width={44} tickMargin={4} tick={{fontSize: 10, fill: "var(--erp-color-text-muted)"}} axisLine={false} tickLine={false} tickFormatter={(value: number) => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : String(value)} />
+      <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={24} tickMargin={8} tick={{fontSize: 10, fill: "var(--erp-chart-axis)"}} axisLine={false} tickLine={false} />
+      <YAxis width={44} tickMargin={4} tick={{fontSize: 10, fill: "var(--erp-chart-axis)"}} axisLine={false} tickLine={false} tickFormatter={(value: number) => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : String(value)} />
       <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value || 0))} />} />
       <Area type="monotone" dataKey="revenue" name="revenue" stroke="var(--color-revenue)" fill={`url(#${gradientId})`} strokeWidth={2.5} dot={{r: 3, fill: "var(--erp-color-surface)", strokeWidth: 2}} />
       {showProfit && <Area type="monotone" dataKey="profit" name="profit" stroke="var(--color-profit)" fill="none" strokeDasharray="6 3" strokeWidth={2} dot={{r: 2, fill: "var(--erp-color-surface)", strokeWidth: 2}} />}

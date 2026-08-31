@@ -2,7 +2,7 @@ import {keepPreviousData, useQuery, type UseQueryResult} from "@tanstack/react-q
 import {ArrowRight, Boxes, ImageOff, LockKeyhole, RefreshCw, RotateCcw, Search, ShieldAlert, SlidersHorizontal, Warehouse} from "lucide-react";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -295,7 +295,7 @@ function InventoryDetailSection({title, children}: {title: string; children: Rea
 function DetailField({label, value}: {label: string; value: string | undefined}) { return <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><p className="text-[11px] text-[var(--erp-color-text-muted)]">{label}</p><p className="mt-1 break-words text-sm font-semibold text-[var(--erp-color-text)]">{value || "—"}</p></div>; }
 function DetailAmount({label, value}: {label: string; value: number | undefined}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className="mt-1 font-mono text-base font-semibold">{value === undefined ? "—" : formatCurrency(value)}</p></div>; }
 
-function MetricCard({label, value, detail, icon, tone = "normal"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "normal" | "warning" | "muted"}) { return <Card><CardContent className="flex min-h-[112px] items-start justify-between p-4"><div><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className={tone === "warning" ? "mt-2 font-mono text-2xl font-bold text-[var(--erp-color-warning)]" : tone === "muted" ? "mt-2 text-xl font-bold text-[var(--erp-color-text-muted)]" : "mt-2 font-mono text-2xl font-bold text-[var(--erp-color-text)]"}>{value}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{detail}</p></div><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]">{icon}</span></CardContent></Card>; }
+function MetricCard({label, value, detail, icon, tone = "normal"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "normal" | "warning" | "muted"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "normal" || tone === "muted" ? "neutral" : "warning"} valueTone={tone === "muted" ? "muted" : tone === "warning" ? "warning" : "neutral"} />; }
 
 function summarizeInventoryModelRows(rows: InventoryModelSummary[], showCost: boolean): InventorySummary {
   const summary = rows.reduce<InventorySummary>((result, row) => ({

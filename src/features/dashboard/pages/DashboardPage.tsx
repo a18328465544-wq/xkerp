@@ -1,10 +1,10 @@
 import {keepPreviousData, useQuery} from "@tanstack/react-query";
-import {AlertCircle, ArrowDownRight, ArrowRight, ArrowUpRight, Boxes, CalendarDays, ClipboardList, LogIn, PackageCheck, RefreshCw, Sparkles, TrendingUp, Warehouse, XCircle} from "lucide-react";
+import {AlertCircle, ArrowRight, ArrowUpRight, Boxes, CalendarDays, ClipboardList, LogIn, PackageCheck, RefreshCw, Sparkles, TrendingUp, Warehouse, XCircle} from "lucide-react";
 import {lazy, Suspense, useEffect, useMemo, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, ChartMeta} from "@/src/components/ui";
-import {BottomRegion, DashboardSection, ErpDashboardPageFrame, ErpEmptyState, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {BottomRegion, DashboardSection, ErpDashboardPageFrame, ErpEmptyState, ErpMetricCard, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {aiApi, queryKeys, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -97,10 +97,10 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
     <ErpPageHeader title={`${greeting}，${session.user.displayName || "老板"}`} subtitle="专注经营每一天，让数据驱动增长" quickStatus={quickStatus} dateContent={<span className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs text-[var(--erp-color-text-secondary)]"><CalendarDays className="h-4 w-4" />{today}</span>} actions={<Button variant="secondary" size="sm" onClick={onRefresh}><RefreshCw className="h-4 w-4" />刷新</Button>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap-comfortable)]">
       <MetricsRegion>
-      <MetricCard label="今日营业额" value={formatCurrency(stats.todayRevenue)} compare={stats.revenueChange} icon={<TrendingUp className="h-4 w-4" />} tone="blue" />
-      <MetricCard label="今日利润" value={canSeeProfit ? formatCurrency(stats.todayProfit) : "无权查看"} compare={canSeeProfit ? profitChange : null} icon={<ArrowUpRight className="h-4 w-4" />} tone="green" detail={canSeeProfit ? `昨日 ${formatCurrency(stats.yesterdayProfit)}` : "利润权限受限"} />
-      <MetricCard label="待处理事项" value={String(pendingTotal)} compare={null} icon={<ClipboardList className="h-4 w-4" />} tone="amber" detail={`入库 ${stats.pendingInbound} · 出库 ${stats.pendingOutbound}`} />
-      <MetricCard label="库存总价值" value={canSeeProfit ? formatCurrency(stats.inventoryValue) : "无权查看"} compare={null} icon={<Boxes className="h-4 w-4" />} tone="blue" detail={`${stats.activeInventoryCount} 件在库`} />
+      <ErpMetricCard label="今日营业额" value={formatCurrency(stats.todayRevenue)} compare={stats.revenueChange} icon={<TrendingUp className="h-4 w-4" />} tone="info" />
+      <ErpMetricCard label="今日利润" value={canSeeProfit ? formatCurrency(stats.todayProfit) : "无权查看"} compare={canSeeProfit ? profitChange : null} icon={<ArrowUpRight className="h-4 w-4" />} tone="success" valueTone={canSeeProfit ? "success" : "muted"} detail={canSeeProfit ? `昨日 ${formatCurrency(stats.yesterdayProfit)}` : "利润权限受限"} />
+      <ErpMetricCard label="待处理事项" value={String(pendingTotal)} compare={null} icon={<ClipboardList className="h-4 w-4" />} tone="warning" valueTone={pendingTotal ? "warning" : "neutral"} detail={`入库 ${stats.pendingInbound} · 出库 ${stats.pendingOutbound}`} />
+      <ErpMetricCard label="库存总价值" value={canSeeProfit ? formatCurrency(stats.inventoryValue) : "无权查看"} compare={null} icon={<Boxes className="h-4 w-4" />} tone="info" detail={`${stats.activeInventoryCount} 件在库`} />
       </MetricsRegion>
     <MainRegion variant="70-30">
       <MainRegion.Primary className="space-y-5">
@@ -192,11 +192,6 @@ function buildTrendRows(invoices: SalesInvoice[], today: string) {
 }
 
 function riskScore(item: CardInventory, today: string) { return storeDateDiffDays(item.entryTime, today) * 1000 + Math.max(0, Number(item.costPrice || 0) - Number(item.marketPrice || 0)); }
-
-function MetricCard({label, value, detail, compare, icon, tone}: {label: string; value: string; detail?: string; compare: number | null; icon: ReactNode; tone: "blue" | "green" | "amber"}) {
-  const toneClass = tone === "green" ? "text-[var(--erp-color-success)] bg-[var(--erp-color-success-soft)]" : tone === "amber" ? "text-[var(--erp-color-warning)] bg-[var(--erp-color-warning-soft)]" : "text-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)]";
-  return <Card><CardContent className="min-h-[126px] p-4"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><span className={`flex h-8 w-8 items-center justify-center rounded-full ${toneClass}`}>{icon}</span></div><p className="mt-2 font-mono text-2xl font-bold tracking-tight text-[var(--erp-color-text)]">{value}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-[var(--erp-color-text-muted)]">{detail || "较昨日"}</span>{compare === null ? <span className="text-[var(--erp-color-text-muted)]">暂无对比</span> : <span className={`inline-flex items-center gap-0.5 font-semibold ${compare >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{compare >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}{Math.abs(compare).toFixed(1)}%</span>}</div></CardContent></Card>;
-}
 
 function SummaryCell({label, value, tone}: {label: string; value: string; tone?: "success"}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 text-sm font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>; }
 

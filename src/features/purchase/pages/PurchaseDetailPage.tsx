@@ -5,7 +5,7 @@ import {useEffect, useMemo, useState} from "react";
 import {toast} from "sonner";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, CardHeader} from "@/src/components/ui";
-import {ErpDataTable, ErpDetailPageFrame, ErpDocumentDeleteDialog, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {ErpDataTable, ErpDetailPageFrame, ErpDocumentDeleteDialog, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, apiDownload, purchaseApi, queryKeys} from "@/src/services/api";
 import {useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -44,8 +44,7 @@ function purchaseDeleteBlockedReason(detail: PurchaseDetail) {
 }
 
 function DetailMetric({label, value, detail, tone = "neutral"}: {label: string; value: string; detail: string; tone?: "neutral" | "success" | "warning"}) {
-  const valueClass = tone === "success" ? "text-[var(--erp-color-success)]" : tone === "warning" ? "text-[var(--erp-color-warning)]" : "text-[var(--erp-color-text)]";
-  return <Card><CardContent className="min-h-[108px] p-4"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className={`mt-2 font-mono text-2xl font-bold ${valueClass}`}>{value}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{detail}</p></CardContent></Card>;
+  return <ErpMetricCard label={label} value={value} detail={detail} valueTone={tone} />;
 }
 
 function PurchaseImages({images}: {images: readonly string[]}) {

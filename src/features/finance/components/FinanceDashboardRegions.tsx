@@ -10,10 +10,10 @@ import type {financeApi} from "@/src/services/api";
 export function FinanceDashboardMetricRegion({view}: {view: FinanceDashboardView}) {
   return (
     <MetricsRegion>
-      <FinanceMetricCard label="当前可用资金" value={amountOrPermission(view.availableCash)} detail={view.availableCash === undefined ? "缺少资金账户权限" : `账面余额 ${formatCurrency(view.bookBalance || 0)}`} icon={<WalletCards className="h-4 w-4" />} tone={view.availableCash !== undefined && view.availableCash <= 0 ? "warning" : "info"} />
-      <FinanceMetricCard label="今日收入" value={amountOrPermission(view.todayIncome)} detail={compareText(view.todayIncome, view.yesterdayIncome)} icon={<ArrowDownRight className="h-4 w-4" />} tone="success" />
-      <FinanceMetricCard label="今日支出" value={amountOrPermission(view.todayExpense)} detail={compareText(view.todayExpense, view.yesterdayExpense)} icon={<ArrowUpRight className="h-4 w-4" />} tone={view.todayExpense ? "danger" : "neutral"} />
-      <FinanceMetricCard label="待处理任务" value={`${view.exceptions.length} 项`} detail={view.exceptions.length ? "优先处理资金与对账异常" : "当前未发现待处理异常"} icon={<ReceiptText className="h-4 w-4" />} tone={view.exceptions.length ? "warning" : "success"} />
+      <FinanceMetricCard label="当前可用资金" value={amountOrPermission(view.availableCash)} detail={view.availableCash === undefined ? "缺少资金账户权限" : `账面余额 ${formatCurrency(view.bookBalance || 0)}`} icon={<WalletCards className="h-4 w-4" />} tone={view.availableCash !== undefined && view.availableCash <= 0 ? "warning" : "info"} valueTone={view.availableCash !== undefined && view.availableCash <= 0 ? "warning" : "neutral"} />
+      <FinanceMetricCard label="今日收入" value={amountOrPermission(view.todayIncome)} detail={compareDetail(view.todayIncome, view.yesterdayIncome)} compare={compareValue(view.todayIncome, view.yesterdayIncome)} icon={<ArrowDownRight className="h-4 w-4" />} tone="success" valueTone="success" />
+      <FinanceMetricCard label="今日支出" value={amountOrPermission(view.todayExpense)} detail={compareDetail(view.todayExpense, view.yesterdayExpense)} compare={compareValue(view.todayExpense, view.yesterdayExpense)} icon={<ArrowUpRight className="h-4 w-4" />} tone={view.todayExpense ? "danger" : "neutral"} valueTone={view.todayExpense ? "danger" : "neutral"} />
+      <FinanceMetricCard label="待处理任务" value={`${view.exceptions.length} 项`} detail={view.exceptions.length ? "优先处理资金与对账异常" : "当前未发现待处理异常"} icon={<ReceiptText className="h-4 w-4" />} tone={view.exceptions.length ? "warning" : "success"} valueTone={view.exceptions.length ? "warning" : "success"} />
     </MetricsRegion>
   );
 }
@@ -54,12 +54,8 @@ export function FinanceDashboardHealthRegions({view, access}: {view: FinanceDash
 }
 
 function amountOrPermission(value: number | undefined) { return value === undefined ? "权限受限" : formatCurrency(value); }
-function compareText(today: number | undefined, yesterday: number | undefined) {
-  if (today === undefined || yesterday === undefined) return "缺少账户流水权限";
-  if (!yesterday) return `昨日 ${formatCurrency(0)}`;
-  const rate = ((today - yesterday) / Math.abs(yesterday)) * 100;
-  return `较昨日 ${rate >= 0 ? "+" : ""}${rate.toFixed(1)}% · 昨日 ${formatCurrency(yesterday)}`;
-}
+function compareDetail(today: number | undefined, yesterday: number | undefined) { return today === undefined || yesterday === undefined ? "缺少账户流水权限" : `昨日 ${formatCurrency(yesterday)}`; }
+function compareValue(today: number | undefined, yesterday: number | undefined) { return today === undefined || yesterday === undefined || yesterday === 0 ? undefined : ((today - yesterday) / Math.abs(yesterday)) * 100; }
 function healthTone(risk: FinanceHealthRisk | undefined): "success" | "warning" | "danger" | "neutral" { return risk === "low" ? "success" : risk === "attention" ? "warning" : risk === "high" ? "danger" : "neutral"; }
 function healthLabel(risk: FinanceHealthRisk | undefined) { return risk === "low" ? "健康" : risk === "attention" ? "需关注" : risk === "high" ? "高风险" : "无法计算"; }
 function turnoverText(view: FinanceDashboardView, access: FinanceDashboardAccess) {

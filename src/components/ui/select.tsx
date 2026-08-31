@@ -119,7 +119,7 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
       name={name}
       autoHighlight
     >
-      <BaseCombobox.InputGroup className={cn("erp-focus-ring relative flex h-[var(--erp-control-height)] min-w-0 items-center rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] transition-colors hover:border-[var(--erp-color-border-strong)] focus-within:border-[var(--erp-color-primary)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)]", hasCustomWidth ? undefined : "w-full", className)}>
+      <BaseCombobox.InputGroup data-erp-component="select" data-variant="search" className={cn("erp-focus-ring relative flex h-[var(--erp-control-height)] min-w-0 items-center rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] focus-within:border-[var(--erp-color-primary)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)]", hasCustomWidth ? undefined : "w-full", className)}>
         <Search className="pointer-events-none absolute left-3 h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
         <BaseCombobox.Input
           id={id}
@@ -170,8 +170,9 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
     name={name}
     id={id}
   >
-    <BaseSelect.Trigger
-      className={cn("erp-focus-ring flex h-[var(--erp-control-height)] min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-[placeholder]:text-[var(--erp-color-text-muted)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)] data-disabled:text-[var(--erp-color-text-muted)] data-pressed:border-[var(--erp-color-primary)]", hasCustomWidth ? undefined : "w-full", className)}
+      <BaseSelect.Trigger
+      data-erp-component="select"
+      className={cn("erp-focus-ring flex h-[var(--erp-control-height)] min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-[placeholder]:text-[var(--erp-color-text-muted)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)] data-disabled:text-[var(--erp-color-text-muted)] data-pressed:border-[var(--erp-color-primary)]", hasCustomWidth ? undefined : "w-full", className)}
       aria-label={ariaLabel}
     >
       <BaseSelect.Value className="min-w-0 truncate" placeholder={placeholder} />

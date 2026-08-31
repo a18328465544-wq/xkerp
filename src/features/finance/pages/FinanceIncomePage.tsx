@@ -22,7 +22,7 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Input, Select } from "@/src/components/ui";
+import { Button, Card, Input, Select } from "@/src/components/ui";
 import {
   DashboardSection,
   ErpFinancePageFrame,
@@ -30,6 +30,7 @@ import {
   ErpDetailDrawer,
   ErpFilterBar,
   ErpLoadingState,
+  ErpMetricCard,
   ErpPageContent,
   ErpPageError,
   ErpPageHeader,
@@ -636,22 +637,7 @@ function Metric({
   icon: ReactNode;
   tone: "neutral" | "info" | "success" | "warning";
 }) {
-  return (
-    <Card>
-      <CardContent className="flex min-h-[110px] items-start justify-between gap-3 p-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">
-            {label}
-          </p>
-          <p className="mt-2 truncate font-mono text-xl font-bold">{value}</p>
-          <p className="mt-1 truncate text-[11px] text-[var(--erp-color-text-muted)]">
-            {detail}
-          </p>
-        </div>
-        <ErpStatusBadge label={icon} tone={tone} />
-      </CardContent>
-    </Card>
-  );
+  return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} valueTone={tone} />;
 }
 function Fact({
   label,

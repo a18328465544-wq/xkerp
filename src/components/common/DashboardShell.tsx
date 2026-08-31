@@ -17,10 +17,10 @@ export function DashboardSection({title, description, actions, density = "compac
   /* Default sections reserve one helper line so async/conditional copy cannot move the content below. */
   const showDescription = density === "default" && Boolean(title || description);
   const hasHeader = Boolean(title || showDescription || actions);
-  return <section {...props} data-erp-component="dashboard-section" data-density={density} className={cn("rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4 shadow-[var(--erp-shadow-card)]", density === "default" && "p-5", className)}>
+  return <section {...props} data-erp-component="dashboard-section" data-density={density} className={cn("erp-card-surface p-[var(--erp-card-padding-compact)]", density === "default" && "p-[var(--erp-card-padding)]", className)}>
     {hasHeader && <div data-erp-region="section-header" className={cn("flex flex-wrap items-start justify-between gap-3 border-b border-[var(--erp-color-border)] pb-3", density === "default" && "pb-4")}>
       <div className="min-w-0">{title && <h2 className="text-[var(--erp-font-section-title)] font-bold text-[var(--erp-color-text)]">{title}</h2>}{showDescription && <p className="erp-annotation-slot mt-1 text-xs text-[var(--erp-color-text-secondary)]" data-empty={!description || undefined} aria-hidden={!description || undefined}>{description || "\u00a0"}</p>}</div>
-      {actions && <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div>}
+      {actions && <div data-erp-region="section-actions" className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div>}
     </div>}
     <div data-erp-region="section-content" className={cn(hasHeader ? "pt-3" : "", density === "default" && hasHeader && "pt-4")}>{children}</div>
   </section>;

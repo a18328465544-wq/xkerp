@@ -1,7 +1,7 @@
-import {ArrowUpRight, Boxes, ClipboardList, PackageCheck, Sparkles, Warehouse} from "lucide-react";
+import {ArrowUpRight, Boxes, ClipboardList, PackageCheck, Sparkles, TrendingUp, Warehouse} from "lucide-react";
 import {useState} from "react";
 import {Avatar, Badge, Button, Card, CardContent, CardHeader, Input, Select, Separator, Skeleton, Textarea} from "@/src/components/ui";
-import {DashboardSection, ErpDashboardPageFrame, ErpAmountInput, ErpDataTable, ErpDatePicker, ErpEmptyState, ErpFilterBar, ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, QuickStatusGroup, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDashboardPageFrame, ErpAmountInput, ErpDataTable, ErpDatePicker, ErpEmptyState, ErpFilterBar, ErpFormSection, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, QuickStatusGroup, type QuickStatusItemData} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
 
 type DemoRow = {id: string; name: string; status: string; amount: number};
@@ -62,10 +62,10 @@ export function DesignSystemPage() {
         <TokenSwatch name="净额 / 中性汇总" value="--erp-color-net" className="bg-[var(--erp-color-net)]" dark />
         <TokenSwatch name="待处理 / 风险" value="--erp-color-risk" className="bg-[var(--erp-color-risk)]" dark />
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="页面标题" value="28px" /><Metric label="正文" value="14px" /><Metric label="默认控件" value="40px" /><Metric label="卡片圆角" value="12px" /></div>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="页面标题" value="28px" /><Metric label="正文" value="14px" /><Metric label="默认控件" value="40px" /><Metric label="卡片圆角" value="18px" /></div>
     </DashboardSection>
     <MetricsRegion>
-      <Card><CardContent className="p-4"><p className="text-xs text-[var(--erp-color-text-secondary)]">Metric Card</p><p className="mt-2 font-mono text-2xl font-bold">¥406,721</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">较昨日 +12.6%</p></CardContent></Card>
+      <ErpMetricCard label="Metric Card" value="¥406,721" detail="昨日 ¥360,000" compare={12.6} icon={<TrendingUp className="h-4 w-4" />} tone="success" />
       <Card><CardContent className="p-4"><p className="text-xs text-[var(--erp-color-text-secondary)]">Status Badge</p><div className="mt-3 flex flex-wrap gap-2"><ErpStatusBadge label="中性" tone="neutral" /><ErpStatusBadge label="信息" tone="info" /><ErpStatusBadge label="正常" tone="success" /><ErpStatusBadge label="提醒" tone="warning" /><ErpStatusBadge label="风险" tone="danger" /></div></CardContent></Card>
       <Card><CardContent className="p-4"><p className="text-xs text-[var(--erp-color-text-secondary)]">Avatar</p><div className="mt-3 flex items-center gap-3"><Avatar src={avatarSrc} alt="郭鑫" /><span className="text-sm font-semibold">郭鑫 · 老板账号</span></div></CardContent></Card>
       <Card><CardContent className="p-4"><p className="text-xs text-[var(--erp-color-text-secondary)]">Loading</p><div className="mt-3 space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-8 w-full" /></div></CardContent></Card>

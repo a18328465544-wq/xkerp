@@ -38,7 +38,7 @@ export function FinanceHealthPanel({view}: {view: FinanceDashboardView}) {
           className="h-full w-full -rotate-90"
           aria-label={`资金健康度 ${view.healthScore} 分`}
         >
-          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--erp-color-border)" strokeWidth="9" />
+          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--erp-color-border-soft)" strokeWidth="9" />
           <circle
             cx="50"
             cy="50"

@@ -151,7 +151,7 @@ function ProfitTrend({trend, showProfit, showNetProfit, updatedAt}: {trend: Fina
               <stop offset="100%" stopColor="var(--color-revenue)" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 5" stroke="var(--erp-color-border)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 5" stroke="var(--erp-chart-grid)" vertical={false} />
           <ChartLegend />
           <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={24} tickMargin={8} tick={{fontSize: 10, fill: "var(--erp-color-text-muted)"}} axisLine={false} tickLine={false} />
           <YAxis width={48} tickMargin={4} tick={{fontSize: 10, fill: "var(--erp-color-text-muted)"}} axisLine={false} tickLine={false} tickFormatter={(value: number) => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : String(value)} />

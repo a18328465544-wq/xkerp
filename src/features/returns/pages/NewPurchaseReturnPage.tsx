@@ -4,7 +4,7 @@ import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
 import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
-import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
+import {ErpDatePicker, ErpFormSection, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -154,5 +154,5 @@ function matchPurchaseCardsToLines(invoice: PurchaseInvoice | undefined, cards: 
   });
 }
 
-function Metric({label, value, detail}: {label: string; value: string; detail: string}) { return <Card><CardContent className="min-h-[104px] p-4"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className="mt-2 font-mono text-2xl font-bold">{value}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{detail}</p></CardContent></Card>; }
+function Metric({label, value, detail}: {label: string; value: string; detail: string}) { return <ErpMetricCard label={label} value={value} detail={detail} />; }
 function ReturnState({title, icon}: {title: string; icon: ReactNode}) { return <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-center"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]">{icon}</span><p className="font-bold">{title}</p></div>; }

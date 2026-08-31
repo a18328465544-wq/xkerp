@@ -8,6 +8,7 @@ import {
   ErpFinancePageFrame,
   ErpDetailDrawer,
   ErpFilterBar,
+  ErpMetricCard,
   ErpPageContent,
   ErpPageError,
   ErpPageHeader,
@@ -477,23 +478,7 @@ function Metric({
   detail: string;
   tone?: "neutral" | "success" | "warning";
 }) {
-  return (
-    <Card>
-      <div className="p-4">
-        <p className="text-xs text-[var(--erp-color-text-secondary)]">
-          {label}
-        </p>
-        <p
-          className={`mt-2 font-mono text-xl font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : tone === "warning" ? "text-[var(--erp-color-warning)]" : ""}`}
-        >
-          {value}
-        </p>
-        <p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">
-          {detail}
-        </p>
-      </div>
-    </Card>
-  );
+  return <ErpMetricCard label={label} value={value} detail={detail} tone={tone} valueTone={tone} />;
 }
 function Fact({ label, value }: { label: string; value: string }) {
   return (

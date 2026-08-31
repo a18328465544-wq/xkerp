@@ -3,7 +3,7 @@ import {Combine, LockKeyhole, PackageOpen, RefreshCw, Search, Unplug, Wrench} fr
 import {useMemo, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, assemblyApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -62,7 +62,7 @@ function AssemblyContent({session, filters, onFiltersChange, listQuery, referenc
   </ErpWarehousePageFrame>;
 }
 
-function MetricCard({label, value, detail, icon, tone = "info"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "info" | "success" | "warning"}) {return <Card><CardContent className="flex items-start justify-between gap-3 p-4"><div><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className="mt-2 font-mono text-xl font-bold">{value}</p><p className="mt-1 text-[11px] text-[var(--erp-color-text-muted)]">{detail}</p></div><ErpStatusBadge label={icon} tone={tone} /></CardContent></Card>;}
+function MetricCard({label, value, detail, icon, tone = "info"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "info" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;}
 
 function RecentOperations({records, showProfit, onView}: {records: AssemblyOperation[]; showProfit: boolean; onView: (record: AssemblyOperation) => void}) {return <DashboardSection title="近期操作" description="当前分页中的最新记录" className="sticky top-4"><div className="space-y-2">{records.length ? records.map((record) => <button type="button" key={record.id} onClick={() => onView(record)} className="w-full rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3 text-left hover:bg-[var(--erp-color-surface-muted)]"><div className="flex items-center justify-between gap-2"><strong className="font-mono text-sm">{record.id}</strong><ErpStatusBadge label={record.type} tone={record.type === "拆卸" ? "warning" : "info"} /></div><p className="mt-2 truncate text-xs text-[var(--erp-color-text-secondary)]">{record.type === "拆卸" ? `${record.beforeProductName || "库存"} → ${record.afterParts.length} 个配件` : `${record.beforeParts.length} 个配件 → ${record.afterProductName || "组装成品"}`}</p><div className="mt-2 flex justify-between text-[11px] text-[var(--erp-color-text-muted)]"><span>{record.handler}</span><span>{showProfit ? formatCurrency(assemblyOperationValue(record)) : record.time}</span></div></button>) : <p className="py-8 text-center text-xs text-[var(--erp-color-text-muted)]">当前没有操作记录</p>}</div></DashboardSection>;}
 

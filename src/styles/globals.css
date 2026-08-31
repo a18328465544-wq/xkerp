@@ -22,6 +22,43 @@ button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 ::selection { background: rgb(10 132 255 / 0.18); }
 .erp-focus-ring:focus-visible { outline: 3px solid rgb(10 132 255 / 0.28); outline-offset: 2px; }
+.erp-form-control {
+  height: var(--erp-control-height);
+  border-radius: var(--erp-radius-control);
+}
+.erp-search-control {
+  height: var(--erp-control-height);
+  border-radius: var(--erp-radius-control);
+}
+.erp-filter-control {
+  height: var(--erp-control-height-filter);
+  border-radius: var(--erp-radius-control);
+}
+.erp-card-surface {
+  border-radius: var(--erp-radius-card);
+  border-color: var(--erp-color-border);
+  background: var(--erp-color-surface);
+  box-shadow: var(--erp-shadow-card);
+}
+.erp-card-action {
+  display: inline-flex;
+  min-height: var(--erp-control-height-filter);
+  align-items: center;
+  gap: var(--erp-space-2);
+  border: 1px solid var(--erp-color-border);
+  border-radius: var(--erp-radius-pill);
+  padding: 0 var(--erp-space-3);
+  color: var(--erp-color-text-secondary);
+  font-size: var(--erp-font-caption);
+  font-weight: 600;
+  transition: border-color var(--erp-motion-fast) ease, background-color var(--erp-motion-fast) ease, color var(--erp-motion-fast) ease;
+}
+.erp-card-action:hover {
+  border-color: var(--erp-color-border-strong);
+  background: var(--erp-color-surface-muted);
+  color: var(--erp-color-text);
+}
+.erp-card-action:focus-visible { outline: 3px solid rgb(10 132 255 / 0.22); outline-offset: 2px; }
 .erp-annotation-slot {
   display: block;
   height: var(--erp-annotation-height);
@@ -219,6 +256,57 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 [data-page-frame="finance"] [data-erp-component="dashboard-section"] > [data-erp-region="section-content"]:only-child {
   padding-top: 0;
+}
+
+/* The analytics card language follows the Qianwen reference: one clear
+   decision per surface, a quiet header/action row and a compact data footer. */
+[data-erp-component="card"],
+[data-erp-component="dashboard-section"],
+[data-erp-component="data-table"] {
+  border-radius: var(--erp-radius-card);
+}
+[data-erp-component="metric-card"] {
+  overflow: hidden;
+}
+[data-erp-component="metric-card"] [data-erp-region="metric-label"] {
+  letter-spacing: 0.01em;
+}
+[data-erp-component="metric-card"] [data-erp-region="metric-value"] {
+  font-size: clamp(1.5rem, 2vw, 1.875rem);
+  line-height: 1.15;
+}
+[data-erp-component="metric-card"] [data-erp-region="metric-detail"] {
+  min-height: var(--erp-annotation-height);
+}
+[data-erp-component="dashboard-section"] > [data-erp-region="section-header"] {
+  align-items: center;
+}
+[data-erp-component="dashboard-section"] > [data-erp-region="section-header"] [data-erp-region="section-actions"] {
+  flex-shrink: 0;
+}
+[data-erp-region="section-actions"] > a {
+  display: inline-flex;
+  min-height: var(--erp-control-height-filter);
+  align-items: center;
+  gap: var(--erp-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--erp-radius-pill);
+  padding: 0 var(--erp-space-3);
+  color: var(--erp-color-primary);
+  font-size: var(--erp-font-caption);
+  font-weight: 600;
+  transition: border-color var(--erp-motion-fast) ease, background-color var(--erp-motion-fast) ease;
+}
+[data-erp-region="section-actions"] > a:hover {
+  border-color: var(--erp-color-border);
+  background: var(--erp-color-surface-muted);
+}
+[data-erp-region="section-actions"] > a:focus-visible { outline: 3px solid rgb(10 132 255 / 0.22); outline-offset: 2px; }
+[data-erp-component="chart-meta"] {
+  border-top-color: var(--erp-color-border-soft);
+}
+[data-erp-component="analytics-insight-item"] {
+  border-bottom-color: var(--erp-color-border-soft);
 }
 
 /* Analytics owns the vertical rhythm and makes both main slots fill the same

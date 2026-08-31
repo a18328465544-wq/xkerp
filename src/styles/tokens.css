@@ -1,9 +1,12 @@
 :root {
-  --erp-color-canvas: #f6f8fb;
+  /* Qianwen-inspired surface language: a quiet canvas keeps white cards and
+     business signals readable without relying on decorative gradients. */
+  --erp-color-canvas: #f7f8fb;
   --erp-color-surface: #ffffff;
-  --erp-color-surface-muted: #f1f5f9;
-  --erp-color-border: #dfe7f1;
-  --erp-color-border-strong: #c9d5e3;
+  --erp-color-surface-muted: #f5f7fb;
+  --erp-color-border: #e2e8f0;
+  --erp-color-border-soft: #edf1f6;
+  --erp-color-border-strong: #cbd5e1;
   --erp-color-text: #172033;
   --erp-color-text-secondary: #506078;
   --erp-color-text-muted: #64748b;
@@ -43,9 +46,14 @@
   --erp-radius-md: 8px;
   --erp-radius-lg: 12px;
   --erp-radius-xl: 16px;
+  --erp-radius-card: 18px;
+  --erp-radius-control: 10px;
   --erp-radius-pill: 9999px;
-  --erp-shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.03);
+  --erp-shadow-card: 0 1px 2px rgb(15 23 42 / 0.035), 0 4px 16px rgb(15 23 42 / 0.028);
   --erp-shadow-popover: 0 16px 48px rgb(15 23 42 / 0.16);
+  --erp-card-padding: 20px;
+  --erp-card-padding-compact: 16px;
+  --erp-card-gap: 12px;
   --erp-font-page-title: 28px;
   --erp-font-section-title: 16px;
   --erp-font-body: 14px;
@@ -55,6 +63,9 @@
   --erp-annotation-height: 16px;
   --erp-control-height: 40px;
   --erp-control-height-compact: 32px;
+  --erp-control-height-filter: 36px;
+  --erp-chart-grid: #e7edf5;
+  --erp-chart-axis: #94a3b8;
   /* Quick Status is a single-line summary. These shared geometry tokens keep
      every Page Header dense without page-specific height or spacing patches. */
   --erp-quick-status-height: 32px;

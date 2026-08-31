@@ -40,7 +40,7 @@ export function ErpDatePicker({value, onChange, density = "default", min, max, p
   const trigger = (
     <button
       type="button"
-      className={cn("erp-focus-ring flex items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]", controlHeight, invalid && "border-[var(--erp-color-danger)]", hasCustomWidth ? undefined : "w-full", className)}
+      className={cn("erp-focus-ring flex items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]", controlHeight, invalid && "border-[var(--erp-color-danger)]", hasCustomWidth ? undefined : "w-full", className)}
       disabled={disabled}
       aria-label={ariaLabel}
       aria-required={required}

@@ -204,7 +204,7 @@ export function ChartLegendContent({payload, nameKey, hideIcon = false, classNam
   const {config} = useChart();
   if (!payload?.length) return null;
 
-  return <div className={cn("flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs", className)} {...props}>
+  return <div className={cn("flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs", className)} {...props}>
     {payload.map((item: LegendPayload, index) => {
       const key = nameKey || item.dataKey || item.value || index;
       const itemConfig = configForKey(config, key);
@@ -237,7 +237,7 @@ export interface ChartMetaProps extends React.ComponentProps<"div"> {
 /** Compact text fallback for users who do not hover a chart. */
 export function ChartMeta({summary, updatedAt, className, ...props}: ChartMetaProps) {
   if (summary === undefined && updatedAt === undefined) return null;
-  return <div className={cn("flex flex-wrap items-center justify-between gap-2 border-t border-[var(--erp-color-border)] pt-2 text-[11px] text-[var(--erp-color-text-muted)]", className)} {...props}>
+  return <div data-erp-component="chart-meta" className={cn("flex flex-wrap items-center justify-between gap-2 border-t border-[var(--erp-color-border-soft)] pt-2 text-[11px] text-[var(--erp-color-text-muted)]", className)} {...props}>
     {summary !== undefined ? <span className="min-w-0">{summary}</span> : <span />}
     {updatedAt !== undefined ? <span className="shrink-0">更新于 {updatedAt}</span> : null}
   </div>;

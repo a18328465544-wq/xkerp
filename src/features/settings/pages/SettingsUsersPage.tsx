@@ -4,7 +4,7 @@ import {Filter, Pencil, RefreshCw, Search, ShieldCheck, UserPlus, Users} from "l
 import {useEffect, useMemo, useState} from "react";
 import {toast} from "sonner";
 import {Button, Card, Input, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpSettingsPageFrame, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpSettingsPageFrame, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, usersApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {SettingsUserItem} from "@/src/types/finance-remaining";
@@ -82,5 +82,5 @@ function SettingsUsersContent({users, loading, fetching, error, onRetry, onAuthE
   </ErpSettingsPageFrame>;
 }
 
-function Metric({label, value, detail, tone = "neutral"}: {label: string; value: string; detail: string; tone?: "neutral" | "success" | "warning" | "info"}) {return <Card><div className="p-4"><p className="text-xs text-[var(--erp-color-text-secondary)]">{label}</p><p className={`mt-2 font-mono text-xl font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : tone === "warning" ? "text-[var(--erp-color-warning)]" : tone === "info" ? "text-[var(--erp-color-primary)]" : ""}`}>{value}</p><p className="mt-1 text-[11px] text-[var(--erp-color-text-muted)]">{detail}</p></div></Card>;}
+function Metric({label, value, detail, tone = "neutral"}: {label: string; value: string; detail: string; tone?: "neutral" | "success" | "warning" | "info"}) {return <ErpMetricCard label={label} value={value} detail={detail} tone={tone} valueTone={tone} />;}
 function Fact({label, value}: {label: string; value: string}) {return <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3"><p className="text-[11px] text-[var(--erp-color-text-muted)]">{label}</p><p className="mt-1 truncate text-sm font-semibold">{value}</p></div>;}

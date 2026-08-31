@@ -4,7 +4,7 @@ import {Boxes, Download, Filter, Layers3, PackageCheck, Plus, RefreshCw, Search,
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, productsApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useProductLedger} from "@/src/hooks/useProductLedger";
@@ -133,7 +133,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
 }
 
 function MetricCard({label, value, detail, icon, tone = "info"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "info" | "success" | "warning" | "neutral"}) {
-  return <Card><CardContent className="flex items-start justify-between gap-3 p-4"><div><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className="mt-2 font-mono text-xl font-bold">{value}</p><p className="mt-1 text-[11px] text-[var(--erp-color-text-muted)]">{detail}</p></div><ErpStatusBadge label={icon} tone={tone} /></CardContent></Card>;
+  return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;
 }
 
 function ConfirmationDialog({state, pending, onClose, onConfirm}: {state: {kind: "delete"; product: ProductLibraryItem} | {kind: "import"; rows: ProductImportRow[]; overwrite: number} | null; pending: boolean; onClose: () => void; onConfirm: () => void}) {

@@ -348,7 +348,7 @@ function FinanceDashboardContent({
                             </linearGradient>
                           </defs>
                           <CartesianGrid
-                            stroke="var(--erp-color-border)"
+                            stroke="var(--erp-chart-grid)"
                             strokeDasharray="3 5"
                             vertical={false}
                           />

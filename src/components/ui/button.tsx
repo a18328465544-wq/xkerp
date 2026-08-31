@@ -30,7 +30,8 @@ export function Button({variant = "secondary", size = "md", className, children,
   return (
     <BaseButton
       {...props}
-      className={cn("erp-focus-ring inline-flex shrink-0 items-center justify-center rounded-[var(--erp-radius-md)] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50", variants[variant], sizes[size], className)}
+      type={props.type ?? "button"}
+      className={cn("erp-focus-ring inline-flex shrink-0 items-center justify-center rounded-[var(--erp-radius-control)] font-semibold transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50", variants[variant], sizes[size], className)}
     >
       {children}
     </BaseButton>

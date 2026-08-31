@@ -5,7 +5,7 @@ import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Cell, Pie, PieChart} from "recharts";
 import {toast} from "sonner";
 import {Button, Card, ChartContainer, ChartMeta, ChartTooltip, ChartTooltipContent, Input, Select, type ChartConfig} from "@/src/components/ui";
-import {DashboardSection, ErpEmptyState, ErpFinancePageFrame, ErpFilterBar, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageToolbar, ErpStatusBadge} from "@/src/components/common";
+import {DashboardSection, ErpEmptyState, ErpFinancePageFrame, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageToolbar, ErpStatusBadge} from "@/src/components/common";
 import {ApiError, financeAccountsApi, queryKeys} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api/invalidation";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -139,8 +139,7 @@ function SummaryCards({summary, accountCount}: {summary: ReturnType<typeof summa
 }
 
 function SummaryCard({label, value, detail, icon, tone, count = false}: {label: string; value: number; detail: string; icon: ReactNode; tone: "info" | "success" | "warning"; count?: boolean}) {
-  const toneClass = tone === "success" ? "bg-[var(--erp-color-success-soft)] text-[var(--erp-color-success)]" : tone === "warning" ? "bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]" : "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]";
-  return <Card><div className="flex min-h-[116px] items-start gap-3 p-4"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${toneClass}`}>{icon}</span><div className="min-w-0"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p><p className="mt-2 truncate font-mono text-xl font-bold text-[var(--erp-color-text)]">{count ? `${value} 个` : formatMoney(value)}</p><p className="mt-1 truncate text-[11px] text-[var(--erp-color-text-muted)]">{detail}</p></div></div></Card>;
+  return <ErpMetricCard label={label} value={count ? `${value} 个` : formatMoney(value)} detail={detail} icon={icon} tone={tone} valueTone={tone === "info" ? "neutral" : tone} />;
 }
 
 function AccountCards({accounts, onCreate, onView, onCollect, onTransfer, onLedger, canCollect, canTransfer, canViewLedger}: {accounts: FinanceAccountItem[]; onCreate: () => void; onView: (account: FinanceAccountItem) => void; onCollect: (account: FinanceAccountItem) => void; onTransfer: (account: FinanceAccountItem) => void; onLedger: (account: FinanceAccountItem) => void; canCollect: boolean; canTransfer: boolean; canViewLedger: boolean}) {
