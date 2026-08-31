@@ -159,6 +159,7 @@ export function getStatePatchKeysForRequest(method: string, path: string): State
 
 export function getReloadKeysForRequest(method: string, path: string): StateCollectionKey[] | null {
   if (method.toUpperCase() === "GET" && path === "/api/products") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/market-quotes") return ["marketQuotes", "inventory"];
   if (method.toUpperCase() === "GET" && path === "/api/vendors") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers/page") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers") return ["customers"];

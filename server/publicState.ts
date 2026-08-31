@@ -1,6 +1,6 @@
 import { defaultPermissions } from "../src/data/systemDefaults.ts";
 import { normalizeAllowedMenus } from "../src/utils/menu.ts";
-import type { SystemUserAccount } from "../src/types.ts";
+import type { MarketQuote, SystemUserAccount } from "../src/types.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { sanitizeAppStateForClient, sanitizeUserAccount, stripLazyStateCollections } from "./security.ts";
 import type { AppState } from "./store.ts";
@@ -48,6 +48,47 @@ const collectionMenuRequirements: Partial<Record<StateCollectionKey, string[]>> 
 function canAccessCollection(permissions: { allowedMenus: string[] }, key: StateCollectionKey) {
   const requiredMenus = collectionMenuRequirements[key];
   return !requiredMenus || requiredMenus.some((menuId) => canAccessMenu(permissions, menuId));
+}
+
+type MarketQuotePricePermissions = {
+  showCost?: boolean;
+  showProfit?: boolean;
+};
+
+const MARKET_QUOTE_COST_FIELDS = [
+  "buyPrice",
+  "yestBuyPrice",
+  "todayBuyPrice",
+  "minPrice",
+  "changeAmount",
+  "changeRatio",
+  "refBuyPrice",
+] as const;
+const MARKET_QUOTE_PROFIT_FIELDS = ["sellPrice", "todaySellPrice", "maxPrice", "refSellPrice"] as const;
+
+/**
+ * Project quote prices at the server boundary.  The quote page and the legacy state endpoint
+ * must use the same projection so a restricted account cannot receive a hidden price merely by
+ * choosing a different read path.
+ */
+export function projectMarketQuoteForUser(quote: MarketQuote, permissions: MarketQuotePricePermissions) {
+  const showCost = permissions.showCost === true;
+  const showProfit = permissions.showProfit === true;
+  const history = Array.isArray(quote.history)
+    ? quote.history.flatMap((point) => {
+      if (!point || typeof point !== "object" || typeof point.date !== "string" || !point.date.trim()) return [];
+      return [{
+        date: point.date,
+        ...(showCost ? { buyPrice: point.buyPrice } : {}),
+        ...(showProfit ? { sellPrice: point.sellPrice } : {}),
+      }];
+    })
+    : [];
+  const projected = {...quote, history};
+  const fields = projected as unknown as Record<string, unknown>;
+  if (!showCost) for (const key of MARKET_QUOTE_COST_FIELDS) delete fields[key];
+  if (!showProfit) for (const key of MARKET_QUOTE_PROFIT_FIELDS) delete fields[key];
+  return projected as MarketQuote;
 }
 
 function inventoryWithCurrentAge(inventory: AppState["inventory"]) {
@@ -100,6 +141,7 @@ export function publicStateForUser(state: AppState, user?: SystemUserAccount, mo
 
   const permissions = getPermissionsForUser(state, user);
   const scopedState = { ...safeState, currentRole: user.role };
+  scopedState.marketQuotes = scopedState.marketQuotes.map((quote) => projectMarketQuoteForUser(quote, permissions));
   const canAccessCommissions =
     canAccessMenu(permissions, "purchase_commission") || canAccessMenu(permissions, "sales_commission");
 
@@ -174,6 +216,7 @@ export function publicCollectionForUser(
     const inventory = inventoryWithCurrentAge(state.inventory);
     return permissions.showCost ? inventory : inventory.map((item) => ({ ...item, costPrice: 0 }));
   }
+  if (key === "marketQuotes") return state.marketQuotes.map((quote) => projectMarketQuoteForUser(quote, permissions));
   if (key === "purchaseInvoices") {
     return permissions.showCost ? state.purchaseInvoices : state.purchaseInvoices.map((invoice) => ({
       ...invoice,
@@ -214,4 +257,20 @@ export function publicCollectionForUser(
     return canAccessMenu(permissions, "permissions") ? safeUsers : safeUsers.filter((item) => item.id === user.id);
   }
   return value;
+}
+
+/**
+ * The quote page only needs product identity, status and (when authorized) cost to calculate
+ * stock counts.  Do not send SNs, warehouse locations or buyer details as a side effect of
+ * opening a market-data page.
+ */
+export function publicMarketQuoteInventoryForUser(state: AppState, user?: SystemUserAccount) {
+  if (!user) return [];
+  const permissions = getPermissionsForUser(state, user);
+  if (!canAccessCollection(permissions, "inventory")) return [];
+  return inventoryWithCurrentAge(state.inventory).map((item) => ({
+    productId: item.productId,
+    status: item.status,
+    ...(permissions.showCost ? { costPrice: item.costPrice } : {}),
+  }));
 }

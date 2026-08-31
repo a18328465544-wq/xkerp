@@ -86,6 +86,7 @@ import { registerSalesCustomerRoutes } from "./routes/salesCustomers.ts";
 import {registerSalesOutboundRoutes} from "./routes/salesOutbound.ts";
 import {registerCustomerDirectoryRoutes} from "./routes/customerDirectory.ts";
 import { registerProductLedgerRoutes } from "./routes/productLedger.ts";
+import { registerMarketQuoteRoutes } from "./routes/marketQuotes.ts";
 import { registerCommercialRoutes } from "./routes/commercial.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.ts";
@@ -1510,6 +1511,10 @@ registerStateRoutes(app, {
   getPublicState: (req, mode) => publicState(req as AuthRequest, mode),
   getCurrentUser: (req) => actions(req as AuthRequest).getCurrentUser(),
   createCsrfToken,
+});
+registerMarketQuoteRoutes(app, {
+  requireMenu,
+  getState: () => state,
 });
 
 // AI only receives a compact, anonymized business snapshot. The endpoint remains read-only:

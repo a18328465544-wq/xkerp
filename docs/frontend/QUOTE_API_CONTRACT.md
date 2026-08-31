@@ -2,9 +2,10 @@
 
 ## 读取
 
-- `GET /api/products`
-- 权限：`quotes`（服务端 `requireAnyMenu` 已允许）
-- V2 只从 `data.marketQuotes` 和最小化的 `data.inventory` 聚合行情与关联在库数量。
+- `GET /api/market-quotes`
+- 权限：`quotes`（服务端登录态鉴权 + `requireMenu("quotes")`）
+- 响应固定为 `data.marketQuotes` 与最小化的 `data.inventory`（仅 `productId`、`status`，有权限时附带 `costPrice`），两者来自同一租户/门店的数据库快照。
+- 服务端按 `showCost` / `showProfit` 投影价格字段和历史点；前端适配器只负责 DTO 到领域模型转换。
 - 页面不直接消费 DTO；响应先经过 `adaptMarketQuoteSnapshot()`。
 
 ## 写入
@@ -17,7 +18,7 @@
 ## 前端边界
 
 ```text
-FastAPI Response → Quote DTO → Quote Adapter → MarketQuote Domain → Quotes Feature
+Express API Response → Quote DTO → Quote Adapter → MarketQuote Domain → Quotes Feature
 ```
 
 - 不生成模拟历史点。

@@ -2,6 +2,34 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {quotesApi} from "./quotes";
 
+test("quote list reads the dedicated market quote snapshot", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.equal(input, "/api/market-quotes");
+    return new Response(JSON.stringify({
+      data: {
+        marketQuotes: [{
+          id: "MQ-1",
+          productId: "SP-1",
+          model: "RTX 4090",
+          brand: "NVIDIA",
+          refBuyPrice: 18000,
+          refSellPrice: 19500,
+          trend: "stable",
+          updateTime: "2026-08-31",
+        }],
+        inventory: [],
+      },
+    }), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await quotesApi.list({showCost: true, showProfit: true});
+    assert.equal(result.quotes.length, 1);
+    assert.equal(result.quotes[0]?.id, "MQ-1");
+    assert.equal(result.quotes[0]?.sellPrice, 19500);
+  } finally {globalThis.fetch = previousFetch;}
+});
+
 test("quote update uses the existing PATCH contract and never sends fake history", async () => {
   const previousFetch = globalThis.fetch;
   let body = "";

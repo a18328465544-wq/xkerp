@@ -9,7 +9,7 @@ const today = () => storeDate();
 
 export const quotesApi = {
   async list(permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
-    return adaptMarketQuoteSnapshot(await apiRequest<MarketQuoteSnapshotResponseDto>("/api/products", {signal}), permissions);
+    return adaptMarketQuoteSnapshot(await apiRequest<MarketQuoteSnapshotResponseDto>("/api/market-quotes", {signal}), permissions);
   },
   async create(values: MarketQuoteFormValues, permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
     const response = await apiRequest<MarketQuoteSnapshotResponseDto>("/api/market-quotes", {method: "POST", body: JSON.stringify(toMarketQuoteCreateRequest(values, today())), signal});

@@ -28,6 +28,7 @@ test("reads participate in revision checks while HEAD and OPTIONS remain lightwe
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/customers/page"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/vendors"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/products"), []);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/market-quotes"), ["marketQuotes", "inventory"]);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/sales-invoices/outbound"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/logs"), []);
 });

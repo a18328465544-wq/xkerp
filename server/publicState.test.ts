@@ -78,6 +78,32 @@ test("创建采购所需的候选数据只向具备采购入口的账号开放",
   assert.deepEqual(scoped.financeLedger, []);
 });
 
+test("行情价格和历史点在服务端按账号权限裁剪", () => {
+  const state = createInitialState({includeDemoData: true});
+  const clerk = state.systemUsers.find((user) => user.role === "店员");
+  assert.ok(clerk);
+  clerk.permissionOverrides = {
+    allowedMenus: ["quotes"],
+    showCost: false,
+    showProfit: false,
+  };
+  const quote = state.marketQuotes[0];
+  assert.ok(quote);
+  quote.history = [{date: "2026-08-31", buyPrice: 18000, sellPrice: 19500}];
+
+  const scoped = publicStateForUser(state, clerk, "full");
+  const projected = scoped.marketQuotes.find((item) => item.id === quote.id) as unknown as Record<string, unknown> | undefined;
+  assert.ok(projected);
+  assert.equal(projected.refBuyPrice, undefined);
+  assert.equal(projected.refSellPrice, undefined);
+  assert.equal(projected.changeAmount, undefined);
+  assert.deepEqual(projected.history, [{date: "2026-08-31"}]);
+
+  const collection = publicCollectionForUser(state, "marketQuotes", clerk) as unknown as Array<Record<string, unknown>>;
+  assert.equal(collection[0]?.todayBuyPrice, undefined);
+  assert.equal(collection[0]?.todaySellPrice, undefined);
+});
+
 test("malformed legacy permission settings fall back to safe role defaults", () => {
   const state = createInitialState();
   const clerk = state.systemUsers.find((user) => user.role === "店员");
