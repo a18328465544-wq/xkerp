@@ -10,7 +10,7 @@ import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog} from "@/src/components/common";
 import {ApiError, purchaseApi, queryKeys} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
-import type {PurchaseDetail, PurchaseFormValues, PurchaseReferenceData, PurchaseSourceOption} from "@/src/types/purchase";
+import type {PurchaseDetail, PurchaseFormValues, PurchaseProductOption, PurchaseReferenceData, PurchaseSourceOption} from "@/src/types/purchase";
 import {calculatePurchaseSettlement, calculatePurchaseSummary} from "@/src/lib/purchase";
 import {formatCurrency} from "@/src/lib/format";
 import {PurchaseAmountSummary, PurchaseLineItemsTable, PurchasePaymentSection, PurchaseSourcePicker} from "../components";
@@ -159,8 +159,8 @@ function PurchaseEditForm({detail, policy, referenceData: initialReferenceData, 
     setValue("contact", "", {shouldDirty: true, shouldValidate: true});
     setValue("vendorCreditAppliedAmount", 0, {shouldDirty: true, shouldValidate: true});
   };
-  const selectProduct = (index: number, productId: string) => {
-    const product = referenceData?.products.find((item) => item.id === productId);
+  const selectProduct = (index: number, productId: string, productOverride?: PurchaseProductOption) => {
+    const product = productOverride || referenceData?.products.find((item) => item.id === productId);
     if (!product) return;
     const current = getValues(`items.${index}`);
     setValue(`items.${index}`, {...current, productId: product.id, productName: product.name, category: product.category, model: product.model, brand: product.brand, version: product.version, vram: product.vram}, {shouldDirty: true, shouldValidate: true});

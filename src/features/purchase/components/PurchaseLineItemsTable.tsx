@@ -6,6 +6,7 @@ import {ErpAmountInput, ErpEmptyState} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
 import {productDisplayName} from "@/src/lib/productName";
 import type {PurchaseFormValues, PurchaseLineFormValue, PurchaseProductOption} from "@/src/types/purchase";
+import {mergeSelectedPurchaseProducts} from "./purchaseProductOptions";
 
 export function PurchaseLineItemsTable({control, fields, items, products, canEnterCost, showProfit, canCreateProduct, disabled, productsLoading, onProductKeywordChange, onProductSelect, onProductClear, onAdd, onRemove, onOpenCreateProduct}: {
   control: Control<PurchaseFormValues>;
@@ -19,29 +20,31 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
   disabled?: boolean;
   productsLoading?: boolean;
   onProductKeywordChange?: (keyword: string) => void;
-  onProductSelect: (index: number, productId: string) => void;
+  onProductSelect: (index: number, productId: string, product?: PurchaseProductOption) => void;
   onProductClear: (index: number) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
   onOpenCreateProduct?: (index: number, initialName?: string) => void;
 }) {
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
-  const orderedProducts = useMemo(() => [...products].sort((left, right) => {
+  const productsWithSelected = useMemo(() => mergeSelectedPurchaseProducts(products, items), [items, products]);
+  const orderedProducts = useMemo(() => [...productsWithSelected].sort((left, right) => {
     const leftIndex = recentProductIds.indexOf(left.id);
     const rightIndex = recentProductIds.indexOf(right.id);
     if (leftIndex === -1 && rightIndex === -1) return 0;
     if (leftIndex === -1) return 1;
     if (rightIndex === -1) return -1;
     return leftIndex - rightIndex;
-  }), [products, recentProductIds]);
+  }), [productsWithSelected, recentProductIds]);
   const productOptions = useMemo(() => orderedProducts.map((product) => { const label = productDisplayName(product); return {value: product.id, label, labelText: label, searchText: `${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`}; }), [orderedProducts]);
+  const hasProducts = productsWithSelected.length > 0;
   const handleProductSelect = (index: number, productId: string) => {
     setRecentProductIds((current) => [productId, ...current.filter((id) => id !== productId)].slice(0, 6));
-    onProductSelect(index, productId);
+    onProductSelect(index, productId, productsWithSelected.find((product) => product.id === productId));
   };
   return <Card><CardContent>
-    {!products.length ? <div className="rounded-[var(--erp-radius-md)] border border-dashed border-[var(--erp-color-warning)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-sm text-[var(--erp-color-warning)]">当前没有可用商品规格，或当前账号没有商品读取权限。请先建立商品模板并确认 products 权限。</div> : null}
-    <div className={`${!products.length ? "mt-3 " : ""}overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)]`}>
+    {!hasProducts ? <div className="rounded-[var(--erp-radius-md)] border border-dashed border-[var(--erp-color-warning)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-sm text-[var(--erp-color-warning)]">当前没有可用商品规格，或当前账号没有商品读取权限。请先建立商品模板并确认 products 权限。</div> : null}
+    <div className={`${!hasProducts ? "mt-3 " : ""}overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)]`}>
       <div className="erp-scrollbar max-h-[420px] overflow-auto">
       <table className="w-full min-w-[1076px] table-fixed border-collapse text-sm">
         <colgroup><col className="w-[300px]" /><col className="w-[132px]" /><col className="w-[132px]" /><col className="w-[96px]" /><col className="w-[112px]" /><col className="w-[220px]" /><col className="w-[84px]" /></colgroup>
@@ -52,7 +55,7 @@ export function PurchaseLineItemsTable({control, fields, items, products, canEnt
           const expectedProfit = (item.estSellPrice - item.buyPrice) * item.quantity;
           return <tr key={field.id} className="group align-middle last:[&>td]:border-b-0 hover:bg-[var(--erp-color-surface-muted)]/60">
             <td className="sticky left-0 erp-content-sticky-layer border-b border-r border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2 group-hover:bg-[var(--erp-color-surface-muted)]">
-              <Controller control={control} name={`items.${index}.productId` as const} render={({field: input}) => <Select searchable searchPlaceholder="搜索商品…" emptyText="没有找到匹配的商品规格" className="min-w-0" value={input.value} options={productOptions} searchLoading={productsLoading} onSearchValueChange={onProductKeywordChange} onValueChange={(value) => { input.onChange(value); handleProductSelect(index, value); }} onClear={() => onProductClear(index)} quickCreateAction={canCreateProduct && onOpenCreateProduct ? {label: "新建商品", onClick: (searchText) => onOpenCreateProduct(index, searchText || item.productName), disabled} : undefined} disabled={disabled || (!products.length && !(canCreateProduct && onOpenCreateProduct))} placeholder={products.length ? "选择商品规格" : "搜索或新建商品"} aria-label={`第 ${index + 1} 行商品`} aria-invalid={missingProductIdentity} />} />
+              <Controller control={control} name={`items.${index}.productId` as const} render={({field: input}) => <Select searchable searchPlaceholder="搜索商品…" emptyText="没有找到匹配的商品规格" className="min-w-0" value={input.value} options={productOptions} searchLoading={productsLoading} onSearchValueChange={onProductKeywordChange} onValueChange={(value) => { input.onChange(value); handleProductSelect(index, value); }} onClear={() => onProductClear(index)} quickCreateAction={canCreateProduct && onOpenCreateProduct ? {label: "新建商品", onClick: (searchText) => onOpenCreateProduct(index, searchText || item.productName), disabled} : undefined} disabled={disabled || (!hasProducts && !(canCreateProduct && onOpenCreateProduct))} placeholder={hasProducts ? "选择商品规格" : "搜索或新建商品"} aria-label={`第 ${index + 1} 行商品`} aria-invalid={missingProductIdentity} />} />
             </td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">{canEnterCost ? <Controller control={control} name={`items.${index}.buyPrice` as const} render={({field: input}) => <ErpAmountInput value={input.value} onBlur={input.onBlur} onValueChange={(detail) => input.onChange(detail.floatValue || 0)} disabled={disabled} aria-label={`第 ${index + 1} 行进货价`} />} /> : <span className="flex h-10 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-2 text-xs text-[var(--erp-color-text-muted)]">不可录入</span>}</td>
             <td className="border-b border-r border-[var(--erp-color-border)] px-3 py-2">{showProfit ? <Controller control={control} name={`items.${index}.estSellPrice` as const} render={({field: input}) => <ErpAmountInput value={input.value} onBlur={input.onBlur} onValueChange={(detail) => input.onChange(detail.floatValue || 0)} disabled={disabled} aria-label={`第 ${index + 1} 行预估售价`} />} /> : <span className="flex h-10 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-2 text-xs text-[var(--erp-color-text-muted)]">—</span>}</td>
