@@ -84,7 +84,7 @@ test("finance profit supports customer grouping, keyword/date filters and pagina
   assert.equal(report.rows.length, 1);
   assert.equal(report.rows[0]?.label, "李四");
   assert.equal(report.trend[0]?.revenue, 1800);
-  const paged = selectFinanceProfitReport([invoice(), second], {...defaultFinanceProfitFilters, dimension: "customer", pageSize: 1, page: 2});
+  const paged = selectFinanceProfitReport([invoice(), second], {...defaultFinanceProfitFilters, dimension: "customer", dateStart: "2026-08-01", dateEnd: "2026-08-31", pageSize: 1, page: 2});
   assert.equal(paged.meta.total, 2);
   assert.equal(paged.pageRows.length, 1);
 });
