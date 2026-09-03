@@ -280,6 +280,12 @@ const collectionTables: Array<{
     dataComment: "退货单 JSON，结构对应 ReturnOrder，包含退货类型、关联单据、库存 SN、客户/供应商、退货金额、结算方式、抵扣金额和处理状态。",
   },
   {
+    key: "customerOrders",
+    table: "gpu_customer_orders",
+    tableComment: "客户订单协同主线表，保存客户意向到销售、回收或置换执行过程中的协作上下文。",
+    dataComment: "客户订单协同 JSON，结构对应 CustomerOrder，包含统一主状态、当前阻塞任务、负责人、协作者、关联单据引用和跟进事件；金额与库存以关联业务单据为准。",
+  },
+  {
     key: "systemUsers",
     table: "gpu_system_users",
     tableComment: "系统账号表，保存登录账号、人员名称、账号身份、启用状态、密码哈希和账号权限覆盖。",

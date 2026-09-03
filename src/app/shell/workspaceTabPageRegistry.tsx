@@ -22,6 +22,7 @@ const CrmWorkspacePage = lazy(() => import("@/src/features/crm/pages/CrmWorkspac
 const NewCustomerLeadPage = lazy(() => import("@/src/features/crm/pages/NewCustomerLeadPage").then((module) => ({default: module.NewCustomerLeadPage})));
 const CustomerDirectoryPage = lazy(() => import("@/src/features/customers/pages/CustomerDirectoryPage").then((module) => ({default: module.CustomerDirectoryPage})));
 const VendorDirectoryPage = lazy(() => import("@/src/features/vendors/pages/VendorDirectoryPage").then((module) => ({default: module.VendorDirectoryPage})));
+const OrderPoolPage = lazy(() => import("@/src/features/order-pool/pages/OrderPoolPage").then((module) => ({default: module.OrderPoolPage})));
 const AftersalesWorkspacePage = lazy(() => import("@/src/features/aftersales/pages/AftersalesWorkspacePage").then((module) => ({default: module.AftersalesWorkspacePage})));
 const FinanceDashboardPage = lazy(() => import("@/src/features/finance/pages/FinanceDashboardPage").then((module) => ({default: module.FinanceDashboardPage})));
 const FinanceAccountsPage = lazy(() => import("@/src/features/finance/pages/FinanceAccountsPage").then((module) => ({default: module.FinanceAccountsPage})));
@@ -67,6 +68,7 @@ const staticPages: Record<string, WorkspaceTabPageDescriptor> = {
   "/crm/customers": staticPage("customers", () => <CustomerDirectoryPage />),
   "/crm/customers/new": staticPage("customer-create", () => <NewCustomerLeadPage />),
   "/crm/vendors": staticPage("vendors", () => <VendorDirectoryPage />),
+  "/order-pool": staticPage("order-pool", () => <OrderPoolPage />),
   "/aftersales": staticPage("aftersales", () => <AftersalesWorkspacePage />),
   "/finance": staticPage("finance", () => <FinanceDashboardPage />),
   "/finance/accounts": staticPage("finance-accounts", () => <FinanceAccountsPage />),

@@ -25,7 +25,7 @@ export function ErpPageHeader({title, subtitle, density = "compact", quickStatus
   return <ErpPageTopbar
     data-erp-component="page-header"
     data-density={density}
-    className={cn(density === "default" && "gap-4", hasQuickStatus && "lg:grid lg:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.8fr)_auto] lg:items-start lg:gap-4")}
+    className={cn(density === "default" && "gap-4", hasQuickStatus && "lg:grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_auto] lg:items-start lg:gap-4")}
   >
     <ErpPageIdentity title={title} subtitle={showSubtitle ? subtitle : undefined} reserveSubtitle={showSubtitle} />
     {hasQuickStatus ? <ErpPageContext><QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} className="min-w-0" /></ErpPageContext> : null}

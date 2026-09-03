@@ -91,6 +91,7 @@ import { registerCommercialRoutes } from "./routes/commercial.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.ts";
 import { registerFinanceReadModelRoutes } from "./routes/financeReadModels.ts";
+import { registerOrderPoolRoutes } from "./routes/orderPool.ts";
 import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
 import { createStateProxy, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
 import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
@@ -1499,6 +1500,13 @@ registerSalesProductCandidateRoutes(app, {requireMenu, getInventorySummary: (req
 registerSalesCustomerRoutes(app, {requireMenu});
 registerSalesOutboundRoutes(app, {requireMenu});
 registerCustomerDirectoryRoutes(app, {requireMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
+registerOrderPoolRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req),
+  persist: (req, result) => persistRequest(req, result),
+});
 registerProductLedgerRoutes(app, {
   requireMenu,
   getState: () => state,

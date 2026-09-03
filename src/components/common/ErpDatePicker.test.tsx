@@ -11,10 +11,12 @@ test("ErpDatePicker uses full width by default", () => {
 test("ErpDatePicker respects a compact width supplied by a list filter", () => {
   const markup = renderToStaticMarkup(<ErpDatePicker className="w-36" value="" onChange={() => undefined} />);
   assert.match(markup, /w-36/);
-  assert.doesNotMatch(markup, /w-full/);
+  assert.doesNotMatch(markup, /(?:^|[\s"])w-full(?:[\s"]|$)/);
 });
 
 test("ErpDatePicker uses the shared compact height when requested", () => {
   const markup = renderToStaticMarkup(<ErpDatePicker density="compact" value="" onChange={() => undefined} />);
   assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
+  assert.match(markup, /data-erp-component="date-picker"/);
+  assert.match(markup, /data-density="compact"/);
 });

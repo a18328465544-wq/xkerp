@@ -11,6 +11,8 @@ test("mutation policy includes shared ERP writes and cache writes, while excludi
   assert.equal(isStateMutationPath("POST", "/api/ai/insights/refresh"), true);
   assert.equal(isStateMutationPath("POST", "/api/gpu_erp/crm/customer/lead-preview"), false);
   assert.equal(isStateMutationPath("GET", "/api/sales-invoices"), false);
+  assert.equal(isStateMutationPath("POST", "/api/order-pool"), true);
+  assert.equal(isStateMutationPath("POST", "/api/order-pool/DD-1/events"), true);
 });
 
 test("full-state backups share the serialization boundary without becoming mutations", () => {

@@ -65,12 +65,13 @@ export function GlobalSearchDialog({open, onOpenChange}: {open: boolean; onOpenC
               <Search className="h-5 w-5 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
               <Input
                 autoFocus
+                density="compact"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="搜索工作区模块、SN、客户、订单或 GPU 型号"
                 aria-label="全局搜索"
-                className="h-9 border-0 px-0 shadow-none focus:ring-0"
+                className="border-0 px-0 shadow-none focus:ring-0"
               />
               <span className="hidden shrink-0 items-center gap-1 rounded border border-[var(--erp-color-border)] px-1.5 py-0.5 text-[10px] text-[var(--erp-color-text-muted)] sm:inline-flex">
                 <Command className="h-3 w-3" aria-hidden="true" />K

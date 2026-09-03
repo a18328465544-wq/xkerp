@@ -54,6 +54,50 @@ test("new partner archive ids use readable daily sequence numbers", () => {
   });
 });
 
+test("customer order pool keeps a shared main line and auditable collaboration events", () => {
+  const state = createInitialState({includeDemoData: false});
+  const actions = createStoreActions(state, {userId: "USR-ADMIN", role: "老板"});
+  const created = actions.createCustomerOrder({
+    orderType: "置换",
+    partyType: "mixed",
+    customerName: "订单池测试客户",
+    contact: "wx-order-pool",
+    collaboratorIds: ["USR-SALES"],
+  });
+
+  assert.equal(created.mainStage, "待接单");
+  assert.equal(created.blocker, "待客户确认");
+  assert.equal(created.ownerId, "USR-ADMIN");
+  assert.deepEqual(created.collaborators.map((item) => item.userId), ["USR-SALES"]);
+  assert.equal(created.events[0].type, "created");
+
+  const following = actions.updateCustomerOrder(created.id, {
+    mainStage: "跟进中",
+    blocker: "待报价",
+    nextAction: "确认置换差价",
+    collaboratorIds: ["USR-SALES"],
+  });
+  assert.equal(following.mainStage, "跟进中");
+  assert.equal(following.blocker, "待报价");
+  assert.ok(following.events.some((event) => event.type === "stage_changed"));
+
+  const noted = actions.appendCustomerOrderNote(created.id, {content: "销售和回收两条业务线已加入同一订单"});
+  assert.equal(noted.events[0].type, "note");
+  const linked = actions.linkCustomerOrderDocument(created.id, {type: "sales", id: "XS-ORDER-001", label: "置换销售单"});
+  assert.deepEqual(linked.linkedDocuments[0], {
+    type: "sales",
+    id: "XS-ORDER-001",
+    label: "置换销售单",
+    linkedAt: linked.events[0].occurredAt,
+    linkedBy: "老板",
+  });
+
+  const unassigned = actions.updateCustomerOrder(created.id, {ownerId: null, ownerName: null});
+  assert.equal(unassigned.ownerId, undefined);
+  assert.equal(unassigned.ownerName, undefined);
+  assert.ok(unassigned.events.some((event) => event.type === "assigned"));
+});
+
 test("purchase invoice creates stock cards, updates vendor, product stock, ledger, and logs", () => {
   const state = createInitialState();
   const actions = createStoreActions(state);

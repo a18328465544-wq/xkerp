@@ -1,5 +1,5 @@
 import type {HTMLAttributes, ReactNode} from "react";
-import {cn} from "@/src/lib/cn";
+import {cn, hasMaxWidthUtilityClass} from "@/src/lib/cn";
 
 /**
  * The shared outer page contract. It owns canvas width and first-level rhythm;
@@ -19,7 +19,7 @@ const densityClasses: Record<ErpPageFrameDensity, string> = {
 };
 
 export function ErpPageFrame({density = "standard", className, children, ...props}: ErpPageFrameProps) {
-  const hasCustomMaxWidth = Boolean(className?.match(/(?:^|\s)max-w-/));
+  const hasCustomMaxWidth = hasMaxWidthUtilityClass(className);
   return (
     <div
       {...props}
@@ -43,7 +43,7 @@ export interface ErpPageTopbarProps extends HTMLAttributes<HTMLElement> {
 
 export function ErpPageTopbar({className, children, ...props}: ErpPageTopbarProps) {
   return (
-    <header {...props} data-erp-region="page-topbar" className={cn("flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", className)}>
+    <header {...props} data-erp-region="page-topbar" className={cn("flex min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", className)}>
       {children}
     </header>
   );
@@ -59,7 +59,7 @@ export interface ErpPageIdentityProps extends Omit<HTMLAttributes<HTMLDivElement
 export function ErpPageIdentity({title, subtitle, reserveSubtitle = false, className, children, ...props}: ErpPageIdentityProps) {
   return (
     <div {...props} data-erp-region="page-identity" className={cn("min-w-0", className)}>
-      {title ? <h1 className="text-xl font-bold tracking-tight text-[var(--erp-color-text)] sm:text-2xl">{title}</h1> : null}
+      {title ? <h1 className="max-w-full break-words text-xl font-bold tracking-tight text-[var(--erp-color-text)] sm:text-2xl">{title}</h1> : null}
       {(subtitle || reserveSubtitle) ? <p className="erp-annotation-slot mt-1 max-w-3xl text-sm text-[var(--erp-color-text-secondary)]" data-empty={!subtitle || undefined} aria-hidden={!subtitle || undefined}>{subtitle || "\u00a0"}</p> : null}
       {children}
     </div>
@@ -67,11 +67,11 @@ export function ErpPageIdentity({title, subtitle, reserveSubtitle = false, class
 }
 
 export function ErpPageTabs({className, children, ...props}: HTMLAttributes<HTMLElement> & {children?: ReactNode}) {
-  return <nav {...props} data-erp-region="page-tabs" className={cn("min-w-0 overflow-x-auto", className)}>{children}</nav>;
+  return <nav {...props} data-erp-region="page-tabs" className={cn("erp-scrollbar min-w-0 max-w-full overflow-x-auto overscroll-x-contain", className)}>{children}</nav>;
 }
 
 export function ErpPageActions({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children?: ReactNode}) {
-  return <div {...props} data-erp-region="page-actions" className={cn("flex shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end", className)}>{children}</div>;
+  return <div {...props} data-erp-region="page-actions" className={cn("flex min-w-0 max-w-full shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end", className)}>{children}</div>;
 }
 
 export function ErpPageContext({className, children, ...props}: HTMLAttributes<HTMLElement> & {children?: ReactNode}) {

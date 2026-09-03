@@ -87,6 +87,7 @@ export const APP_MENU_MODULES: AppMenuModule[] = [
     items: [
       item("客户CRM", "crm", "客户池"),
       item("客户CRM", "customers", "客户列表"),
+      item("客户CRM", "order_pool", "订单池", undefined, false, "primary"),
       item("客户CRM", "vendors", "同行列表", undefined, true),
       item("客户CRM", "aftersales", "售后维护"),
     ],
@@ -170,10 +171,11 @@ export const ROLE_DEFAULT_MENU_IDS: Record<StoreRole, string[]> = {
     "return_orders",
     "crm",
     "customers",
+    "order_pool",
     "quotes",
     "payment_in",
   ],
-  检测员: ["dashboard", "inventory", "inspections", "assembly"],
+  检测员: ["dashboard", "inventory", "inspections", "assembly", "order_pool"],
   财务: [
     "dashboard",
     "purchase_list",
@@ -195,6 +197,7 @@ export const ROLE_DEFAULT_MENU_IDS: Record<StoreRole, string[]> = {
     "finance",
     "finance_closing",
     "vendors",
+    "order_pool",
   ],
 };
 

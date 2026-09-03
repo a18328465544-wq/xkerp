@@ -14,6 +14,30 @@ test("Select respects a compact width supplied by a list filter", () => {
   assert.doesNotMatch(markup, /w-full/);
 });
 
+test("Select recognizes responsive width utilities as an explicit width", () => {
+  const markup = renderToStaticMarkup(<Select className="w-full sm:w-36" value="all" options={[{value: "all", label: "全部"}]} onValueChange={() => undefined} />);
+  assert.match(markup, /sm:w-36/);
+  assert.equal(markup.match(/\bw-full\b/g)?.length, 1);
+});
+
+test("Select keeps full width below a responsive width breakpoint", () => {
+  const markup = renderToStaticMarkup(<Select className="sm:w-36" value="all" options={[{value: "all", label: "全部"}]} onValueChange={() => undefined} />);
+  assert.match(markup, /w-full/);
+  assert.match(markup, /sm:w-36/);
+});
+
+test("Select size sm uses the shared compact control height", () => {
+  const markup = renderToStaticMarkup(<Select size="sm" value="all" options={[{value: "all", label: "全部"}]} onValueChange={() => undefined} aria-label="状态" />);
+  assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
+  assert.match(markup, /data-density="compact"/);
+});
+
+test("searchable Select applies compact density to its input shell", () => {
+  const markup = renderToStaticMarkup(<Select searchable density="compact" value="" options={[]} onValueChange={() => undefined} aria-label="搜索商品" />);
+  assert.match(markup, /data-variant="search"/);
+  assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
+});
+
 test("Select reuses its searchable mode for entity choices", () => {
   const markup = renderToStaticMarkup(<Select searchable searchPlaceholder="搜索商品名称或型号" value="" options={[{value: "gpu-1", label: "华硕 RTX 4090"}]} onValueChange={() => undefined} aria-label="选择商品" />);
   assert.match(markup, /role="combobox"/);

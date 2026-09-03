@@ -15,3 +15,4 @@ export type {FinanceDashboardResponseDto} from "./finance.dto";
 export type {FinanceDailyClosingResponseDto} from "./finance-closing.dto";
 export type {FinanceAccountCreateRequestDto, FinanceAccountLedgerResponseDto, FinanceAccountListResponseDto, FinanceAccountMutationResponseDto, FinanceAccountReconcileRequestDto} from "./finance-account.dto";
 export type {FinanceTransferListResponseDto, FinanceTransferMutationResponseDto, FinanceTransferRequestDto} from "./finance-transfer.dto";
+export type {OrderPoolCollaboratorsResponseDto, OrderPoolCollectionResponseDto, OrderPoolMutationResponseDto} from "./order-pool.dto";

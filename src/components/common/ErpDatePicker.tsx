@@ -2,7 +2,7 @@ import {CalendarDays} from "lucide-react";
 import {useState} from "react";
 import {ErpCalendar} from "./ErpCalendar";
 import {ErpDateOverlay} from "./ErpDateOverlay";
-import {cn} from "@/src/lib/cn";
+import {cn, hasBaseWidthUtilityClass} from "@/src/lib/cn";
 import {formatDateKey, parseDateKey} from "@/src/lib/dateRangePickerUtils";
 
 function parseDateInput(value?: string) {
@@ -35,12 +35,14 @@ export function ErpDatePicker({value, onChange, density = "default", min, max, p
   const selected = parseDateInput(value);
   const minDate = parseDateInput(min);
   const maxDate = parseDateInput(max);
-  const hasCustomWidth = Boolean(className?.match(/(?:^|\s)!?w-/));
+  const hasCustomWidth = hasBaseWidthUtilityClass(className);
   const controlHeight = density === "compact" ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
   const trigger = (
     <button
       type="button"
-      className={cn("erp-focus-ring flex items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]", controlHeight, invalid && "border-[var(--erp-color-danger)]", hasCustomWidth ? undefined : "w-full", className)}
+      data-erp-component="date-picker"
+      data-density={density}
+      className={cn("erp-focus-ring flex min-w-0 max-w-full items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]", controlHeight, invalid && "border-[var(--erp-color-danger)]", hasCustomWidth ? undefined : "w-full", className)}
       disabled={disabled}
       aria-label={ariaLabel}
       aria-required={required}

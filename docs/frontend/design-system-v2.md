@@ -26,7 +26,7 @@
 | 圆角 | `--erp-radius-sm` / `md` / `lg` / `xl` / `pill` | `6 / 8 / 12 / 16 / 9999px` |
 | 阴影 | `--erp-shadow-card` / `popover` | 卡片弱阴影 / 浮层阴影 |
 | 字体 | `page-title` / `section-title` / `body` / `caption` | `28 / 16 / 14 / 12px` |
-| 控件 | `--erp-control-height` / `control-height-compact` | `40 / 32px` |
+| 控件 | `--erp-control-height` / `control-height-compact` | `40 / 36px` |
 | Quick Status | `--erp-quick-status-height` / `icon-size` / `gap` | `32 / 24 / 12px` |
 
 新增视觉值必须先补 Token，并说明跨页面复用场景。业务 TSX 禁止直接写 hex、rgb、hsl；状态底色应使用语义 Token 或 `Badge tone`。

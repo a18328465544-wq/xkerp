@@ -19,6 +19,7 @@ test("ErpDateRangePicker exposes one unified range trigger and visible error", (
   assert.match(markup, /2026-08-10 至 2026-08-01/);
   assert.doesNotMatch(markup, /grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,1fr\)\]/);
   assert.match(markup, /sm:w-32/);
+  assert.doesNotMatch(markup, /sm:min-w-56/);
   assert.match(markup, /role="alert"/);
   assert.match(markup, /开始日期不能晚于结束日期/);
 });
@@ -45,6 +46,8 @@ test("ErpDateRangePicker uses the same compact height token as single-date filte
   );
   assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
   assert.match(markup, /font-mono/);
+  assert.match(markup, /data-erp-component="date-range-picker"/);
+  assert.match(markup, /data-density="compact"/);
 });
 
 test("date range helpers discard malformed values and normalize reversed URL ranges", () => {

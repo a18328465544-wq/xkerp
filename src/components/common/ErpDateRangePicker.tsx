@@ -1,7 +1,7 @@
 import {CalendarRange} from "lucide-react";
 import {useState} from "react";
 import {Button, Input} from "@/src/components/ui";
-import {cn} from "@/src/lib/cn";
+import {cn, hasBaseWidthUtilityClass, hasWidthUtilityClass} from "@/src/lib/cn";
 import {formatDateKey, getDateRangePreset, isDateKey, parseDateKey, validateDateRange, type DateRangePreset, type DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {ErpCalendar} from "./ErpCalendar";
 import {ErpDateOverlay} from "./ErpDateOverlay";
@@ -187,14 +187,18 @@ export function ErpDateRangePicker({
         ? `${startPlaceholder} 至 ${displayEnd}`
         : "选择日期范围";
   const resolvedTriggerClassName = triggerClassName || fieldClassName;
-  const hasCustomWidth = Boolean(resolvedTriggerClassName?.match(/(?:^|\s)!?w-/));
+  const hasCustomWidth = hasBaseWidthUtilityClass(resolvedTriggerClassName);
+  const hasExplicitWidth = hasWidthUtilityClass(resolvedTriggerClassName);
   const controlHeight = density === "compact" ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
   const trigger = (
     <button
       type="button"
+      data-erp-component="date-range-picker"
+      data-density={density}
       className={cn(
-        "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)] sm:min-w-56",
+        "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]",
         controlHeight,
+        !hasExplicitWidth && "sm:min-w-56",
         visibleError && "border-[var(--erp-color-danger)]",
         hasCustomWidth ? undefined : "w-full",
         resolvedTriggerClassName,
@@ -235,7 +239,8 @@ export function ErpDateRangePicker({
                     <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
                       {startPlaceholder}
                       <Input
-                        className="mt-1 h-[var(--erp-control-height-compact)] w-full font-mono text-xs placeholder:font-sans"
+                        density="compact"
+                        className="mt-1 w-full font-mono text-xs placeholder:font-sans"
                         value={startInput}
                         onChange={(event) => updateInput("startDate", event.target.value)}
                         onBlur={(event) => normalizeInput("startDate", event.target.value)}
@@ -248,7 +253,8 @@ export function ErpDateRangePicker({
                     <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
                       {endPlaceholder}
                       <Input
-                        className="mt-1 h-[var(--erp-control-height-compact)] w-full font-mono text-xs placeholder:font-sans"
+                        density="compact"
+                        className="mt-1 w-full font-mono text-xs placeholder:font-sans"
                         value={endInput}
                         onChange={(event) => updateInput("endDate", event.target.value)}
                         onBlur={(event) => normalizeInput("endDate", event.target.value)}

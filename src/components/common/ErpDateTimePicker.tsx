@@ -1,7 +1,7 @@
 import {CalendarClock} from "lucide-react";
 import {useState} from "react";
 import {Button, Input} from "@/src/components/ui";
-import {cn} from "@/src/lib/cn";
+import {cn, hasBaseWidthUtilityClass} from "@/src/lib/cn";
 import {formatDateKey, isDateKey, parseDateKey} from "@/src/lib/dateRangePickerUtils";
 import {ErpCalendar} from "./ErpCalendar";
 import {ErpDateOverlay} from "./ErpDateOverlay";
@@ -115,7 +115,7 @@ export function ErpDateTimePicker({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateTimeParts>(() => parseDateTime(value));
   const [timeError, setTimeError] = useState<string | null>(null);
-  const hasCustomWidth = Boolean(className?.match(/(?:^|\s)!?w-/));
+  const hasCustomWidth = hasBaseWidthUtilityClass(className);
   const controlHeight = density === "compact" ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
   const selected = draft.dateKey ? parseDateKey(draft.dateKey) || undefined : undefined;
   const minDate = min ? parseDateKey(min.slice(0, 10)) || undefined : undefined;
@@ -162,9 +162,11 @@ export function ErpDateTimePicker({
   const trigger = (
     <button
       type="button"
+      data-erp-component="date-time-picker"
+      data-density={density}
       data-erp-date-time-picker="true"
       className={cn(
-        "erp-focus-ring flex items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]",
+        "erp-focus-ring flex min-w-0 max-w-full items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]",
         controlHeight,
         (invalid || timeError) && "border-[var(--erp-color-danger)]",
         hasCustomWidth ? undefined : "w-full",
@@ -190,7 +192,8 @@ export function ErpDateTimePicker({
         <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">
           时间
           <Input
-            className="mt-1 h-[var(--erp-control-height-compact)] w-full font-mono text-xs"
+            density="compact"
+            className="mt-1 w-full font-mono text-xs"
             type="time"
             value={draft.time}
             onChange={(event) => handleTimeChange(event.target.value)}

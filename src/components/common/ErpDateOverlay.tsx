@@ -44,13 +44,13 @@ export function ErpDateOverlay({open, onOpenChange, trigger, children, className
   const content = typeof children === "function" ? children({compactViewport}) : children;
 
   return (
-    <div className={className}>
+    <div className={cn("min-w-0 max-w-full", className)}>
       <BasePopover.Root open={open} onOpenChange={onOpenChange}>
         <BasePopover.Trigger render={trigger} />
         <BasePopover.Portal>
           {open && compactViewport && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 sm:hidden" aria-hidden="true" onMouseDown={() => onOpenChange(false)} />}
           <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner erp-date-popover-positioner outline-none" sideOffset={sideOffset} align={align}>
-            <BasePopover.Popup className={cn("erp-popover-surface relative rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none", panelClassName)}>
+            <BasePopover.Popup className={cn("erp-popover-surface relative min-w-0 max-w-full rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none", panelClassName)}>
               {title ? <div className={cn("flex items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4", headerMobileOnly && "sm:hidden")}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--erp-color-text)]">{title}</p>

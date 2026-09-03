@@ -34,6 +34,19 @@ button, a { -webkit-tap-highlight-color: transparent; }
   height: var(--erp-control-height-filter);
   border-radius: var(--erp-radius-control);
 }
+/* A compact filter bar owns the density of the controls it contains. This
+   keeps pages from having to repeat size props on every search/select field;
+   standalone controls continue to use their own density contract. */
+[data-erp-component="filter-bar"][data-density="compact"] [data-erp-component="input"],
+[data-erp-component="filter-bar"][data-density="compact"] [data-erp-component="select"],
+[data-erp-component="filter-bar"][data-density="compact"] [data-erp-component="amount-input"] {
+  height: var(--erp-control-height-filter);
+}
+[data-erp-component="filter-bar"][data-density="compact"] [data-erp-component="date-picker"],
+[data-erp-component="filter-bar"][data-density="compact"] [data-erp-component="date-range-picker"],
+[data-erp-component="filter-bar"][data-density="compact"] [data-erp-component="date-time-picker"] {
+  height: var(--erp-control-height-filter);
+}
 .erp-card-surface {
   border-radius: var(--erp-radius-card);
   border-color: var(--erp-color-border);
@@ -85,6 +98,17 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .erp-skip-link:focus { transform: translateY(0); }
 .erp-scrollbar::-webkit-scrollbar { width: 7px; height: 7px; }
 .erp-scrollbar::-webkit-scrollbar-thumb { border-radius: var(--erp-radius-pill); background: #cbd5e1; }
+.erp-workspace-tabs { scrollbar-width: thin; }
+.erp-workspace-tabs > [data-erp-workspace-tab] {
+  /* Browser-like tabs consume the available bar first, then compress to a
+     readable minimum before the bar starts scrolling. */
+  flex: 1 1 clamp(72px, 12vw, 180px);
+  min-width: 72px;
+  max-width: 180px;
+}
+@media (min-width: 640px) {
+  .erp-workspace-tabs > [data-erp-workspace-tab] { min-width: 88px; }
+}
 .erp-horizontal-scroll {
   max-width: 100%;
   overscroll-behavior-x: contain;

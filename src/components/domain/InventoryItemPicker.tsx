@@ -134,7 +134,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
         aria-controls={open && !value ? listboxId : undefined}
         aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
       />
-      {value ? <Button type="button" size="icon" variant="ghost" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => { onClear(); setOpen(false); }} aria-label="清除商品候选"><X className="h-4 w-4" /></Button> : <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />}
+      {value ? <Button type="button" size="icon" variant="ghost" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => { onClear(); setOpen(false); }} aria-label="清除商品候选"><X className="h-4 w-4" /></Button> : <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />}
     </div>
     {listbox && typeof document !== "undefined" ? createPortal(listbox, document.body) : null}
   </div>;

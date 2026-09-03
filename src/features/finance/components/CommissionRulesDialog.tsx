@@ -102,7 +102,7 @@ function RuleForm({mode, rule, onChange}: {mode: CommissionMode; rule: Commissio
         </RadioChoice>
       </div>
       {rule.calculation !== "fixed" ? <div className="mt-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-info-soft)] p-3">
-        <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-[var(--erp-color-primary)]"><span>{rule.calculation === "tiered" ? "阶梯规则" : "金额区间"}</span><Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={addTier}><Plus className="h-3.5 w-3.5" />添加</Button></div>
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-[var(--erp-color-primary)]"><span>{rule.calculation === "tiered" ? "阶梯规则" : "金额区间"}</span><Button type="button" size="xs" variant="ghost" onClick={addTier}><Plus className="h-3.5 w-3.5" />添加</Button></div>
         <div className="space-y-2">
           {tiers.map((tier, index) => <div key={`tier-${index}`} className="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_2rem]">
             <Input type="number" min="0" value={tier.minAmount} onChange={(event) => setTier(index, {minAmount: Math.max(0, Number(event.target.value || 0))})} placeholder="起始金额" aria-label={`第${index + 1}档起始金额`} />

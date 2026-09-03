@@ -12,6 +12,8 @@ test("commercial foundation creates tenant, store, membership, subscription and 
   assert.match(COMMERCIAL_FOUNDATION_SQL, /jsonb_typeof\(custom_permissions\) <> 'array'/);
   assert.match(COMMERCIAL_FOUNDATION_SQL, /ALTER TABLE gpu_sessions ADD COLUMN IF NOT EXISTS tenant_id/);
   assert.match(COMMERCIAL_FOUNDATION_SQL, /ALTER TABLE gpu_sessions ADD COLUMN IF NOT EXISTS store_id/);
+  assert.match(COMMERCIAL_FOUNDATION_SQL, /ALTER TABLE gpu_customer_orders ADD COLUMN IF NOT EXISTS tenant_id/);
+  assert.match(COMMERCIAL_FOUNDATION_SQL, /ALTER TABLE gpu_customer_orders ADD COLUMN IF NOT EXISTS store_id/);
   assert.match(COMMERCIAL_FOUNDATION_SQL, new RegExp(COMMERCIAL_FOUNDATION_SCHEMA_VERSION));
   assert.doesNotMatch(COMMERCIAL_FOUNDATION_SQL, /DROP CONSTRAINT|DROP TABLE|DROP COLUMN/i);
 });

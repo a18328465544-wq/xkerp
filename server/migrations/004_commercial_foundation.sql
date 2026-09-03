@@ -138,7 +138,7 @@ BEGIN
     'gpu_settlement_accounts', 'gpu_settlement_ledger',
     'gpu_payment_in_records', 'gpu_payment_out_records',
     'gpu_account_transfers', 'gpu_assembly_operations', 'gpu_return_orders',
-    'gpu_system_users'
+    'gpu_customer_orders', 'gpu_system_users'
   ] LOOP
     IF to_regclass('public.' || table_name) IS NOT NULL THEN
       EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS tenant_id TEXT', table_name);

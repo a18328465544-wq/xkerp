@@ -32,6 +32,7 @@ const protectedPatterns = [
   /^\/api\/inventory\/(?:batch|import|scan-flow)$/,
   /^\/api\/customers(?:\/[^/]+)?$/,
   /^\/api\/vendors(?:\/[^/]+)?$/,
+  /^\/api\/order-pool(?:\/[^/]+)?(?:\/(?:events|links))?$/,
   /^\/api\/logs$/,
   /^\/api\/finance-ledger\/[^/]+\/reconcile$/,
   /^\/api\/reset$/,

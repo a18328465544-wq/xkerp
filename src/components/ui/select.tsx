@@ -3,7 +3,7 @@ import {Combobox as BaseCombobox} from "@base-ui/react/combobox";
 import {Check, ChevronDown, Plus, Search, X} from "lucide-react";
 import {useState, type ReactNode} from "react";
 import {Button} from "./button";
-import {cn} from "@/src/lib/cn";
+import {cn, hasBaseWidthUtilityClass} from "@/src/lib/cn";
 
 export interface SelectOption {
   value: string;
@@ -28,6 +28,10 @@ export interface SelectProps {
   id?: string;
   "aria-label"?: string;
   className?: string;
+  /** Compact controls are intended for filter/tool-bar contexts (36px). */
+  density?: "default" | "compact";
+  /** Alias used by existing design-system guidance: sm maps to compact. */
+  size?: "sm" | "md";
   /** Entity selectors (customers, products, documents) use the existing shared control as a search box. */
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -81,8 +85,10 @@ export function shouldShowQuickCreateAction({hasSelection, searchLoading}: {
  * Keep option data at the feature boundary and keep popup styling here so
  * business pages never fall back to browser-native selects.
  */
-export function Select({value, options, onValueChange, placeholder = "请选择", disabled, required, name, id, "aria-label": ariaLabel, className, searchable = false, searchPlaceholder, emptyText = "没有找到匹配项", searchLoading = false, onSearchValueChange, shouldFilter = true, searchResultLimit = 60, onClear, quickCreateAction}: SelectProps) {
-  const hasCustomWidth = Boolean(className?.match(/(?:^|\s)!?w-/));
+export function Select({value, options, onValueChange, placeholder = "请选择", disabled, required, name, id, "aria-label": ariaLabel, className, density = "default", size = "md", searchable = false, searchPlaceholder, emptyText = "没有找到匹配项", searchLoading = false, onSearchValueChange, shouldFilter = true, searchResultLimit = 60, onClear, quickCreateAction}: SelectProps) {
+  const hasCustomWidth = hasBaseWidthUtilityClass(className);
+  const compact = density === "compact" || size === "sm";
+  const controlHeight = compact ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   if (searchable) {
@@ -119,7 +125,7 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
       name={name}
       autoHighlight
     >
-      <BaseCombobox.InputGroup data-erp-component="select" data-variant="search" className={cn("erp-focus-ring relative flex h-[var(--erp-control-height)] min-w-0 items-center rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] focus-within:border-[var(--erp-color-primary)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)]", hasCustomWidth ? undefined : "w-full", className)}>
+      <BaseCombobox.InputGroup data-erp-component="select" data-variant="search" data-density={compact ? "compact" : "default"} className={cn("erp-focus-ring relative flex min-w-0 items-center rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] focus-within:border-[var(--erp-color-primary)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)]", controlHeight, hasCustomWidth ? undefined : "w-full", className)}>
         <Search className="pointer-events-none absolute left-3 h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
         <BaseCombobox.Input
           id={id}
@@ -135,7 +141,7 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
       <BaseCombobox.Portal>
         <BaseCombobox.Positioner className="erp-popover-layer erp-option-positioner max-w-[calc(100vw-2rem)] outline-none" sideOffset={4} align="start">
           <BaseCombobox.Popup className="erp-option-popup w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
-            {showQuickCreateAction && quickCreateAction ? <div className="mb-0.5 flex min-h-8 items-center justify-between gap-2 border-b border-[var(--erp-color-border)] px-2 py-1"><span className="text-[11px] font-semibold text-[var(--erp-color-text-muted)]">快捷新建</span><Button type="button" size="sm" variant="ghost" disabled={quickCreateAction.disabled} className="h-7 px-2" onClick={() => {const query = searchText.trim(); setSearchOpen(false); setSearchText(""); onSearchValueChange?.(""); quickCreateAction.onClick(query);}}><Plus className="h-3.5 w-3.5" />{quickCreateAction.label}</Button></div> : null}
+            {showQuickCreateAction && quickCreateAction ? <div className="mb-0.5 flex min-h-8 items-center justify-between gap-2 border-b border-[var(--erp-color-border)] px-2 py-1"><span className="text-[11px] font-semibold text-[var(--erp-color-text-muted)]">快捷新建</span><Button type="button" size="xs" variant="ghost" disabled={quickCreateAction.disabled} onClick={() => {const query = searchText.trim(); setSearchOpen(false); setSearchText(""); onSearchValueChange?.(""); quickCreateAction.onClick(query);}}><Plus className="h-3.5 w-3.5" />{quickCreateAction.label}</Button></div> : null}
             {searchLoading ? <div className="px-3 py-4 text-center text-xs text-[var(--erp-color-text-muted)]" role="status">正在搜索…</div> : null}
             {!searchLoading ? <BaseCombobox.Empty>
               <div className="px-3 py-5 text-center text-xs text-[var(--erp-color-text-muted)]">{emptyText}</div>
@@ -172,7 +178,8 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
   >
       <BaseSelect.Trigger
       data-erp-component="select"
-      className={cn("erp-focus-ring flex h-[var(--erp-control-height)] min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-[placeholder]:text-[var(--erp-color-text-muted)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)] data-disabled:text-[var(--erp-color-text-muted)] data-pressed:border-[var(--erp-color-primary)]", hasCustomWidth ? undefined : "w-full", className)}
+      data-density={compact ? "compact" : "default"}
+      className={cn("erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-[placeholder]:text-[var(--erp-color-text-muted)] data-disabled:cursor-not-allowed data-disabled:bg-[var(--erp-color-surface-muted)] data-disabled:text-[var(--erp-color-text-muted)] data-pressed:border-[var(--erp-color-primary)]", controlHeight, hasCustomWidth ? undefined : "w-full", className)}
       aria-label={ariaLabel}
     >
       <BaseSelect.Value className="min-w-0 truncate" placeholder={placeholder} />
@@ -182,7 +189,7 @@ export function Select({value, options, onValueChange, placeholder = "请选择"
     </BaseSelect.Trigger>
     <BaseSelect.Portal>
       <BaseSelect.Positioner className="erp-popover-layer erp-option-positioner outline-none" sideOffset={4}>
-        <BaseSelect.Popup className="erp-option-popup min-w-[var(--anchor-width)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
+        <BaseSelect.Popup className="erp-option-popup min-w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 text-[var(--erp-color-text)] shadow-[var(--erp-shadow-popover)] outline-none">
           <BaseSelect.List className="erp-scrollbar max-h-[min(18rem,var(--available-height))] overflow-y-auto">
             {options.map((option) => <BaseSelect.Item
               key={option.value}

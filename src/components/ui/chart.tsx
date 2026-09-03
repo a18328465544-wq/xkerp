@@ -162,7 +162,7 @@ export function ChartTooltipContent({
   const labelConfig = configForKey(config, labelKey || label);
   const renderedLabel = labelFormatter ? labelFormatter(label, payload) : labelConfig?.label || label;
 
-  return <div className={cn("min-w-36 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2.5 text-xs shadow-[var(--erp-shadow-popover)]", className)} {...props}>
+  return <div className={cn("min-w-0 max-w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden break-words rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2.5 text-xs shadow-[var(--erp-shadow-popover)] sm:min-w-36", className)} {...props}>
     {!hideLabel && renderedLabel !== undefined && renderedLabel !== null ? <div className="mb-2 font-semibold text-[var(--erp-color-text)]">{renderedLabel}</div> : null}
     <div className="space-y-1.5">
       {payload.map((item, index) => {
@@ -187,7 +187,7 @@ export function ChartTooltipContent({
             /> : null}
             <span className="truncate">{name}</span>
           </span>
-          <span className="shrink-0 font-mono font-semibold text-[var(--erp-color-text)]">{value}</span>
+          <span className="max-w-full shrink-0 break-words text-right font-mono font-semibold text-[var(--erp-color-text)]">{value}</span>
         </div>;
       })}
     </div>
@@ -238,7 +238,7 @@ export interface ChartMetaProps extends React.ComponentProps<"div"> {
 export function ChartMeta({summary, updatedAt, className, ...props}: ChartMetaProps) {
   if (summary === undefined && updatedAt === undefined) return null;
   return <div data-erp-component="chart-meta" className={cn("flex flex-wrap items-center justify-between gap-2 border-t border-[var(--erp-color-border-soft)] pt-2 text-[11px] text-[var(--erp-color-text-muted)]", className)} {...props}>
-    {summary !== undefined ? <span className="min-w-0">{summary}</span> : <span />}
-    {updatedAt !== undefined ? <span className="shrink-0">更新于 {updatedAt}</span> : null}
+    {summary !== undefined ? <span className="min-w-0 max-w-full break-words">{summary}</span> : <span />}
+    {updatedAt !== undefined ? <span className="max-w-full shrink-0 truncate">更新于 {updatedAt}</span> : null}
   </div>;
 }

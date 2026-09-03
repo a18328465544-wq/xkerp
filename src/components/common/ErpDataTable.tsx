@@ -181,7 +181,7 @@ export function ErpDataTable<TData>({
           {detailCells.length > 0 && <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[var(--erp-color-border)] pt-3">
             {detailCells.map((cell) => <div key={cell.id} className="min-w-0">
               <dt className="truncate text-[11px] text-[var(--erp-color-text-muted)]">{cellLabel(cell)}</dt>
-              <dd className="mt-0.5 min-w-0 truncate text-xs text-[var(--erp-color-text-secondary)]">{flexRender(cell.column.columnDef.cell, cell.getContext())}</dd>
+              <dd className="mt-0.5 min-w-0 break-words text-xs text-[var(--erp-color-text-secondary)]">{flexRender(cell.column.columnDef.cell, cell.getContext())}</dd>
             </div>)}
           </dl>}
           {(remaining > 0 || onRowClick) && <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--erp-color-border)] pt-3">
@@ -223,7 +223,7 @@ export function ErpDataTable<TData>({
           <Button className="shrink-0" size="icon" variant="ghost" aria-label="下一页" disabled={page >= totalPages} onClick={() => onPageChange?.(page + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Select className="min-w-[6.5rem] shrink-0" aria-label="每页条数" value={String(pageSize)} options={pageSizeOptions} onValueChange={(value) => onPageSizeChange?.(Number(value))} />
+          <Select size="sm" className="min-w-[6.5rem] shrink-0" aria-label="每页条数" value={String(pageSize)} options={pageSizeOptions} onValueChange={(value) => onPageSizeChange?.(Number(value))} />
         </div>
       )}
     </div>}

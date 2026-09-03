@@ -43,6 +43,7 @@ const collectionMenuRequirements: Partial<Record<StateCollectionKey, string[]>> 
   accountTransfers: ["account_transfer", "finance"],
   assemblyOperations: ["assembly"],
   returnOrders: ["return_orders", "return_sales", "return_purchase", "finance"],
+  customerOrders: ["order_pool"],
 };
 
 function canAccessCollection(permissions: { allowedMenus: string[] }, key: StateCollectionKey) {

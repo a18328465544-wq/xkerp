@@ -72,13 +72,13 @@ export function WorkspaceTabs() {
           </BasePopover.Portal>
         </BasePopover.Root>
       </div>
-      <nav className="erp-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden sm:flex" aria-label="已打开页面">
+      <nav className="erp-workspace-tabs erp-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden sm:flex" aria-label="已打开页面">
         {tabs.map((item) => {
           const active = isActive(item.id);
           const pinnedTab = state.pinnedIds.includes(item.id);
           const closable = item.id !== WORKSPACE_HOME_ID;
           return (
-            <div key={item.id} className="group relative flex min-w-[88px] max-w-[144px] shrink-0 items-center sm:min-w-[100px] sm:max-w-[180px]">
+            <div key={item.id} data-erp-workspace-tab="true" className="group relative flex min-w-0 max-w-[180px] items-center">
               <Link
                 to={item.path}
                 aria-current={active ? "page" : undefined}

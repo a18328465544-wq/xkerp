@@ -95,6 +95,7 @@ export const INITIAL_STATE_RELOAD_KEYS: StateCollectionKey[] = [
   "accountTransfers",
   "assemblyOperations",
   "returnOrders",
+  "customerOrders",
   "systemUsers",
 ];
 
@@ -122,6 +123,7 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   if (startsWithAny(path, ["/api/assembly-operations"])) return ["assemblyOperations", "inventory", "products", "logs"];
   if (startsWithAny(path, ["/api/returns"])) return RETURN_KEYS;
   if (startsWithAny(path, ["/api/aftersales"])) return AFTERSALES_KEYS;
+  if (startsWithAny(path, ["/api/order-pool"])) return ["customerOrders", "logs"];
   if (startsWithAny(path, ["/api/market-quotes"])) return ["marketQuotes", "inventory", "logs"];
   if (startsWithAny(path, ["/api/inventory"])) return ["inventory", "products", "salesInvoices", "purchaseCommissions", "logs"];
   if (startsWithAny(path, ["/api/customers"])) return ["customers", "logs"];
@@ -184,6 +186,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return [];
   if (method.toUpperCase() === "GET" && (path === "/api/assembly-operations" || path === "/api/assembly-operations/reference")) return [];
   if (method.toUpperCase() === "GET" && path === "/api/aftersales/workspace") return [];
+  if (method.toUpperCase() === "GET" && (path === "/api/order-pool" || /^\/api\/order-pool\/[^/]+$/.test(path))) return [];
   if (method.toUpperCase() === "GET" && (path === "/api/returns" || path === "/api/returns/reference")) return [];
   // These list routes query PostgreSQL directly and must not deserialize the same collection
   // into the process cache before executing their indexed, server-side paginated query.

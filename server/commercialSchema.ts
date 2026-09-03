@@ -43,6 +43,7 @@ export const COMMERCIAL_COLLECTION_TABLES = [
   "gpu_account_transfers",
   "gpu_assembly_operations",
   "gpu_return_orders",
+  "gpu_customer_orders",
   "gpu_system_users",
 ] as const;
 

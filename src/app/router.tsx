@@ -27,6 +27,7 @@ const CrmWorkspacePage = lazyRouteComponent(() => import("@/src/features/crm/pag
 const NewCustomerLeadPage = lazyRouteComponent(() => import("@/src/features/crm/pages/NewCustomerLeadPage"), "NewCustomerLeadPage");
 const CustomerDirectoryPage = lazyRouteComponent(() => import("@/src/features/customers/pages/CustomerDirectoryPage"), "CustomerDirectoryPage");
 const VendorDirectoryPage = lazyRouteComponent(() => import("@/src/features/vendors/pages/VendorDirectoryPage"), "VendorDirectoryPage");
+const OrderPoolPage = lazyRouteComponent(() => import("@/src/features/order-pool/pages/OrderPoolPage"), "OrderPoolPage");
 const AftersalesWorkspacePage = lazyRouteComponent(() => import("@/src/features/aftersales/pages/AftersalesWorkspacePage"), "AftersalesWorkspacePage");
 const FinanceDashboardPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceDashboardPage"), "FinanceDashboardPage");
 const FinanceAccountsPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceAccountsPage"), "FinanceAccountsPage");
@@ -92,6 +93,7 @@ const crmRoute = createRoute({getParentRoute: () => rootRoute, path: "/crm", com
 const crmCustomersRoute = createRoute({getParentRoute: () => rootRoute, path: "/crm/customers", component: CustomerDirectoryPage});
 const crmCustomerNewRoute = createRoute({getParentRoute: () => rootRoute, path: "/crm/customers/new", component: NewCustomerLeadPage});
 const crmVendorsRoute = createRoute({getParentRoute: () => rootRoute, path: "/crm/vendors", component: VendorDirectoryPage});
+const orderPoolRoute = createRoute({getParentRoute: () => rootRoute, path: "/order-pool", component: OrderPoolPage});
 const aftersalesRoute = createRoute({getParentRoute: () => rootRoute, path: "/aftersales", component: AftersalesWorkspacePage});
 const financeRoute = createRoute({getParentRoute: () => rootRoute, path: "/finance", component: FinanceDashboardPage});
 const financeAccountsRoute = createRoute({getParentRoute: () => rootRoute, path: "/finance/accounts", component: FinanceAccountsPage});
@@ -115,7 +117,7 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute, aiInsightsRoute, quotesRoute, inventoryRoute, productsRoute, assemblyRoute,
   purchaseRoute, purchaseNewRoute, purchaseDetailRoute, purchaseEditRoute, inspectionsRoute, purchaseReturnsRoute, purchaseReturnsNewRoute,
   salesNewRoute, salesRoute, salesOutboundRoute, salesReturnsNewRoute, salesReturnsRoute,
-  crmRoute, crmCustomersRoute, crmCustomerNewRoute, crmVendorsRoute, aftersalesRoute,
+  crmRoute, crmCustomersRoute, crmCustomerNewRoute, crmVendorsRoute, orderPoolRoute, aftersalesRoute,
   financeRoute, financeAccountsRoute, financeLedgerRoute, financeIncomeRoute, financeExpenseRoute, financeTransfersRoute,
   financeProfitRoute, financeClosingRoute, financeReturnReconcileRoute, financePurchaseCommissionRoute,
   financeCustomerFundsRoute, financeSalesCommissionRoute,

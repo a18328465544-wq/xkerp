@@ -9,12 +9,14 @@ test("ErpDateTimePicker keeps the existing local date-time value contract", () =
   );
   assert.match(markup, /2026-08-19 09:30/);
   assert.match(markup, /data-erp-date-time-picker="true"/);
+  assert.match(markup, /data-erp-component="date-time-picker"/);
   assert.doesNotMatch(markup, /datetime-local/);
 });
 
 test("ErpDateTimePicker supports the shared compact height token", () => {
   const markup = renderToStaticMarkup(<ErpDateTimePicker density="compact" value="" onChange={() => undefined} />);
   assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
+  assert.match(markup, /data-density="compact"/);
 });
 
 test("ErpDateTimePicker respects time-level bounds on the same date", () => {

@@ -76,6 +76,12 @@ export const queryKeys = {
     all: () => ["customers"] as const,
     directory: (access: {showProfit: boolean}, filters: unknown, sorting: unknown) => ["customers", "directory", access, filters, sorting] as const,
   },
+  orderPool: {
+    all: () => ["order-pool"] as const,
+    collaborators: () => ["order-pool", "collaborators"] as const,
+    list: (filters: unknown) => ["order-pool", "list", filters] as const,
+    detail: (id: string) => ["order-pool", "detail", id] as const,
+  },
   vendors: {
     all: () => ["vendors"] as const,
     directory: (access: {showProfit: boolean}, filters: unknown, sorting: unknown) => ["vendors", "directory", access, filters, sorting] as const,

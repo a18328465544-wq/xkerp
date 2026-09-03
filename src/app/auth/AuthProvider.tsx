@@ -204,7 +204,7 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
               <label htmlFor="login-username" className="text-sm font-semibold text-[var(--erp-color-text)]">账号</label>
               <div className="relative mt-2">
                 <UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
-                <Input id="login-username" className="h-11 pl-10" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="请输入账号" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
+                <Input id="login-username" className="pl-10" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="请输入账号" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
               </div>
             </div>
             <div>
@@ -214,14 +214,14 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
               </div>
               <div className="relative mt-2">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
-                <Input id="login-password" className="h-11 pl-10 pr-11" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="请输入密码" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
+                <Input id="login-password" className="pl-10 pr-11" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="请输入密码" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
                 <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--erp-color-text-muted)]" aria-label={showPassword ? "隐藏密码" : "显示密码"} title={showPassword ? "隐藏密码" : "显示密码"} onClick={() => setShowPassword((visible) => !visible)}>
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
             {message && <div id="login-error" role="alert" aria-live="assertive" className="flex items-start gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-danger)]/20 bg-[var(--erp-color-danger-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--erp-color-danger)]"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>{message}</p></div>}
-            <Button className="h-12 w-full text-sm shadow-[0_8px_18px_rgb(10_132_255_/_0.2)]" type="submit" variant="primary" disabled={pending}>{pending ? "登录中…" : "登录并继续"}<ArrowUpRight className="h-4 w-4" /></Button>
+            <Button className="w-full shadow-[0_8px_18px_rgb(10_132_255_/_0.2)]" size="lg" type="submit" variant="primary" disabled={pending}>{pending ? "登录中…" : "登录并继续"}<ArrowUpRight className="h-4 w-4" /></Button>
           </form>
 
           <div className="mt-8 flex items-start gap-2 border-t border-[var(--erp-color-border)] pt-5 text-xs leading-5 text-[var(--erp-color-text-muted)]">

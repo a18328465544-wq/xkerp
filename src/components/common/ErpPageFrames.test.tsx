@@ -37,3 +37,13 @@ test("ERP page frames preserve a caller-provided max width", () => {
   assert.doesNotMatch(markup, /max-w-\[1760px\]/);
   assert.match(markup, /settings-content/);
 });
+
+test("ERP page frames respect responsive and important max width utilities", () => {
+  const responsive = renderToStaticMarkup(<ErpSettingsPageFrame className="lg:max-w-5xl"><span>responsive-content</span></ErpSettingsPageFrame>);
+  assert.match(responsive, /lg:max-w-5xl/);
+  assert.doesNotMatch(responsive, /max-w-\[var\(--erp-page-max-width\)\]/);
+
+  const important = renderToStaticMarkup(<ErpSettingsPageFrame className="!max-w-4xl"><span>important-content</span></ErpSettingsPageFrame>);
+  assert.match(important, /!max-w-4xl/);
+  assert.doesNotMatch(important, /max-w-\[var\(--erp-page-max-width\)\]/);
+});

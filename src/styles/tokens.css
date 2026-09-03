@@ -62,7 +62,10 @@
   /* Optional helper/annotation copy always owns one stable line. */
   --erp-annotation-height: 16px;
   --erp-control-height: 40px;
-  --erp-control-height-compact: 32px;
+  /* Compact controls are shared by filters, dense tables and responsive
+     toolbars. Keep the geometry at 36px so every control remains readable
+     and meets the touch/keyboard baseline without page-level height patches. */
+  --erp-control-height-compact: 36px;
   --erp-control-height-filter: 36px;
   --erp-chart-grid: #e7edf5;
   --erp-chart-axis: #94a3b8;

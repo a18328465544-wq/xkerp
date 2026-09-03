@@ -76,10 +76,10 @@ export function ErpColumnVisibilityMenu<TData>({
                 已显示 {visibleCount}/{options.length} 列
               </span>
               <div className="flex items-center gap-1">
-                <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" onClick={handleSelectAll}>
+                <Button type="button" size="xs" variant="ghost" className="px-1.5 text-[11px]" onClick={handleSelectAll}>
                   全选
                 </Button>
-                <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" onClick={handleReset}>
+                <Button type="button" size="xs" variant="ghost" className="px-1.5 text-[11px]" onClick={handleReset}>
                   重置
                 </Button>
               </div>

@@ -22,3 +22,4 @@ export {adaptFinanceDashboardDataset, buildFinanceDashboard} from "./finance.ada
 export {adaptFinanceDailyClosing, adaptFinanceDailyClosingMutation, adaptFinanceDailyClosings, toFinanceDailyClosingRequest} from "./finance-closing.adapter";
 export {adaptFinanceAccount, adaptFinanceAccountLedgerPage, adaptFinanceAccountMutation, adaptFinanceAccountPage, mergeFinanceAccountPages, toFinanceAccountCreateRequest, toFinanceAccountReconcileRequest} from "./finance-account.adapter";
 export {adaptFinanceTransfer, adaptFinanceTransferCollection, adaptFinanceTransferMutation, adaptFinanceTransferSnapshot, filterFinanceTransferCollection, toFinanceTransferRequest} from "./finance-transfer.adapter";
+export {adaptOrderPoolCollaborators, adaptOrderPoolCollection, adaptOrderPoolMutation} from "./order-pool.adapter";

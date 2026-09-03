@@ -58,6 +58,7 @@ const pathById: Record<string, string> = {
   return_orders: "/sales/returns",
   crm: "/crm",
   customers: "/crm/customers",
+  order_pool: "/order-pool",
   vendors: "/crm/vendors",
   aftersales: "/aftersales",
   finance: "/finance",
@@ -139,6 +140,7 @@ export function isNavigationItemActive(item: NavigationItem, pathname: string) {
  * the route contract instead of teaching every page a different rule.
  */
 export function requiredMenuIdsForPath(pathname: string): string[] | undefined {
+  if (pathname === "/order-pool" || pathname.startsWith("/order-pool/")) return ["order_pool"];
   if (pathname === "/ai-insights" || pathname.startsWith("/ai-insights/")) {
     return ["dashboard", "ai_insights"];
   }
