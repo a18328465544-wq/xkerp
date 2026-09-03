@@ -8,7 +8,7 @@ import helmet from "helmet";
 import { acquireAuthWriteLock, acquireStateWriteLock, appendInspectionVersionInTransaction, createDatabaseSessionStore, dataFilePath, deleteAiInsightAction, findActiveTenantMembership, findInventoryRecord, findInventoryRecordBySn, findSystemUserById, findSystemUserByUsername, getStateRevision, listAiInsightActions, listInspectionVersions, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveAiInsightAction, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
-import { notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
+import { notifyFeishuMarketQuotePriceChanged, notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
 import { getDashboardAiInsights } from "./aiInsights.ts";
 import { runCopilotTurn, type CopilotMessage } from "./aiCopilot.ts";
 import type { CopilotContext } from "../src/utils/copilotTools.ts";
@@ -92,6 +92,7 @@ import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.ts";
 import { registerFinanceReadModelRoutes } from "./routes/financeReadModels.ts";
 import { registerOrderPoolRoutes } from "./routes/orderPool.ts";
+import { marketQuotePriceChange, marketQuotePriceChanges, snapshotMarketQuote } from "./marketQuoteNotifications.ts";
 import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
 import { createStateProxy, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
 import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
@@ -1398,6 +1399,11 @@ openPricesRouter.use(openApiRateLimiter, requireOpenApiToken);
 openPricesRouter.post("/sync-est-sell", asyncRoute(async (req, res) => {
   replaceCurrentState(await loadStateCollections(state, ["products", "inventory", "marketQuotes", "logs"]));
   const body = req.body || {};
+  const beforeQuotes = new Map(
+    state.marketQuotes
+      .filter((quote) => quote.productId === String(body.productId || "").trim())
+      .map((quote) => [quote.id, snapshotMarketQuote(quote)] as const),
+  );
   const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).syncEstimatedSellPrice({
     productId: String(body.productId || ""),
     estSellPrice: Number(body.estSellPrice ?? body.suggestSellPrice ?? body.refSellPrice ?? body.todaySellPrice),
@@ -1406,6 +1412,7 @@ openPricesRouter.post("/sync-est-sell", asyncRoute(async (req, res) => {
   });
   const stateMerge = productPriceSyncMerge(result.productId);
   await saveStateRecords(stateMergeRecords(stateMerge));
+  void notifyFeishuMarketQuotePriceChanged(marketQuotePriceChanges(beforeQuotes, state.marketQuotes.filter((quote) => quote.productId === result.productId)));
   res.json({ data: result });
 }));
 
@@ -2648,16 +2655,22 @@ app.post("/api/market-quotes/import", requireMenu("quotes"), asyncRoute(async (r
     sendApiError(req, res, 400, "VALIDATION_ERROR", "单次最多导入 2000 条行情参考。");
     return;
   }
+  const beforeQuotes = new Map(state.marketQuotes.map((quote) => [quote.id, snapshotMarketQuote(quote)] as const));
   const result = actions(req).importMarketQuotes(quotes);
   const stateMerge = marketQuotesMerge(result.quotes);
   await saveStateRecords(stateMergeRecords(stateMerge));
+  void notifyFeishuMarketQuotePriceChanged(marketQuotePriceChanges(beforeQuotes, result.quotes));
   res.status(201).json(okMerge(result, stateMerge));
 }));
 
 app.patch("/api/market-quotes/:id", requireMenu("quotes"), asyncRoute(async (req, res) => {
+  const existing = state.marketQuotes.find((quote) => quote.id === req.params.id!);
+  const beforeQuote = existing ? snapshotMarketQuote(existing) : undefined;
   const updated = actions(req).updateMarketPrice(req.params.id!, req.body.todayBuyPrice, req.body.todaySellPrice, req.body.remarks);
   const stateMerge = marketQuoteMerge(updated);
   await saveStateRecords(stateMergeRecords(stateMerge));
+  const priceChange = marketQuotePriceChange(beforeQuote, updated || undefined);
+  if (priceChange) void notifyFeishuMarketQuotePriceChanged(priceChange);
   res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));
 }));
 

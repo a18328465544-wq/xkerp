@@ -8,6 +8,22 @@ export type FeishuSalesNotificationResult =
 
 export type FeishuNotificationResult = FeishuSalesNotificationResult;
 
+export interface FeishuMarketQuotePriceChange {
+  quoteId: string;
+  productName?: string;
+  model?: string;
+  brand?: string;
+  previousBuyPrice: number;
+  nextBuyPrice: number;
+  previousSellPrice: number;
+  nextSellPrice: number;
+  updateTime?: string;
+}
+
+export type FeishuMarketQuoteNotificationResult =
+  | { sent: true }
+  | { sent: false; reason: "not_configured" | "delivery_failed" | "no_changes" };
+
 function money(value: number) {
   return `¥${Number(value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -37,6 +53,98 @@ export function buildFeishuSalesInvoiceMessage(invoice: SalesInvoice) {
     `经办人：${invoice.handleBy || "未填写"}`,
     `开单时间：${invoice.date || "未填写"}`,
   ].join("\n");
+}
+
+function signedMoney(value: number) {
+  const amount = Number(value || 0);
+  return `${amount >= 0 ? "+" : "-"}¥${Math.abs(amount).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function priceChangeSummary(previous: number, next: number) {
+  return `${money(previous)} → ${money(next)}（${signedMoney(next - previous)}）`;
+}
+
+function priceChangeDirection(change: FeishuMarketQuotePriceChange) {
+  const deltas = [change.nextBuyPrice - change.previousBuyPrice, change.nextSellPrice - change.previousSellPrice]
+    .filter((value) => value !== 0);
+  if (deltas.length === 0) return "未变更";
+  if (deltas.every((value) => value > 0)) return "上涨";
+  if (deltas.every((value) => value < 0)) return "下跌";
+  return "价格调整";
+}
+
+export function buildFeishuMarketQuotePriceChangedMessage(
+  changes: FeishuMarketQuotePriceChange | FeishuMarketQuotePriceChange[],
+) {
+  const rows = Array.isArray(changes) ? changes : [changes];
+  const visibleRows = rows.slice(0, 20);
+  const lines = [
+    "📊 行情参考价格变更提醒",
+    `本次有 ${rows.length} 条行情价格发生变化`,
+    ...visibleRows.flatMap((change, index) => {
+      const title = change.model?.trim() || change.productName?.trim() || change.quoteId;
+      const brand = change.brand?.trim() ? `（${change.brand.trim()}）` : "";
+      return [
+        `${index + 1}. ${title}${brand} · ${priceChangeDirection(change)}`,
+        `回收参考价：${priceChangeSummary(change.previousBuyPrice, change.nextBuyPrice)}`,
+        `销售参考价：${priceChangeSummary(change.previousSellPrice, change.nextSellPrice)}`,
+      ];
+    }),
+  ];
+  if (rows.length > visibleRows.length) {
+    lines.push(`其余 ${rows.length - visibleRows.length} 条请到行情参考页面查看。`);
+  }
+  const latestTime = visibleRows.map((change) => change.updateTime).filter(Boolean).sort().at(-1);
+  if (latestTime) lines.push(`更新时间：${latestTime}`);
+  return lines.join("\n");
+}
+
+export async function notifyFeishuMarketQuotePriceChanged(
+  changes: FeishuMarketQuotePriceChange | FeishuMarketQuotePriceChange[],
+  options: {
+    webhookUrl?: string;
+    fetchImpl?: FetchLike;
+    timeoutMs?: number;
+  } = {},
+): Promise<FeishuMarketQuoteNotificationResult> {
+  const rows = Array.isArray(changes) ? changes : [changes];
+  if (rows.length === 0) return { sent: false, reason: "no_changes" };
+
+  // 行情参考与销售开单沿用同一个飞书机器人，保持现有部署配置不变。
+  const webhookUrl = (options.webhookUrl ?? process.env.FEISHU_SALES_WEBHOOK_URL ?? "").trim();
+  if (!webhookUrl) return { sent: false, reason: "not_configured" };
+
+  const timeoutMs = Math.max(1_000, Number(options.timeoutMs ?? process.env.FEISHU_NOTIFICATION_TIMEOUT_MS ?? 5_000));
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  try {
+    const response = await fetchImpl(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        msg_type: "text",
+        content: { text: buildFeishuMarketQuotePriceChangedMessage(rows) },
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const payload = await response.json().catch(() => null) as { code?: unknown; StatusCode?: unknown; msg?: unknown; StatusMessage?: unknown } | null;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const platformCode = typeof payload?.code === "number"
+      ? payload.code
+      : typeof payload?.StatusCode === "number"
+        ? payload.StatusCode
+        : 0;
+    if (platformCode !== 0) {
+      throw new Error(String(payload?.msg || payload?.StatusMessage || `Feishu code ${platformCode}`));
+    }
+    return { sent: true };
+  } catch (error) {
+    // 飞书是外部提醒，不能让行情已经落库的请求因为通知失败而回滚。
+    console.error("[feishu] 行情参考价格变更提醒发送失败", {
+      quoteCount: rows.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { sent: false, reason: "delivery_failed" };
+  }
 }
 
 export async function notifyFeishuSalesInvoiceCreated(

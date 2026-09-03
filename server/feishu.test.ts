@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildFeishuSalesInvoiceMessage, notifyFeishuDailyReport, notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
+import {
+  buildFeishuMarketQuotePriceChangedMessage,
+  buildFeishuSalesInvoiceMessage,
+  notifyFeishuDailyReport,
+  notifyFeishuMarketQuotePriceChanged,
+  notifyFeishuSalesInvoiceCreated,
+} from "./feishu.ts";
 import type { SalesInvoice } from "../src/types.ts";
 
 const invoice: SalesInvoice = {
@@ -28,11 +34,31 @@ const invoice: SalesInvoice = {
   totalProfit: 2000,
 };
 
+const quotePriceChange = {
+  quoteId: "MQ-1",
+  productName: "华硕 RTX 4090",
+  model: "RTX 4090",
+  brand: "NVIDIA",
+  previousBuyPrice: 18000,
+  nextBuyPrice: 17500,
+  previousSellPrice: 19500,
+  nextSellPrice: 19200,
+  updateTime: "2026-09-03 10:30",
+};
+
 test("sales invoice message includes the operational sales fields", () => {
   const message = buildFeishuSalesInvoiceMessage(invoice);
   assert.match(message, /销售单：XS-20260726-001/);
   assert.match(message, /商品：RTX 4070 ×2/);
   assert.match(message, /待收 ¥800\.00/);
+});
+
+test("market quote price change message contains both reference prices and direction", () => {
+  const message = buildFeishuMarketQuotePriceChangedMessage(quotePriceChange);
+  assert.match(message, /行情参考价格变更提醒/);
+  assert.match(message, /RTX 4090（NVIDIA） · 下跌/);
+  assert.match(message, /回收参考价：¥18,000\.00 → ¥17,500\.00（-¥500\.00）/);
+  assert.match(message, /销售参考价：¥19,500\.00 → ¥19,200\.00（-¥300\.00）/);
 });
 
 test("sales invoice notification posts Feishu text", async () => {
@@ -60,6 +86,35 @@ test("sales invoice notification treats a Feishu business error as a delivery fa
     fetchImpl: async () => new Response(JSON.stringify({ code: 19022, msg: "webhook unavailable" }), { status: 200 }),
   });
   assert.deepEqual(result, { sent: false, reason: "delivery_failed" });
+});
+
+test("market quote price notification reuses the existing sales webhook", async () => {
+  let request: { url: string; init?: RequestInit } | null = null;
+  const result = await notifyFeishuMarketQuotePriceChanged(quotePriceChange, {
+    webhookUrl: "https://example.test/feishu",
+    fetchImpl: async (url, init) => {
+      request = { url, init };
+      return new Response("{}", { status: 200 });
+    },
+  });
+  assert.deepEqual(result, { sent: true });
+  assert.equal(request?.url, "https://example.test/feishu");
+  const body = JSON.parse(String(request?.init?.body));
+  assert.equal(body.msg_type, "text");
+  assert.match(body.content.text, /价格发生变化/);
+});
+
+test("market quote price notification does not send an empty batch", async () => {
+  let called = false;
+  const result = await notifyFeishuMarketQuotePriceChanged([], {
+    webhookUrl: "https://example.test/feishu",
+    fetchImpl: async () => {
+      called = true;
+      return new Response("{}", { status: 200 });
+    },
+  });
+  assert.deepEqual(result, { sent: false, reason: "no_changes" });
+  assert.equal(called, false);
 });
 
 test("daily report posts to its own webhook", async () => {
