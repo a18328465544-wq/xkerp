@@ -18,6 +18,7 @@ export const queryKeys = {
   sales: {
     all: () => ["sales"] as const,
     list: (access: {userId: string; showCost: boolean; showProfit: boolean}, filters?: unknown) => ["sales", "list", access, filters] as const,
+    detail: (id: string) => ["sales", "detail", id] as const,
     outbound: (userId: string, filters: unknown) => ["sales", "outbound", userId, filters] as const,
     customers: (keyword: string) => ["sales", "customers", keyword] as const,
     inventoryCandidates: (keyword: string) => ["sales", "inventory-candidates", keyword] as const,
@@ -30,6 +31,7 @@ export const queryKeys = {
   },
   ai: {
     insights: () => ["ai", "insights"] as const,
+    dailySalesSummary: (date: string) => ["ai", "daily-sales-summary", date] as const,
   },
   purchase: {
     all: () => ["purchase"] as const,
@@ -48,6 +50,8 @@ export const queryKeys = {
     reference: (filters: unknown = {}) => ["returns", "reference", filters] as const,
     salesList: (filters: SalesReturnListFilters) => ["returns", "sales", "list", filters] as const,
     purchaseList: (filters: SalesReturnListFilters) => ["returns", "purchase", "list", filters] as const,
+    salesDetail: (id: string) => ["returns", "sales", "detail", id] as const,
+    purchaseDetail: (id: string) => ["returns", "purchase", "detail", id] as const,
   },
   inspections: {
     all: () => ["inspections"] as const,

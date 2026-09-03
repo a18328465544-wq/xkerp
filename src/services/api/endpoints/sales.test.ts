@@ -90,6 +90,19 @@ test("sales outbound preflight uses the authoritative server endpoint", async ()
   }
 });
 
+test("sales detail resolver can locate an invoice by an inventory-card reference", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.equal(input, "/api/sales-invoices?page=1&pageSize=1&keyword=KC-1");
+    return new Response(JSON.stringify({data: {salesInvoices: [{id: "S-1", invoiceNo: "XS-1", items: [{inventoryId: "KC-1", productName: "RTX 4090", sn: "SN-1", sellPrice: 18000}]}], inventory: []}, meta: {page: 1, pageSize: 1, total: 1}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await salesApi.findByReference(" KC-1 ", {showCost: false, showProfit: false});
+    assert.equal(result?.invoiceNo, "XS-1");
+    assert.equal(result?.lines[0]?.id, "KC-1");
+  } finally { globalThis.fetch = previousFetch; }
+});
+
 test("sales delete endpoint encodes the invoice id and adapts the deleted document", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {

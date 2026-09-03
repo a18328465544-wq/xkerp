@@ -132,6 +132,8 @@ export interface SalesReturnListItem {
   date: string;
   relatedDocNo: string;
   sourceInventoryId: string;
+  /** All inventory cards covered by a whole-document return. */
+  sourceInventoryIds?: string[];
   productId: string;
   productName: string;
   sn: string;

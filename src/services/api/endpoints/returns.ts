@@ -34,10 +34,26 @@ export const returnsApi = {
     return adaptSalesReturnList(response);
   },
 
+  /** Resolve a return drawer reference across pages, including batch-return inventory cards. */
+  async findSalesByReference(reference: string, signal?: AbortSignal) {
+    const keyword = reference.trim();
+    if (!keyword) return null;
+    const result = await this.listSales({keyword, status: "", page: 1, pageSize: 100}, signal);
+    return result.items.find((item) => item.id === keyword || item.returnNo === keyword || item.sourceInventoryId === keyword || item.sourceInventoryIds?.includes(keyword)) || null;
+  },
+
   async listPurchase(filters: SalesReturnListFilters, signal?: AbortSignal) {
     const params = toPurchaseReturnListQueryParams(filters);
     const response = await apiRequest<SalesReturnListResponseDto>(`/api/returns?${params.toString()}`, {signal});
     return adaptPurchaseReturnList(response);
+  },
+
+  /** Resolve a purchase-return drawer reference across pages, including batch-return inventory cards. */
+  async findPurchaseByReference(reference: string, signal?: AbortSignal) {
+    const keyword = reference.trim();
+    if (!keyword) return null;
+    const result = await this.listPurchase({keyword, status: "", page: 1, pageSize: 100}, signal);
+    return result.items.find((item) => item.id === keyword || item.returnNo === keyword || item.sourceInventoryId === keyword || item.sourceInventoryIds?.includes(keyword)) || null;
   },
 
   async createSales(values: SalesReturnFormValues, signal?: AbortSignal) {

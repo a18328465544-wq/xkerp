@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInitialState } from "./store.ts";
-import { buildDailyBusinessReport, buildFeishuDailyAiSummaryMessage, buildFeishuDailyBusinessReportMessage } from "./dailyReport.ts";
+import { beforeCutoff, buildDailyBusinessReport, buildFeishuDailyAiSummaryMessage, buildFeishuDailyBusinessReportMessage } from "./dailyReport.ts";
+import { buildDailySalesSummary, buildRuleDailySalesNarrative } from "./dailySalesSummary.ts";
 
 test("daily report separates sales orders from actual outbound profit and respects cutoff", () => {
   const state = createInitialState();
@@ -31,4 +32,25 @@ test("daily report appends read-only AI suggestions with their evidence", () => 
   assert.match(text, /AI 经营总结/);
   assert.match(text, /RTX 3090 已压货 47 天/);
   assert.match(text, /建议仅供经营决策参考/);
+});
+
+test("daily report includes the server-computed product and unit-price summary", () => {
+  const state = createInitialState({includeDemoData: false});
+  state.inventory = [{
+    id: "I-1", productId: "P-1", productName: "RTX 4090", category: "显卡", model: "RTX 4090", brand: "", version: "", vram: "24G", sn: "SN-1",
+    sourceType: "同行拿货", supplierName: "供应商", costPrice: 9000, estSellPrice: 11000, marketPrice: 11000, status: "已售出", condition: "99新", inWarranty: false,
+    repaired: false, gpuRisk: false, fullBox: true, warehouseLocation: "发货区", entryTime: "2026-09-03", storageDays: 0, salesPrice: 10000, salesTime: "2026-09-03 10:00",
+  }];
+  const report = buildDailyBusinessReport(state, "2026-09-03");
+  const summary = buildDailySalesSummary(state, "2026-09-03");
+  const text = buildFeishuDailyAiSummaryMessage(report, {source: "rules", generatedAt: "2026-09-03T20:00:00.000Z", expiresAt: "2026-09-03T20:15:00.000Z", insights: []}, {summary, narrative: buildRuleDailySalesNarrative(summary, "2026-09-03T20:00:00.000Z")});
+  assert.match(text, /今日销售总结/);
+  assert.match(text, /RTX 4090/);
+  assert.match(text, /¥10,000 ×1/);
+});
+
+test("daily report cutoff accepts unpadded local hours and rejects invalid timestamps", () => {
+  assert.equal(beforeCutoff("2026-09-03 9:05", "2026-09-03", "20:00"), true);
+  assert.equal(beforeCutoff("2026-09-03 20:01", "2026-09-03", "20:00"), false);
+  assert.equal(beforeCutoff("2026-09-03 25:00", "2026-09-03", "20:00"), false);
 });

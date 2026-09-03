@@ -161,6 +161,11 @@ export function getStatePatchKeysForRequest(method: string, path: string): State
 
 export function getReloadKeysForRequest(method: string, path: string): StateCollectionKey[] | null {
   if (method.toUpperCase() === "GET" && path === "/api/products") return [];
+  // The daily sales summary loads its tenant/store snapshot explicitly in the
+  // route. Keep the authentication middleware's request-scoped context intact
+  // so permissions are evaluated against the same tenant, not the fallback
+  // single-store state.
+  if (method.toUpperCase() === "GET" && path === "/api/ai/daily-sales-summary") return [];
   if (method.toUpperCase() === "GET" && path === "/api/market-quotes") return ["marketQuotes", "inventory"];
   if (method.toUpperCase() === "GET" && path === "/api/vendors") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers/page") return [];

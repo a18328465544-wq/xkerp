@@ -103,7 +103,13 @@ export async function listReturnOrders(scope: Scope, filters: {page?: number; pa
     query.clauses.push(`COALESCE(data->>'type','') = ANY($${query.values.length}::text[])`);
     if (filters.type?.trim()) {query.values.push(filters.type.trim()); query.clauses.push(`data->>'type' = $${query.values.length}`);}
     if (filters.status?.trim()) {query.values.push(filters.status.trim()); query.clauses.push(`data->>'status' = $${query.values.length}`);}
-    if (filters.keyword?.trim()) {query.values.push(`%${filters.keyword.trim()}%`); query.clauses.push(`CONCAT_WS(' ', id, data->>'returnNo', data->>'relatedDocNo', data->>'productName', data->>'sn', data->>'partyName', data->>'reason', data->>'remarks') ILIKE $${query.values.length}`);}
+    if (filters.keyword?.trim()) {
+      query.values.push(`%${filters.keyword.trim()}%`);
+      // Batch return orders keep their inventory-card references in items[].
+      // Include both the scalar and nested references so a product-ledger
+      // click can locate the owning return document regardless of pagination.
+      query.clauses.push(`CONCAT_WS(' ', id, data->>'returnNo', data->>'relatedDocNo', data->>'sourceInventoryId', data->>'productName', data->>'sn', data->>'partyName', data->>'reason', data->>'remarks', COALESCE((data->'items')::text, '')) ILIKE $${query.values.length}`);
+    }
     const page = boundedInteger(filters.page, 1, 100_000);
     const pageSize = boundedInteger(filters.pageSize, 20, 100);
     const where = `WHERE ${query.clauses.join(" AND ")}`;

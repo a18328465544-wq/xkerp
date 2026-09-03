@@ -68,3 +68,18 @@ test("sales return endpoint serializes whole-document lines and omits draft-only
     assert.equal("returnItems" in requestBody, false);
   } finally { globalThis.fetch = previous; }
 });
+
+test("return detail resolvers locate batch orders by nested inventory-card references", async () => {
+  const previousFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify({data: {data: [{id: "RET-BATCH", returnNo: "XSTH-BATCH", type: "销售退货", status: "待处理", items: [{sourceInventoryId: "KC-2"}], amount: 5000}], meta: {page: 1, pageSize: 100, total: 1}}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await returnsApi.findSalesByReference("KC-2");
+    assert.equal(result?.returnNo, "XSTH-BATCH");
+    assert.deepEqual(result?.sourceInventoryIds, ["KC-2"]);
+    assert.equal(calls[0], "/api/returns?type=%E9%94%80%E5%94%AE%E9%80%80%E8%B4%A7&page=1&pageSize=100&keyword=KC-2");
+  } finally { globalThis.fetch = previousFetch; }
+});

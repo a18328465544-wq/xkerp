@@ -6,7 +6,7 @@ export {salesApi, toSalesCustomerQueryParams, toSalesInventoryQueryParams} from 
 export type {SalesApiPermissions} from "./sales";
 export {stateApi} from "./state";
 export {aiApi} from "./ai";
-export type {AiInsightItem, AiInsightsResult, CopilotRequest, CopilotStreamEvent, CopilotContext, CopilotMessage, CopilotCardAction, CopilotToolResult} from "./ai";
+export type {AiDailySalesSummaryResult, AiInsightItem, AiInsightsResult, CopilotRequest, CopilotStreamEvent, CopilotContext, CopilotMessage, CopilotCardAction, CopilotToolResult} from "./ai";
 export {purchaseApi} from "./purchase";
 export type {PurchaseReferencePermissions} from "../adapters/purchase.adapter";
 export {backupApi} from "./backup";

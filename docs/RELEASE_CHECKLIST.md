@@ -39,6 +39,10 @@ systemctl is-enabled gpu-erp-backup.timer
 systemctl status gpu-erp-backup.timer --no-pager
 ```
 
+若启用 AI 销售日报，另外安装 `ops/systemd/gpu-erp-daily-report.service` 和
+`ops/systemd/gpu-erp-daily-report.timer`，默认每天 20:05（Asia/Shanghai）触发；先用
+`node server-dist/daily-report.mjs --dry-run` 检查真实汇总，再启用 timer。日报读取真实已出库商品和成交价，AI 仅润色，未配置模型时自动使用规则总结。
+
 预检必须确认 `DATABASE_URL`、`OPEN_API_TOKEN`、`BOOTSTRAP_ADMIN_PASSWORD`、数据库连接、必需迁移版本、核心业务表、19 个高频查询/一致性索引和三份非空构建文件均存在。CRM/商业化手工迁移按
 `001_crm_foundation.sql` → `002_operational_projections.sql` →
 `003_crm_foundation_v2.sql` → `004_commercial_foundation.sql` →
@@ -56,7 +60,8 @@ systemctl status gpu-erp-backup.timer --no-pager
 
 ## 3. 备份和恢复门禁
 
-- 备份服务使用 `ops/systemd/gpu-erp-backup.service` 和 `.timer`。
+- 备份服务使用 `ops/systemd/gpu-erp-backup.service` 和 `.timer`；AI 销售日报使用
+  `ops/systemd/gpu-erp-daily-report.service` 和 `.timer`。
 - 恢复演练必须使用独立数据库，并设置：
 
 ```bash

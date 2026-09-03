@@ -1,7 +1,7 @@
 import {apiRequest} from "../client";
 import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesOutboundPreflight, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesProductCandidates, adaptSalesSettlementAccounts, toSalesOutboundRequestDto} from "../adapters/sales.adapter";
 import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesListStateResponseDto, SalesOutboundPreflightResponseDto, SalesOutboundResponseDto, SalesProductCandidatesResponseDto, SalesSettlementAccountsResponseDto} from "../dto/sales.dto";
-import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesOutboundDataset, SalesOutboundFilters, SalesOutboundPreflightResult, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
+import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesListItem, SalesOutboundDataset, SalesOutboundFilters, SalesOutboundPreflightResult, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
 import {toCreateSalesRequest} from "../adapters/sales.adapter";
 import type {SalesApiPermissions} from "../adapters/sales.adapter";
 
@@ -22,6 +22,16 @@ export const salesApi = {
     const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => {if (value !== "") params.set(key, String(value));});
     const response = await apiRequest<SalesListStateResponseDto>(`/api/sales-invoices?${params.toString()}`, {signal});
     return adaptSalesListState(response, permissions);
+  },
+
+  /** Resolve a drawer reference independently of the currently visible page. */
+  async findByReference(reference: string, permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesListItem | null> {
+    const keyword = reference.trim();
+    if (!keyword) return null;
+    const params = new URLSearchParams({page: "1", pageSize: "1", keyword});
+    const response = await apiRequest<SalesListStateResponseDto>(`/api/sales-invoices?${params.toString()}`, {signal});
+    const dataset = adaptSalesListState(response, permissions);
+    return dataset.items.find((item) => item.id === keyword || item.invoiceNo === keyword || item.lines.some((line) => line.id === keyword || line.sn === keyword)) || null;
   },
 
   async listAllForReport(permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesListDataset> {

@@ -75,9 +75,9 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const openProductLedgerDocument = (row: ProductLedgerRow) => {
     setLedgerSubject(null);
     if (row.documentType === "采购入库") return void navigate({to: "/purchase", search: {keyword: row.documentNo}});
-    if (row.documentType === "采购退货") return void navigate({to: "/purchase/returns", search: {keyword: row.documentNo}});
-    if (row.documentType === "销售出库") return void navigate({to: "/sales", search: {keyword: row.documentNo}});
-    if (row.documentType === "销售退货") return void navigate({to: "/sales/returns", search: {keyword: row.documentNo}});
+    if (row.documentType === "采购退货") return void navigate({to: "/purchase/returns", search: {keyword: row.documentNo, detail: row.documentNo, page: 1}});
+    if (row.documentType === "销售出库") return void navigate({to: "/sales", search: {keyword: row.documentNo, detail: row.documentNo, page: 1}});
+    if (row.documentType === "销售退货") return void navigate({to: "/sales/returns", search: {keyword: row.documentNo, detail: row.documentNo, page: 1}});
     if (row.documentType === "组装拆卸") return void navigate({to: "/assembly", search: {q: row.documentNo}});
     return void navigate({to: "/inventory", search: {keyword: row.documentNo}});
   };

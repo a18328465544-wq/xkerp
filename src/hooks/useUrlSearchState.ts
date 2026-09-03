@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useState} from "react";
+import {useWorkspaceTabActivity} from "./useWorkspaceTabRuntime";
 
 type UrlSearchStateOptions<T> = {
   defaultValue: T;
@@ -24,13 +25,22 @@ function writeSearch(params: URLSearchParams) {
  * popstate handling now live in one hook instead of every page.
  */
 export function useUrlSearchState<T>({defaultValue, parse, serialize, preserveKeys = []}: UrlSearchStateOptions<T>) {
-  const [value, setValue] = useState<T>(() => typeof window === "undefined" ? defaultValue : parse(currentSearch()));
+  const {active} = useWorkspaceTabActivity();
+  // Keep-alive pages all live in the same React tree. Their URL state must not
+  // react to another page's query-string changes while they are hidden, or a
+  // detail drawer from the hidden page can be portaled over the active page.
+  const [value, setValue] = useState<T>(() => typeof window === "undefined" || !active ? defaultValue : parse(currentSearch()));
 
   useEffect(() => {
+    if (!active) return;
     const onPopState = () => setValue(parse(currentSearch()));
     window.addEventListener("popstate", onPopState);
+    // A keep-alive page may become active without remounting. Re-read the
+    // current URL at that boundary so direct links and browser navigation are
+    // still reflected by the newly visible page.
+    onPopState();
     return () => window.removeEventListener("popstate", onPopState);
-  }, [parse]);
+  }, [active, parse]);
 
   const commit = useCallback((next: T) => {
     const current = new URLSearchParams(currentSearch());
@@ -49,4 +59,3 @@ export function useUrlSearchState<T>({defaultValue, parse, serialize, preserveKe
 export function replaceUrlSearch(params: URLSearchParams) {
   writeSearch(params);
 }
-

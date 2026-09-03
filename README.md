@@ -79,3 +79,16 @@ directory. Set `BACKUP_RETENTION_DAYS` to control retention (default: 30 days).
 Install `gpu-erp-backup.service` and `.timer` before relying on automatic backups.
 
 Restore testing should be performed against a separate PostgreSQL database; never restore over the live database without a confirmed maintenance plan.
+
+## AI 销售日报
+
+`scripts/send_daily_report.sh` 生成并投递每日销售总结。总结由服务端先按已出库库存、真实成交单价和门店时区截止时间计算，再由 AI（未配置时使用规则文案）做易懂的文字整理；AI 不参与金额计算，也不会修改业务数据。默认每天 20:05（Asia/Shanghai）执行，部署前需配置 `FEISHU_DAILY_REPORT_WEBHOOK_URL` 或复用 `FEISHU_SALES_WEBHOOK_URL`，并安装：
+
+```bash
+sudo install -m 0644 ops/systemd/gpu-erp-daily-report.service ops/systemd/gpu-erp-daily-report.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gpu-erp-daily-report.timer
+systemctl status gpu-erp-daily-report.timer --no-pager
+```
+
+日报发送记录按租户、门店、日期和通知类型幂等保存；飞书长消息会自动分段，失败时由脚本重试。首次启用前可运行 `node server-dist/daily-report.mjs --dry-run` 检查内容，不会发送消息。

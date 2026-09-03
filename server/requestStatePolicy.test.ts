@@ -25,6 +25,7 @@ test("reads participate in revision checks while HEAD and OPTIONS remain lightwe
   assert.equal(shouldReloadStateFromDatabase("HEAD", "/api/products"), false);
   assert.equal(shouldReloadStateFromDatabase("OPTIONS", "/api/products"), false);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/items"), []);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/ai/daily-sales-summary"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/customers/page"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/vendors"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/products"), []);

@@ -88,6 +88,7 @@ import {registerCustomerDirectoryRoutes} from "./routes/customerDirectory.ts";
 import { registerProductLedgerRoutes } from "./routes/productLedger.ts";
 import { registerMarketQuoteRoutes } from "./routes/marketQuotes.ts";
 import { registerCommercialRoutes } from "./routes/commercial.ts";
+import { registerAiDailySalesRoutes } from "./routes/aiDailySales.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.ts";
 import { registerFinanceReadModelRoutes } from "./routes/financeReadModels.ts";
@@ -1531,16 +1532,26 @@ registerMarketQuoteRoutes(app, {
   requireMenu,
   getState: () => state,
 });
+registerAiDailySalesRoutes(app, {
+  requireAnyMenu,
+  loadState,
+  getStoreDate: storeDate,
+  getCutoff: () => process.env.FEISHU_DAILY_REPORT_CUTOFF || "20:00",
+  permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser),
+});
 
 // AI only receives a compact, anonymized business snapshot. The endpoint remains read-only:
 // suggestions may route a user to work, but never alter a price, order, inventory or ledger.
-app.get("/api/ai/insights", requireAnyMenu(["dashboard", "ai_insights"]), asyncRoute(async (_req: AuthRequest, res) => {
-  await reloadStateFromDatabase();
+app.get("/api/ai/insights", requireAnyMenu(["dashboard", "ai_insights"]), asyncRoute(async (req: AuthRequest, res) => {
+  // Keep AI read models tenant/store scoped. The legacy reload helper defaults
+  // to the compatibility store, which would be the wrong source for a
+  // multi-tenant session.
+  replaceCurrentState(await loadState(req.tenantId, req.storeId));
   res.json({ data: await getDashboardAiInsights(state) });
 }));
 
-app.post("/api/ai/insights/refresh", requireBoss, requireAnyMenu(["dashboard", "ai_insights"]), asyncRoute(async (_req: AuthRequest, res) => {
-  await reloadStateFromDatabase();
+app.post("/api/ai/insights/refresh", requireBoss, requireAnyMenu(["dashboard", "ai_insights"]), asyncRoute(async (req: AuthRequest, res) => {
+  replaceCurrentState(await loadState(req.tenantId, req.storeId));
   res.json({ data: await getDashboardAiInsights(state, { force: true }) });
 }));
 

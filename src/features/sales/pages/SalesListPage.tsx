@@ -2,14 +2,15 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useNavigate} from "@tanstack/react-router";
 import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-table";
 import {Banknote, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search, ShoppingCart, Truck} from "lucide-react";
-import {useCallback, useMemo, useState, type ReactNode} from "react";
+import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpDocumentDeleteDialog, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
+import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {AuthSession} from "@/src/services/api";
 import {formatCurrency} from "@/src/lib/format";
 import type {SalesListFilters, SalesListItem, SalesListLine, SalesListSortKey} from "@/src/types/sales";
@@ -82,7 +83,16 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   const [deleting, setDeleting] = useState<SalesListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "sales-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectSalesList(query.data?.items || [], filters), [filters, query.data]);
-  const selectedDetail = useMemo(() => query.data?.items.find((item) => item.id === detailId || item.invoiceNo === detailId) || null, [detailId, query.data?.items]);
+  const {active} = useWorkspaceTabActivity();
+  const selectedDetailFromPage = useMemo(() => query.data?.items.find((item) => item.id === detailId || item.invoiceNo === detailId) || null, [detailId, query.data?.items]);
+  const detailQuery = useQuery({
+    queryKey: queryKeys.sales.detail(detailId || ""),
+    queryFn: ({signal}) => salesApi.findByReference(detailId || "", {showCost: session.permissions.showCost, showProfit: session.permissions.showProfit}, signal),
+    enabled: active && Boolean(detailId && !selectedDetailFromPage),
+    retry: false,
+  });
+  useEffect(() => {if (detailQuery.error instanceof ApiError && detailQuery.error.isUnauthorized) onAuthExpired();}, [detailQuery.error, onAuthExpired]);
+  const selectedDetail = selectedDetailFromPage || detailQuery.data || null;
   const openDetail = useCallback((item: SalesListItem) => commitDetail(item.id), [commitDetail]);
   const invalidate = async () => {await Promise.all([
     queryClient.invalidateQueries({queryKey: queryKeys.sales.all()}),
@@ -144,7 +154,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
     </ErpListPageFrame>
 
     <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要" footer={selectedDetail && session.permissions.canDelete ? <div className="flex flex-wrap items-center justify-end gap-2">{selectedDetail.outboundStatus === "已出库" ? <span className="text-xs text-[var(--erp-color-text-muted)]">已出库销售单不能删除</span> : <Button type="button" size="sm" variant="danger" onClick={() => setDeleting(selectedDetail)}>删除销售单</Button>}</div> : undefined}>
-      {selectedDetail ? <SalesSnapshotDetail item={selectedDetail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前快照中未找到该销售单，可能已删除或当前账号无权查看。</div>}
+      {selectedDetail ? <SalesSnapshotDetail item={selectedDetail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位销售单" description="正在跨页查找完整销售单明细。" /> : detailQuery.error ? <ErpEmptyState title="销售单详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该销售单，可能已删除或当前账号无权查看。</div>}
     </ErpDetailDrawer>
     <ErpDocumentDeleteDialog
       open={Boolean(deleting)}

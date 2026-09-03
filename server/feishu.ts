@@ -206,20 +206,53 @@ export async function notifyFeishuDailyReport(
 
   const timeoutMs = Math.max(1_000, Number(options.timeoutMs ?? process.env.FEISHU_NOTIFICATION_TIMEOUT_MS ?? 5_000));
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const chunks = splitFeishuDailyText(text);
   try {
-    const response = await fetchImpl(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ msg_type: "text", content: { text } }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const payload = await response.json().catch(() => null) as { code?: unknown; StatusCode?: unknown; msg?: unknown; StatusMessage?: unknown } | null;
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const platformCode = typeof payload?.code === "number" ? payload.code : typeof payload?.StatusCode === "number" ? payload.StatusCode : 0;
-    if (platformCode !== 0) throw new Error(String(payload?.msg || payload?.StatusMessage || `Feishu code ${platformCode}`));
+    for (const chunk of chunks) {
+      const response = await fetchImpl(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ msg_type: "text", content: { text: chunk } }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const payload = await response.json().catch(() => null) as { code?: unknown; StatusCode?: unknown; msg?: unknown; StatusMessage?: unknown } | null;
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const platformCode = typeof payload?.code === "number" ? payload.code : typeof payload?.StatusCode === "number" ? payload.StatusCode : 0;
+      if (platformCode !== 0) throw new Error(String(payload?.msg || payload?.StatusMessage || `Feishu code ${platformCode}`));
+    }
     return { sent: true };
   } catch (error) {
     console.error("[feishu] 经营日报推送失败", { error: error instanceof Error ? error.message : String(error) });
     return { sent: false, reason: "delivery_failed" };
   }
+}
+
+const FEISHU_DAILY_TEXT_LIMIT = 18_000;
+
+/** Keep every product line while staying below Feishu's text payload limit. */
+export function splitFeishuDailyText(text: string, maxLength = FEISHU_DAILY_TEXT_LIMIT) {
+  const parsedLimit = Math.floor(Number(maxLength));
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, parsedLimit) : FEISHU_DAILY_TEXT_LIMIT;
+  const chunks: string[] = [];
+  let current = "";
+  const pushCurrent = () => {
+    if (current) chunks.push(current);
+    current = "";
+  };
+  for (const line of String(text || "").split("\n")) {
+    if (line.length > limit) {
+      pushCurrent();
+      for (let index = 0; index < line.length; index += limit) chunks.push(line.slice(index, index + limit));
+      continue;
+    }
+    const candidate = current ? `${current}\n${line}` : line;
+    if (candidate.length > limit) {
+      pushCurrent();
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+  pushCurrent();
+  return chunks.length ? chunks : [""];
 }

@@ -2,10 +2,13 @@ import {X} from "lucide-react";
 import type {ReactNode} from "react";
 import {Dialog} from "@/src/components/ui";
 import {Button} from "@/src/components/ui";
+import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {cn} from "@/src/lib/cn";
 
 export function ErpDetailDrawer({open, onOpenChange, title, description, children, footer}: {open: boolean; onOpenChange: (open: boolean) => void; title: ReactNode; description?: ReactNode; children: ReactNode; footer?: ReactNode}) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}>
+  const {active} = useWorkspaceTabActivity();
+
+  return <Dialog.Root open={active && open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
       <Dialog.Backdrop className="erp-drawer-backdrop-layer erp-drawer-backdrop fixed inset-x-0 bottom-0 bg-[var(--erp-color-backdrop)] backdrop-blur-[2px]" />
       <Dialog.Viewport className="erp-drawer-layer erp-drawer-viewport fixed inset-x-0 bottom-0 flex justify-end">

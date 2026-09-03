@@ -6,6 +6,7 @@ import {
   notifyFeishuDailyReport,
   notifyFeishuMarketQuotePriceChanged,
   notifyFeishuSalesInvoiceCreated,
+  splitFeishuDailyText,
 } from "./feishu.ts";
 import type { SalesInvoice } from "../src/types.ts";
 
@@ -129,4 +130,10 @@ test("daily report posts to its own webhook", async () => {
   assert.deepEqual(result, { sent: true });
   assert.equal(request?.url, "https://example.test/daily-report");
   assert.equal(JSON.parse(String(request?.init?.body)).content.text, "日报正文");
+});
+
+test("daily report splitter preserves lines and bounds each Feishu chunk", () => {
+  const chunks = splitFeishuDailyText(["标题", "商品明细", "A".repeat(8), "B".repeat(8)].join("\n"), 12);
+  assert.deepEqual(chunks, ["标题\n商品明细", "AAAAAAAA", "BBBBBBBB"]);
+  assert.ok(chunks.every((chunk) => chunk.length <= 12));
 });

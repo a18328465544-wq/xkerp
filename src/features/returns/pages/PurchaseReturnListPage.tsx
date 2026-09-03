@@ -5,12 +5,13 @@ import {Banknote, CheckCircle2, ClipboardCheck, Download, Filter, ListFilter, Lo
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
+import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {formatCurrency} from "@/src/lib/format";
 import type {PurchaseReturnListFilters, PurchaseReturnListItem} from "@/src/types/returns";
 import {createPurchaseReturnColumns} from "../purchase-return.columns";
@@ -44,7 +45,18 @@ export function PurchaseReturnListPage() {
 
 function PurchaseReturnContent({session, filters, commitFilters, detailId, commitDetail, query, onAuthExpired}: {session: AuthSession; filters: PurchaseReturnListFilters; commitFilters: (filters: PurchaseReturnListFilters) => void; detailId: string | null; commitDetail: (id: string | null) => void; query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof returnsApi.listPurchase>>>>; onAuthExpired: () => void}) {
   const queryClient = useQueryClient(); const navigate = useNavigate(); const [completeTarget, setCompleteTarget] = useState<PurchaseReturnListItem | null>(null); const [editTarget, setEditTarget] = useState<PurchaseReturnListItem | null>(null); const [deleteTarget, setDeleteTarget] = useState<PurchaseReturnListItem | null>(null); const [editDraft, setEditDraft] = useState<ReturnEditDraft>({handler: "", reason: "", remarks: ""}); const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "purchase-returns", userId: session.user.id, defaultVisibility: {}});
-  const items = query.data?.items || []; const detail = items.find((item) => item.id === detailId || item.returnNo === detailId) || null; const active = countActiveSalesReturnFilters(filters); const pending = items.filter((item) => item.status === "待处理").length; const pageAmount = items.reduce((sum, item) => sum + item.amount, 0); const pageCredit = items.reduce((sum, item) => sum + item.creditAmount + item.vendorCreditAmount, 0);
+  const items = query.data?.items || [];
+  const {active: tabActive} = useWorkspaceTabActivity();
+  const detailFromPage = items.find((item) => item.id === detailId || item.returnNo === detailId) || null;
+  const detailQuery = useQuery({
+    queryKey: queryKeys.returns.purchaseDetail(detailId || ""),
+    queryFn: ({signal}) => returnsApi.findPurchaseByReference(detailId || "", signal),
+    enabled: tabActive && Boolean(detailId && !detailFromPage),
+    retry: false,
+  });
+  useEffect(() => {if (detailQuery.error instanceof ApiError && detailQuery.error.isUnauthorized) onAuthExpired();}, [detailQuery.error, onAuthExpired]);
+  const detail = detailFromPage || detailQuery.data || null;
+  const active = countActiveSalesReturnFilters(filters); const pending = items.filter((item) => item.status === "待处理").length; const pageAmount = items.reduce((sum, item) => sum + item.amount, 0); const pageCredit = items.reduce((sum, item) => sum + item.creditAmount + item.vendorCreditAmount, 0);
   const canEdit = session.permissions.canEditHistory;
   const canDelete = session.permissions.canDelete;
   const invalidateReturns = () => Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.returns.all()}), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}), queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()})]);
@@ -65,7 +77,9 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <div className="flex flex-wrap items-center justify-end gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div>
     <ErpDataTable columns={columns} data={items} getRowId={(item) => item.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="采购退货加载失败" emptyTitle="暂无采购退货" emptyDescription={active ? "当前筛选没有匹配记录。" : "服务器当前没有采购退货记录。"} onRetry={() => void query.refetch()} onRowClick={openDetail} page={query.data?.meta.page || filters.page} pageSize={query.data?.meta.pageSize || filters.pageSize} total={query.data?.meta.total || 0} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader />
-    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} title={detail?.returnNo || detailId || "采购退货详情"} description="来自真实采购退货列表响应；财务变化以完成后的服务端字段为准。" footer={detail && <div className="flex flex-wrap justify-end gap-2">{canDelete && <Button size="sm" variant="danger" onClick={() => openDelete(detail)}>{detail.status === "已完成" ? "删除并冲销" : "删除"}</Button>}{canEdit && <Button size="sm" variant="secondary" onClick={() => openEdit(detail)}>编辑资料</Button>}{detail.status === "待处理" && <Button variant="primary" onClick={() => setCompleteTarget(detail)}><CheckCircle2 className="h-4 w-4" />完成采购退货</Button>}</div>}>{detail ? <PurchaseReturnDetail item={detail} /> : <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前页没有该退货单，请返回对应分页后查看。</p>}</ErpDetailDrawer>
+    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} title={detail?.returnNo || detailId || "采购退货详情"} description="来自真实采购退货列表响应；财务变化以完成后的服务端字段为准。" footer={detail && <div className="flex flex-wrap justify-end gap-2">{canDelete && <Button size="sm" variant="danger" onClick={() => openDelete(detail)}>{detail.status === "已完成" ? "删除并冲销" : "删除"}</Button>}{canEdit && <Button size="sm" variant="secondary" onClick={() => openEdit(detail)}>编辑资料</Button>}{detail.status === "待处理" && <Button variant="primary" onClick={() => setCompleteTarget(detail)}><CheckCircle2 className="h-4 w-4" />完成采购退货</Button>}</div>}>
+      {detail ? <PurchaseReturnDetail item={detail} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位采购退货单" description="正在跨页查找完整退货明细。" /> : detailQuery.error ? <ErpEmptyState title="采购退货详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该退货单，可能已删除或当前账号无权查看。</div>}
+    </ErpDetailDrawer>
     <CompleteDialog target={completeTarget} pending={mutation.isPending} error={mutation.error instanceof Error ? mutation.error.message : ""} onClose={() => {if (!mutation.isPending) setCompleteTarget(null);}} onConfirm={() => {if (completeTarget) mutation.mutate(completeTarget);}} />
     <ReturnEditDialog target={editTarget} draft={editDraft} pending={updateMutation.isPending} error={updateMutation.error instanceof Error ? updateMutation.error.message : ""} onClose={() => {if (!updateMutation.isPending) setEditTarget(null);}} onDraftChange={setEditDraft} onConfirm={() => {if (editTarget) updateMutation.mutate({item: editTarget, values: editDraft});}} />
     <DeleteReturnDialog target={deleteTarget} pending={deleteMutation.isPending} error={deleteMutation.error instanceof Error ? deleteMutation.error.message : ""} onClose={() => {if (!deleteMutation.isPending) setDeleteTarget(null);}} onConfirm={() => {if (deleteTarget) deleteMutation.mutate(deleteTarget);}} />

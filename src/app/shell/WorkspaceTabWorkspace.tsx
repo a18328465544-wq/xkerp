@@ -37,6 +37,18 @@ function itemById(id: string) {
   return navigationItems.find((item) => item.id === id);
 }
 
+/**
+ * Detail drawers are page-scoped URL state. Keep ordinary list filters when
+ * switching workspace tabs, but never carry a drawer reference into another
+ * page where the same query key can mean a different entity.
+ */
+function searchWithoutDetail() {
+  if (typeof window === "undefined") return {};
+  const params = new URLSearchParams(window.location.search);
+  params.delete("detail");
+  return Object.fromEntries(params.entries());
+}
+
 export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode}) {
   const {session} = useAuth();
   const navigate = useNavigate();
@@ -150,7 +162,7 @@ export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode})
     activate(item.id);
     if (!current) {
       const targetPath = routeByTabRef.current[item.id] || item.path;
-      void navigate({to: targetPath});
+      void navigate({to: targetPath, search: searchWithoutDetail()});
     }
   }, [activate, currentItem?.id, navigate, setNavigationIntent]);
 
@@ -173,7 +185,7 @@ export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode})
     }
     setPendingClose({id, targetId: next.activeId, startPathname: pathname});
     setNavigationIntent("close");
-    void navigate({to: targetPath});
+    void navigate({to: targetPath, search: searchWithoutDetail()});
   }, [isTabDirty, navigate, pathname, setNavigationIntent, transition]);
 
   const confirmDirtyClose = useCallback(() => {

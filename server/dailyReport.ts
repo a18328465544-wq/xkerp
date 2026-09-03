@@ -1,15 +1,23 @@
 import type { AppState } from "./store.ts";
 import type { AiInsightsPayload } from "./aiInsights.ts";
+import type { DailySalesAiNarrative, DailySalesSummary } from "../src/types/ai.ts";
 
 const money = (value: unknown) => Number(value || 0) || 0;
 
-function beforeCutoff(value: string | undefined, date: string, cutoff: string) {
+export function beforeCutoff(value: string | undefined, date: string, cutoff: string) {
   if (!value) return false;
-  const normalized = String(value).trim();
+  const normalized = String(value).trim().replace("T", " ");
   if (!normalized.startsWith(date)) return false;
   // Date-only business records are counted for that business day. Timestamp records respect the
   // scheduled report cutoff so the message never implies it includes transactions after 20:00.
-  return normalized.length <= date.length || normalized.slice(0, `${date} `.length + cutoff.length) <= `${date} ${cutoff}`;
+  if (normalized.length <= date.length) return true;
+  const time = normalized.slice(date.length + 1).match(/^(\d{1,2}):(\d{2})/);
+  if (!time) return false;
+  const hours = Number(time[1]);
+  const minutes = Number(time[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return false;
+  const localTimestamp = `${date} ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  return localTimestamp <= `${date} ${cutoff}`;
 }
 
 export interface DailyBusinessReport {
@@ -98,7 +106,50 @@ export function buildFeishuDailyBusinessReportMessage(report: DailyBusinessRepor
   ].join("\n");
 }
 
-export function buildFeishuDailyAiSummaryMessage(report: DailyBusinessReport, ai: AiInsightsPayload) {
+function formatDailySalesMoney(value: number | undefined) {
+  if (value === undefined) return "暂无";
+  return `¥${Number(value || 0).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+}
+
+function formatDailySalesPriceBreakdown(summary: DailySalesSummary["products"][number]) {
+  const prices = summary.priceBreakdown.map((row) => `${formatDailySalesMoney(row.unitPrice)} ×${row.quantity}`);
+  if (summary.unknownPriceQuantity > 0) prices.push(`${summary.unknownPriceQuantity} 张单价缺失`);
+  return prices.length ? prices.join("、") : "单价缺失";
+}
+
+export function buildFeishuDailySalesSummarySection(summary: DailySalesSummary, narrative: DailySalesAiNarrative) {
+  const average = formatDailySalesMoney(summary.today.averageUnitPrice);
+  const lines = [
+    "🧾 今日销售总结",
+    `一句话：${narrative.headline}`,
+    `已出库：${summary.today.quantity} 张 · 销售额：${formatDailySalesMoney(summary.today.amount)} · 平均成交单价：${average}`,
+    summary.today.grossProfit !== undefined ? `已实现毛利：${formatDailySalesMoney(summary.today.grossProfit)}` : "",
+    "",
+    "商品明细：",
+    ...(summary.products.length
+      ? summary.products.map((product) => `• ${product.productName}：${product.quantity} 张 · ${formatDailySalesPriceBreakdown(product)} · 合计 ${formatDailySalesMoney(product.amount)}${product.grossProfit !== undefined ? ` · 毛利 ${formatDailySalesMoney(product.grossProfit)}` : ""}`)
+      : ["• 今天暂无已出库商品。"]),
+    "",
+    `较昨日：${narrative.comparison}`,
+  ];
+  if (summary.returns.orderCount > 0) {
+    lines.push(`当日退货：${summary.returns.orderCount} 单 · ${summary.returns.quantity} 张 · ${formatDailySalesMoney(summary.returns.amount)}`);
+  }
+  if (narrative.attention.length) {
+    lines.push("", "需要注意：", ...narrative.attention.map((item) => `• ${item}`));
+  }
+  if (summary.dataQualityIssues.length && !narrative.attention.some((item) => summary.dataQualityIssues.includes(item))) {
+    lines.push("", "数据提示：", ...summary.dataQualityIssues.map((item) => `• ${item}`));
+  }
+  lines.push("", `总结来源：${narrative.source === "ai" ? `AI${narrative.model ? `（${narrative.model}）` : ""}` : "系统规则"} · ${narrative.generatedAt.slice(0, 16).replace("T", " ")}`);
+  return lines.filter(Boolean).join("\n");
+}
+
+export function buildFeishuDailyAiSummaryMessage(
+  report: DailyBusinessReport,
+  ai: AiInsightsPayload,
+  sales?: {summary: DailySalesSummary; narrative: DailySalesAiNarrative},
+) {
   const base = buildFeishuDailyBusinessReportMessage(report);
   const suggestions = ai.insights.length
     ? ai.insights.map((insight, index) => [
@@ -108,6 +159,7 @@ export function buildFeishuDailyAiSummaryMessage(report: DailyBusinessReport, ai
     ].filter(Boolean).join("\n")).join("\n")
     : "暂无需要优先处理的 AI 建议。";
   return [
+    sales ? buildFeishuDailySalesSummarySection(sales.summary, sales.narrative) : "",
     base,
     "",
     "🤖 AI 经营总结",

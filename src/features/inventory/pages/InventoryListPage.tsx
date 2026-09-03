@@ -97,9 +97,9 @@ export function InventoryListPage() {
   const openProductLedgerDocument = (row: ProductLedgerRow) => {
     setLedgerSubject(null);
     if (row.documentType === "采购入库") return void navigate({to: "/purchase", search: {keyword: row.documentNo}});
-    if (row.documentType === "采购退货") return void navigate({to: "/purchase/returns", search: {keyword: row.documentNo}});
-    if (row.documentType === "销售出库") return void navigate({to: "/sales", search: {keyword: row.documentNo}});
-    if (row.documentType === "销售退货") return void navigate({to: "/sales/returns", search: {keyword: row.documentNo}});
+    if (row.documentType === "采购退货") return void navigate({to: "/purchase/returns", search: {keyword: row.documentNo, detail: row.documentNo, page: 1}});
+    if (row.documentType === "销售出库") return void navigate({to: "/sales", search: {keyword: row.documentNo, detail: row.documentNo, page: 1}});
+    if (row.documentType === "销售退货") return void navigate({to: "/sales/returns", search: {keyword: row.documentNo, detail: row.documentNo, page: 1}});
     if (row.documentType === "组装拆卸") return void navigate({to: "/assembly", search: {q: row.documentNo}});
     return void navigate({to: "/inventory", search: {keyword: row.documentNo}});
   };
@@ -191,17 +191,27 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   };
   useEffect(() => setRowSelection({}), [filters]);
   const openJourneyDocument = (event: InventoryJourneyEvent) => {
+    const documentNo = event.documentNo?.trim();
+    // A journey event already carries the authoritative document number. Pass
+    // it through the destination URL so the target list can resolve the exact
+    // record instead of inheriting the inventory card's `detail` parameter.
+    if (event.type === "sale" && documentNo) {
+      void navigate({to: "/sales", search: {keyword: documentNo, detail: documentNo, page: 1}});
+      return;
+    }
+    if (event.type === "return" && documentNo) {
+      const target = event.title === "销售退货" ? "/sales/returns" : "/purchase/returns";
+      void navigate({to: target, search: {keyword: documentNo, detail: documentNo, page: 1}});
+      return;
+    }
     const target = event.type === "purchase" ? "/purchase"
-      : event.type === "sale" ? "/sales"
-        : event.type === "inspection" ? "/inspections"
-          : event.type === "payment" ? "/finance/ledger"
-            : event.type === "aftersales" ? "/aftersales"
-              : event.type === "return" ? (event.title === "销售退货" ? "/sales/returns" : "/purchase/returns")
-                : event.type === "assembly" ? "/assembly"
-                  : undefined;
+      : event.type === "inspection" ? "/inspections"
+        : event.type === "payment" ? "/finance/ledger"
+          : event.type === "aftersales" ? "/aftersales"
+            : event.type === "assembly" ? "/assembly"
+              : undefined;
     if (!target) return;
-    onCloseDetail();
-    void navigate({to: target});
+    void navigate({to: target, search: {}});
   };
   const detailItem = journeyQuery.data?.card ?? detailQuery.data?.item ?? null;
 

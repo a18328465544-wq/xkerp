@@ -1,6 +1,7 @@
 import {apiRequest, apiStreamRequest} from "../client";
 import {ApiError} from "../errors";
 import type {CopilotContext, CopilotToolName, CopilotToolResult} from "@/src/utils/copilotTools";
+import type {DailySalesAiNarrative, DailySalesMetrics, DailySalesPriceBreakdown, DailySalesProductSummary, DailySalesReturnProductSummary, DailySalesReturnSummary, DailySalesSummary, DailySalesSummaryResult} from "@/src/types/ai";
 
 export type {CopilotContext, CopilotCardAction, CopilotToolResult} from "@/src/utils/copilotTools";
 
@@ -24,6 +25,8 @@ export interface AiInsightsResult {
   expiresAt: string;
   model?: string;
 }
+
+export type AiDailySalesSummaryResult = DailySalesSummaryResult;
 
 export interface CopilotRequest {
   messages: CopilotMessage[];
@@ -49,6 +52,128 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function text(value: unknown, fallback = "") { return typeof value === "string" ? value : fallback; }
+
+function finiteNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function optionalNumber(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function adaptDailySalesMetrics(value: unknown): DailySalesMetrics {
+  const item = record(value);
+  const grossProfit = optionalNumber(item.grossProfit);
+  const averageUnitPrice = optionalNumber(item.averageUnitPrice);
+  return {
+    productCount: Math.max(0, Math.round(finiteNumber(item.productCount))),
+    quantity: Math.max(0, Math.round(finiteNumber(item.quantity))),
+    pricedQuantity: Math.max(0, Math.round(finiteNumber(item.pricedQuantity))),
+    amount: finiteNumber(item.amount),
+    ...(averageUnitPrice !== undefined ? {averageUnitPrice} : {}),
+    ...(grossProfit !== undefined ? {grossProfit} : {}),
+  };
+}
+
+function adaptDailySalesPriceBreakdown(value: unknown): DailySalesPriceBreakdown | null {
+  const item = record(value);
+  const unitPrice = optionalNumber(item.unitPrice);
+  if (unitPrice === undefined) return null;
+  return {
+    unitPrice,
+    quantity: Math.max(0, Math.round(finiteNumber(item.quantity))),
+    amount: finiteNumber(item.amount, unitPrice * Math.max(0, Math.round(finiteNumber(item.quantity)))),
+  };
+}
+
+function adaptDailySalesProduct(value: unknown, index: number): DailySalesProductSummary | null {
+  const item = record(value);
+  const productName = text(item.productName, "未命名商品");
+  const quantity = Math.max(0, Math.round(finiteNumber(item.quantity)));
+  const pricedQuantity = Math.max(0, Math.round(finiteNumber(item.pricedQuantity)));
+  const unknownPriceQuantity = Math.max(0, Math.round(finiteNumber(item.unknownPriceQuantity)));
+  const averageUnitPrice = optionalNumber(item.averageUnitPrice);
+  const grossProfit = optionalNumber(item.grossProfit);
+  const priceBreakdown = Array.isArray(item.priceBreakdown)
+    ? item.priceBreakdown.map(adaptDailySalesPriceBreakdown).filter((row): row is DailySalesPriceBreakdown => Boolean(row)).slice(0, 20)
+    : [];
+  return {
+    key: text(item.key, `product-${index}`),
+    productName,
+    model: text(item.model),
+    quantity,
+    pricedQuantity,
+    unknownPriceQuantity,
+    amount: finiteNumber(item.amount),
+    ...(averageUnitPrice !== undefined ? {averageUnitPrice} : {}),
+    priceBreakdown,
+    ...(grossProfit !== undefined ? {grossProfit} : {}),
+  };
+}
+
+function adaptDailySalesReturnProduct(value: unknown): DailySalesReturnProductSummary {
+  const item = record(value);
+  return {
+    productName: text(item.productName, "未命名商品"),
+    quantity: Math.max(0, Math.round(finiteNumber(item.quantity))),
+    amount: finiteNumber(item.amount),
+  };
+}
+
+function adaptDailySalesReturns(value: unknown): DailySalesReturnSummary {
+  const item = record(value);
+  return {
+    orderCount: Math.max(0, Math.round(finiteNumber(item.orderCount))),
+    quantity: Math.max(0, Math.round(finiteNumber(item.quantity))),
+    amount: finiteNumber(item.amount),
+    products: Array.isArray(item.products) ? item.products.map(adaptDailySalesReturnProduct).slice(0, 50) : [],
+  };
+}
+
+function adaptDailySalesNarrative(value: unknown): DailySalesAiNarrative {
+  const item = record(value);
+  const source: DailySalesAiNarrative["source"] = item.source === "ai" ? "ai" : "rules";
+  const attention = Array.isArray(item.attention)
+    ? item.attention.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean).slice(0, 3)
+    : [];
+  return {
+    source,
+    generatedAt: text(item.generatedAt),
+    headline: text(item.headline, "今日销售数据已汇总。"),
+    comparison: text(item.comparison, "暂无可比数据。"),
+    attention,
+    model: text(item.model) || undefined,
+  };
+}
+
+/** Normalize the read-only daily-sales contract at the browser boundary. */
+export function adaptDailySalesSummaryResult(value: unknown): AiDailySalesSummaryResult | null {
+  const root = record(value);
+  const summaryValue = record(root.summary);
+  const date = text(summaryValue.date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const summary: DailySalesSummary = {
+    date,
+    cutoff: text(summaryValue.cutoff, "20:00"),
+    today: adaptDailySalesMetrics(summaryValue.today),
+    yesterday: adaptDailySalesMetrics(summaryValue.yesterday),
+    comparison: {
+      quantityDelta: Math.round(finiteNumber(record(summaryValue.comparison).quantityDelta)),
+      ...(optionalNumber(record(summaryValue.comparison).quantityChangeRatio) !== undefined ? {quantityChangeRatio: optionalNumber(record(summaryValue.comparison).quantityChangeRatio)} : {}),
+      amountDelta: finiteNumber(record(summaryValue.comparison).amountDelta),
+      ...(optionalNumber(record(summaryValue.comparison).amountChangeRatio) !== undefined ? {amountChangeRatio: optionalNumber(record(summaryValue.comparison).amountChangeRatio)} : {}),
+      ...(optionalNumber(record(summaryValue.comparison).averageUnitPriceDelta) !== undefined ? {averageUnitPriceDelta: optionalNumber(record(summaryValue.comparison).averageUnitPriceDelta)} : {}),
+    },
+    products: Array.isArray(summaryValue.products) ? summaryValue.products.map(adaptDailySalesProduct).filter((item): item is DailySalesProductSummary => Boolean(item)).slice(0, 100) : [],
+    returns: adaptDailySalesReturns(summaryValue.returns),
+    pendingOutboundOrders: Math.max(0, Math.round(finiteNumber(summaryValue.pendingOutboundOrders))),
+    dataQualityIssues: Array.isArray(summaryValue.dataQualityIssues) ? summaryValue.dataQualityIssues.filter((item): item is string => typeof item === "string").slice(0, 20) : [],
+  };
+  return {summary, narrative: adaptDailySalesNarrative(root.narrative)};
+}
 
 const toolNames = new Set<CopilotToolName>([
   "searchInventory", "searchCustomer", "createQuote", "createPurchase", "createSales",
@@ -152,6 +277,13 @@ export const aiApi = {
     const data = record(response.data);
     const insights = Array.isArray(data.insights) ? data.insights.map(adaptInsight).filter((item): item is AiInsightItem => Boolean(item)) : [];
     return {insights, source: text(data.source, "rules"), generatedAt: text(data.generatedAt), expiresAt: text(data.expiresAt), model: text(data.model) || undefined};
+  },
+  async dailySalesSummary(date: string, signal?: AbortSignal): Promise<AiDailySalesSummaryResult> {
+    const params = new URLSearchParams({date});
+    const response = await apiRequest<{data?: unknown}>(`/api/ai/daily-sales-summary?${params.toString()}`, {signal});
+    const result = adaptDailySalesSummaryResult(response.data);
+    if (!result) throw new ApiError(0, "今日销售总结数据无效");
+    return result;
   },
   async streamCopilot(input: CopilotRequest, onEvent: (event: CopilotStreamEvent) => void, signal?: AbortSignal): Promise<void> {
     const response = await apiStreamRequest("/api/ai/copilot", {method: "POST", body: JSON.stringify(input), signal});

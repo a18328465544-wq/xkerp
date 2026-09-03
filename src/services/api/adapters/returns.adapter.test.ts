@@ -32,6 +32,12 @@ test("sales return adapter never leaks purchase return rows into the feature", (
   assert.deepEqual(result.items.map((item) => item.id), ["S-1"]);
 });
 
+test("return adapter keeps nested inventory references for batch detail lookup", () => {
+  const result = adaptSalesReturnList({data: {data: [{id: "RET-BATCH", returnNo: "TH-BATCH", type: "销售退货", items: [{sourceInventoryId: "KC-1"}, {sourceInventoryId: "KC-2"}]}], meta: {page: 1, pageSize: 20, total: 1}}});
+  assert.equal(result.items[0]?.sourceInventoryId, "KC-1");
+  assert.deepEqual(result.items[0]?.sourceInventoryIds, ["KC-1", "KC-2"]);
+});
+
 test("sales return completion response is projected without state patches", () => {
   assert.deepEqual(adaptSalesReturnComplete({id: "RET-1", returnNo: "TH-1", status: "已完成", completedAt: "2026-08-09 12:00", stateMerge: {inventory: []}}), {
     id: "RET-1",

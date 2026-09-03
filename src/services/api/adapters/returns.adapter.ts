@@ -21,6 +21,12 @@ function statusValue(value: unknown): SalesReturnStatus {
 
 export function adaptSalesReturnListItem(value: unknown): SalesReturnListItem {
   const dto = record(value);
+  const nestedSourceInventoryIds = Array.isArray(dto.items)
+    ? dto.items
+      .map((item) => text(record(item).sourceInventoryId))
+      .filter(Boolean)
+    : [];
+  const sourceInventoryId = text(dto.sourceInventoryId || nestedSourceInventoryIds[0]);
   return {
     id: text(dto.id || dto.returnNo),
     returnNo: text(dto.returnNo || dto.id),
@@ -28,7 +34,8 @@ export function adaptSalesReturnListItem(value: unknown): SalesReturnListItem {
     status: statusValue(dto.status),
     date: text(dto.date),
     relatedDocNo: text(dto.relatedDocNo),
-    sourceInventoryId: text(dto.sourceInventoryId),
+    sourceInventoryId,
+    ...(nestedSourceInventoryIds.length ? {sourceInventoryIds: Array.from(new Set(nestedSourceInventoryIds))} : {}),
     productId: text(dto.productId),
     productName: text(dto.productName, "未命名商品"),
     sn: text(dto.sn),

@@ -61,6 +61,7 @@ export type {FinanceIncomeCategory, FinanceIncomeCollection, FinanceIncomeFilter
 export {financeExpenseCategories, financeExpensePaymentMethods, legacyFinanceExpenseCategories} from "./finance-expense";
 export type {FinanceExpenseCategory, FinanceExpenseCollection, FinanceExpenseFilters, FinanceExpenseFormValues, FinanceExpenseItem} from "./finance-expense";
 export type {FinanceTransferCollection, FinanceTransferFilters, FinanceTransferFormValues, FinanceTransferItem} from "./finance-transfer";
+export type {DailySalesAiNarrative, DailySalesAiNarrativeSource, DailySalesComparison, DailySalesMetrics, DailySalesPriceBreakdown, DailySalesProductSummary, DailySalesReturnProductSummary, DailySalesReturnSummary, DailySalesSummary, DailySalesSummaryResult} from "./ai";
 export type {CommissionAdjustment, CommissionMode, CommissionSettlementStatus} from "./commission";
 export type {
   CustomerOrder,
