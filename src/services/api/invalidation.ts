@@ -22,5 +22,6 @@ const keyForDomain: Record<ErpQueryDomain, () => readonly unknown[]> = {
 };
 
 export async function invalidateErpDomains(queryClient: QueryClient, domains: readonly ErpQueryDomain[]) {
-  await Promise.all(domains.map((domain) => queryClient.invalidateQueries({queryKey: keyForDomain[domain]()})));
+  const uniqueDomains = [...new Set(domains)];
+  await Promise.all(uniqueDomains.map((domain) => queryClient.invalidateQueries({queryKey: keyForDomain[domain]()})));
 }

@@ -165,6 +165,11 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 `server/routes/`，架构门禁限制主组合文件继续增长。当前 `system.ts`、`financeClosing.ts`
 和 `domainSnapshots.ts` 已独立拥有各自的 HTTP 契约。
 
+近期已完成渐进拆分的边界包括：`financeReadModels.ts`、`financeAccounts.ts`、
+`financePayments.ts`、`productMutations.ts`、`partnerMutations.ts`、`media.ts` 和
+`crmReadModels.ts`、`crmMutations.ts`、`crmNormalizedReads.ts`、`aiRoutes.ts`、
+`purchaseMutations.ts`、`salesMutations.ts` 和 `returnMutations.ts`。这些模块通过依赖注入复用现有鉴权、状态补丁和领域动作，迁移期间不改变接口路径。
+
 组合层负责：
 
 - Express 应用初始化。

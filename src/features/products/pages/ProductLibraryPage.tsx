@@ -6,6 +6,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, productsApi, queryKeys, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useProductLedger} from "@/src/hooks/useProductLedger";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
@@ -54,9 +55,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const stockUnits = query.data?.meta?.summary.stockUnits ?? products.reduce((sum, item) => sum + item.currentStock, 0);
   const stockedTemplates = query.data?.meta?.summary.stockedTemplates ?? products.filter((item) => item.currentStock > 0).length;
 
-  const invalidate = async () => {
-    await Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.products.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()})]);
-  };
+  const invalidate = () => invalidateErpDomains(queryClient, ["products", "state"]);
   const handleMutationError = (error: Error) => {
     if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;}
     toast.error(error.message);

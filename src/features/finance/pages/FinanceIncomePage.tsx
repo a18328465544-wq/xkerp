@@ -46,6 +46,7 @@ import {
   queryKeys,
   type AuthSession,
 } from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import { createCapabilities, useAuth } from "@/src/app/auth";
 import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
 import { formatCurrency } from "@/src/lib/format";
@@ -143,8 +144,7 @@ function FinanceIncomeContent({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<FinanceIncomeItem | null>(null);
   const collection = loadedCollection || {items: [], total: 0, totalAmount: 0, page: filters.page, pageSize: filters.pageSize, source: "database-page" as const};
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.finance.all() });
+  const invalidate = () => invalidateErpDomains(queryClient, ["finance"]);
   const mutationError = (caught: Error) => {
     if (caught instanceof ApiError && caught.isUnauthorized) { onAuthExpired(); return; }
     toast.error(caught.message);

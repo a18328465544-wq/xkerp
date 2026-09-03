@@ -7,6 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, purchaseApi, queryKeys} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -80,14 +81,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
   const [deleting, setDeleting] = useState<PurchaseListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "purchase-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectPurchaseList(query.data?.items || [], filters), [filters, query.data]);
-  const invalidate = async () => {await Promise.all([
-    queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.customers.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.crm.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.state.all()}),
-  ]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["purchase", "inventory", "finance", "customers", "crm", "state"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); toast.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
   const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail, onDelete: setDeleting}), [onDetail, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);

@@ -7,6 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, aftersalesApi, queryKeys, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -32,7 +33,7 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
   const items = snapshot?.items || []; const candidates = snapshot?.candidates || [];
   const filtered = useMemo(() => sortAftersales(filterAftersales(items, filters), sorting), [filters, items, sorting]); const totalPages = Math.max(1, Math.ceil(filtered.length / filters.pageSize)); useEffect(() => {if (filters.page > totalPages) onFiltersChange({...filters, page: totalPages});}, [filters, onFiltersChange, totalPages]); const pageRows = filtered.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
   const goToReturns = () => {void navigate({to: "/sales/returns/new"});};
-  const invalidate = async () => {await Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.aftersales.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()}), queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}), queryClient.invalidateQueries({queryKey: queryKeys.sales.all()}), queryClient.invalidateQueries({queryKey: queryKeys.customers.all()})]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["aftersales", "state", "inventory", "sales", "customers"]);
   const handleError = (caught: Error) => {if (caught instanceof ApiError && caught.isUnauthorized) {onAuthExpired(); return;} toast.error(caught.message);};
   const createMutation = useMutation({mutationFn: async (values: AftersalesCreateFormValues) => {const candidate = candidates.find((item) => item.inventoryId === values.candidateId); if (!candidate) throw new Error("所选库存卡已不存在，请刷新后重试"); if (candidate.activeClaimId) throw new Error(`该 SN 已存在处理中工单 ${candidate.activeClaimId}`); return aftersalesApi.create(values, candidate, session.user.displayName);}, onSuccess: async (created) => {toast.success("售后工单已登记，库存卡已进入售后中"); setCreateOpen(false); setDetail(created); await invalidate();}, onError: handleError});
   const resolveMutation = useMutation({mutationFn: async ({record, values}: {record: AftersalesListItem; values: AftersalesResolutionFormValues}) => aftersalesApi.resolve(record.id, values, session.user.displayName), onSuccess: async (updated) => {toast.success(updated.status === "已拒绝" ? "售后工单已拒绝" : "售后工单已结案"); setResolving(null); setDetail(updated); await invalidate();}, onError: handleError});

@@ -7,6 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -83,12 +84,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
   const completedOnPage = items.filter((item) => item.status === "已完成").length;
   const canEdit = session.permissions.canEditHistory;
   const canDelete = session.permissions.canDelete;
-  const invalidateReturns = () => Promise.all([
-    queryClient.invalidateQueries({queryKey: queryKeys.returns.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.sales.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.state.all()}),
-  ]);
+  const invalidateReturns = () => invalidateErpDomains(queryClient, ["returns", "sales", "inventory", "state"]);
   const handleMutationError = (error: Error) => {
     if (error instanceof ApiError && error.isUnauthorized) {
       onAuthExpired();

@@ -6,6 +6,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDetailDrawer, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, quotesApi, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
@@ -50,7 +51,7 @@ function MarketQuotesContent({session, query, filters, onFiltersChange, onAuthEx
   const linkedStock = quotes.reduce((total, quote) => total + quote.stockCount, 0);
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.brand !== "all") + Number(filters.trend !== "all");
 
-  const invalidate = async () => {await Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.quotes.all()}), queryClient.invalidateQueries({queryKey: queryKeys.products.all()}), queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()})]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["quotes", "products", "inventory", "state"]);
   const mutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const saveMutation = useMutation({mutationFn: ({values, quote}: {values: MarketQuoteFormValues; quote: MarketQuoteItem | null}) => quote ? quotesApi.update(quote.id, values, session.permissions) : quotesApi.create(values, session.permissions), onSuccess: async (quote) => {toast.success(`${quote.model} 行情已保存`); setDialogOpen(false); setEditing(null); await invalidate();}, onError: mutationError});
   const deleteMutation = useMutation({mutationFn: (id: string) => quotesApi.remove(id), onSuccess: async () => {toast.success("行情参考已删除"); setDeleting(null); await invalidate();}, onError: mutationError});

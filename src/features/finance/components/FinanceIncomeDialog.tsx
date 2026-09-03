@@ -1,22 +1,135 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {Controller, useForm} from "react-hook-form";
-import {useEffect, useState, type ReactNode} from "react";
-import {Button, Dialog, Input, Select, Textarea} from "@/src/components/ui";
+import {useEffect} from "react";
+import {Input, Select, Textarea} from "@/src/components/ui";
 import {ErpAmountInput, ErpDatePicker, ErpUploader} from "@/src/components/common";
 import type {FinanceAccountItem} from "@/src/types/finance-account";
 import {financeIncomeCategories, financeIncomePaymentMethods, type FinanceIncomeFormValues, type FinanceIncomeItem} from "@/src/types/finance-income";
 import {storeDate} from "@/src/utils/storeTime";
 import {financeIncomeSchema} from "../finance-income.schema";
 import {useFinanceIncomeMediaUpload} from "../hooks/useFinanceIncomeMediaUpload";
+import {FinanceEntryDialogShell, FinanceEntryField, useFinanceEntryPreview} from "./FinanceEntryDialogShell";
 
 const defaults = (): FinanceIncomeFormValues => ({source: "", accountId: "", amount: 0, paymentMethod: "微信", businessType: "其他收入", referenceNo: "", date: storeDate(), remarks: "", images: []});
 
-export function FinanceIncomeDialog({open, item, accounts, pending, error, onOpenChange, onSubmit}: {open: boolean; item: FinanceIncomeItem | null; accounts: FinanceAccountItem[]; pending: boolean; error?: string; onOpenChange: (open: boolean) => void; onSubmit: (values: FinanceIncomeFormValues) => Promise<void>}) {
-  const [preview, setPreview] = useState<string>();
+type FinanceIncomeDialogProps = {
+  open: boolean;
+  item: FinanceIncomeItem | null;
+  accounts: FinanceAccountItem[];
+  pending: boolean;
+  error?: string;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (values: FinanceIncomeFormValues) => Promise<void>;
+};
+
+export function FinanceIncomeDialog({open, item, accounts, pending, error, onOpenChange, onSubmit}: FinanceIncomeDialogProps) {
+  const {preview, setPreview} = useFinanceEntryPreview();
   const form = useForm<FinanceIncomeFormValues>({defaultValues: defaults(), resolver: zodResolver(financeIncomeSchema), mode: "onBlur"});
   const media = useFinanceIncomeMediaUpload((urls) => form.setValue("images", urls, {shouldDirty: true, shouldValidate: true}));
-  useEffect(() => {if (!open) return; const values: FinanceIncomeFormValues = item ? {source: item.source, accountId: item.accountId, amount: item.amount, paymentMethod: item.paymentMethod, businessType: financeIncomeCategories.includes(item.businessType as typeof financeIncomeCategories[number]) ? item.businessType as typeof financeIncomeCategories[number] : "其他收入", referenceNo: item.referenceNo || "", date: item.time.slice(0, 10), remarks: item.remarks || "", images: item.images} : defaults(); form.reset(values); media.reset(values.images);}, [form, item, media.reset, open]);
-  return <><Dialog.Root open={open} onOpenChange={(next) => {if (!pending) onOpenChange(next);}}><Dialog.Portal><Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)] backdrop-blur-sm" /><Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-4"><Dialog.Popup className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)]"><div className="border-b border-[var(--erp-color-border)] px-5 py-4"><Dialog.Title className="text-lg font-bold">{item ? "编辑非经营收入" : "新增非经营收入"}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">只登记非销售、非采购单自动生成的临时收入；保存后由后端同步账户和财务流水。</Dialog.Description></div><form onSubmit={(event) => {void form.handleSubmit(onSubmit)(event);}}><div className="grid gap-4 p-5 md:grid-cols-2"><Field label="收入来源" error={form.formState.errors.source?.message}><Input {...form.register("source")} placeholder="例如：平台返点、物流赔偿" disabled={pending} /></Field><Field label="收入类型" error={form.formState.errors.businessType?.message}><Controller control={form.control} name="businessType" render={({field}) => <Select value={field.value} onValueChange={field.onChange} options={financeIncomeCategories.map((value) => ({value, label: value}))} disabled={pending} aria-label="收入类型" />} /></Field><Field label="结算账户" error={form.formState.errors.accountId?.message}><Controller control={form.control} name="accountId" render={({field}) => <Select value={field.value} onValueChange={field.onChange} options={accounts.filter((account) => account.enabled).map((account) => ({value: account.id, label: `${account.name} · ${account.type}`}))} disabled={pending} placeholder="请选择入账账户" aria-label="结算账户" />} /></Field><Field label="入账方式" error={form.formState.errors.paymentMethod?.message}><Controller control={form.control} name="paymentMethod" render={({field}) => <Select value={field.value} onValueChange={field.onChange} options={financeIncomePaymentMethods.map((value) => ({value, label: value}))} disabled={pending} aria-label="入账方式" />} /></Field><Field label="金额" error={form.formState.errors.amount?.message}><Controller control={form.control} name="amount" render={({field}) => <ErpAmountInput value={field.value} onValueChange={(value) => field.onChange(value.floatValue || 0)} disabled={pending} aria-label="收入金额" />} /></Field><Field label="日期" error={form.formState.errors.date?.message}><Controller control={form.control} name="date" render={({field}) => <ErpDatePicker value={field.value} onChange={field.onChange} disabled={pending} aria-label="收入日期" />} /></Field><Field label="外部参考号（选填）" error={form.formState.errors.referenceNo?.message}><Input {...form.register("referenceNo")} placeholder="转账单号、赔偿单号等；不是 ERP 关联单号" disabled={pending} /></Field><Field label="备注（选填）" error={form.formState.errors.remarks?.message}><Textarea {...form.register("remarks")} className="min-h-20" maxLength={200} disabled={pending} placeholder="说明收入背景、核对信息" /></Field><div className="md:col-span-2"><ErpUploader items={media.items} maxCount={6} accept={media.accept} disabled={pending} description="上传转账截图或收入凭证；统一压缩到约 100KB 后保存真实媒体 URL。" error={media.error} onFilesSelected={media.addFiles} onRetry={media.retry} onRemove={media.remove} onPreview={(value) => setPreview(value.previewUrl)} /></div>{error && <p role="alert" className="md:col-span-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p>}</div><div className="flex justify-end gap-2 border-t border-[var(--erp-color-border)] px-5 py-4"><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button type="submit" variant="primary" disabled={pending || media.blocking}>{media.blocking ? "请处理图片状态" : pending ? "保存中…" : item ? "保存修改" : "登记收入"}</Button></div></form></Dialog.Popup></Dialog.Viewport></Dialog.Portal></Dialog.Root>{preview && <Dialog.Root open onOpenChange={(next) => {if (!next) setPreview(undefined);}}><Dialog.Portal><Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)]" /><Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-8"><Dialog.Popup className="max-h-full max-w-5xl rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-surface)] p-3"><Dialog.Title className="sr-only">凭证预览</Dialog.Title><img src={preview} alt="收入凭证预览" className="max-h-[80vh] max-w-full object-contain" /></Dialog.Popup></Dialog.Viewport></Dialog.Portal></Dialog.Root>}</>;
-}
 
-function Field({label, children}: {label: string; error?: string; children: ReactNode}) {return <label className="block text-sm font-semibold">{label}<div className="mt-2">{children}</div></label>;}
+  useEffect(() => {
+    if (!open) return;
+    const values: FinanceIncomeFormValues = item
+      ? {
+        source: item.source,
+        accountId: item.accountId,
+        amount: item.amount,
+        paymentMethod: item.paymentMethod,
+        businessType: financeIncomeCategories.includes(item.businessType as typeof financeIncomeCategories[number])
+          ? item.businessType as typeof financeIncomeCategories[number]
+          : "其他收入",
+        referenceNo: item.referenceNo || "",
+        date: item.time.slice(0, 10),
+        remarks: item.remarks || "",
+        images: item.images,
+      }
+      : defaults();
+    form.reset(values);
+    media.reset(values.images);
+  }, [form, item, media.reset, open]);
+
+  return (
+    <FinanceEntryDialogShell
+      open={open}
+      pending={pending}
+      title={item ? "编辑非经营收入" : "新增非经营收入"}
+      description="只登记非销售、非采购单自动生成的临时收入；保存后由后端同步账户和财务流水。"
+      submitLabel={media.blocking ? "请处理图片状态" : pending ? "保存中…" : item ? "保存修改" : "登记收入"}
+      submitDisabled={media.blocking}
+      error={error}
+      preview={preview}
+      previewAlt="收入凭证预览"
+      onOpenChange={onOpenChange}
+      onSubmit={(event) => { void form.handleSubmit(onSubmit)(event); }}
+      onPreviewChange={setPreview}
+    >
+      <FinanceEntryField label="收入来源" error={form.formState.errors.source?.message}>
+        <Input {...form.register("source")} placeholder="例如：平台返点、物流赔偿" disabled={pending} />
+      </FinanceEntryField>
+      <FinanceEntryField label="收入类型" error={form.formState.errors.businessType?.message}>
+        <Controller
+          control={form.control}
+          name="businessType"
+          render={({field}) => <Select value={field.value} onValueChange={field.onChange} options={financeIncomeCategories.map((value) => ({value, label: value}))} disabled={pending} aria-label="收入类型" />}
+        />
+      </FinanceEntryField>
+      <FinanceEntryField label="结算账户" error={form.formState.errors.accountId?.message}>
+        <Controller
+          control={form.control}
+          name="accountId"
+          render={({field}) => (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              options={accounts.filter((account) => account.enabled).map((account) => ({value: account.id, label: `${account.name} · ${account.type}`}))}
+              disabled={pending}
+              placeholder="请选择入账账户"
+              aria-label="结算账户"
+            />
+          )}
+        />
+      </FinanceEntryField>
+      <FinanceEntryField label="入账方式" error={form.formState.errors.paymentMethod?.message}>
+        <Controller
+          control={form.control}
+          name="paymentMethod"
+          render={({field}) => <Select value={field.value} onValueChange={field.onChange} options={financeIncomePaymentMethods.map((value) => ({value, label: value}))} disabled={pending} aria-label="入账方式" />}
+        />
+      </FinanceEntryField>
+      <FinanceEntryField label="金额" error={form.formState.errors.amount?.message}>
+        <Controller
+          control={form.control}
+          name="amount"
+          render={({field}) => <ErpAmountInput value={field.value} onValueChange={(value) => field.onChange(value.floatValue || 0)} disabled={pending} aria-label="收入金额" />}
+        />
+      </FinanceEntryField>
+      <FinanceEntryField label="日期" error={form.formState.errors.date?.message}>
+        <Controller
+          control={form.control}
+          name="date"
+          render={({field}) => <ErpDatePicker value={field.value} onChange={field.onChange} disabled={pending} aria-label="收入日期" />}
+        />
+      </FinanceEntryField>
+      <FinanceEntryField label="外部参考号（选填）" error={form.formState.errors.referenceNo?.message}>
+        <Input {...form.register("referenceNo")} placeholder="转账单号、赔偿单号等；不是 ERP 关联单号" disabled={pending} />
+      </FinanceEntryField>
+      <FinanceEntryField label="备注（选填）" error={form.formState.errors.remarks?.message}>
+        <Textarea {...form.register("remarks")} className="min-h-20" maxLength={200} disabled={pending} placeholder="说明收入背景、核对信息" />
+      </FinanceEntryField>
+      <div className="md:col-span-2">
+        <ErpUploader
+          items={media.items}
+          maxCount={6}
+          accept={media.accept}
+          disabled={pending}
+          description="上传转账截图或收入凭证；统一压缩到约 100KB 后保存真实媒体 URL。"
+          error={media.error}
+          onFilesSelected={media.addFiles}
+          onRetry={media.retry}
+          onRemove={media.remove}
+          onPreview={(value) => setPreview(value.previewUrl)}
+        />
+      </div>
+    </FinanceEntryDialogShell>
+  );
+}

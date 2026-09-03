@@ -7,6 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
@@ -59,7 +60,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
   const active = countActiveSalesReturnFilters(filters); const pending = items.filter((item) => item.status === "待处理").length; const pageAmount = items.reduce((sum, item) => sum + item.amount, 0); const pageCredit = items.reduce((sum, item) => sum + item.creditAmount + item.vendorCreditAmount, 0);
   const canEdit = session.permissions.canEditHistory;
   const canDelete = session.permissions.canDelete;
-  const invalidateReturns = () => Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.returns.all()}), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}), queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()})]);
+  const invalidateReturns = () => invalidateErpDomains(queryClient, ["returns", "purchase", "inventory", "state"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const mutation = useMutation({mutationFn: (item: PurchaseReturnListItem) => returnsApi.complete(item.id), onSuccess: (result) => {toast.success(`${result.returnNo} 已完成采购退货`); setCompleteTarget(null); void invalidateReturns();}, onError: handleMutationError});
   const updateMutation = useMutation({mutationFn: ({item, values}: {item: PurchaseReturnListItem; values: ReturnEditDraft}) => returnsApi.update(item.id, values), onSuccess: (result) => {toast.success(`${result?.returnNo || editTarget?.returnNo || "采购退货单"} 已保存修改`); setEditTarget(null); void invalidateReturns();}, onError: handleMutationError});

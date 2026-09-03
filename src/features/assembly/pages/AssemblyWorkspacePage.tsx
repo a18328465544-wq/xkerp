@@ -5,6 +5,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, assemblyApi, queryKeys, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
@@ -37,7 +38,7 @@ function AssemblyContent({session, filters, onFiltersChange, listQuery, referenc
   const records = listQuery.data?.items || [];
   const references = referenceQuery.data || {inventory: [], products: []};
   const availableParts = references.inventory.filter((item) => ["已入库", "已上架"].includes(item.status)).length;
-  const invalidate = async () => {await Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.assembly.all()}), queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}), queryClient.invalidateQueries({queryKey: queryKeys.products.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()})]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["assembly", "inventory", "products", "state"]);
   const handleError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const createMutation = useMutation({mutationFn: ({values}: {values: Parameters<typeof assemblyApi.create>[0]; reset: () => void}) => assemblyApi.create(values, access), onSuccess: async (operation, variables) => {variables.reset(); toast.success(`${operation.type}单 ${operation.id} 已保存，库存状态已同步`); await invalidate();}, onError: handleError});
   const deleteMutation = useMutation({mutationFn: (id: string) => assemblyApi.remove(id, access), onSuccess: async (operation) => {setDeleting(null); toast.success(`${operation.id} 已删除，库存状态由服务端完成回滚`); await invalidate();}, onError: handleError});

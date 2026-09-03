@@ -6,6 +6,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, customersApi, queryKeys, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
@@ -49,7 +50,7 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
   const total = query.data?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / filters.pageSize));
   useEffect(() => {if (filters.page > totalPages) onFiltersChange({...filters, page: totalPages});}, [filters, onFiltersChange, totalPages]);
-  const invalidate = async () => {await Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.customers.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()}), queryClient.invalidateQueries({queryKey: queryKeys.crm.all()})]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["customers", "state", "crm"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const saveMutation = useMutation({mutationFn: ({values, current}: {values: CustomerRecordFormValues; current: CustomerDirectoryItem | null}) => current ? customersApi.update(current.id, values, session.permissions) : customersApi.create(values, session.permissions), onSuccess: async (customer) => {toast.success(`${customer.name} 已保存`); setDialogOpen(false); setEditing(null); setDetail(customer); await invalidate();}, onError: handleMutationError});
   const deleteMutation = useMutation({mutationFn: (id: string) => customersApi.remove(id), onSuccess: async () => {toast.success("客户档案已删除"); setDeleting(null); setDetail(null); await invalidate();}, onError: handleMutationError});

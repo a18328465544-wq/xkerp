@@ -7,6 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpDocumentDeleteDialog, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, salesApi} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -94,14 +95,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   useEffect(() => {if (detailQuery.error instanceof ApiError && detailQuery.error.isUnauthorized) onAuthExpired();}, [detailQuery.error, onAuthExpired]);
   const selectedDetail = selectedDetailFromPage || detailQuery.data || null;
   const openDetail = useCallback((item: SalesListItem) => commitDetail(item.id), [commitDetail]);
-  const invalidate = async () => {await Promise.all([
-    queryClient.invalidateQueries({queryKey: queryKeys.sales.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.customers.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.crm.all()}),
-    queryClient.invalidateQueries({queryKey: queryKeys.state.all()}),
-  ]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["sales", "inventory", "finance", "customers", "crm", "state"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const deleteMutation = useMutation({mutationFn: (id: string) => salesApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); commitDetail(null); toast.success(`销售单 ${result.invoiceNo || id} 已删除`, {description: "关联待出库占用、收款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
   const columns = useMemo(() => createSalesListColumns({showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail: openDetail, onDelete: setDeleting}), [openDetail, session.permissions.canDelete, session.permissions.showProfit]);

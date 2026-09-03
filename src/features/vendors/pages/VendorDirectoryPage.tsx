@@ -6,6 +6,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, vendorsApi, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
@@ -48,7 +49,7 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
   const total = query.data?.meta?.total ?? vendors.length;
   const totalPages = query.data?.meta?.totalPages ?? Math.max(1, Math.ceil(total / filters.pageSize));
   useEffect(() => {if (filters.page > totalPages) onFiltersChange({...filters, page: totalPages});}, [filters, onFiltersChange, totalPages]);
-  const invalidate = async () => {await Promise.all([queryClient.invalidateQueries({queryKey: queryKeys.vendors.all()}), queryClient.invalidateQueries({queryKey: queryKeys.state.all()}), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}), queryClient.invalidateQueries({queryKey: queryKeys.sales.all()})]);};
+  const invalidate = () => invalidateErpDomains(queryClient, ["vendors", "state", "purchase", "sales"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
   const saveMutation = useMutation({mutationFn: ({values, current}: {values: VendorRecordFormValues; current: VendorDirectoryItem | null}) => current ? vendorsApi.update(current.id, values, {showProfit: session.permissions.showProfit}) : vendorsApi.create(values, {showProfit: session.permissions.showProfit}), onSuccess: async (vendor) => {toast.success(`${vendor.name} 已保存`); setDialogOpen(false); setEditing(null); setDetail(vendor); await invalidate();}, onError: handleMutationError});
   const deleteMutation = useMutation({mutationFn: (id: string) => vendorsApi.remove(id), onSuccess: async () => {toast.success("同行档案已删除"); setDeleting(null); setDetail(null); await invalidate();}, onError: handleMutationError});

@@ -1,6 +1,8 @@
 import type { Express, Request, RequestHandler } from "express";
 import {getFinanceDashboard, listAccountTransfers} from "../financeDashboardRepository.ts";
 import {getCustomerFundsSnapshot} from "../customerFundsRepository.ts";
+import type {AppState} from "../store.ts";
+import type {createStoreActions} from "../store.ts";
 
 type FinanceRequest = Request & { authUser?: unknown; tenantId?: string; storeId?: string };
 
@@ -10,6 +12,9 @@ type FinanceReadModelDependencies = {
   startOfMonth: (date: string) => string;
   addDateDays: (date: string, days: number) => string;
   ok: (data?: unknown) => unknown;
+  state: AppState;
+  actions: (req: Request) => ReturnType<typeof createStoreActions>;
+  paginated: <T>(items: T[], req: Request) => unknown;
   sendValidationError: (req: FinanceRequest, res: Parameters<RequestHandler>[1], message: string) => void;
   permissionsForRequest: (req: Request) => {showCost?: boolean; showProfit?: boolean; allowedMenus: string[]};
 };
@@ -30,6 +35,19 @@ function dateRangeDays(startDate: string, endDate: string) {
 
 /** Finance read models are kept out of the composition root and expose only scoped projections. */
 export function registerFinanceReadModelRoutes(app: Express, dependencies: FinanceReadModelDependencies) {
+  app.get("/api/gpu_erp/finance/settlement-accounts", dependencies.requireMenu("settlement_accounts"), (req, res) => {
+    res.json(dependencies.paginated(dependencies.state.settlementAccounts, req));
+  });
+
+  app.get("/api/gpu_erp/finance/account-summary", dependencies.requireMenu("finance_reports"), (req, res) => {
+    res.json({data: dependencies.actions(req).getAccountSummary(req.query as Record<string, string>)});
+  });
+
+  app.get("/api/gpu_erp/reports/employee-payment-summary", dependencies.requireMenu("finance_reports"), (req, res) => {
+    const summary = dependencies.actions(req).getAccountSummary(req.query as Record<string, string>).employeeSummary;
+    res.json(dependencies.paginated(summary, req));
+  });
+
   app.get("/api/finance/dashboard", dependencies.requireMenu("finance"), async (req: FinanceRequest, res, next) => {
     try {
       const today = dependencies.getStoreDate();
