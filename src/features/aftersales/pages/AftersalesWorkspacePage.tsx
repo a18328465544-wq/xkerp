@@ -7,7 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpWarehousePageFrame, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, aftersalesApi, queryKeys, type AuthSession} from "@/src/services/api";
-import {invalidateErpDomains} from "@/src/services/api";
+import {invalidateErpDomains, refreshErpAfterDocument} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -35,7 +35,7 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
   const goToReturns = () => {void navigate({to: "/sales/returns/new"});};
   const invalidate = () => invalidateErpDomains(queryClient, ["aftersales", "state", "inventory", "sales", "customers"]);
   const handleError = (caught: Error) => {if (caught instanceof ApiError && caught.isUnauthorized) {onAuthExpired(); return;} toast.error(caught.message);};
-  const createMutation = useMutation({mutationFn: async (values: AftersalesCreateFormValues) => {const candidate = candidates.find((item) => item.inventoryId === values.candidateId); if (!candidate) throw new Error("所选库存卡已不存在，请刷新后重试"); if (candidate.activeClaimId) throw new Error(`该 SN 已存在处理中工单 ${candidate.activeClaimId}`); return aftersalesApi.create(values, candidate, session.user.displayName);}, onSuccess: async (created) => {toast.success("售后工单已登记，库存卡已进入售后中"); setCreateOpen(false); setDetail(created); await invalidate();}, onError: handleError});
+  const createMutation = useMutation({mutationFn: async (values: AftersalesCreateFormValues) => {const candidate = candidates.find((item) => item.inventoryId === values.candidateId); if (!candidate) throw new Error("所选库存卡已不存在，请刷新后重试"); if (candidate.activeClaimId) throw new Error(`该 SN 已存在处理中工单 ${candidate.activeClaimId}`); return aftersalesApi.create(values, candidate, session.user.displayName);}, onSuccess: async (created) => {toast.success("售后工单已登记，库存卡已进入售后中"); setCreateOpen(false); setDetail(created); await refreshErpAfterDocument(queryClient);}, onError: handleError});
   const resolveMutation = useMutation({mutationFn: async ({record, values}: {record: AftersalesListItem; values: AftersalesResolutionFormValues}) => aftersalesApi.resolve(record.id, values, session.user.displayName), onSuccess: async (updated) => {toast.success(updated.status === "已拒绝" ? "售后工单已拒绝" : "售后工单已结案"); setResolving(null); setDetail(updated); await invalidate();}, onError: handleError});
   const columns = useMemo(() => createAftersalesColumns({onOpen: setDetail, onReturn: goToReturns}), []);
   const activeCount = items.filter((item) => ["待处理", "检测中"].includes(item.status)).length; const completeCount = items.filter((item) => item.status === "已完成").length; const repairCost = items.reduce((sum, item) => sum + item.repairCost, 0); const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.status !== "all") + Number(filters.type !== "all");

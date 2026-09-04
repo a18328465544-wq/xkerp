@@ -7,7 +7,8 @@ import {toast} from "sonner";
 import {Badge, Button, Card, Dialog, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpEmptyState, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageFrame, ErpPageHeader, ErpUploader, useErpDirtyGuard, useErpUnsavedChangesGuard, type ErpUploaderItem} from "@/src/components/common";
 import {compressImageFile, IMAGE_ACCEPTED_MIME_TYPES, IMAGE_MAX_COUNT, validateImageFile} from "@/src/lib/media/image-compression";
-import {ApiError, inspectionApi, mediaApi, queryKeys, type AuthSession} from "@/src/services/api";
+import {ApiError, inspectionApi, mediaApi, queryKeys, refreshErpAfterDocument, type AuthSession} from "@/src/services/api";
+import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import type {InspectionCandidate, InspectionFormValues, InspectionHistoryItem} from "@/src/types/inspection";
@@ -193,7 +194,7 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
     mutationFn: ({values, inspectionId, expectedRecordVersion}: {values: InspectionFormValues; inspectionId?: string; expectedRecordVersion?: number}) => inspectionId
       ? inspectionApi.update(inspectionId, values, expectedRecordVersion || 1)
       : inspectionApi.create(values),
-    onSuccess: (result) => {
+    onSuccess: async (result, variables) => {
       toast.success(selectedCandidate?.condition === "全新"
         ? `${result.id || "检测记录"} 已完成全新快速入库，SN 与质保已同步`
         : `${result.id || "检测记录"} 已提交，SN、成色、带盒、保修期和最终库位已同步`);
@@ -201,9 +202,11 @@ function InspectionWorkspaceContent({session, query, onAuthExpired}: {session: A
       setEditingHistory(null);
       media.reset([]);
       form.reset(createInspectionDefaults(null, session.user.displayName));
-      void queryClient.invalidateQueries({queryKey: queryKeys.inspections.all()});
-      void queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()});
-      void queryClient.invalidateQueries({queryKey: queryKeys.state.all()});
+      if (variables.inspectionId) {
+        await invalidateErpDomains(queryClient, ["inspections", "inventory", "state"]);
+      } else {
+        await refreshErpAfterDocument(queryClient);
+      }
     },
     onError: (error) => {
       if (error instanceof ApiError && error.isUnauthorized) {

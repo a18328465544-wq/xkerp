@@ -5,7 +5,7 @@ import {Link, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Select, Textarea} from "@/src/components/ui";
 import {ErpCrmPageFrame, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
-import {crmApi, queryKeys} from "@/src/services/api";
+import {crmApi, refreshErpAfterDocument} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {QuickCaptureConfirmInput, QuickCaptureParseResult, QuickCaptureSourceType} from "@/src/types/crm";
@@ -21,10 +21,10 @@ export function NewCustomerLeadPage() {
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={error?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
   if (!session) return <LeadState title="登录状态为空" icon={<LogIn className="h-5 w-5" />} />;
   if (!canAccess) return <LeadState title="当前账号没有 CRM 权限" description="服务器已拒绝 crm 菜单访问（403）。" icon={<UserPlus className="h-5 w-5" />} />;
-  return <LeadForm session={session} onSuccess={() => void queryClient.invalidateQueries({queryKey: queryKeys.crm.all()})} />;
+  return <LeadForm session={session} onSuccess={() => refreshErpAfterDocument(queryClient)} />;
 }
 
-function LeadForm({session, onSuccess}: {session: AuthSession; onSuccess: () => void}) {
+function LeadForm({session, onSuccess}: {session: AuthSession; onSuccess: () => void | Promise<void>}) {
   const navigate = useNavigate();
   const [sourceType, setSourceType] = useState<QuickCaptureSourceType>("manual");
   const [rawText, setRawText] = useState("");
@@ -33,7 +33,7 @@ function LeadForm({session, onSuccess}: {session: AuthSession; onSuccess: () => 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const parseMutation = useMutation({mutationFn: () => crmApi.parseQuickCapture(rawText.trim(), sourceType), onSuccess: (result) => { setParsed(result); setMatchedCustomerId(result.customerCandidates[0]?.customerId || ""); setError(""); toast.success("客户线索已解析"); }});
-  const confirmMutation = useMutation({mutationFn: (input: QuickCaptureConfirmInput) => crmApi.confirmQuickCapture(input), onSuccess: () => { setSuccess("客户线索已保存，客户档案、跟进任务和时间线已同步。"); toast.success("客户线索已保存"); onSuccess(); }});
+  const confirmMutation = useMutation({mutationFn: (input: QuickCaptureConfirmInput) => crmApi.confirmQuickCapture(input), onSuccess: async () => { setSuccess("客户线索已保存，客户档案、跟进任务和时间线已同步。"); toast.success("客户线索已保存"); await onSuccess(); }});
   const submitParse = (event: FormEvent) => { event.preventDefault(); if (parsed) return confirm(); setError(""); if (!rawText.trim()) return setError("请粘贴聊天记录或填写客户线索"); parseMutation.mutate(); };
   const confirm = () => {
     if (!parsed) return;

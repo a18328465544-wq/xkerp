@@ -30,6 +30,7 @@ export const queryKeys = {
     initial: () => ["state", "initial"] as const,
   },
   ai: {
+    all: () => ["ai"] as const,
     insights: () => ["ai", "insights"] as const,
     dailySalesSummary: (date: string) => ["ai", "daily-sales-summary", date] as const,
   },
@@ -115,6 +116,7 @@ export const queryKeys = {
     },
   },
   settings: {
+    all: () => ["settings"] as const,
     users: () => ["settings", "users"] as const,
     logs: (filters: unknown) => ["settings", "logs", filters] as const,
   },

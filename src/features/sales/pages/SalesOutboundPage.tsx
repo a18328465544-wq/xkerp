@@ -5,7 +5,7 @@ import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {DashboardSection, ErpDataTable, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
-import {ApiError, createIdempotencyKey, queryKeys, salesApi} from "@/src/services/api";
+import {ApiError, createIdempotencyKey, queryKeys, refreshErpAfterDocument, salesApi} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
@@ -76,13 +76,11 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
           : `服务器仍有 ${missingCount} 件商品无法匹配可售库存`);
     }
     return salesApi.confirmOutbound(selectedInvoice.id, values, undefined, outboundIdempotencyKeyRef.current);
-  }, onSuccess: (result) => {
+  }, onSuccess: async (result) => {
     outboundIdempotencyKeyRef.current = createIdempotencyKey("sales-outbound");
     toast.success(`${result.invoiceNo} 已完成销售出库`);
     setScanCodes(""); setScanInput(""); setRemarks(""); setServerPreflight(null); setInvoiceId(null);
-    void queryClient.invalidateQueries({queryKey: queryKeys.sales.all()});
-    void queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()});
-    void queryClient.invalidateQueries({queryKey: queryKeys.state.all()});
+    await refreshErpAfterDocument(queryClient);
   }, onError: (error) => {
     if (error instanceof ApiError && error.isUnauthorized) {
       onAuthExpired();

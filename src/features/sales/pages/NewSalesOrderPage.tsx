@@ -7,7 +7,7 @@ import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {CustomerPicker} from "@/src/components/domain";
 import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPartnerQuickCreateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
-import {ApiError, createIdempotencyKey, partnersApi, queryKeys, salesApi} from "@/src/services/api";
+import {ApiError, createIdempotencyKey, partnersApi, queryKeys, refreshErpAfterDocument, salesApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {SalesChannel, SalesCustomerOption, SalesFormValues, SalesProductCandidate} from "@/src/types/sales";
@@ -222,8 +222,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       setCustomerKeyword("");
       setInventoryKeywords({});
       setActiveInventoryFieldId(null);
-      await queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()});
-      await queryClient.invalidateQueries({queryKey: queryKeys.sales.all()});
+      await refreshErpAfterDocument(queryClient);
     } catch (caught) {
       const error = caught instanceof ApiError ? caught : undefined;
       setServerError(salesSubmitErrorMessage(caught));

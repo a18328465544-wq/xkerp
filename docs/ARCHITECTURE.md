@@ -105,7 +105,7 @@ src/
 ```
 
 后端由 `server/index.ts` 组合应用，领域路由位于 `server/routes/`，业务事实与持久化分别由
-`server/store.ts`、`server/db.ts`、`server/security.ts` 和 `server/requestStatePolicy.ts` 负责；前端架构调整不得把业务事实移入浏览器。
+`server/store.ts`、`server/db.ts`、`server/security.ts` 和 `server/requestStatePolicy.ts` 负责；其中 `store.ts` 与 `db.ts` 都是兼容外观/组合边界，具体领域规则和基础设施按模块落在同目录文件中。前端架构调整不得把业务事实移入浏览器。
 
 ## 5. 前端架构
 
@@ -165,10 +165,34 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 `server/routes/`，架构门禁限制主组合文件继续增长。当前 `system.ts`、`financeClosing.ts`
 和 `domainSnapshots.ts` 已独立拥有各自的 HTTP 契约。
 
+组合根不再直接声明业务 `app.*` 路由；登录、登出、数据初始化和开放接口也分别通过
+`routes/auth.ts`、`routes/openApi.ts` 挂载。`server/index.ts` 只保留全局中间件、状态/鉴权
+依赖组装、错误处理和 `register*Routes` 调用，这样路由边界可以单独测试，且不会把业务逻辑
+重新堆回组合文件。
+
 近期已完成渐进拆分的边界包括：`financeReadModels.ts`、`financeAccounts.ts`、
 `financePayments.ts`、`productMutations.ts`、`partnerMutations.ts`、`media.ts` 和
 `crmReadModels.ts`、`crmMutations.ts`、`crmNormalizedReads.ts`、`aiRoutes.ts`、
-`purchaseMutations.ts`、`salesMutations.ts` 和 `returnMutations.ts`。这些模块通过依赖注入复用现有鉴权、状态补丁和领域动作，迁移期间不改变接口路径。
+`purchaseMutations.ts`、`inspectionMutations.ts`、`assemblyMutations.ts`、
+`inventoryMutations.ts`、`salesMutations.ts`、`returnMutations.ts`、
+`aftersalesMutations.ts`、`marketQuoteMutations.ts`、`logs.ts` 和
+`financeLedgerMutations.ts`、`userManagement.ts`、`openApi.ts` 和 `auth.ts`。这些模块通过
+依赖注入复用现有鉴权、状态补丁和领域动作，迁移期间不改变接口路径；CRM 快捷录入的解析、
+客户匹配、幂等确认和账户/跟进事务集中在 `routes/crmQuickCaptureRoutes.ts`。商品、财务和
+供应商状态补丁分别集中在 `productStateMerges.ts`、`financeStateMerges.ts` 和
+`partnerStateMerges.ts`，避免在 HTTP 组合层复制跨集合联动规则。`storeStateNormalization.ts`
+负责历史枚举/凭证归一化和商品库存汇总，`storeInventoryPlanning.ts` 负责数量展开、待出库
+预占和可售库存统计；`storePartnerIdentity.ts` 负责客户/同行归档编号、历史主体匹配和等级
+建议规则；`storeReturnPlanning.ts` 负责退货明细身份解析、原行恢复和备注清理；`storeCrmOperations.ts` 负责客户
+档案、跟进、需求、报价、CRM 演示数据回填和汇总；`storeBootstrap.ts`
+负责演示/生产初始状态和初始账号安全化；`storeCommissionPlanning.ts` 负责按物理库存成本生成
+提成和销售退货冲减；`storeSettlementLedger.ts` 负责结算账户、余额流水重建和收付款流水关联；
+`storeAssemblyOperations.ts` 负责组装/拆卸库存变换与可回滚删除；`storeOrderPool.ts` 负责客户
+订单池的协同事件、负责人和业务单据关联。退货域进一步拆为 `storeReturnTypes.ts`（状态/依赖契约）、
+`storeReturnFinancials.ts`（退款分摊和流水查找）、`storeReturnCreation.ts`（单件/整单创建）、
+`storeReturnCompletion.ts`（完成退货及库存、账务冲减）和 `storeReturnDeletion.ts`（删除后的原单恢复）。
+`storeReturnOperations.ts` 只做这些边界的依赖组装并暴露兼容动作。这些状态/领域边界不改变
+`createStoreActions` 的兼容入口。
 
 组合层负责：
 
@@ -258,6 +282,20 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 POSTGRES_IMPORT_LEGACY_JSON=false
 ```
 
+### 7.1.1 数据库模块边界
+
+`server/db.ts` 只负责 PostgreSQL 连接、事务边界、密码升级和各基础设施的依赖组装，并保留历史导出以兼容现有路由。新增数据库逻辑应落在对应模块，不应把实现重新堆回组合外观：
+
+- `dbQueryBuilders.ts`：只构造带白名单排序、参数化筛选和分页的 SQL。
+- `dbQueryServices.ts`：执行库存、日志、提成、财务和发票分页读取。
+- `dbStatePersistence.ts`：状态初始化、集合增量保存、快照和 revision。
+- `dbCollectionStorage.ts`：集合表映射、批量 upsert、追加集合和 schema 辅助。
+- `dbPostgresInitializer.ts`：建表、索引、迁移、密码升级和 schema 注释。
+- `dbLocks.ts`、`dbSessions.ts`、`dbScope.ts`：事务锁、会话存储和租户/门店作用域。
+- `dbReferenceQueries.ts`、`dbDailyOperations.ts`、`dbAiInsights.ts`、`dbBackups.ts`：引用查询、日报、AI 缓存和备份等独立基础设施。
+
+边界规则：查询模块不写业务状态，持久化模块不决定库存/金额规则；跨集合变更仍由 `store.ts` 领域动作和统一状态命令执行器保持事务一致。文件数量不是拆分目标，只有能解释职责、复用边界或降低测试成本的模块才应继续抽取。
+
 ### 7.2 数据表设计
 
 当前采用“业务集合表 + JSONB 数据”的模式，每个集合一张表：
@@ -292,7 +330,7 @@ data jsonb not null,
 updated_at timestamptz not null
 ```
 
-表和字段注释由 `server/db.ts` 初始化时写入数据库。
+表和字段注释由 `server/dbPostgresInitializer.ts` 初始化时写入数据库，并由 `server/db.ts` 组合调用。
 
 高频查询仍保留 JSONB 作为权威业务文档，`operational-projections-v1` 迁移为库存、采购、销售、财务和退货增加不可漂移的 PostgreSQL 生成列及组合索引。`GET /api/inventory/items` 与 Open API 库存列表直接使用这些投影字段分页和过滤，不再先把全部库存加载进 Node 进程；旧表达式索引暂时保留以支持版本回滚。
 
@@ -621,7 +659,7 @@ sudo nginx -t
 2. `server/store.ts` 是否集中处理业务规则。
 3. `server/index.ts` 是否新增/复用 API。
 4. `server/requestStatePolicy.ts` 是否配置持久化集合。
-5. `server/db.ts` 是否需要新增集合表。
+5. `server/dbPostgresInitializer.ts` 或 `dbCollectionStorage.ts` 是否需要新增集合表/集合映射。
 6. `src/services/api/endpoints`、DTO 和 Adapter 是否需要新增资源边界；页面禁止直接 fetch。
 7. `src/utils/menu.ts` 是否需要新增菜单和权限入口。
 8. 测试是否覆盖金额、库存、SN、删除、退货或权限边界。

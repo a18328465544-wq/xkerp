@@ -4,10 +4,12 @@ import path from "node:path";
 const root = process.cwd();
 const indexPath = path.join(root, "server", "index.ts");
 const dbPath = path.join(root, "server", "db.ts");
+const dbSessionsPath = path.join(root, "server", "dbSessions.ts");
 const appPath = path.join(root, "server", "app.ts");
 const policyPath = path.join(root, "server", "mutationPolicy.ts");
 const indexSource = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, "utf8") : "";
 const dbSource = fs.existsSync(dbPath) ? fs.readFileSync(dbPath, "utf8") : "";
+const dbSessionsSource = fs.existsSync(dbSessionsPath) ? fs.readFileSync(dbSessionsPath, "utf8") : "";
 const policySource = fs.existsSync(policyPath) ? fs.readFileSync(policyPath, "utf8") : "";
 const observabilityPath = path.join(root, "server", "observability.ts");
 const observabilitySource = fs.existsSync(observabilityPath) ? fs.readFileSync(observabilityPath, "utf8") : "";
@@ -53,7 +55,7 @@ if (!/redactRequestPath/.test(observabilitySource) || !/safeErrorMessage/.test(o
 if (!/createRequestMetrics/.test(observabilitySource) || !/api\/ops\/metrics/.test(fs.readFileSync(systemRoutesPath, "utf8"))) {
   fail("后端必须提供低基数请求指标，并通过老板权限的 /api/ops/metrics 暴露。");
 }
-if (!/cleanupExpired/.test(dbSource) || !/SESSION_CLEANUP_INTERVAL_MS/.test(indexSource)) {
+if (!/cleanupExpired/.test(`${dbSource}\n${dbSessionsSource}`) || !/SESSION_CLEANUP_INTERVAL_MS/.test(indexSource)) {
   fail("数据库会话必须按统一间隔清理过期 token，不能无限增长。");
 }
 if (/app\.use\(asyncRoute\(requireAuth\)\)/.test(indexSource)) {

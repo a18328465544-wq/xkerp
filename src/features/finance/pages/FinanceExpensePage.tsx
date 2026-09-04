@@ -46,7 +46,7 @@ import {
   queryKeys,
   type AuthSession,
 } from "@/src/services/api";
-import {invalidateErpDomains} from "@/src/services/api";
+import {invalidateErpDomains, refreshErpAfterDocument} from "@/src/services/api";
 import { createCapabilities, useAuth } from "@/src/app/auth";
 import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
 import { formatCurrency } from "@/src/lib/format";
@@ -160,12 +160,12 @@ function FinanceExpenseContent({
       item
         ? financeExpenseApi.update(item.id, values, item.handler)
         : financeExpenseApi.create(values, session.user.displayName),
-    onSuccess: async (item) => {
+    onSuccess: async (item, variables) => {
       toast.success(`${item.businessType}已保存`);
       setDialogOpen(false);
       setEditing(null);
       setDetail(item);
-      await invalidate();
+      await (variables.item ? invalidate() : refreshErpAfterDocument(queryClient));
     },
     onError: mutationError,
   });

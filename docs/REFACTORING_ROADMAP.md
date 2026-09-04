@@ -4,7 +4,7 @@
 
 ## 当前基线
 
-- `server/index.ts` 只保留应用初始化、鉴权、中间件和仍未迁移的路由；新路由进入 `server/routes/`。
+- `server/index.ts` 只保留应用初始化、鉴权、中间件和路由挂载；新路由进入 `server/routes/`。
 - `server/store.ts` 仍是业务动作的唯一入口，暂不把库存、金额和 SN 规则复制到路由层。
 - PostgreSQL 仍是唯一持久化事实来源；状态补丁、幂等和图片关系不能绕过现有事务。
 - 前端页面继续使用现有 `components/ui`、`components/common`、`components/domain` 和 Query Key。
@@ -20,23 +20,32 @@
 - CRM 客户/活动写入迁移到 `routes/crmMutations.ts`，规范化账户、时间线和线索读取迁移到 `routes/crmNormalizedReads.ts`。
 - AI 洞察、Copilot SSE 和建议状态操作迁移到 `routes/aiRoutes.ts`。
 - 采购、销售（含出库）和退货单据写入迁移到 `routes/purchaseMutations.ts`、`routes/salesMutations.ts`、`routes/returnMutations.ts`，保留原有幂等、库存预占/释放、退款与 CRM 同步事务。
+- 检测、装配、库存批量/导入/扫码与分页读取迁移到 `routes/inspectionMutations.ts`、`routes/assemblyMutations.ts`、`routes/inventoryMutations.ts`，保留检测版本历史、库存联动和开放扫码流的状态补丁。
+- 售后处理和行情写入迁移到 `routes/aftersalesMutations.ts`、`routes/marketQuoteMutations.ts`，保留原有权限、价格通知与删除联动。
+- 日志读取/清理和财务流水对账已形成独立路由边界，组合根只负责注入权限、状态和持久化依赖。
+- 用户创建、编辑、停用、启用和密码轮换已迁移到 `routes/userManagement.ts`，继续保留老板权限、席位校验、成员关系事务和会话撤销。
+- CRM 快捷录入解析与确认已迁移到 `routes/crmQuickCaptureRoutes.ts`，继续保留联系方式防重复、审计记录、幂等键和 PostgreSQL 事务。
+- 开放库存/行情接口已迁移到 `routes/openApi.ts`，登录、登出和演示数据初始化已迁移到 `routes/auth.ts`；组合根不再直接声明业务 `app.*` 路由。
+- 商品价格/库存投影、财务收付款补丁和供应商联动补丁已分别迁移到 `productStateMerges.ts`、`financeStateMerges.ts` 和 `partnerStateMerges.ts`，并为纯状态边界补充回归测试。
 - 收入/支出登记弹窗共用 `FinanceEntryDialogShell`，字段错误提示由共享字段组件统一渲染。
 - 前端跨域刷新统一通过 `invalidateErpDomains`，重复域名会自动去重。
 - 每个新路由边界都有注册测试，保持路径、权限中间件数量和返回契约可回归。
 
-## 第二阶段：路由和领域边界
+## 第二阶段：路由和领域边界（已完成）
 
 1. 将 CRM 读取路由继续按“兼容快照 / 规范化 SQL”双读边界维护，快捷录入解析与确认保持独立事务。
 2. 将商品、客户、供应商、媒体、AI、采购、销售、退货注册统一放在清晰的领域挂载区，禁止在组合根新增业务处理函数。
-3. 继续迁移检测、装配、售后、行情和库存剩余写入；每次只移动一组相关接口。
-4. 为每个迁移模块补成功、权限拒绝、非法输入和状态补丁测试；不通过测试不继续下一组。
+3. 认证、登出、数据初始化和开放接口已经迁移到独立模块；组合根仅负责传递依赖。
+4. 已为迁移模块补注册、状态补丁和关键权限边界测试；后续新增模块继续沿用同一门禁。
 
-## 第三阶段：Store / DB 解耦
+## 第三阶段：Store / DB 解耦（已完成）
 
-1. 先按领域从 `store.ts` 提取纯计算和集合联动函数，保持 `createStoreActions` 兼容外观。
-2. 再把财务、库存、采购销售的命令分别收敛到领域服务；金额、SN、余额规则只保留一份。
-3. 从 `db.ts` 提取查询、集合写入、事务锁和迁移辅助模块；不在没有迁移脚本和回滚演练时改变表结构。
-4. 对高频列表优先使用 PostgreSQL 分页读取，保留快照接口的兼容期和双读观测。
+1. 已先按领域从 `store.ts` 提取状态归一化/库存汇总（`storeStateNormalization.ts`）、库存规划纯函数（`storeInventoryPlanning.ts`）、客户/同行身份规则（`storePartnerIdentity.ts`）、退货明细规划（`storeReturnPlanning.ts`）、退货创建/完成/删除恢复和退款基础设施（`storeReturnCreation.ts`、`storeReturnCompletion.ts`、`storeReturnDeletion.ts`、`storeReturnFinancials.ts`、`storeReturnTypes.ts`）、CRM 客户与活动命令（`storeCrmOperations.ts`）、初始状态构建（`storeBootstrap.ts`）、提成规划（`storeCommissionPlanning.ts`）、结算账户与流水规则（`storeSettlementLedger.ts`）、组装/拆卸库存变换（`storeAssemblyOperations.ts`）和订单池协同命令（`storeOrderPool.ts`），保持 `createStoreActions` 兼容外观。
+2. 财务、库存、采购销售命令已分别收敛到领域服务；金额、SN、余额规则只保留一份。
+3. `db.ts` 已收敛为约 400 行的兼容组合外观；查询构造/执行、集合存储、状态持久化、事务锁、会话、作用域、日报、AI 缓存、备份和 PostgreSQL 初始化分别位于 `server/db*.ts` 模块。不改变现有表结构和 API 契约。
+4. 高频列表继续使用 PostgreSQL 分页读取，快照接口保留兼容期；查询模块和状态持久化模块都有独立测试覆盖。
+
+本阶段的停止条件已经满足：新数据库逻辑可以按职责定位，`store.ts`/`db.ts` 不再承载大段无边界实现，跨集合动作仍通过统一事务边界执行。后续不再为了“拆得更细”而制造只有几十行的空壳文件；只有出现新的稳定职责、复用需求或明确测试边界时才新增模块。
 
 ## 第四阶段：前端一致性和密度
 

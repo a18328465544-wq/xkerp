@@ -6,7 +6,7 @@ import {toast} from "sonner";
 import {Button, Card, Input, Select, Textarea} from "@/src/components/ui";
 import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {createCapabilities, useAuth} from "@/src/app/auth";
-import {ApiError, orderPoolApi, queryKeys, type AuthSession} from "@/src/services/api";
+import {ApiError, orderPoolApi, queryKeys, refreshErpAfterDocument, type AuthSession} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api/invalidation";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import type {CustomerOrder, OrderPoolBlocker, OrderPoolCollaboratorOption, OrderPoolCreateInput, OrderPoolDocumentLinkInput, OrderPoolFilters, OrderPoolOrderType, OrderPoolPriority, OrderPoolQueue, OrderPoolStage, OrderPoolUpdateInput} from "@/src/types/order-pool";
@@ -84,7 +84,7 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
   const updateFilters = (patch: Partial<OrderPoolFilters>) => commitFilters({...filters, ...patch, page: patch.page ?? 1});
   const invalidate = () => invalidateErpDomains(queryClient, ["orderPool", "state"]);
   const handleError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
-  const createMutation = useMutation({mutationFn: (input: OrderPoolCreateInput) => orderPoolApi.create(input), onSuccess: async (order) => {toast.success(`${order.orderNo} 已加入订单池`); setCreateOpen(false); setSelected(order); setDetailOpen(true); await invalidate();}, onError: handleError});
+  const createMutation = useMutation({mutationFn: (input: OrderPoolCreateInput) => orderPoolApi.create(input), onSuccess: async (order) => {toast.success(`${order.orderNo} 已加入订单池`); setCreateOpen(false); setSelected(order); setDetailOpen(true); await refreshErpAfterDocument(queryClient);}, onError: handleError});
   const updateMutation = useMutation({mutationFn: ({id, patch}: {id: string; patch: OrderPoolUpdateInput; feedback?: string}) => orderPoolApi.update(id, patch), onSuccess: async (order, variables) => {setSelected(order); toast.success(variables.feedback || "订单池信息已更新"); await invalidate();}, onError: handleError});
   const noteMutation = useMutation({mutationFn: ({id, content}: {id: string; content: string}) => orderPoolApi.addNote(id, {content}), onSuccess: async (order) => {setSelected(order); toast.success("跟进记录已添加"); await invalidate();}, onError: handleError});
   const linkMutation = useMutation({mutationFn: ({id, input}: {id: string; input: OrderPoolDocumentLinkInput}) => orderPoolApi.linkDocument(id, input), onSuccess: async (order) => {setSelected(order); toast.success("业务单据已关联"); await invalidate();}, onError: handleError});

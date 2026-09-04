@@ -7,7 +7,7 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
-import {ApiError, createIdempotencyKey, productsApi, purchaseApi, queryKeys} from "@/src/services/api";
+import {ApiError, createIdempotencyKey, productsApi, purchaseApi, queryKeys, refreshErpAfterDocument} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {ProductTemplateFormValues} from "@/src/types/product";
@@ -232,12 +232,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
       setRestoredDraftActive(false);
       reset(createPurchaseDefaults(operatorName));
       setSelectedSource(null);
-      await Promise.all([
-        queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
-        queryClient.invalidateQueries({queryKey: queryKeys.purchase.referenceData()}),
-        queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
-        queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
-      ]);
+      await refreshErpAfterDocument(queryClient);
       void navigate({to: nextPath});
     } catch (caught) {
       const apiError = caught instanceof ApiError ? caught : undefined;

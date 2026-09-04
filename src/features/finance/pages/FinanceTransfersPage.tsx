@@ -5,7 +5,7 @@ import {toast} from "sonner";
 import {Button, Card, Input, Select} from "@/src/components/ui";
 import {DashboardSection, ErpFinancePageFrame, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, financeAccountsApi, financeTransfersApi, queryKeys, type AuthSession} from "@/src/services/api";
-import {invalidateErpDomains} from "@/src/services/api";
+import {invalidateErpDomains, refreshErpAfterDocument} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
@@ -42,7 +42,7 @@ function FinanceTransfersContent({session, onAuthExpired, filters, onFiltersChan
   const collection = transferQuery.data || {items: [], total: 0, totalAmount: 0, totalFee: 0, totalReceived: 0, page: filters.page, pageSize: filters.pageSize, source: "database-page" as const};
   const invalidate = () => invalidateErpDomains(queryClient, ["finance"]);
   const mutationError = (caught: Error) => {if (caught instanceof ApiError && caught.isUnauthorized) {onAuthExpired(); return;} toast.error(caught.message);};
-  const saveMutation = useMutation({mutationFn: ({values, item}: {values: FinanceTransferFormValues; item: FinanceTransferItem | null}) => item ? financeTransfersApi.update(item.id, values, session.user.displayName) : financeTransfersApi.create(values, session.user.displayName), onSuccess: async (item) => {toast.success(`${item.id} 调拨已保存，账户余额与流水已同步`); setDialogOpen(false); setEditing(null); setDetail(item); await invalidate();}, onError: mutationError});
+  const saveMutation = useMutation({mutationFn: ({values, item}: {values: FinanceTransferFormValues; item: FinanceTransferItem | null}) => item ? financeTransfersApi.update(item.id, values, session.user.displayName) : financeTransfersApi.create(values, session.user.displayName), onSuccess: async (item, variables) => {toast.success(`${item.id} 调拨已保存，账户余额与流水已同步`); setDialogOpen(false); setEditing(null); setDetail(item); await (variables.item ? invalidate() : refreshErpAfterDocument(queryClient));}, onError: mutationError});
   const deleteMutation = useMutation({mutationFn: (id: string) => financeTransfersApi.remove(id), onSuccess: async () => {toast.success("资金调拨已删除，账户余额与流水已反向修正"); setDeleting(null); setDetail(null); await invalidate();}, onError: mutationError});
   const openCreate = () => {saveMutation.reset(); setEditing(null); setDialogOpen(true);};
   const openEdit = (item: FinanceTransferItem) => {saveMutation.reset(); setEditing(item); setDialogOpen(true);};

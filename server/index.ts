@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import { acquireAuthWriteLock, acquireStateWriteLock, appendInspectionVersionInTransaction, createDatabaseSessionStore, dataFilePath, findActiveTenantMembership, findInventoryRecord, findInventoryRecordBySn, findSystemUserById, findSystemUserByUsername, getStateRevision, listInspectionVersions, loadState, loadStateCollections, queryInventoryPage, queryLogsPage, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
+import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, dataFilePath, findActiveTenantMembership, findSystemUserById, findSystemUserByUsername, getStateRevision, loadState, loadStateCollections, saveState, saveStateCollections, saveStateRecords } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
 import { notifyFeishuMarketQuotePriceChanged, notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
@@ -35,32 +35,16 @@ import {
   type StateMergePatch,
 } from "./statePatch.ts";
 import { runStateCommand, type StateCommandTransactionHook } from "./stateCommand.ts";
-import { storeDate, storeDateDiffDays, storeDateTime } from "../src/utils/storeTime.ts";
+import { storeDate, storeDateDiffDays } from "../src/utils/storeTime.ts";
 import { addDateDays, startOfMonth } from "../src/lib/dateRangePickerUtils.ts";
-import { matchesKeyword, normalizeSearchText } from "../src/utils/search.ts";
-import { isInventoryLinkedToAssembly } from "../src/utils/inventoryRelations.ts";
-import { ensureCrmCustomerAccount, upsertCrmCustomerAccount } from "./crmAccountRepository.ts";
+import { matchesKeyword } from "../src/utils/search.ts";
+import { upsertCrmCustomerAccount } from "./crmAccountRepository.ts";
 import { createSerializedMutationRunner, isMutationAbortedError } from "./mutationQueue.ts";
 import { createAuthMutationRunner } from "./authMutation.ts";
 import { requiresStateSerialization } from "./mutationPolicy.ts";
 import { createRequestMetrics, redactRequestPath, safeErrorMessage } from "./observability.ts";
-import { syncCrmFollowUp, syncCrmQuote, syncCrmRequirement } from "./crmCommandRepository.ts";
-import {
-  confirmQuickCaptureAuditInTransaction,
-  findQuickCaptureAudit,
-  findLeadByIdempotencyKey,
-  insertQuickCaptureLead,
-  insertQuickCaptureTask,
-  saveQuickCaptureAudit,
-  saveQuickCaptureAuditInTransaction,
-} from "./crmQuickCaptureRepository.ts";
-import {
-  createQuickCaptureLeadId,
-  createQuickCaptureTaskId,
-  parseQuickCaptureText,
-  validateQuickCaptureConfirm,
-  QuickCaptureValidationError,
-} from "./crmQuickCapture.ts";
+import { syncCrmQuote, syncCrmRequirement } from "./crmCommandRepository.ts";
+import { QuickCaptureValidationError } from "./crmQuickCapture.ts";
 import { registerMasterDataRoutes } from "./routes/masterData.ts";
 import { registerPurchaseReadRoutes } from "./routes/purchaseRead.ts";
 import { registerOperationalReadRoutes } from "./routes/operationalReads.ts";
@@ -85,6 +69,20 @@ import { registerStateRevisionRoute, registerStateRoutes } from "./routes/state.
 import { registerFinanceReadModelRoutes } from "./routes/financeReadModels.ts";
 import { registerFinanceAccountRoutes } from "./routes/financeAccounts.ts";
 import { registerFinancePaymentRoutes } from "./routes/financePayments.ts";
+import {
+  accountTransferMerge as buildAccountTransferMerge,
+  paymentInMerge as buildPaymentInMerge,
+  paymentOutMerge as buildPaymentOutMerge,
+} from "./financeStateMerges.ts";
+import {
+  productTemplateMerge as buildProductTemplateMerge,
+  sanitizeInventoryRowsForUser as buildSanitizedInventoryRows,
+} from "./productStateMerges.ts";
+import {
+  deleteStateMerge as buildDeleteStateMerge,
+  simpleRecordCreateMerge as buildSimpleRecordCreateMerge,
+  vendorRecordMerge as buildVendorRecordMerge,
+} from "./partnerStateMerges.ts";
 import { registerProductMutationRoutes } from "./routes/productMutations.ts";
 import { registerMediaRoutes } from "./routes/media.ts";
 import { registerPartnerMutationRoutes } from "./routes/partnerMutations.ts";
@@ -97,24 +95,20 @@ import { registerSalesMutationRoutes } from "./routes/salesMutations.ts";
 import { registerReturnMutationRoutes } from "./routes/returnMutations.ts";
 import { registerAftersalesMutationRoutes } from "./routes/aftersalesMutations.ts";
 import { registerMarketQuoteMutationRoutes } from "./routes/marketQuoteMutations.ts";
+import { registerInspectionMutationRoutes } from "./routes/inspectionMutations.ts";
+import { registerAssemblyMutationRoutes } from "./routes/assemblyMutations.ts";
+import { registerInventoryMutationRoutes } from "./routes/inventoryMutations.ts";
+import { registerLogRoutes } from "./routes/logs.ts";
+import { registerFinanceLedgerMutationRoutes } from "./routes/financeLedgerMutations.ts";
+import { registerUserManagementRoutes } from "./routes/userManagement.ts";
+import { registerCrmQuickCaptureRoutes } from "./routes/crmQuickCaptureRoutes.ts";
 import { registerOrderPoolRoutes } from "./routes/orderPool.ts";
-import { marketQuotePriceChanges, snapshotMarketQuote } from "./marketQuoteNotifications.ts";
+import { registerOpenApiRoutes } from "./routes/openApi.ts";
+import { registerLoginRoute, registerLogoutRoute, registerResetRoute } from "./routes/auth.ts";
 import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
 import { createStateProxy, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
 import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
-import {
-  inspectionCreateDto,
-  inspectionUpdateDto,
-  parseHttpDto,
-} from "./httpDto.ts";
 import type {
-  AccountTransferRecord,
-  AssemblyOperationRecord,
-  CardInventory,
-  InspectionRecord,
-  InventoryScanResult,
-  PaymentInRecord,
-  PaymentOutRecord,
   ProductTemplate,
   SystemUserAccount,
 } from "../src/types.ts";
@@ -394,10 +388,6 @@ function actions(req?: AuthRequest, context?: StoreActionContext) {
   });
 }
 
-function isUniqueViolation(error: unknown) {
-  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "23505");
-}
-
 async function persist<T>(result: T, keys?: StateCollectionKey[] | null) {
   if (keys?.length) {
     await saveStateCollections(state, keys);
@@ -546,181 +536,6 @@ function transactionHookWithIdempotency<T>(
   };
 }
 
-function deleteMerge(logs = state.logs.slice(0, 1)) {
-  return compactStateMerge({ logs });
-}
-
-function simpleRecordCreateMerge(key: StateCollectionKey, record: { id: string }) {
-  return compactStateMerge({
-    [key]: [record],
-    logs: state.logs.slice(0, 1),
-  } as StateMergePatch);
-}
-
-function vendorRecordMerge(vendor: { id: string; name: string } | null) {
-  if (!vendor) return compactStateMerge({ logs: state.logs.slice(0, 1) });
-  const legacyNameIsUnique = state.vendors.filter((item) => item.name.trim() === vendor.name.trim()).length === 1;
-  return compactStateMerge({
-    vendors: recordsByIds(state.vendors, [vendor.id]),
-    purchaseInvoices: state.purchaseInvoices.filter((invoice) => invoice.sourcePartnerId === vendor.id && (invoice.sourcePartnerType || "vendor") === "vendor"),
-    salesInvoices: state.salesInvoices.filter((invoice) => invoice.customerId === vendor.id && invoice.customerPartnerType === "vendor"),
-    inventory: legacyNameIsUnique ? state.inventory.filter((card) => card.supplierName === vendor.name) : [],
-    paymentOutRecords: state.paymentOutRecords.filter((item) => item.supplierId === vendor.id),
-    settlementLedger: legacyNameIsUnique ? state.settlementLedger.filter((item) => item.supplierName === vendor.name) : [],
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function recordsByIds<T extends { id: string }>(items: T[], ids: Iterable<string | undefined>) {
-  const idSet = new Set(Array.from(ids).filter(Boolean));
-  if (!idSet.size) return [];
-  return items.filter((item) => idSet.has(item.id));
-}
-
-function recordsByIdOrLegacyName<T extends { id: string; name: string }>(items: T[], id?: string, name?: string) {
-  if (id) return items.filter((item) => item.id === id);
-  const legacyName = name?.trim();
-  if (!legacyName) return [];
-  return items.filter((item) => item.name.trim() === legacyName);
-}
-
-function relatedProductsForInventory(inventory: CardInventory[]) {
-  return recordsByIds(state.products, inventory.map((item) => item.productId));
-}
-
-function financeRowsByIdsOrDocNo(ids: Iterable<string | undefined>, docNos: Iterable<string | undefined>) {
-  const idSet = new Set(Array.from(ids).filter(Boolean));
-  const docNoSet = new Set(Array.from(docNos).filter(Boolean));
-  return state.financeLedger.filter((item) =>
-    idSet.has(item.id) || (item.relatedId ? docNoSet.has(item.relatedId) : false)
-  );
-}
-
-function settlementRowsByIdsOrDocNo(ids: Iterable<string | undefined>, docNos: Iterable<string | undefined>) {
-  const idSet = new Set(Array.from(ids).filter(Boolean));
-  const docNoSet = new Set(Array.from(docNos).filter(Boolean));
-  return state.settlementLedger.filter((item) =>
-    idSet.has(item.id) || (item.relatedDocNo ? docNoSet.has(item.relatedDocNo) : false)
-  );
-}
-
-function paymentInMerge(record: PaymentInRecord) {
-  const relatedDocNos = new Set([record.id, record.relatedDocNo].filter(Boolean));
-  const settlementLedger = settlementRowsByIdsOrDocNo([record.settlementLedgerId], relatedDocNos);
-  const financeLedger = financeRowsByIdsOrDocNo([record.financeLedgerId], relatedDocNos);
-  const accountIds = new Set([
-    record.accountId,
-    ...settlementLedger.map((item) => item.accountId),
-    ...financeLedger.map((item) => item.settlementAccountId),
-  ].filter(Boolean));
-
-  return compactStateMerge({
-    paymentInRecords: [record],
-    settlementAccounts: state.settlementAccounts.filter((item) => accountIds.has(item.id)),
-    settlementLedger,
-    financeLedger,
-    salesInvoices: state.salesInvoices.filter((item) => item.id === record.relatedDocNo || item.invoiceNo === record.relatedDocNo),
-    customers: recordsByIdOrLegacyName(state.customers, record.customerId, record.customerName),
-    vendors: recordsByIdOrLegacyName(state.vendors, record.supplierId, record.supplierName),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function paymentOutMerge(record: PaymentOutRecord) {
-  const relatedDocNos = new Set([record.id, record.relatedDocNo].filter(Boolean));
-  const settlementLedger = settlementRowsByIdsOrDocNo([record.settlementLedgerId], relatedDocNos);
-  const financeLedger = financeRowsByIdsOrDocNo([record.financeLedgerId], relatedDocNos);
-  const accountIds = new Set([
-    record.accountId,
-    ...settlementLedger.map((item) => item.accountId),
-    ...financeLedger.map((item) => item.settlementAccountId),
-  ].filter(Boolean));
-
-  return compactStateMerge({
-    paymentOutRecords: [record],
-    settlementAccounts: state.settlementAccounts.filter((item) => accountIds.has(item.id)),
-    settlementLedger,
-    financeLedger,
-    purchaseInvoices: state.purchaseInvoices.filter((item) => item.id === record.relatedDocNo || item.invoiceNo === record.relatedDocNo),
-    vendors: recordsByIdOrLegacyName(state.vendors, record.supplierId, record.supplierName),
-    customers: recordsByIdOrLegacyName(state.customers, record.customerId, record.customerName),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function accountTransferMerge(record: AccountTransferRecord) {
-  return compactStateMerge({
-    accountTransfers: [record],
-    settlementAccounts: recordsByIds(state.settlementAccounts, [record.fromAccountId, record.toAccountId]),
-    settlementLedger: state.settlementLedger.filter((item) => item.relatedDocNo === record.id),
-    financeLedger: state.financeLedger.filter((item) => item.relatedId === record.id),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function inspectionMerge(record: InspectionRecord) {
-  const inventory = recordsByIds(state.inventory, [record.inventoryId]);
-  return compactStateMerge({
-    inspections: [record],
-    inventory,
-    products: relatedProductsForInventory(inventory),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function assemblyOperationMerge(record: AssemblyOperationRecord) {
-  const relatedSn = new Set([
-    record.beforeSn,
-    record.afterSn,
-    ...record.beforeParts.map((part) => part.sn),
-    ...record.afterParts.map((part) => part.sn),
-  ].filter(Boolean).map((sn) => String(sn).toLowerCase()));
-  const inventory = state.inventory.filter((item) =>
-    relatedSn.has(item.sn.toLowerCase()) || isInventoryLinkedToAssembly(item, record.id)
-  );
-
-  return compactStateMerge({
-    assemblyOperations: [record],
-    inventory,
-    products: relatedProductsForInventory(inventory),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function productPriceSyncMerge(productId: string) {
-  const inventory = state.inventory.filter((item) => item.productId === productId);
-  return compactStateMerge({
-    products: recordsByIds(state.products, [productId]),
-    inventory,
-    marketQuotes: state.marketQuotes.filter((quote) => quote.productId === productId),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function sanitizeInventoryRowsForUser(inventory: CardInventory[], user?: SystemUserAccount) {
-  const permissions = getPermissionsForUser(user);
-  const currentInventory = inventory.map((item) => ({
-    ...item,
-    storageDays: storeDateDiffDays(item.entryTime),
-    actualProfit: permissions.showCost && permissions.showProfit && item.salesPrice !== undefined
-      ? Number((item.salesPrice - item.costPrice).toFixed(2))
-      : undefined,
-  }));
-  return permissions.showCost ? currentInventory : currentInventory.map((item) => ({ ...item, costPrice: 0 }));
-}
-
-function productTemplateMerge(req: AuthRequest, products: ProductTemplate | ProductTemplate[] | null) {
-  const changedProducts = Array.isArray(products) ? products : products ? [products] : [];
-  const productIds = new Set(changedProducts.map((product) => product.id).filter(Boolean));
-  const inventory = productIds.size ? state.inventory.filter((item) => productIds.has(item.productId)) : [];
-  return compactStateMerge({
-    products: changedProducts,
-    inventory: sanitizeInventoryRowsForUser(inventory, req.authUser),
-    marketQuotes: productIds.size ? state.marketQuotes.filter((quote) => quote.productId && productIds.has(quote.productId)) : [],
-    logs: state.logs.slice(0, 1),
-  });
-}
-
 async function persistProductImages(req: AuthRequest, product: ProductTemplate) {
   const urls = await persistEntityImages(req, "product", product.id, "product-image", "imageUrls");
   if (urls) product.imageUrls = urls;
@@ -761,34 +576,6 @@ function withoutImagePayload(body: unknown) {
   delete clean.images;
   delete clean.imageUrls;
   return clean;
-}
-
-function inventoryRecordsMerge(inventory: CardInventory[]) {
-  return compactStateMerge({
-    inventory,
-    products: relatedProductsForInventory(inventory),
-    salesInvoices: state.salesInvoices.filter((invoice) =>
-      invoice.items.some((item) => inventory.some((card) => card.id === item.inventoryId))
-    ),
-    purchaseCommissions: state.purchaseCommissions.filter((item) => inventory.some((card) => card.id === item.inventoryId)),
-    logs: state.logs.slice(0, 1),
-  });
-}
-
-function scanFlowMerge(result: { results: InventoryScanResult[] }, salesInvoiceId?: string) {
-  const inventoryIds = new Set(result.results.map((item) => item.inventoryId).filter(Boolean));
-  const inventory = state.inventory.filter((item) => inventoryIds.has(item.id));
-  const relatedSalesInvoiceIds = new Set([
-    salesInvoiceId,
-    ...inventory.map((item) => item.salesInvoiceId),
-  ].filter(Boolean));
-  return compactStateMerge({
-    inventory,
-    products: relatedProductsForInventory(inventory),
-    salesInvoices: state.salesInvoices.filter((item) => relatedSalesInvoiceIds.has(item.id) || relatedSalesInvoiceIds.has(item.invoiceNo)),
-    purchaseCommissions: state.purchaseCommissions.filter((item) => inventoryIds.has(item.inventoryId)),
-    logs: state.logs.slice(0, 1),
-  });
 }
 
 function productLibraryStateData<T>(result: T) {
@@ -851,44 +638,6 @@ function mutationRoute(handler: express.RequestHandler): express.RequestHandler 
 }
 
 const requireOpenApiToken = createRequireOpenApiToken(OPEN_API_TOKEN, { onDenied: logSecurityDenial });
-
-function openInventoryItem(card: AppState["inventory"][number]) {
-  return {
-    id: card.id,
-    productId: card.productId,
-    productName: card.productName,
-    category: card.category || "显卡",
-    model: card.model,
-    brand: card.brand,
-    version: card.version,
-    vram: card.vram,
-    sn: card.sn,
-    expressNo: card.expressNo,
-    sourceType: card.sourceType,
-    supplierName: card.supplierName,
-    costPrice: card.costPrice,
-    estSellPrice: card.estSellPrice,
-    marketPrice: card.marketPrice,
-    priceSource: card.priceSource,
-    priceUpdatedAt: card.priceUpdatedAt,
-    status: card.status,
-    condition: card.condition,
-    inWarranty: card.inWarranty,
-    warrantyDate: card.warrantyDate,
-    repaired: card.repaired,
-    gpuRisk: card.gpuRisk,
-    fullBox: card.fullBox,
-    warehouseLocation: card.warehouseLocation,
-    entryTime: card.entryTime,
-    storageDays: storeDateDiffDays(card.entryTime),
-    remarks: card.remarks,
-    salesPrice: card.salesPrice,
-    salesTime: card.salesTime,
-    salesInvoiceId: card.salesInvoiceId,
-    buyerName: card.buyerName,
-  };
-}
-
 
 async function applyAuthenticatedUser(userId: string, session?: { tenantId?: string; storeId?: string }) {
   const tenantId = session?.tenantId || DEFAULT_TENANT_ID;
@@ -1026,168 +775,48 @@ registerCommercialRoutes(app, {
   createCsrfToken,
 });
 
-app.post("/api/auth/login", loginRateLimiter, authMutationRoute(async (req, res) => {
-  try {
-	    // Login only needs a current account record. Loading every order, log and ledger row here
-	    // made a normal sign-in slower as the audit trail grew.
-    replaceCurrentState(await loadStateCollections(state, ["systemUsers"]));
-	    const user = actions(req).login(req.body);
-    const token = await sessions.create(user.id, { tenantId: user.tenantId || DEFAULT_TENANT_ID, storeId: user.storeId || DEFAULT_STORE_ID });
-	    setSessionCookie(res, token);
-	    const savedUser = state.systemUsers.find((item) => item.id === user.id);
-	    await saveStateRecords([
-	      ...(savedUser ? [{ key: "systemUsers" as const, items: [savedUser] }] : []),
-	      { key: "logs", items: state.logs.slice(0, 1) },
-	    ]);
-    res.json({
-      ...ok({ user, csrfToken: createCsrfToken(token) }, savedUser, "initial"),
-      meta: { stateMode: "initial", stateRevision: await getStateRevision() },
-    });
-  } catch (error) {
-    const domainError = toDomainError(error);
-    if (domainError.status === 401 || domainError.code === "VALIDATION_ERROR") {
-      sendApiError(req, res, 401, "LOGIN_FAILED", "账号或密码错误", true);
-      return;
-    }
-    await reloadStateFromDatabase().catch(() => undefined);
-    throw error;
-  }
-}));
+const authRouteDependencies = {
+  loginRateLimiter,
+  authMutationRoute,
+  asyncRoute,
+  requireBoss,
+  reloadStateCollections: async (keys: StateCollectionKey[]) => {
+    replaceCurrentState(await loadStateCollections(state, keys));
+  },
+  reloadState: reloadStateFromDatabase,
+  replaceState: replaceCurrentState,
+  getState: () => state,
+  actions: (req: express.Request) => actions(req as AuthRequest),
+  sessions,
+  setSessionCookie,
+  clearSessionCookie,
+  createCsrfToken,
+  getStateRevision,
+  saveStateRecords,
+  saveState,
+  ok,
+  sendApiError,
+  defaultTenantId: DEFAULT_TENANT_ID,
+  defaultStoreId: DEFAULT_STORE_ID,
+};
 
-const openInventoryRouter = express.Router();
-openInventoryRouter.use(openApiRateLimiter, requireOpenApiToken);
+registerLoginRoute(app, authRouteDependencies);
 
-openInventoryRouter.get("/items", asyncRoute(async (req, res) => {
-  const page = await queryInventoryPage<CardInventory>({
-    tenantId: DEFAULT_TENANT_ID,
-    storeId: DEFAULT_STORE_ID,
-    page: Number(req.query.page || 1),
-    pageSize: Number(req.query.pageSize || req.query.per_page || 20),
-    keyword: String(req.query.keyword || req.query.search || ""),
-    status: String(req.query.status || ""),
-    category: String(req.query.category || ""),
-    warehouseLocation: String(req.query.warehouseLocation || ""),
-    includeSold: String(req.query.includeSold || "") === "true",
-    sortKey: String(req.query.sortKey || ""),
-    sortDirection: req.query.sortDirection === "asc" ? "asc" : "desc",
-  });
-  res.json({ data: page.data.map(openInventoryItem), meta: page.meta });
-}));
-
-openInventoryRouter.get("/items/:id", asyncRoute(async (req, res) => {
-  const card = await findInventoryRecord<CardInventory>(req.params.id!, DEFAULT_TENANT_ID, DEFAULT_STORE_ID);
-  if (!card) {
-    sendApiError(req, res, 404, "INVENTORY_NOT_FOUND", "库存档案不存在");
-    return;
-  }
-  res.json({ data: openInventoryItem(card) });
-}));
-
-openInventoryRouter.get("/by-sn/:sn", asyncRoute(async (req, res) => {
-  const card = await findInventoryRecordBySn<CardInventory>(req.params.sn!.trim(), DEFAULT_TENANT_ID, DEFAULT_STORE_ID);
-  if (!card) {
-    sendApiError(req, res, 404, "INVENTORY_SN_NOT_FOUND", "未找到该 SN 对应库存");
-    return;
-  }
-  res.json({ data: openInventoryItem(card) });
-}));
-
-openInventoryRouter.get("/summary", asyncRoute(async (req, res) => {
-  replaceCurrentState(await loadStateCollections(state, ["inventory"]));
-  const rows = actions(undefined, { role: "财务", actor: "OpenAPI" }).getInventorySummary(req.query as Record<string, string>);
-  res.json(paginated(rows, req));
-}));
-
-openInventoryRouter.post("/scan-in", asyncRoute(async (req, res) => {
-  replaceCurrentState(await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]));
-  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
-    ...req.body,
-    mode: "入库",
-    handler: req.body?.handler || "OpenAPI",
-  });
-  const stateMerge = scanFlowMerge(result);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.json({ data: result });
-}));
-
-openInventoryRouter.post("/scan-out", asyncRoute(async (req, res) => {
-  replaceCurrentState(await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]));
-  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
-    ...req.body,
-    mode: "出库",
-    handler: req.body?.handler || "OpenAPI",
-  });
-  const stateMerge = scanFlowMerge(result, req.body?.salesInvoiceId);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.json({ data: result });
-}));
-
-openInventoryRouter.post("/relocate", asyncRoute(async (req, res) => {
-  replaceCurrentState(await loadStateCollections(state, ["inventory", "products", "salesInvoices", "logs"]));
-  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).scanInventoryFlow({
-    ...req.body,
-    mode: "移库",
-    handler: req.body?.handler || "OpenAPI",
-  });
-  const stateMerge = scanFlowMerge(result);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.json({ data: result });
-}));
-
-app.use("/api/open/inventory", openInventoryRouter);
-
-const openPricesRouter = express.Router();
-openPricesRouter.use(openApiRateLimiter, requireOpenApiToken);
-
-openPricesRouter.post("/sync-est-sell", asyncRoute(async (req, res) => {
-  replaceCurrentState(await loadStateCollections(state, ["products", "inventory", "marketQuotes", "logs"]));
-  const body = req.body || {};
-  const beforeQuotes = new Map(
-    state.marketQuotes
-      .filter((quote) => quote.productId === String(body.productId || "").trim())
-      .map((quote) => [quote.id, snapshotMarketQuote(quote)] as const),
-  );
-  const result = actions(undefined, { role: "财务", actor: "OpenAPI" }).syncEstimatedSellPrice({
-    productId: String(body.productId || ""),
-    estSellPrice: Number(body.estSellPrice ?? body.suggestSellPrice ?? body.refSellPrice ?? body.todaySellPrice),
-    priceSource: body.priceSource || body.source,
-    remarks: body.remarks,
-  });
-  const stateMerge = productPriceSyncMerge(result.productId);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  void notifyFeishuMarketQuotePriceChanged(marketQuotePriceChanges(beforeQuotes, state.marketQuotes.filter((quote) => quote.productId === result.productId)));
-  res.json({ data: result });
-}));
-
-openPricesRouter.get("/market-quotes", asyncRoute(async (req, res) => {
-  replaceCurrentState(await loadStateCollections(state, ["marketQuotes"]));
-  const keyword = String(req.query.q || req.query.search || "").trim();
-  const brand = normalizeSearchText(req.query.brand);
-  const rows = state.marketQuotes
-    .filter((quote) => {
-      const matchSearch = matchesKeyword([quote.model, quote.productName, quote.brand], keyword);
-      const matchesBrand = !brand || normalizeSearchText(quote.brand) === brand;
-      return matchSearch && matchesBrand;
-    })
-    .sort((a, b) => String(b.updateTime || b.date || "").localeCompare(String(a.updateTime || a.date || "")))
-    .map((quote) => ({
-      id: quote.id,
-      productId: quote.productId,
-      productName: quote.productName,
-      model: quote.model,
-      brand: quote.brand,
-      refBuyPrice: quote.refBuyPrice ?? quote.todayBuyPrice ?? quote.yestBuyPrice ?? 0,
-      refSellPrice: quote.refSellPrice ?? quote.todaySellPrice ?? quote.maxPrice ?? 0,
-      trend: quote.trend,
-      changeAmount: quote.changeAmount,
-      fluctuation: quote.fluctuation || quote.remarks,
-      updateTime: quote.updateTime || quote.date,
-      history: quote.history || [],
-    }));
-  res.json(paginated(rows, req));
-}));
-
-app.use("/api/open/prices", openPricesRouter);
+registerOpenApiRoutes(app, {
+  openApiRateLimiter,
+  requireOpenApiToken,
+  asyncRoute,
+  reloadStateCollections: async (keys) => {
+    replaceCurrentState(await loadStateCollections(state, keys));
+  },
+  getState: () => state,
+  actions: (context) => actions(undefined, context),
+  notifyMarketQuotePriceChanged: notifyFeishuMarketQuotePriceChanged,
+  sendApiError: (req, res, status, code, message) => sendApiError(req, res, status, code, message),
+  paginated,
+  defaultTenantId: DEFAULT_TENANT_ID,
+  defaultStoreId: DEFAULT_STORE_ID,
+});
 
 // Background clients poll this lightweight revision endpoint first. Keeping it ahead of the
 // state-reload middleware avoids deserializing every business collection when nothing changed.
@@ -1300,69 +929,21 @@ registerAiRoutes(app, {
   defaultTenantId: DEFAULT_TENANT_ID,
 });
 
-app.post("/api/auth/logout", authMutationRoute(async (req: AuthRequest, res) => {
-  try {
-    await sessions.revoke(req.authToken);
-    clearSessionCookie(res);
-    const result = actions(req).logout();
-    await saveStateRecords([{ key: "logs", items: state.logs.slice(0, 1) }]);
-    await reloadStateFromDatabase();
-    res.json(ok(result));
-  } catch (error) {
-    await reloadStateFromDatabase().catch(() => undefined);
-    throw error;
-  }
-}));
+registerLogoutRoute(app, authRouteDependencies);
 
-app.get("/api/users", requireBoss, requireMenu("permissions"), (req: AuthRequest, res) => {
-  res.json(ok(actions(req).listUsers()));
+registerUserManagementRoutes(app, {
+  requireBoss,
+  requireMenu,
+  asyncRoute,
+  actions: (req) => actions(req as AuthRequest),
+  assertSeatAvailable,
+  persistUserWithMembership,
+  revokeUserSessions: async (userId, tenantId) => {
+    await sessions.revokeUserSessions?.(userId, tenantId);
+  },
+  sendApiError: (req, res, status, code, message) => sendApiError(req, res, status, code, message),
+  ok,
 });
-
-app.post("/api/users", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
-  const created = actions(req).createUser(req.body);
-  if (created.enabled) await assertSeatAvailable(created.tenantId || DEFAULT_TENANT_ID, created.id, created.storeId || DEFAULT_STORE_ID);
-  const persisted = await persistUserWithMembership(req, created);
-  res.status(201).json(ok(persisted));
-}));
-
-app.put("/api/users/:id", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
-  const updated = actions(req).updateUser(req.params.id!, req.body);
-  if (updated.enabled) await assertSeatAvailable(updated.tenantId || DEFAULT_TENANT_ID, updated.id, updated.storeId || DEFAULT_STORE_ID);
-  const persisted = await persistUserWithMembership(req, updated);
-  res.json(ok(persisted));
-}));
-
-// Account lifecycle operations are explicit so operators do not need to send a
-// full user object just to suspend an account or rotate a credential.
-app.post("/api/users/:id/deactivate", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
-  if (req.params.id === req.authUser?.id) {
-    sendApiError(req, res, 400, "SELF_DEACTIVATION", "不能停用当前登录账号");
-    return;
-  }
-  const updated = actions(req).updateUser(req.params.id!, { enabled: false });
-  const persisted = await persistUserWithMembership(req, updated);
-  await sessions.revokeUserSessions?.(updated.id, updated.tenantId || DEFAULT_TENANT_ID);
-  res.json(ok(persisted));
-}));
-
-app.post("/api/users/:id/reactivate", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
-  const updated = actions(req).updateUser(req.params.id!, { enabled: true });
-  await assertSeatAvailable(updated.tenantId || DEFAULT_TENANT_ID, updated.id, updated.storeId || DEFAULT_STORE_ID);
-  const persisted = await persistUserWithMembership(req, updated);
-  res.json(ok(persisted));
-}));
-
-app.post("/api/users/:id/reset-password", requireBoss, requireMenu("permissions"), asyncRoute(async (req: AuthRequest, res) => {
-  const password = typeof req.body?.password === "string" ? req.body.password.trim() : "";
-  if (password.length < 12 || password.length > 1024) {
-    sendApiError(req, res, 400, "INVALID_PASSWORD", "新密码至少 12 位且不能超过 1024 位");
-    return;
-  }
-  const updated = actions(req).updateUser(req.params.id!, { password });
-  const persisted = await persistUserWithMembership(req, updated);
-  await sessions.revokeUserSessions?.(updated.id, updated.tenantId || DEFAULT_TENANT_ID);
-  res.json(ok(persisted));
-}));
 
 registerFinanceAccountRoutes(app, {
   requireMenu,
@@ -1385,9 +966,9 @@ registerFinancePaymentRoutes(app, {
   releaseMutationIdempotency,
   transactionHookWithIdempotency,
   persistEntityImages: (req, entityType, entityId, relationRole) => persistEntityImages(req as AuthRequest, entityType, entityId, relationRole),
-  paymentInMerge,
-  paymentOutMerge,
-  accountTransferMerge,
+  paymentInMerge: (record) => buildPaymentInMerge(state, record),
+  paymentOutMerge: (record) => buildPaymentOutMerge(state, record),
+  accountTransferMerge: (record) => buildAccountTransferMerge(state, record),
 });
 
 registerFinanceReadModelRoutes(app, {
@@ -1413,180 +994,13 @@ registerCrmReadModelRoutes(app, {
 
 registerCrmNormalizedReadRoutes(app, {requireMenu, asyncRoute});
 
-app.post("/api/gpu_erp/crm/quick-capture/parse", requireMenu("crm"), asyncRoute(async (req: AuthRequest, res) => {
-  const result = await parseQuickCaptureText(
-    { rawText: req.body?.rawText, sourceType: req.body?.sourceType },
-    { products: state.products, customers: state.customers },
-  );
-  await saveQuickCaptureAudit({
-    id: result.parseId,
-    rawText: result.rawText,
-    sourceType: result.sourceType,
-    parsed: result,
-    actorId: crmActor(req),
-    model: result.model,
-  });
-  res.json({ data: result });
-}));
-
-app.post("/api/gpu_erp/crm/quick-capture/confirm", requireMenu("crm"), asyncRoute(async (req: AuthRequest, res) => {
-  const input = validateQuickCaptureConfirm(req.body);
-  const audit = await findQuickCaptureAudit(input.parseId);
-  if (!audit) throw new QuickCaptureValidationError("解析记录已过期，请重新解析后再确认", "CRM_QUICK_CAPTURE_PARSE_NOT_FOUND", 404);
-  if (audit.rawText !== input.rawText) throw new QuickCaptureValidationError("解析原文已变化，请重新解析后再确认", "CRM_QUICK_CAPTURE_PARSE_MISMATCH", 409);
-  if (audit.sourceType !== input.sourceType) throw new QuickCaptureValidationError("解析来源已变化，请重新解析后再确认", "CRM_QUICK_CAPTURE_SOURCE_MISMATCH", 409);
-  const existing = await findLeadByIdempotencyKey(input.idempotencyKey);
-  if (existing) {
-    res.json({ data: { lead: existing, task: null, customer: state.customers.find(item => item.id === existing.customerId) || null, duplicate: true } });
-    return;
-  }
-
-  const fields = input.fields;
-  let customer: AppState["customers"][number];
-  let createdCustomer: AppState["customers"][number] | null = null;
-  if (input.matchAction === "link_existing") {
-    const matchedCustomer = state.customers.find(item => item.id === input.matchedCustomerId);
-    if (!matchedCustomer) throw new QuickCaptureValidationError("要关联的客户不存在，请重新匹配", "CRM_QUICK_CAPTURE_CUSTOMER_NOT_FOUND", 404);
-    customer = matchedCustomer;
-  } else {
-    const exactMatch = state.customers.find(item => {
-      const phone = String(fields.phone || "").trim().toLowerCase();
-      const currentPhone = String(item.phone || item.contact || "").trim().toLowerCase();
-      const wechat = String(fields.wechat || "").trim().toLowerCase();
-      const currentWechat = String(item.wechat || "").trim().toLowerCase();
-      const qq = String(fields.qq || "").trim().toLowerCase();
-      const currentQq = String(item.qq || "").trim().toLowerCase();
-      return (phone && currentPhone === phone) || (wechat && currentWechat === wechat) || (qq && currentQq === qq);
-    });
-    if (exactMatch) {
-      throw new QuickCaptureValidationError(`联系方式已匹配客户【${exactMatch.name}】，请在预览中选择“关联已有客户”`, "CRM_QUICK_CAPTURE_MATCH_REQUIRED", 409);
-    }
-    const intent = fields.intentType === "回收" ? "高" : fields.priority === "高" ? "高" : fields.priority === "低" ? "低" : "中";
-    if (!fields.customerName) throw new QuickCaptureValidationError("客户名称不能为空", "CRM_QUICK_CAPTURE_CUSTOMER_NAME_REQUIRED", 400);
-    createdCustomer = actions(req).createCustomer({
-      name: fields.customerName,
-      contact: fields.phone,
-      phone: fields.phone,
-      wechat: fields.wechat,
-      qq: fields.qq,
-      city: fields.city,
-      company: fields.company,
-      firstChannel: fields.source || "CRM快捷录入",
-      source: fields.source || "CRM快捷录入",
-      type: fields.intentType === "回收" ? "个人卖家客户" : "个人买家客户",
-      intent,
-      budget: fields.expectedPrice || 0,
-      estimatedAmount: fields.quotedPrice || fields.expectedPrice || 0,
-      nextFollowTime: fields.followUpTime,
-      nextFollowUpAt: fields.followUpTime,
-      nextAction: fields.productModel ? `确认 ${fields.productModel} 的需求和价格` : "补充需求和联系方式",
-      tags: fields.tags,
-      remarks: fields.note,
-      fromCrm: true,
-    });
-    customer = createdCustomer;
-  }
-
-  const followUp = actions(req).createCrmFollowUp({
-    customerId: customer.id,
-    contactMethod: fields.wechat ? "微信" : fields.phone ? "电话" : "其他",
-    content: fields.note || `快捷录入线索：${fields.productModel || fields.productName || "待确认商品"}`,
-    result: "继续跟进",
-    handler: crmActor(req),
-    followTime: storeDateTime(),
-    nextFollowTime: fields.followUpTime,
-    nextFollowUpAt: fields.followUpTime,
-    nextAction: fields.productModel ? `确认 ${fields.productModel} 的需求和价格` : "补充需求和联系方式",
-    estimatedAmount: fields.quotedPrice || fields.expectedPrice || 0,
-    dealProbability: fields.priority === "高" ? 70 : fields.priority === "低" ? 20 : 40,
-    remarks: "由客户线索快捷录入自动创建",
-  });
-
-  const stateMerge = compactStateMerge({
-    customers: recordsByIds(state.customers, [customer.id]),
-    crmFollowUps: [followUp],
-    logs: state.logs.slice(0, 1),
-  });
-  const leadId = createQuickCaptureLeadId();
-  const taskId = createQuickCaptureTaskId();
-  let savedLead: Awaited<ReturnType<typeof insertQuickCaptureLead>> | null = null;
-  let savedTask: Awaited<ReturnType<typeof insertQuickCaptureTask>> | null = null;
-  try {
-    await saveStateRecords(
-      stateMergeRecords(stateMerge),
-      async (client) => {
-        const account = createdCustomer
-          ? await upsertCrmCustomerAccount(client, customer, "created", crmActor(req))
-          : await ensureCrmCustomerAccount(client, customer);
-        const matchedAccount = input.matchAction === "link_existing" ? account.accountId : undefined;
-        savedLead = await insertQuickCaptureLead(client, {
-          id: leadId,
-          customerId: customer.id,
-          sourceType: input.sourceType,
-          source: fields.source,
-          intentType: fields.intentType,
-          productCategory: fields.productCategory,
-          productName: fields.productName,
-          productModel: fields.productModel,
-          productId: fields.productId,
-          quantity: fields.quantity,
-          expectedPrice: fields.expectedPrice,
-          quotedPrice: fields.quotedPrice,
-          transactionType: fields.transactionType,
-          deliveryMethod: fields.deliveryMethod,
-          followUpTime: fields.followUpTime,
-          priority: fields.priority || "中",
-          stage: fields.stage || "新线索",
-          tags: fields.tags,
-          note: fields.note,
-          rawText: input.rawText,
-          confidence: input.confidence,
-          missingFields: input.missingFields,
-          conflicts: input.conflicts,
-          matchedCustomerId: input.matchedCustomerId,
-          createdBy: crmActor(req),
-          accountId: account.accountId,
-          matchedAccountId: matchedAccount,
-          idempotencyKey: input.idempotencyKey,
-        });
-        savedLead = savedLead ? { ...savedLead, customerId: customer.id, customerName: customer.name, matchedCustomerId: input.matchedCustomerId } : savedLead;
-        savedTask = await insertQuickCaptureTask(client, {
-          id: taskId,
-          leadId,
-          customerId: customer.id,
-          accountId: account.accountId,
-          taskType: "客户跟进",
-          title: fields.followUpTime ? `跟进客户：${customer.name}` : `补充线索：${customer.name}`,
-          dueAt: fields.followUpTime,
-          status: "待处理",
-          assignee: crmActor(req),
-          createdBy: crmActor(req),
-        });
-        savedTask = savedTask ? { ...savedTask, customerId: customer.id } : savedTask;
-        await syncCrmFollowUp(client, followUp, customer, crmActor(req));
-        await confirmQuickCaptureAuditInTransaction(client, {
-          id: input.parseId,
-          finalPayload: { ...input, leadId, taskId },
-          status: "confirmed",
-          leadId,
-        });
-      },
-    );
-  } catch (error) {
-    // Two browser tabs can confirm the same parse before either sees the first response.
-    // The unique idempotency key is the database backstop; turn that race into the same
-    // safe duplicate response as the normal pre-check instead of a 500.
-    if (isUniqueViolation(error)) {
-      const existingAfterRace = await findLeadByIdempotencyKey(input.idempotencyKey);
-      if (existingAfterRace) {
-        res.json({ data: { lead: existingAfterRace, task: null, customer: state.customers.find(item => item.id === existingAfterRace.customerId) || null, duplicate: true } });
-        return;
-      }
-    }
-    throw error;
-  }
-  res.status(201).json(okMerge({ customer, lead: savedLead, task: savedTask, followUp }, stateMerge));
-}));
+registerCrmQuickCaptureRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+  actorForRequest: (req) => crmActor(req),
+});
 
 registerCrmMutationRoutes(app, {
   requireMenu,
@@ -1602,8 +1016,8 @@ registerProductMutationRoutes(app, {
   asyncRoute,
   actions: (req) => actions(req as AuthRequest),
   persistProductImages,
-  productTemplateMerge,
-  deleteMerge,
+  productTemplateMerge: (req, products) => buildProductTemplateMerge(state, products, req.authUser),
+  deleteMerge: () => buildDeleteStateMerge(state),
 });
 
 registerPartnerMutationRoutes(app, {
@@ -1611,10 +1025,10 @@ registerPartnerMutationRoutes(app, {
   requireDeletePermission,
   asyncRoute,
   actions: (req) => actions(req as AuthRequest),
-  customerCreateMerge: (customer) => simpleRecordCreateMerge("customers", customer),
-  vendorCreateMerge: (vendor) => simpleRecordCreateMerge("vendors", vendor),
-  vendorRecordMerge,
-  deleteMerge,
+  customerCreateMerge: (customer) => buildSimpleRecordCreateMerge(state, "customers", customer),
+  vendorCreateMerge: (vendor) => buildSimpleRecordCreateMerge(state, "vendors", vendor),
+  vendorRecordMerge: (vendor) => buildVendorRecordMerge(state, vendor),
+  deleteMerge: () => buildDeleteStateMerge(state),
   persistCustomerAccount: (client, req, customer) => upsertCrmCustomerAccount(client, customer, "created", crmActor(req as AuthRequest)),
 });
 
@@ -1641,68 +1055,25 @@ registerPurchaseMutationRoutes(app, {
   transactionHookWithIdempotency,
 });
 
-app.post("/api/inspections", requireMenu("inspections"), asyncRoute(async (req: AuthRequest, res) => {
-  const command = parseHttpDto(inspectionCreateDto, withoutImagePayload(req.body));
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).submitInspection(command),
-    inspectionMerge,
-    async (record) => {
-      const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
-      if (urls) record.images = urls;
-    },
-    (client, record) => appendInspectionVersionInTransaction(client, record, req.tenantId, crmActor(req)),
-  );
-  res.status(201).json(okMerge(created, stateMerge));
-}));
+registerInspectionMutationRoutes(app, {
+  requireMenu,
+  requireHistoryEditPermission,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+  withoutImagePayload,
+  persistEntityImages: (req, entityType, entityId, relationRole) => persistEntityImages(req, entityType, entityId, relationRole),
+  actorForRequest: (req) => crmActor(req),
+  sendNotFound: (req, res, code, message) => sendApiError(req, res, 404, code, message),
+});
 
-app.get("/api/inspections/:id/versions", requireMenu("inspections"), asyncRoute(async (req: AuthRequest, res) => {
-  const inspection = state.inspections.find((item) => item.id === req.params.id);
-  if (!inspection) {
-    sendApiError(req, res, 404, "INSPECTION_NOT_FOUND", "检测记录不存在");
-    return;
-  }
-  res.json({ data: await listInspectionVersions(req.params.id!, req.tenantId) });
-}));
-
-app.put("/api/inspections/:id", requireMenu("inspections"), requireHistoryEditPermission, asyncRoute(async (req: AuthRequest, res) => {
-  const {expectedRecordVersion, ...updates} = parseHttpDto(inspectionUpdateDto, withoutImagePayload(req.body));
-  const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).updateInspection(req.params.id!, updates, expectedRecordVersion),
-    inspectionMerge,
-    async (record) => {
-      const urls = await persistEntityImages(req, "inspection", record.id, "inspection-evidence");
-      if (urls) record.images = urls;
-    },
-    (client, record) => appendInspectionVersionInTransaction(client, record, req.tenantId, crmActor(req)),
-  );
-  res.json(okMerge(updated, stateMerge));
-}));
-
-app.post("/api/assembly-operations", requireMenu("assembly"), asyncRoute(async (req, res) => {
-  const created = actions(req).createAssemblyOperation(req.body);
-  const stateMerge = assemblyOperationMerge(created);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.status(201).json(okMerge(created, stateMerge));
-}));
-
-app.delete("/api/assembly-operations/:id", requireMenu("assembly"), requireDeletePermission, asyncRoute(async (req, res) => {
-  const beforeIds = new Set(state.inventory.filter((item) => isInventoryLinkedToAssembly(item, req.params.id!)).map((item) => item.id));
-  const beforeOperation = state.assemblyOperations.find((item) => item.id === req.params.id!);
-  const deleted = actions(req).deleteAssemblyOperation(req.params.id!);
-  const afterRelated = state.inventory.filter((item) => beforeIds.has(item.id));
-  const afterIds = new Set(afterRelated.map((item) => item.id));
-  const stateMerge = compactStateMerge({
-    inventory: afterRelated,
-    products: relatedProductsForInventory(afterRelated),
-    logs: state.logs.slice(0, 1),
-  });
-  const stateDelete = {
-    assemblyOperations: (deleted || beforeOperation)?.id ? [(deleted || beforeOperation)!.id] : [],
-    inventory: Array.from(beforeIds).filter((id) => !afterIds.has(id)),
-  };
-  await saveStateRecords([...stateMergeRecords(stateMerge), ...stateDeleteRecords(stateDelete)]);
-  res.status(deleted ? 200 : 404).json(okMerge(deleted, stateMerge, stateDelete));
-}));
+registerAssemblyMutationRoutes(app, {
+  requireMenu,
+  requireDeletePermission,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+});
 
 registerSalesMutationRoutes(app, {
   requireMenu,
@@ -1748,106 +1119,37 @@ registerMarketQuoteMutationRoutes(app, {
   asyncRoute,
   getState: () => state,
   actions: (req) => actions(req as AuthRequest),
-  deleteMerge,
+  deleteMerge: () => buildDeleteStateMerge(state),
   notifyPriceChanged: notifyFeishuMarketQuotePriceChanged,
   notifyPriceChanges: notifyFeishuMarketQuotePriceChanged,
   sendValidationError: (req, res, message) => sendApiError(req, res, 400, "VALIDATION_ERROR", message),
 });
 
-app.patch("/api/inventory/batch", requireMenu("inventory"), asyncRoute(async (req, res) => {
-  const { data: updated, stateMerge } = await runStateCommand(
-    () => actions(req).batchUpdateInventory(req.body.ids || [], req.body.updates || {}),
-    inventoryRecordsMerge,
-  );
-  res.json(okMerge(updated, stateMerge));
-}));
-
-app.get("/api/inventory/summary", requireMenu("inventory"), (req, res) => {
-  res.json({ data: actions(req).getInventorySummary(req.query as Record<string, string>) });
+registerInventoryMutationRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+  sanitizeInventoryRows: (rows, user) => buildSanitizedInventoryRows(state, rows, user),
 });
 
-// Paginated inventory endpoint for the ERP UI. Existing state hydration remains compatible, while
-// new screens can page directly from PostgreSQL instead of receiving the whole inventory array.
-app.get("/api/inventory/items", requireMenu("inventory"), asyncRoute(async (req: AuthRequest, res) => {
-  const page = await queryInventoryPage<CardInventory>({
-    tenantId: (req as AuthRequest).tenantId,
-    storeId: (req as AuthRequest).storeId,
-    page: Number(req.query.page || 1),
-    pageSize: Number(req.query.pageSize || 50),
-    keyword: String(req.query.keyword || req.query.search || ""),
-    status: String(req.query.status || ""),
-    category: String(req.query.category || ""),
-    brand: String(req.query.brand || ""),
-    risk: req.query.risk === "mined" || req.query.risk === "upturned" || req.query.risk === "high" ? req.query.risk : undefined,
-    minStorageDays: Number(req.query.minStorageDays || 0),
-    maxStorageDays: req.query.maxStorageDays === undefined ? undefined : Number(req.query.maxStorageDays),
-    minProfitMargin: Number(req.query.minProfitMargin || 0),
-    activeOnly: String(req.query.activeOnly || "") === "true",
-    warehouseLocation: String(req.query.warehouseLocation || ""),
-    includeSold: String(req.query.includeSold || "") === "true",
-    sortKey: String(req.query.sortKey || ""),
-    sortDirection: req.query.sortDirection === "asc" ? "asc" : "desc",
-  });
-  res.json({ data: sanitizeInventoryRowsForUser(page.data, req.authUser), meta: page.meta });
-}));
+registerLogRoutes(app, {
+  requireMenu,
+  requireHistoryEditPermission,
+  asyncRoute,
+  actions: (req) => actions(req as AuthRequest),
+  persistRequest,
+  ok,
+});
 
-app.post("/api/inventory/import", requireMenu("inventory"), asyncRoute(async (req, res) => {
-  const { data: created, stateMerge } = await runStateCommand(
-    () => actions(req).importInventoryRows(req.body.rows || [], req.body.handler),
-    inventoryRecordsMerge,
-  );
-  res.status(201).json(okMerge(created, stateMerge));
-}));
+registerFinanceLedgerMutationRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+});
 
-app.post("/api/inventory/scan-flow", requireMenu("inventory"), asyncRoute(async (req, res) => {
-  const result = actions(req).scanInventoryFlow(req.body);
-  const stateMerge = scanFlowMerge(result, req.body?.salesInvoiceId);
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.json(okMerge(result, stateMerge));
-}));
-
-app.get("/api/logs", requireMenu("logs"), asyncRoute(async (req, res) => {
-  const page = await queryLogsPage({
-    tenantId: (req as AuthRequest).tenantId,
-    storeId: (req as AuthRequest).storeId,
-    page: Number(req.query.page || 1),
-    pageSize: Number(req.query.pageSize || req.query.per_page || 100),
-    keyword: String(req.query.keyword || ""),
-  });
-  res.json({ data: { logs: page.data, meta: page.meta, logsLoaded: true } });
-}));
-
-app.post("/api/logs", requireMenu("logs"), asyncRoute(async (req, res) => {
-  const { user, module, type, target, beforeVal, afterVal } = req.body;
-  res.status(201).json(ok(await persistRequest(req, actions(req).addLog(user, module, type, target, beforeVal, afterVal))));
-}));
-
-app.delete("/api/logs", requireMenu("logs"), requireHistoryEditPermission, asyncRoute(async (req, res) => {
-  actions(req).clearAllLogs();
-  await persistRequest(req, null);
-  res.json(ok(null));
-}));
-
-app.patch("/api/finance-ledger/:id/reconcile", requireMenu("finance"), asyncRoute(async (req, res) => {
-  const updated = actions(req).reconcileLedgerItem(req.params.id!);
-  const stateMerge = compactStateMerge({
-    financeLedger: updated ? [updated] : [],
-    logs: state.logs.slice(0, 1),
-  });
-  await saveStateRecords(stateMergeRecords(stateMerge));
-  res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));
-}));
-
-app.post("/api/reset", requireBoss, asyncRoute(async (req, res) => {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_RESET !== "true") {
-    sendApiError(req, res, 403, "FORBIDDEN", "生产环境已禁用数据初始化接口", true);
-    return;
-  }
-  replaceCurrentState(actions(req).resetToDemoData());
-  await saveState(state);
-  await reloadStateFromDatabase();
-  res.json(ok(state));
-}));
+registerResetRoute(app, authRouteDependencies);
 
 registerBackupRoutes(app, {
   state,

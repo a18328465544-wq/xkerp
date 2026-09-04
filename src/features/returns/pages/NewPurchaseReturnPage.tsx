@@ -5,7 +5,7 @@ import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "reac
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
-import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
+import {ApiError, queryKeys, refreshErpAfterDocument, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import {formatCurrency} from "@/src/lib/format";
@@ -37,10 +37,10 @@ export function NewPurchaseReturnPage() {
   if (!session || !allowed) return <ErpPageError title="当前账号没有采购退货权限" description="服务器已拒绝 return_purchase / return_orders 菜单访问，请联系管理员授权。" />;
   if (stateQuery.isPending || !stateQuery.data) return <Card><CardContent><ReturnState title="正在加载采购单、库存与付款关系" icon={<RefreshCw className="h-5 w-5 animate-spin" />} /></CardContent></Card>;
   if (stateQuery.error) return <ErpPageError title="无法加载采购退货基础数据" description={stateQuery.error.message} onRetry={() => void stateQuery.refetch()} />;
-  return <PurchaseReturnForm session={session} state={stateQuery.data} onAuthExpired={logout} onSuccess={() => {void queryClient.invalidateQueries({queryKey: queryKeys.returns.all()}); void queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}); void queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()});}} />;
+  return <PurchaseReturnForm session={session} state={stateQuery.data} onAuthExpired={logout} onSuccess={() => refreshErpAfterDocument(queryClient)} />;
 }
 
-function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session: AuthSession; state: Awaited<ReturnType<typeof returnsApi.reference>>; onAuthExpired: () => void; onSuccess: () => void}) {
+function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session: AuthSession; state: Awaited<ReturnType<typeof returnsApi.reference>>; onAuthExpired: () => void; onSuccess: () => void | Promise<void>}) {
   const navigate = useNavigate();
   const defaultValues: PurchaseReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementMode: "抵扣账款", settlementAccountId: "", handler: session.user.displayName, reason: "", inventoryAction: "退回供应商", remarks: "", returnScope: "single"};
   const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: PurchaseReturnFormValues}>("return_purchase");
@@ -104,7 +104,7 @@ function PurchaseReturnForm({session, state, onAuthExpired, onSuccess}: {session
       discardDraft();
       setRestoredDraftActive(false);
       setValues((current) => ({...current, relatedDocNo: "", sourceInventoryId: "", amount: 0, settlementAccountId: "", reason: "", remarks: "", returnScope: "single", returnItems: undefined}));
-      onSuccess();
+      await onSuccess();
     } catch (caught) {
       if (caught instanceof ApiError && caught.isUnauthorized) onAuthExpired();
       setError(caught instanceof Error ? caught.message : "采购退货提交失败");

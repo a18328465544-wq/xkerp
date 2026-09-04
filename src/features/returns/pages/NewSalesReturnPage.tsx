@@ -5,7 +5,7 @@ import {Link, useNavigate} from "@tanstack/react-router";
 import {toast} from "sonner";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
-import {ApiError, queryKeys, returnsApi} from "@/src/services/api";
+import {ApiError, queryKeys, refreshErpAfterDocument, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {ReturnOrderBatchItemInput, SalesReturnFormValues} from "@/src/types/returns";
@@ -30,10 +30,10 @@ export function NewSalesReturnPage() {
   if (!canAccess) return <ReturnState title="当前账号没有销售退货权限" description="服务器已拒绝 return_sales / return_orders 菜单访问（403）。" icon={<LockKeyhole className="h-5 w-5" />} />;
   if (stateQuery.isPending || !stateQuery.data) return <ReturnState title="正在加载销售单和库存" icon={<RefreshCw className="h-5 w-5 animate-spin" />} />;
   if (stateQuery.error) return <ErpPageError title="无法加载退货基础数据" description={stateQuery.error.message} onRetry={() => void stateQuery.refetch()} />;
-  return <SalesReturnForm session={session} invoices={stateQuery.data.salesInvoices} inventory={stateQuery.data.inventory} onAuthExpired={logout} onSuccess={() => void queryClient.invalidateQueries({queryKey: queryKeys.returns.all()})} />;
+  return <SalesReturnForm session={session} invoices={stateQuery.data.salesInvoices} inventory={stateQuery.data.inventory} onAuthExpired={logout} onSuccess={() => refreshErpAfterDocument(queryClient)} />;
 }
 
-function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess}: {session: AuthSession; invoices: SalesInvoice[]; inventory: Array<{id: string; sn: string; salesInvoiceId?: string; status: string}>; onAuthExpired: () => void; onSuccess: () => void}) {
+function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess}: {session: AuthSession; invoices: SalesInvoice[]; inventory: Array<{id: string; sn: string; salesInvoiceId?: string; status: string}>; onAuthExpired: () => void; onSuccess: () => void | Promise<void>}) {
   const navigate = useNavigate();
   const defaultValues: SalesReturnFormValues = {date: storeDate(), relatedDocNo: "", sourceInventoryId: "", sourceSalesItemIndex: -1, productId: "", productName: "", sn: "", partyName: "", partyId: "", contact: "", amount: 0, inventoryAction: "退回待检测", reason: "", responsibility: "客户", handler: session.user.displayName, remarks: "", returnScope: "single"};
   const {draft: restoredDraft, saveDraft, discardDraft} = useWorkspaceTabDraft<{values: SalesReturnFormValues}>("return_sales");
@@ -89,7 +89,7 @@ function SalesReturnForm({session, invoices, inventory, onAuthExpired, onSuccess
       discardDraft();
       setRestoredDraftActive(false);
       setValues((current) => ({...current, relatedDocNo: "", sourceInventoryId: "", sourceSalesItemIndex: -1, productId: "", productName: "", sn: "", partyName: "", partyId: "", contact: "", amount: 0, reason: "", remarks: "", returnScope: "single", returnItems: undefined}));
-      onSuccess();
+      await onSuccess();
     } catch (caught) {
       if (caught instanceof ApiError && caught.isUnauthorized) onAuthExpired();
       setError(caught instanceof Error ? caught.message : "退货单提交失败");
