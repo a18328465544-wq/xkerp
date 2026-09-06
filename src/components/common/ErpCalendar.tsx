@@ -29,7 +29,7 @@ export interface ErpCalendarRangeProps extends ErpCalendarSharedProps {
 export type ErpCalendarProps = ErpCalendarSingleProps | ErpCalendarRangeProps;
 
 const calendarClassNames = {
-  months: "flex flex-col gap-4 sm:flex-row sm:gap-6",
+  months: "flex flex-col gap-4 md:flex-row md:gap-6",
   month: "space-y-3",
   month_caption: "flex h-8 items-center justify-center",
   caption_label: "text-sm font-semibold",

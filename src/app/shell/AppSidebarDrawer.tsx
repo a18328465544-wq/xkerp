@@ -128,7 +128,7 @@ export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMo
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{top: position.top, left: position.left, maxHeight: `calc(100dvh - ${position.top + 16}px)`}}
-      className="erp-drawer-layer fixed hidden w-[224px] overflow-hidden rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] md:block"
+      className="erp-drawer-layer fixed hidden w-[224px] overflow-hidden rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] lg:block"
     >
       <nav className="erp-scrollbar max-h-[calc(100dvh-72px)] space-y-1 overflow-y-auto p-2" aria-label={`${module.label}功能`}>
         {module.items.map((item) => {

@@ -186,7 +186,7 @@ export function ErpDateTimePicker({
   );
 
   return <ErpDateOverlay open={open} onOpenChange={handleOpenChange} trigger={trigger} title={title} description={description} closeLabel="关闭日期时间" panelClassName="rounded-[var(--erp-radius-lg)]">
-    <div className="grid gap-3 p-3 sm:grid-cols-[auto_9rem] sm:items-start">
+    <div className="grid gap-3 p-3 md:grid-cols-[auto_9rem] md:items-start">
       <ErpCalendar selected={selected} onSelect={handleDateSelect} minDate={minDate} maxDate={maxDate} />
       <div className="space-y-3">
         <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">

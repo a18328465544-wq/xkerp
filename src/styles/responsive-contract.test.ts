@@ -17,7 +17,7 @@ test("responsive overlay contract keeps workspace tabs above all secondary surfa
 
 test("responsive overlay contract gives narrow windows bounded bottom-sheet surfaces", () => {
   assert.match(tokens, /--erp-overlay-mobile-height:\s*calc\(100dvh - var\(--erp-workspace-bar-height\)/);
-  assert.match(globals, /@media \(max-width: 639px\)/);
+  assert.match(globals, /@media \(max-width: 767px\)/);
   assert.match(globals, /\.erp-option-positioner[\s\S]*position:\s*fixed !important/);
   assert.match(globals, /\.erp-popover-positioner[\s\S]*position:\s*fixed !important/);
   const dateOverlay = readFileSync(new URL("../components/common/ErpDateOverlay.tsx", import.meta.url), "utf8");

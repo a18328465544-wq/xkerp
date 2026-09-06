@@ -240,6 +240,24 @@ button, a { -webkit-tap-highlight-color: transparent; }
   z-index: 30;
 }
 
+/* Keep the row action reachable after horizontal scrolling. The content
+   columns remain scrollable, while the single action column stays pinned to
+   the table edge on touchpads and narrow desktop windows. */
+@media (min-width: 768px) {
+  [data-erp-component="data-table"] th[data-erp-sticky-action="true"],
+  [data-erp-component="data-table"] td[data-erp-sticky-action="true"] {
+    position: sticky;
+    right: 0;
+    z-index: 3;
+    background: var(--erp-color-surface);
+    box-shadow: -8px 0 12px -12px rgb(15 23 42 / 0.32);
+  }
+  [data-erp-component="data-table"] thead th[data-erp-sticky-action="true"] {
+    z-index: 4;
+    background: var(--erp-color-surface-muted);
+  }
+}
+
 /* Inspection copy is information-dense, but Chinese labels and status text
    must stay on the shared sans stack. Monospace remains opt-in for IDs and
    measured values via the existing utility class. */
@@ -332,6 +350,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 [data-erp-component="analytics-insight-item"] {
   border-bottom-color: var(--erp-color-border-soft);
 }
+[data-erp-region="analytics-kpis"] [data-analytics-tier="supporting"][data-mobile-collapsed="true"] {
+  display: grid;
+}
 
 /* Analytics owns the vertical rhythm and makes both main slots fill the same
    row without asking a feature to add height or margin hacks. */
@@ -402,7 +423,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   padding: var(--erp-space-4);
 }
 
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   /* Every modal becomes a bottom sheet below the workspace tabs. The drawer
      contract is excluded because drawers already own their right/full-width
      geometry. */
@@ -576,6 +597,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   [data-erp-component="page-header"] [data-erp-region="page-actions"] > * {
     min-width: 0;
     max-width: 100%;
+  }
+  [data-erp-region="analytics-kpis"] [data-analytics-tier="supporting"][data-mobile-collapsed="true"] {
+    display: none;
   }
   [data-page-frame="finance"] > [data-erp-component="page-header"] [data-erp-region="page-actions"] > button {
     flex: 1 1 auto;

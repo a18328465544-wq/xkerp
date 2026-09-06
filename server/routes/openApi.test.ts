@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {Express, RequestHandler} from "express";
+import {storeDateDiffDays} from "../../src/utils/storeTime.ts";
 import {registerOpenApiRoutes, openInventoryItem} from "./openApi.ts";
 
 test("open API routes mount inventory and price routers behind token middleware", () => {
@@ -56,6 +57,6 @@ test("openInventoryItem returns a stable public inventory projection", () => {
   });
 
   assert.equal(row.id, "inventory-1");
-  assert.equal(row.storageDays, 0);
+  assert.equal(row.storageDays, storeDateDiffDays("2026-09-04"));
   assert.equal(row.productName, "RTX 4090");
 });

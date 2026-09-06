@@ -27,8 +27,8 @@ test("ordinary data tables expose a mobile card region and keep the desktop tabl
   );
 
   assert.match(markup, /data-erp-region="mobile-table-cards"/);
-  assert.match(markup, /sm:hidden/);
-  assert.match(markup, /hidden sm:block/);
+  assert.match(markup, /md:hidden/);
+  assert.match(markup, /hidden md:block/);
   assert.match(markup, /测试记录/);
   assert.match(markup, /上一页/);
 });

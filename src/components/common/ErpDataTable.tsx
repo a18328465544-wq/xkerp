@@ -101,6 +101,15 @@ export function ErpDataTable<TData>({
   const setColumnVisibility = onColumnVisibilityChange || setInternalVisibility;
   const setRowSelection = onRowSelectionChange || setInternalSelection;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [compactViewport, setCompactViewport] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setCompactViewport(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
 
   const table = useReactTable({
     data,
@@ -117,8 +126,9 @@ export function ErpDataTable<TData>({
     enableColumnResizing,
     columnResizeMode: "onChange",
   });
+  const shouldVirtualize = virtualized && !compactViewport;
   const rowVirtualizer = useVirtualizer({
-    count: virtualized ? table.getRowModel().rows.length : 0,
+    count: shouldVirtualize ? table.getRowModel().rows.length : 0,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => virtualRowHeight,
     overscan: 8,
@@ -142,8 +152,8 @@ export function ErpDataTable<TData>({
   const totalPages = total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize));
   const rowPadding = density === "compact" ? "px-3 py-2" : "px-4 py-3";
   const tableRows = table.getRowModel().rows;
-  const showMobileCards = mobileMode === "cards" && !virtualized;
-  const visibleRows = virtualized
+  const showMobileCards = mobileMode === "cards" && (!virtualized || compactViewport);
+  const visibleRows = shouldVirtualize
     ? rowVirtualizer.getVirtualItems().flatMap((virtualRow) => {
       const row = tableRows[virtualRow.index];
       return row ? [{row, start: virtualRow.start}] : [];
@@ -157,7 +167,7 @@ export function ErpDataTable<TData>({
   };
   return wrapSurface(<>
     {fetching && <div className="erp-refresh-indicator-layer absolute inset-x-0 top-0 h-0.5 animate-pulse bg-[var(--erp-color-primary)]" role="status" aria-live="polite" aria-label="刷新中" />}
-    {showMobileCards && <div data-erp-region="mobile-table-cards" className="space-y-2 p-2 sm:hidden">
+    {showMobileCards && <div data-erp-region="mobile-table-cards" className="space-y-2 p-2 md:hidden">
       {tableRows.map((row) => {
         const cells = row.getVisibleCells();
         const selectionCell = cells.find((cell) => cell.column.id === "select");
@@ -193,11 +203,11 @@ export function ErpDataTable<TData>({
         </article>;
       })}
     </div>}
-    <div ref={scrollRef} className={cn("erp-scrollbar erp-horizontal-scroll overflow-x-auto", showMobileCards && "hidden sm:block", virtualized && "max-h-[min(48rem,68vh)] overflow-y-auto")}>
+    <div ref={scrollRef} className={cn("erp-scrollbar erp-horizontal-scroll overflow-x-auto", showMobileCards && "hidden md:block", shouldVirtualize && "max-h-[min(48rem,68vh)] overflow-y-auto")}>
       <table className="w-full min-w-[1180px] border-collapse text-left text-sm" aria-label={ariaLabel} aria-busy={loading || fetching} aria-rowcount={total ?? undefined}>
         <thead className={cn("bg-[var(--erp-color-surface-muted)] text-xs text-[var(--erp-color-text-secondary)]", stickyHeader && "sticky top-0 erp-content-sticky-layer")}>
           {table.getHeaderGroups().map((headerGroup) => <tr key={headerGroup.id}>
-            {headerGroup.headers.map((header) => <th key={header.id} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-semibold" style={{width: header.getSize()}}>
+            {headerGroup.headers.map((header) => <th key={header.id} data-erp-sticky-action={isUtilityColumn(header.column.id) && header.column.id !== "select" ? "true" : undefined} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-semibold" style={{width: header.getSize()}}>
               {header.isPlaceholder ? null : <div className="flex items-center gap-1">
                 {header.column.getCanSort() ? <button type="button" className="erp-focus-ring inline-flex items-center gap-1 rounded px-1" onClick={header.column.getToggleSortingHandler()}>{flexRender(header.column.columnDef.header, header.getContext())}{header.column.getIsSorted() === "asc" ? <ArrowUp className="h-3 w-3" /> : header.column.getIsSorted() === "desc" ? <ArrowDown className="h-3 w-3" /> : <ChevronsUpDown className="h-3 w-3 opacity-40" />}</button> : flexRender(header.column.columnDef.header, header.getContext())}
                 {header.column.getCanResize() && <button type="button" aria-label="调整列宽" className="absolute right-0 top-0 h-full w-3 cursor-col-resize text-transparent hover:text-[var(--erp-color-primary)]" onMouseDown={header.getResizeHandler()} onTouchStart={header.getResizeHandler()}><GripVertical className="mx-auto h-4 w-4" /></button>}
@@ -205,17 +215,17 @@ export function ErpDataTable<TData>({
             </th>)}
           </tr>)}
         </thead>
-        <tbody style={virtualized ? {height: `${rowVirtualizer.getTotalSize()}px`, position: "relative"} : undefined}>
-          {visibleRows.map(({row, start}) => <tr key={row.id} style={virtualized ? {position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start ?? 0}px)`} : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn("border-b border-[var(--erp-color-border)] last:border-0 transition-colors", onRowClick ? "cursor-pointer hover:bg-[var(--erp-color-info-soft)]/70 focus-visible:bg-[var(--erp-color-info-soft)]/90 focus-visible:outline-none" : "hover:bg-[var(--erp-color-surface-muted)]/40")} onClick={() => onRowClick?.(row.original)} onKeyDown={(event) => { if (onRowClick && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onRowClick(row.original); } }}>
-            {row.getVisibleCells().map((cell) => <td key={cell.id} className={cn("whitespace-nowrap text-[var(--erp-color-text)]", rowPadding)} onClick={(event) => { if (cell.column.id === "select") event.stopPropagation(); }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}
+        <tbody style={shouldVirtualize ? {height: `${rowVirtualizer.getTotalSize()}px`, position: "relative"} : undefined}>
+          {visibleRows.map(({row, start}) => <tr key={row.id} style={shouldVirtualize ? {position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start ?? 0}px)`} : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn("border-b border-[var(--erp-color-border)] last:border-0 transition-colors", onRowClick ? "cursor-pointer hover:bg-[var(--erp-color-info-soft)]/70 focus-visible:bg-[var(--erp-color-info-soft)]/90 focus-visible:outline-none" : "hover:bg-[var(--erp-color-surface-muted)]/40")} onClick={() => onRowClick?.(row.original)} onKeyDown={(event) => { if (onRowClick && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onRowClick(row.original); } }}>
+            {row.getVisibleCells().map((cell) => <td key={cell.id} data-erp-sticky-action={isUtilityColumn(cell.column.id) && cell.column.id !== "select" ? "true" : undefined} className={cn("whitespace-nowrap text-[var(--erp-color-text)]", rowPadding)} onClick={(event) => { if (cell.column.id === "select") event.stopPropagation(); }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}
           </tr>)}
         </tbody>
       </table>
     </div>
-    {(footer || totalPages !== undefined) && <div className={cn("flex flex-col items-stretch justify-between border-t border-[var(--erp-color-border)] text-xs text-[var(--erp-color-text-secondary)] sm:flex-row sm:items-center", density === "compact" ? "gap-2 px-3 py-2" : "gap-3 px-4 py-2.5")}>
+    {(footer || totalPages !== undefined) && <div className={cn("flex flex-col items-stretch justify-between border-t border-[var(--erp-color-border)] text-xs text-[var(--erp-color-text-secondary)] md:flex-row md:items-center", density === "compact" ? "gap-2 px-3 py-2" : "gap-3 px-4 py-2.5")}>
       {footer || <span>共 {total || 0} 条</span>}
       {totalPages !== undefined && (
-        <div className={cn("flex w-full items-center justify-between whitespace-nowrap sm:w-auto", density === "compact" ? "gap-1" : "gap-2")}>
+        <div className={cn("flex w-full items-center justify-between whitespace-nowrap md:w-auto", density === "compact" ? "gap-1" : "gap-2")}>
           <Button className="shrink-0" size="icon" variant="ghost" aria-label="上一页" disabled={page <= 1} onClick={() => onPageChange?.(page - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>

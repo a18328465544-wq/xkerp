@@ -80,11 +80,38 @@ export interface ChartContainerProps extends React.ComponentProps<"div"> {
 export function ChartContainer({id, className, children, config, ...props}: ChartContainerProps) {
   const generatedId = React.useId();
   const chartId = chartIdValue(id || `chart-${generatedId}`);
+  const hostRef = React.useRef<HTMLDivElement>(null);
+  const [hasSize, setHasSize] = React.useState(false);
+
+  React.useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    if (typeof ResizeObserver === "undefined") {
+      setHasSize(true);
+      return;
+    }
+    let observer: ResizeObserver | undefined;
+    const update = () => {
+      const rect = host.getBoundingClientRect();
+      const next = rect.width > 0 && rect.height > 0;
+      // Once the host has a real size, the chart no longer needs to observe
+      // itself. Disconnecting here also avoids a Recharts child changing the
+      // flex measurement and causing an update-depth loop on KeepAlive pages.
+      if (next) observer?.disconnect();
+      setHasSize((current) => current === next ? current : next);
+    };
+    observer = new ResizeObserver(update);
+    observer.observe(host);
+    // Run once after the observer exists so an already-visible chart can
+    // disconnect immediately instead of holding a needless observer forever.
+    update();
+    return () => observer.disconnect();
+  }, []);
 
   return <ChartContext.Provider value={{config}}>
-    <div id={id} data-chart={chartId} className={cn("relative flex h-full w-full min-w-0 flex-col justify-center text-xs", className)} {...props}>
+    <div id={id} data-chart={chartId} className={cn("relative flex h-full w-full min-w-0 flex-col justify-center text-xs", className)} {...props} ref={hostRef}>
       <ChartStyle id={chartId} config={config} />
-      <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+      {hasSize ? <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer> : <span className="sr-only" role="status">图表加载中</span>}
     </div>
   </ChartContext.Provider>;
 }

@@ -13,6 +13,18 @@ export const storeDateKey = (date = new Date()) => storeDate(date).replace(/-/g,
 export const storeDateTime = (date = new Date()) =>
   toStoreOffsetDate(date).toISOString().replace("T", " ").substring(0, 16);
 
+/** Display an API timestamp in the store timezone without shifting local
+ * business strings that already omit an explicit timezone. */
+export const formatStoreDateTime = (value?: string) => {
+  const normalized = value?.trim() || "";
+  if (!normalized) return "—";
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)) {
+    const parsed = new Date(normalized);
+    if (Number.isFinite(parsed.getTime())) return storeDateTime(parsed);
+  }
+  return normalized.replace("T", " ").slice(0, 16);
+};
+
 export const storeHour = (date = new Date()) =>
   Number(toStoreOffsetDate(date).toISOString().slice(11, 13));
 

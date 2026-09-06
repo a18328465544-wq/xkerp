@@ -28,7 +28,10 @@ function useCompactViewport() {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 639px)");
+    // Treat the compact/tablet viewport as a touch surface as well. The
+    // previous 639px cutoff left 698px browser previews with an anchored
+    // desktop popover whose header was rendered above the viewport.
+    const media = window.matchMedia("(max-width: 767px)");
     const update = () => setCompact(media.matches);
     update();
     media.addEventListener?.("change", update);
@@ -48,10 +51,10 @@ export function ErpDateOverlay({open, onOpenChange, trigger, children, className
       <BasePopover.Root open={open} onOpenChange={onOpenChange}>
         <BasePopover.Trigger render={trigger} />
         <BasePopover.Portal>
-          {open && compactViewport && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 sm:hidden" aria-hidden="true" onMouseDown={() => onOpenChange(false)} />}
+          {open && compactViewport && <div className="erp-popover-layer fixed inset-0 bg-[var(--erp-color-backdrop)]/35 md:hidden" aria-hidden="true" onMouseDown={() => onOpenChange(false)} />}
           <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner erp-date-popover-positioner outline-none" sideOffset={sideOffset} align={align}>
             <BasePopover.Popup className={cn("erp-popover-surface relative min-w-0 max-w-full rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] outline-none", panelClassName)}>
-              {title ? <div className={cn("flex items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4", headerMobileOnly && "sm:hidden")}>
+              {title ? <div className={cn("flex items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-3 py-2.5 md:px-4", headerMobileOnly && "md:hidden")}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--erp-color-text)]">{title}</p>
                   {description ? <p className="mt-0.5 truncate text-xs text-[var(--erp-color-text-muted)]">{description}</p> : null}

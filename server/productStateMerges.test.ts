@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {CardInventory, ProductTemplate, SystemUserAccount} from "../src/types.ts";
+import {storeDateDiffDays} from "../src/utils/storeTime.ts";
 import {createInitialState} from "./store.ts";
 import {productPriceSyncMerge, productTemplateMerge, sanitizeInventoryRowsForUser} from "./productStateMerges.ts";
 
@@ -67,7 +68,7 @@ test("productTemplateMerge includes only changed products and their sanitized in
 
   const patch = productTemplateMerge(state, product, user);
   assert.deepEqual(patch.products, [product]);
-  assert.equal((patch.inventory as CardInventory[])[0]?.storageDays, 3);
+  assert.equal((patch.inventory as CardInventory[])[0]?.storageDays, storeDateDiffDays(inventory.entryTime));
   assert.equal((patch.inventory as CardInventory[])[0]?.costPrice, 0);
   assert.equal((patch.inventory as Array<CardInventory & {actualProfit?: number}>)[0]?.actualProfit, undefined);
   assert.deepEqual(patch.marketQuotes, state.marketQuotes);

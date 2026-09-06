@@ -318,7 +318,7 @@ function FinanceIncomeContent({
           },
         ]}
       />
-      <MetricsRegion>
+      <MetricsRegion mobileCollapseAfter={4}>
         <Metric
           label="筛选收入"
           value={formatCurrency(collection.totalAmount)}
@@ -420,7 +420,7 @@ function FinanceIncomeContent({
           value={{startDate: filters.startDate, endDate: filters.endDate}}
           onChange={({startDate, endDate}) => update({startDate, endDate})}
           density="compact"
-          triggerClassName="sm:w-36"
+          triggerClassName="md:w-36"
           startAriaLabel="开始日期"
           endAriaLabel="结束日期"
           ariaLabel="收入日期范围"

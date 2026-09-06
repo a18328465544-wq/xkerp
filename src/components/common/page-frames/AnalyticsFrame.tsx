@@ -1,4 +1,5 @@
-import type {HTMLAttributes, ReactNode} from "react";
+import {useState, type HTMLAttributes, type ReactNode} from "react";
+import {ChevronDown, ChevronUp} from "lucide-react";
 import {cn} from "@/src/lib/cn";
 import {ErpFilterBar} from "../ErpFilterBar";
 import {ErpPageFrame} from "../ErpPageFrame";
@@ -17,9 +18,13 @@ export function AnalyticsFrame({className, children, ...props}: HTMLAttributes<H
 }
 
 export function AnalyticsKpiRegion({primary, secondary, className, ...props}: Omit<RegionProps, "children"> & {primary: ReactNode; secondary?: ReactNode}) {
+  const [supportingExpanded, setSupportingExpanded] = useState(false);
   return <section {...props} data-erp-region="analytics-kpis" className={cn("min-w-0 space-y-3", className)}>
     <div data-erp-region-level="primary" data-analytics-tier="core" data-analytics-density="primary" className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-3">{primary}</div>
-    {secondary ? <div data-erp-region-level="secondary" data-analytics-tier="supporting" data-analytics-density="secondary" className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,190px),1fr))] gap-2">{secondary}</div> : null}
+    {secondary ? <>
+      <div data-erp-region-level="secondary" data-analytics-tier="supporting" data-analytics-density="secondary" data-mobile-collapsed={!supportingExpanded ? "true" : undefined} className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,190px),1fr))] gap-2">{secondary}</div>
+      <button type="button" data-erp-region="analytics-kpi-toggle" className="erp-focus-ring mx-auto inline-flex min-h-[var(--erp-control-height-filter)] items-center gap-1 rounded-[var(--erp-radius-pill)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-primary)] shadow-sm md:hidden" aria-expanded={supportingExpanded} onClick={() => setSupportingExpanded((current) => !current)}>{supportingExpanded ? <><ChevronUp className="h-3.5 w-3.5" />收起更多指标</> : <><ChevronDown className="h-3.5 w-3.5" />展开更多指标</>}</button>
+    </> : null}
   </section>;
 }
 

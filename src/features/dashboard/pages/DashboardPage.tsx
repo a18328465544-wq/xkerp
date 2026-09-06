@@ -118,7 +118,7 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
           {aiLoading ? <div className="space-y-3"><div className="h-16 animate-pulse rounded-lg bg-[var(--erp-color-surface-muted)]" /><div className="h-16 animate-pulse rounded-lg bg-[var(--erp-color-surface-muted)]" /></div> : aiError ? <div className="space-y-3"><p className="text-xs text-[var(--erp-color-text-secondary)]">AI 建议暂时不可用，数据仍可正常查看。</p><Button size="sm" variant="secondary" onClick={onAiRetry}>重试</Button></div> : <div className="divide-y divide-[var(--erp-color-border)]">{ai.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"><Sparkles className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><ErpStatusBadge label={item.label} tone={toneForSeverity[item.severity]} /><span className="text-[10px] text-[var(--erp-color-text-muted)]">置信度 {item.confidence}%</span></div><p className="mt-1 text-sm font-semibold leading-5 text-[var(--erp-color-text)]">{item.title}</p><p className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{item.detail}</p></div></div>)}{!ai.length && <p className="text-sm text-[var(--erp-color-text-secondary)]">当前暂无建议，AI 入口已连接现有服务。</p>}</div>}
         </DashboardSection>
         <DashboardSection title="今日行情" actions={<Link to="/quotes" className="text-xs font-semibold text-[var(--erp-color-primary)]">更多行情 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
-          <div className="space-y-3">{marketRows.map((quote) => <Link to="/quotes" key={quote.id} className="grid grid-cols-[minmax(0,1fr)_84px_56px] items-center gap-2"><span className="truncate text-sm font-semibold text-[var(--erp-color-text-secondary)]">{quote.model || quote.productName}</span><span className="text-right text-sm font-semibold text-[var(--erp-color-text)]">{formatCurrency(quote.todaySellPrice)}</span><span className={`text-right text-xs font-semibold ${quote.changeRatio >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{quote.changeRatio >= 0 ? "↗" : "↘"} {Math.abs(quote.changeRatio).toFixed(1)}%</span></Link>)}{!marketRows.length && <p className="py-4 text-center text-sm text-[var(--erp-color-text-muted)]">暂无行情数据</p>}</div>
+          <div className="space-y-3">{marketRows.map((quote) => { const sellPrice = canSeeProfit ? safeQuoteSellPrice(quote) : null; return <Link to="/quotes" key={quote.id} className="grid grid-cols-[minmax(0,1fr)_84px_56px] items-center gap-2"><span className="truncate text-sm font-semibold text-[var(--erp-color-text-secondary)]">{quote.model || quote.productName}</span><span className="text-right text-sm font-semibold text-[var(--erp-color-text)]">{sellPrice === null ? "无权查看" : formatCurrency(sellPrice)}</span><span className={`text-right text-xs font-semibold ${quote.changeRatio >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{quote.changeRatio >= 0 ? "↗" : "↘"} {Math.abs(quote.changeRatio).toFixed(1)}%</span></Link>; })}{!marketRows.length && <p className="py-4 text-center text-sm text-[var(--erp-color-text-muted)]">暂无行情数据</p>}</div>
         </DashboardSection>
       </MainRegion.Secondary>
     </MainRegion>
@@ -192,6 +192,17 @@ function buildTrendRows(invoices: SalesInvoice[], today: string) {
 }
 
 function riskScore(item: CardInventory, today: string) { return storeDateDiffDays(item.entryTime, today) * 1000 + Math.max(0, Number(item.costPrice || 0) - Number(item.marketPrice || 0)); }
+
+/**
+ * The initial state endpoint serves both legacy and permission-projected quote
+ * shapes. A restricted account can legitimately receive no sell-price field,
+ * so the dashboard must never pass undefined/NaN into Intl.NumberFormat.
+ */
+function safeQuoteSellPrice(quote: MarketQuote) {
+  const candidate = quote.todaySellPrice ?? quote.refSellPrice ?? quote.maxPrice ?? quote.minPrice;
+  const parsed = Number(candidate);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 function SummaryCell({label, value, tone}: {label: string; value: string; tone?: "success"}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 text-sm font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>; }
 

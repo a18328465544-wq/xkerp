@@ -9,6 +9,6 @@ test("ErpFilterBar exposes the compact finance toolbar layout", () => {
   assert.match(markup, /data-density="compact"/);
   assert.match(markup, /2xl:flex-nowrap/);
   assert.match(markup, /w-full/);
-  assert.match(markup, /sm:w-auto/);
+  assert.match(markup, /md:w-auto/);
   assert.match(markup, />重置</);
 });

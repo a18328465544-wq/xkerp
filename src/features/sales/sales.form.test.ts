@@ -41,13 +41,12 @@ test("sales form allows an empty after-sales terms field", () => {
   assert.equal(salesOrderSchema.safeParse(values).success, true);
 });
 
-test("sales defaults expose four independent clean line-item editors", () => {
+test("sales defaults expose one intentional clean line-item editor", () => {
   const values = createSalesDefaults("测试员");
-  assert.equal(values.items.length, 4);
+  assert.equal(values.items.length, 1);
   assert.equal(values.aftersalesTerms, "");
   assert.ok(values.items.every((item) => item.productId === "" && item.costPrice === undefined));
   assert.ok(values.items.every((item) => item.aftersalesTerms === ""));
-  assert.notEqual(values.items[0], values.items[1]);
 });
 
 test("sales validation and totals ignore untouched placeholder rows", () => {

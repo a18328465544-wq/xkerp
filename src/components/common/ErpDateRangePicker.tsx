@@ -2,7 +2,7 @@ import {CalendarRange} from "lucide-react";
 import {useState} from "react";
 import {Button, Input} from "@/src/components/ui";
 import {cn, hasBaseWidthUtilityClass, hasWidthUtilityClass} from "@/src/lib/cn";
-import {formatDateKey, getDateRangePreset, isDateKey, parseDateKey, validateDateRange, type DateRangePreset, type DateRangeValue} from "@/src/lib/dateRangePickerUtils";
+import {formatDateKey, getDateRangePreset, isDateKey, parseDateKey, parseNaturalDateInput, validateDateRange, type DateRangePreset, type DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {ErpCalendar} from "./ErpCalendar";
 import {ErpDateOverlay} from "./ErpDateOverlay";
 
@@ -104,6 +104,8 @@ export function ErpDateRangePicker({
   const [draftRange, setDraftRange] = useState<DateRangeValue>(() => safeRange(value));
   const [startInput, setStartInput] = useState(() => safeRange(value).startDate);
   const [endInput, setEndInput] = useState(() => safeRange(value).endDate);
+  const [naturalInput, setNaturalInput] = useState("");
+  const [naturalError, setNaturalError] = useState<string | null>(null);
   const minDate = parseDateKey(min || "");
   const maxDate = parseDateKey(max || "");
 
@@ -112,6 +114,8 @@ export function ErpDateRangePicker({
     setDraftRange(next);
     setStartInput(next.startDate);
     setEndInput(next.endDate);
+    setNaturalInput("");
+    setNaturalError(null);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -125,7 +129,7 @@ export function ErpDateRangePicker({
   };
 
   const rangeConstraints = {minDate: min, maxDate: max};
-  const draftError = inputError(startInput, endInput) || validateDateRange(draftRange, maxDays, rangeConstraints) || completeRangeError(draftRange, requireComplete);
+  const draftError = naturalError || inputError(startInput, endInput) || validateDateRange(draftRange, maxDays, rangeConstraints) || completeRangeError(draftRange, requireComplete);
   const committedValue = safeRange(value);
   const committedError = validateDateRange(committedValue, maxDays, rangeConstraints) || completeRangeError(committedValue, requireComplete);
   const visibleError = open ? draftError : error || committedError;
@@ -141,6 +145,7 @@ export function ErpDateRangePicker({
   };
 
   const updateInput = (field: "startDate" | "endDate", rawValue: string) => {
+    setNaturalError(null);
     if (field === "startDate") setStartInput(rawValue);
     else setEndInput(rawValue);
     const trimmed = rawValue.trim();
@@ -158,6 +163,7 @@ export function ErpDateRangePicker({
 
   const handleCalendarSelect = (nextValue: {from: Date | undefined; to?: Date} | undefined) => {
     const next = dateRangeFromCalendarValue(nextValue);
+    setNaturalError(null);
     setDraftRange(next);
     setStartInput(next.startDate);
     setEndInput(next.endDate);
@@ -165,6 +171,7 @@ export function ErpDateRangePicker({
 
   const handlePreset = (preset: DateRangePreset) => {
     const next = getDateRangePreset(preset);
+    setNaturalError(null);
     setDraftRange(next);
     setStartInput(next.startDate);
     setEndInput(next.endDate);
@@ -172,9 +179,28 @@ export function ErpDateRangePicker({
 
   const handleClear = () => {
     const next = {startDate: "", endDate: ""};
+    setNaturalInput("");
+    setNaturalError(null);
     setDraftRange(next);
     setStartInput("");
     setEndInput("");
+  };
+
+  const handleNaturalInput = () => {
+    const parsed = parseNaturalDateInput(naturalInput);
+    if (!parsed) {
+      setNaturalError("未识别日期，请输入“今天”“本周”“8月1号”或 YYYY-MM-DD 至 YYYY-MM-DD");
+      return;
+    }
+    const constraintError = validateDateRange(parsed, maxDays, rangeConstraints) || completeRangeError(parsed, requireComplete);
+    if (constraintError) {
+      setNaturalError(constraintError);
+      return;
+    }
+    setDraftRange(parsed);
+    setStartInput(parsed.startDate);
+    setEndInput(parsed.endDate);
+    setNaturalError(null);
   };
 
   const displayStart = isDateKey(value.startDate) ? value.startDate : "";
@@ -198,7 +224,7 @@ export function ErpDateRangePicker({
       className={cn(
         "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]",
         controlHeight,
-        !hasExplicitWidth && "sm:min-w-56",
+        !hasExplicitWidth && "md:min-w-56",
         visibleError && "border-[var(--erp-color-danger)]",
         hasCustomWidth ? undefined : "w-full",
         resolvedTriggerClassName,
@@ -216,11 +242,11 @@ export function ErpDateRangePicker({
   );
 
   return (
-    <div className={cn("min-w-0 w-full sm:w-auto", className)} role="group" aria-label={ariaLabel}>
+    <div className={cn("min-w-0 w-full md:w-auto", className)} role="group" aria-label={ariaLabel}>
       <ErpDateOverlay open={open} onOpenChange={handleOpenChange} trigger={trigger} title="选择日期范围" description="支持快捷选择，也可以直接输入日期" closeLabel="关闭日期范围" sideOffset={6} panelClassName="max-h-[min(90dvh,720px)] overflow-y-auto rounded-[var(--erp-radius-xl)]">
       {({compactViewport}) => <>
-              <div className="flex flex-col sm:flex-row">
-                <div className="grid grid-cols-3 gap-1 border-b border-[var(--erp-color-border)] p-2 sm:flex sm:w-32 sm:shrink-0 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3">
+              <div className="flex flex-col md:flex-row">
+                <div className="grid grid-cols-3 gap-1 border-b border-[var(--erp-color-border)] p-2 md:flex md:w-32 md:shrink-0 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:p-3">
                   {presets.map((preset) => (
                     <Button
                       key={preset.value}
@@ -235,7 +261,26 @@ export function ErpDateRangePicker({
                   ))}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="grid gap-2 p-3 sm:grid-cols-2 sm:px-4">
+                  <div className="border-b border-[var(--erp-color-border)] px-3 pb-3 pt-3 md:px-4">
+                    <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+                      快速输入
+                      <div className="mt-1 flex min-w-0 gap-2">
+                        <Input
+                          density="compact"
+                          className="min-w-0 flex-1 text-xs placeholder:font-sans"
+                          value={naturalInput}
+                          onChange={(event) => { setNaturalInput(event.target.value); setNaturalError(null); }}
+                          onKeyDown={(event) => { if (event.key === "Escape") handleCancel(); if (event.key === "Enter") { event.preventDefault(); handleNaturalInput(); } }}
+                          placeholder="今天、本周、8月1号或 2026-08-01 至 2026-08-31"
+                          aria-label="自然语言日期"
+                          aria-invalid={Boolean(naturalError) || undefined}
+                        />
+                        <Button type="button" size="sm" variant="secondary" className="shrink-0" onClick={handleNaturalInput}>解析</Button>
+                      </div>
+                      {naturalError && <p className="mt-1 text-xs font-normal text-[var(--erp-color-danger)]" role="alert">{naturalError}</p>}
+                    </label>
+                  </div>
+                  <div className="grid gap-2 p-3 md:grid-cols-2 md:px-4">
                     <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
                       {startPlaceholder}
                       <Input
@@ -279,9 +324,9 @@ export function ErpDateRangePicker({
                       endMonth={maxDate || undefined}
                     />
                   </div>
-                  <div className="border-t border-[var(--erp-color-border)] px-3 py-2.5 sm:px-4">
+                  <div className="border-t border-[var(--erp-color-border)] px-3 py-2.5 md:px-4">
                     {draftError && <p className="mb-2 text-xs text-[var(--erp-color-danger)]" role="alert">{draftError}</p>}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <p className="min-w-0 truncate text-xs text-[var(--erp-color-text-muted)]" aria-live="polite">
                         {draftRange.startDate || draftRange.endDate ? `${draftRange.startDate || "未选择"} 至 ${draftRange.endDate || "未选择"}` : "尚未选择日期"}
                       </p>

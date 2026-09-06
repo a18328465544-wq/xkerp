@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
-import {readDateRange, validateDateRange} from "@/src/lib/dateRangePickerUtils";
+import {parseNaturalDateInput, readDateRange, validateDateRange} from "@/src/lib/dateRangePickerUtils";
 import {ErpDateRangePicker} from "./ErpDateRangePicker";
 
 test("ErpDateRangePicker exposes one unified range trigger and visible error", () => {
@@ -58,4 +58,11 @@ test("date range helpers discard malformed values and normalize reversed URL ran
   assert.equal(validateDateRange({startDate: "2026-01-01", endDate: "2027-01-02"}, 366), "单次最多查看 366 天");
   assert.equal(validateDateRange({startDate: "2026-07-31", endDate: "2026-08-02"}, undefined, {minDate: "2026-08-01", maxDate: "2026-08-31"}), "开始日期不能早于 2026-08-01");
   assert.equal(validateDateRange({startDate: "2026-08-01", endDate: "2026-09-01"}, undefined, {minDate: "2026-08-01", maxDate: "2026-08-31"}), "结束日期不能晚于 2026-08-31");
+});
+
+test("natural date input resolves shortcuts, Chinese dates and ranges", () => {
+  assert.deepEqual(parseNaturalDateInput("今天", "2026-08-08"), {startDate: "2026-08-08", endDate: "2026-08-08"});
+  assert.deepEqual(parseNaturalDateInput("本周", "2026-08-08"), {startDate: "2026-08-03", endDate: "2026-08-09"});
+  assert.deepEqual(parseNaturalDateInput("8月1号", "2026-08-08"), {startDate: "2026-08-01", endDate: "2026-08-01"});
+  assert.deepEqual(parseNaturalDateInput("2026-08-01 至 2026-08-08", "2026-08-08"), {startDate: "2026-08-01", endDate: "2026-08-08"});
 });

@@ -27,7 +27,7 @@ export function WorkspaceTabs() {
 
   return (
     <>
-      <div className="min-w-0 flex-1 sm:hidden">
+      <div className="min-w-0 flex-1 lg:hidden">
         <BasePopover.Root open={mobileTabOpen} onOpenChange={setMobileTabOpen}>
           <BasePopover.Trigger
             type="button"
@@ -72,7 +72,7 @@ export function WorkspaceTabs() {
           </BasePopover.Portal>
         </BasePopover.Root>
       </div>
-      <nav className="erp-workspace-tabs erp-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden sm:flex" aria-label="已打开页面">
+      <nav className="erp-workspace-tabs erp-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden lg:flex" aria-label="已打开页面">
         {tabs.map((item) => {
           const active = isActive(item.id);
           const pinnedTab = state.pinnedIds.includes(item.id);
@@ -84,7 +84,7 @@ export function WorkspaceTabs() {
                 aria-current={active ? "page" : undefined}
                 onClick={(event) => navigateToTab(item, event)}
                 className={cn(
-                  "erp-focus-ring flex h-9 min-w-0 flex-1 items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 pr-6 text-xs font-semibold transition-colors sm:gap-1.5 sm:px-2.5 sm:pr-8",
+                  "erp-focus-ring flex h-9 min-w-0 flex-1 items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 pr-6 text-xs font-semibold transition-colors lg:gap-1.5 lg:px-2.5 lg:pr-8",
                   active
                     ? "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"
                     : "text-[var(--erp-color-text-muted)] hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",
@@ -100,7 +100,7 @@ export function WorkspaceTabs() {
                   variant="ghost"
                   aria-label={`关闭${item.label}`}
                   title={`关闭${item.label}`}
-                  className="absolute right-0 opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                  className="absolute right-0 opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100"
                   onClick={(event) => { event.stopPropagation(); closeTab(item.id); }}
                 >
                   <X className="h-3.5 w-3.5" />

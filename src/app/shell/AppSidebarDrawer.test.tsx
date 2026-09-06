@@ -16,7 +16,7 @@ test("sidebar flyout renders the permitted secondary navigation contract", () =>
 });
 
 test("sidebar flyout keeps the V2 layer and desktop-only presentation contract", () => {
-  assert.match(source, /md:block/);
+  assert.match(source, /lg:block/);
   assert.match(source, /shadow-\[var\(--erp-shadow-popover\)\]/);
   assert.match(source, /document\.addEventListener\("pointerdown"/);
   assert.match(source, /event\.key === "Escape"/);

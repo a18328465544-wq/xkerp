@@ -16,7 +16,9 @@ function text(value: unknown, fallback = "") {
 
 function adaptBackup(value: unknown): BackupRecord {
   const item = record(value);
-  return {id: text(item.id || item.file, "unknown"), createdAt: text(item.createdAt || item.created_at || item.time, "—"), file: text(item.file) || undefined};
+  const createdAt = text(item.createdAt || item.created_at || item.time, "—");
+  const id = text(item.id || item.file) || (createdAt !== "—" ? `backup-${createdAt}` : "未命名备份");
+  return {id, createdAt, file: text(item.file) || undefined};
 }
 
 export const backupApi = {

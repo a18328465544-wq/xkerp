@@ -6,7 +6,7 @@ import {Button, Card, CardContent} from "@/src/components/ui";
 import {AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, DashboardSection, ErpAnalyticsPageFrame, ErpEmptyState, ErpMetricCard, ErpPageContent, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, aiApi, queryKeys} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
-import {storeDate} from "@/src/utils/storeTime";
+import {formatStoreDateTime, storeDate} from "@/src/utils/storeTime";
 import type {DailySalesSummaryResult} from "@/src/types/ai";
 
 function formatSalesMoney(value: number | undefined) {
@@ -78,7 +78,7 @@ export function AiInsightsPage() {
     {icon: <Sparkles className="h-4 w-4" />, label: "建议数量", value: `${insights.length} 条`, description: "当前有效建议", tone: insights.length ? "info" : "neutral"},
     {icon: <TriangleAlert className="h-4 w-4" />, label: "高优先级", value: `${highCount} 条`, description: "需要优先处理", tone: highCount ? "danger" : "success"},
     {icon: query.data?.source === "ai" ? <Sparkles className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />, label: "建议来源", value: query.data?.source === "ai" ? "AI" : "规则", description: "服务器返回来源", tone: query.data?.source === "ai" ? "info" : "neutral"},
-    {icon: <Clock3 className="h-4 w-4" />, label: "生成时间", value: query.data?.generatedAt || "—", description: query.data?.expiresAt ? `有效至 ${query.data.expiresAt}` : "暂无过期时间", tone: "neutral"},
+    {icon: <Clock3 className="h-4 w-4" />, label: "生成时间", value: formatStoreDateTime(query.data?.generatedAt), description: query.data?.expiresAt ? `有效至 ${formatStoreDateTime(query.data.expiresAt)}` : "暂无过期时间", tone: "neutral"},
   ];
 
   return <ErpAnalyticsPageFrame>

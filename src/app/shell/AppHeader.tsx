@@ -56,7 +56,7 @@ export function AppHeader() {
           >
             <Search className="h-4 w-4" />
           </Button>
-          <div className="sm:hidden">
+          <div className="lg:hidden">
             <BasePopover.Root open={accountOpen} onOpenChange={setAccountOpen}>
               <BasePopover.Trigger
                 className="erp-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-[var(--erp-radius-md)] text-[var(--erp-color-text-secondary)] transition-colors hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]"
@@ -82,7 +82,7 @@ export function AppHeader() {
               </BasePopover.Portal>
             </BasePopover.Root>
           </div>
-          <div className="hidden items-center gap-1 sm:flex">
+          <div className="hidden items-center gap-1 lg:flex">
             <Button
               type="button"
               variant="ghost"

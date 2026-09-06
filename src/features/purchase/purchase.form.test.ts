@@ -28,9 +28,8 @@ test("purchase defaults use the current operator for the order and payment handl
   const values = createPurchaseDefaults("当前操作人");
   assert.equal(values.handleBy, "当前操作人");
   assert.equal(values.paymentHandler, "当前操作人");
-  assert.equal(values.items.length, 4);
+  assert.equal(values.items.length, 1);
   assert.ok(values.items.every((item) => item.productId === ""));
-  assert.notEqual(values.items[0], values.items[1]);
 });
 
 test("purchase summary and expansion preserve quantity greater than one", () => {

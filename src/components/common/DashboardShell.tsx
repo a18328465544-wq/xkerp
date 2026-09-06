@@ -1,4 +1,4 @@
-import type {HTMLAttributes, ReactNode} from "react";
+import {Children, useState, type HTMLAttributes, type ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {ErpPageFrame} from "./ErpPageFrame";
 
@@ -9,8 +9,15 @@ export function ErpDashboardPageFrame({className, children, ...props}: HTMLAttri
 /** @deprecated Use ErpDashboardPageFrame; kept as a compatibility alias. */
 export const DashboardShell = ErpDashboardPageFrame;
 
-export function MetricsRegion({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
-  return <section {...props} data-erp-component="metrics-region" className={cn("grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3", className)}>{children}</section>;
+export function MetricsRegion({className, children, mobileCollapseAfter, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode; mobileCollapseAfter?: number}) {
+  const [expanded, setExpanded] = useState(false);
+  const items = Children.toArray(children);
+  const shouldCollapse = Boolean(mobileCollapseAfter && items.length > mobileCollapseAfter);
+  const visibleItems = shouldCollapse && !expanded ? items.slice(0, mobileCollapseAfter) : items;
+  return <>
+    <section {...props} data-erp-component="metrics-region" data-mobile-collapsed={shouldCollapse && !expanded ? "true" : undefined} className={cn("grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3", className)}>{visibleItems}</section>
+    {shouldCollapse && <button type="button" data-erp-region="metrics-toggle" className="erp-focus-ring mx-auto inline-flex min-h-[var(--erp-control-height-filter)] items-center rounded-[var(--erp-radius-pill)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-primary)] shadow-sm md:hidden" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{expanded ? "收起指标" : `展开更多指标（${items.length - (mobileCollapseAfter || 0)}）`}</button>}
+  </>;
 }
 
 export function DashboardSection({title, description, actions, density = "compact", className, children, ...props}: Omit<HTMLAttributes<HTMLElement>, "title"> & {title?: ReactNode; description?: ReactNode; actions?: ReactNode; density?: "compact" | "default"; children: ReactNode}) {
@@ -20,7 +27,7 @@ export function DashboardSection({title, description, actions, density = "compac
   return <section {...props} data-erp-component="dashboard-section" data-density={density} className={cn("erp-card-surface p-[var(--erp-card-padding-compact)]", density === "default" && "p-[var(--erp-card-padding)]", className)}>
     {hasHeader && <div data-erp-region="section-header" className={cn("flex flex-wrap items-start justify-between gap-3 border-b border-[var(--erp-color-border)] pb-3", density === "default" && "pb-4")}>
       <div className="min-w-0">{title && <h2 className="text-[var(--erp-font-section-title)] font-bold text-[var(--erp-color-text)]">{title}</h2>}{showDescription && <p className="erp-annotation-slot mt-1 text-xs text-[var(--erp-color-text-secondary)]" data-empty={!description || undefined} aria-hidden={!description || undefined}>{description || "\u00a0"}</p>}</div>
-      {actions && <div data-erp-region="section-actions" className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div>}
+      {actions && <div data-erp-region="section-actions" className="flex w-full shrink-0 flex-wrap items-center gap-2 md:w-auto md:justify-end">{actions}</div>}
     </div>}
     <div data-erp-region="section-content" className={cn(hasHeader ? "pt-3" : "", density === "default" && hasHeader && "pt-4")}>{children}</div>
   </section>;
