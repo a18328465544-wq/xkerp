@@ -1,9 +1,10 @@
 import type {PurchaseCondition, PurchaseFormValues, PurchaseInvoice, PurchaseLineFormValue} from "@/src/types/purchase";
 import {storeDate} from "@/src/utils/storeTime";
 
-// Start with one intentional line. Additional lines are added explicitly by
-// the operator, so a new purchase form does not open as a wall of empty rows.
-export const PURCHASE_INITIAL_LINE_COUNT = 1;
+// Keep four initial editors so purchasing staff can enter a multi-item order
+// without repeatedly adding rows. Untouched placeholder rows are ignored by
+// validation, totals and request conversion.
+export const PURCHASE_INITIAL_LINE_COUNT = 4;
 
 /**
  * The current purchase API still requires inspection-owned fields. These are

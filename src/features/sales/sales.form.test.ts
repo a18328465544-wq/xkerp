@@ -41,9 +41,9 @@ test("sales form allows an empty after-sales terms field", () => {
   assert.equal(salesOrderSchema.safeParse(values).success, true);
 });
 
-test("sales defaults expose one intentional clean line-item editor", () => {
+test("sales defaults expose four clean line-item editors", () => {
   const values = createSalesDefaults("测试员");
-  assert.equal(values.items.length, 1);
+  assert.equal(values.items.length, 4);
   assert.equal(values.aftersalesTerms, "");
   assert.ok(values.items.every((item) => item.productId === "" && item.costPrice === undefined));
   assert.ok(values.items.every((item) => item.aftersalesTerms === ""));

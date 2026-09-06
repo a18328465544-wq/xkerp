@@ -86,7 +86,7 @@ test("sales request adapter ignores the untouched default placeholder rows", () 
   values.customerName = "张三";
   values.items[0] = {...values.items[0]!, productId: "P-1", productName: "RTX 4090", quantity: 2, sellPrice: 100};
   const request = toCreateSalesRequest(values);
-  assert.equal(values.items.length, 1);
+  assert.equal(values.items.length, 4);
   assert.equal(request.items.length, 2);
   assert.ok(request.items.every((item) => item.productId === "P-1"));
 });

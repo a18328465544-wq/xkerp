@@ -39,7 +39,7 @@ test("quick create cache updates are precise and template selection preserves en
   assert.equal(selected.condition, "90新");
   assert.equal(selected.inWarranty, true);
   assert.equal(selected.warrantyDate, "2027-01-01");
-  assert.equal(values.items.length, 1);
+  assert.equal(values.items.length, 4);
 });
 
 test("quick create schemas reject missing required identity fields", () => {

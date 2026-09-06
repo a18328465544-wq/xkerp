@@ -1,9 +1,10 @@
 import type {SalesFormValues, SalesLineFormValue} from "@/src/types/sales";
 import {storeDate} from "@/src/utils/storeTime";
 
-// Start with one intentional line. Additional lines are added explicitly by
-// the operator, keeping the first screen focused on the primary sale.
-export const SALES_INITIAL_LINE_COUNT = 1;
+// Keep four initial editors so sales staff can enter a multi-item order
+// without repeatedly adding rows. Untouched placeholder rows are ignored by
+// validation, totals and request conversion.
+export const SALES_INITIAL_LINE_COUNT = 4;
 
 export function createSalesLineDefaults(aftersalesTerms = ""): SalesLineFormValue {
   return {inventoryId: "", productId: "", productName: "", brand: "", model: "", vram: "", condition: "出库核验", quantity: 1, sellPrice: 0, costPrice: undefined, remarks: "", aftersalesTerms};

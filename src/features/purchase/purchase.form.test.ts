@@ -28,7 +28,7 @@ test("purchase defaults use the current operator for the order and payment handl
   const values = createPurchaseDefaults("当前操作人");
   assert.equal(values.handleBy, "当前操作人");
   assert.equal(values.paymentHandler, "当前操作人");
-  assert.equal(values.items.length, 1);
+  assert.equal(values.items.length, 4);
   assert.ok(values.items.every((item) => item.productId === ""));
 });
 
