@@ -1,4 +1,5 @@
 import type {Express, Request, RequestHandler} from "express";
+import {financeAccountCreateDto, financeAccountReconcileDto, parseHttpDto} from "../httpDto.ts";
 import {saveStateRecords, type StateCollectionKey} from "../db.ts";
 import {runStateCommand, type StateCommandTransactionHook} from "../stateCommand.ts";
 import {compactStateMerge, stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
@@ -60,8 +61,9 @@ export function registerFinanceAccountRoutes(app: Express, dependencies: Finance
         return;
       }
       try {
+        const command = parseHttpDto(financeAccountCreateDto, req.body);
         const {data: created, stateMerge} = await runStateCommand(
-          () => dependencies.actions(req).createSettlementAccount(req.body),
+          () => dependencies.actions(req).createSettlementAccount(command),
           (record) => ({stateMerge: recordMerge(dependencies.getState(), "settlementAccounts", record)}),
           undefined,
           dependencies.transactionHookWithIdempotency(idempotency, 201),
@@ -78,10 +80,11 @@ export function registerFinanceAccountRoutes(app: Express, dependencies: Finance
     "/api/gpu_erp/finance/settlement-account/:id/reconcile",
     dependencies.requireMenu("settlement_accounts"),
     dependencies.asyncRoute(async (req: FinanceAccountRequest, res) => {
+      const {actualBalance} = parseHttpDto(financeAccountReconcileDto, req.body);
       const {data: updated, stateMerge} = await runStateCommand(
         () => dependencies.actions(req).reconcileSettlementAccount(
           req.params.id!,
-          req.body?.actualBalance,
+          actualBalance,
           req.authUser?.displayName || req.authUser?.username,
         ),
         (record) => ({stateMerge: recordMerge(dependencies.getState(), "settlementAccounts", record)}),

@@ -22,6 +22,18 @@ import {
   commercialExportTenantDirectory,
 } from "../commercialRepository.ts";
 import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "../commercialConstants.ts";
+import {
+  commercialContextSwitchDto,
+  commercialExportCreateDto,
+  commercialMemberCreateDto,
+  commercialMemberUpdateDto,
+  commercialStoreCreateDto,
+  commercialStoreUpdateDto,
+  commercialSubscriptionUpdateDto,
+  commercialTenantCreateDto,
+  commercialUsageCreateDto,
+  parseHttpDto,
+} from "../httpDto.ts";
 
 type CommercialRequest = Request & {
   requestId?: string;
@@ -66,10 +78,6 @@ function sendCommercialError(req: Request, res: Response, error: unknown) {
   return false;
 }
 
-function bodyRecord(req: Request) {
-  return req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body as Record<string, unknown> : {};
-}
-
 /**
  * Commercial control-plane endpoints are deliberately separate from the
  * legacy business routes. They expose tenant/store/seat/quota state and can
@@ -79,9 +87,9 @@ function bodyRecord(req: Request) {
 export function registerCommercialRoutes(app: Express, dependencies: Dependencies) {
   app.post("/api/commercial/context/switch", dependencies.asyncRoute(async (req, res) => {
     const request = req as CommercialRequest;
-    const body = bodyRecord(req);
-    const targetTenantId = String(body.tenantId || "").trim();
-    const targetStoreId = String(body.storeId || "").trim() || DEFAULT_STORE_ID;
+    const command = parseHttpDto(commercialContextSwitchDto, req.body);
+    const targetTenantId = command.tenantId;
+    const targetStoreId = command.storeId || DEFAULT_STORE_ID;
     const userId = request.authUser?.id;
     if (!userId || !targetTenantId) {
       res.status(400).json({ error: { code: "INVALID_TENANT_CONTEXT", message: "企业和门店不能为空", requestId: request.requestId } });
@@ -108,13 +116,13 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
   app.post("/api/commercial/tenants", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
       const request = req as CommercialRequest;
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialTenantCreateDto, req.body);
       const data = await createCommercialTenant({
-        slug: String(body.slug || ""),
-        name: String(body.name || ""),
-        planCode: body.planCode as "pilot" | "standard" | "pro" | "enterprise" | undefined,
-        ownerUserId: body.ownerUserId === undefined ? request.authUser?.id : String(body.ownerUserId),
-        ownerRole: body.ownerRole === undefined ? "老板" : String(body.ownerRole),
+        slug: command.slug,
+        name: command.name,
+        planCode: command.planCode,
+        ownerUserId: command.ownerUserId === undefined ? request.authUser?.id : command.ownerUserId,
+        ownerRole: command.ownerRole === undefined ? "老板" : command.ownerRole,
       });
       res.status(201).json({ data });
     } catch (error) {
@@ -143,13 +151,10 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
 
   app.post("/api/commercial/stores", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialStoreCreateDto, req.body);
       const data = await createCommercialStore({
         tenantId: tenantId(req as CommercialRequest),
-        code: String(body.code || ""),
-        name: String(body.name || ""),
-        timezone: body.timezone === undefined ? undefined : String(body.timezone),
-        currency: body.currency === undefined ? undefined : String(body.currency),
+        ...command,
       });
       res.status(201).json({ data });
     } catch (error) {
@@ -159,12 +164,9 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
 
   app.patch("/api/commercial/stores/:id", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialStoreUpdateDto, req.body);
       const data = await updateCommercialStore(tenantId(req as CommercialRequest), String(req.params.id || ""), {
-        name: body.name === undefined ? undefined : String(body.name),
-        timezone: body.timezone === undefined ? undefined : String(body.timezone),
-        currency: body.currency === undefined ? undefined : String(body.currency),
-        status: body.status as "active" | "archived" | undefined,
+        ...command,
       });
       res.json({ data });
     } catch (error) {
@@ -178,14 +180,14 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
 
   app.post("/api/commercial/members", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialMemberCreateDto, req.body);
       const result = await upsertCommercialMembership({
         tenantId: tenantId(req as CommercialRequest),
-        userId: String(body.userId || ""),
-        storeId: String(body.storeId || storeId(req as CommercialRequest)),
-        role: String(body.role || "店员"),
-        status: body.status as "active" | "invited" | "deactivated" | undefined,
-        permissions: body.permissions && typeof body.permissions === "object" ? body.permissions as Record<string, unknown> : undefined,
+        userId: command.userId,
+        storeId: command.storeId || storeId(req as CommercialRequest),
+        role: command.role,
+        status: command.status,
+        permissions: command.permissions,
         invitedBy: actor(req as CommercialRequest),
       });
       res.status(201).json({ data: result });
@@ -196,16 +198,16 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
 
   app.patch("/api/commercial/members/:userId", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialMemberUpdateDto, req.body);
       const result = await updateCommercialMembership(
         tenantId(req as CommercialRequest),
         String(req.params.userId || ""),
         {
-          status: body.status as "active" | "invited" | "deactivated" | undefined,
-          role: body.role === undefined ? undefined : String(body.role),
-          permissions: body.permissions && typeof body.permissions === "object" ? body.permissions as Record<string, unknown> : undefined,
+          status: command.status,
+          role: command.role,
+          permissions: command.permissions,
         },
-        String(body.storeId || storeId(req as CommercialRequest)),
+        command.storeId || storeId(req as CommercialRequest),
       );
       res.json({ data: result });
     } catch (error) {
@@ -224,15 +226,9 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
 
   app.patch("/api/commercial/subscription", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialSubscriptionUpdateDto, req.body);
       const data = await updateCommercialSubscription(tenantId(req as CommercialRequest), {
-        planCode: body.planCode as "pilot" | "standard" | "pro" | "enterprise" | undefined,
-        status: body.status as "trialing" | "active" | "past_due" | "canceled" | undefined,
-        seatLimit: body.seatLimit === undefined ? undefined : Number(body.seatLimit),
-        mediaBytesLimit: body.mediaBytesLimit === undefined ? undefined : Number(body.mediaBytesLimit),
-        aiTokensLimit: body.aiTokensLimit === undefined ? undefined : Number(body.aiTokensLimit),
-        currentPeriodStart: body.currentPeriodStart === undefined ? undefined : String(body.currentPeriodStart),
-        currentPeriodEnd: body.currentPeriodEnd === undefined ? undefined : String(body.currentPeriodEnd),
+        ...command,
       });
       res.json({ data });
     } catch (error) {
@@ -251,12 +247,11 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
 
   app.post("/api/commercial/usage", dependencies.requireBoss, dependencies.asyncRoute(async (req, res) => {
     try {
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialUsageCreateDto, req.body);
       const data = await recordCommercialUsage({
         tenantId: tenantId(req as CommercialRequest),
-        metric: String(body.metric || ""),
-        quantity: Number(body.quantity),
-        periodStart: body.periodStart === undefined ? undefined : String(body.periodStart),
+        ...command,
+        quantity: Number(command.quantity),
       });
       res.status(201).json({ data });
     } catch (error) {
@@ -271,11 +266,11 @@ export function registerCommercialRoutes(app: Express, dependencies: Dependencie
         res.status(403).json({ error: { code: "FEATURE_NOT_INCLUDED", message: "当前套餐未包含数据导出能力", requestId: (req as CommercialRequest).requestId } });
         return;
       }
-      const body = bodyRecord(req);
+      const command = parseHttpDto(commercialExportCreateDto, req.body);
       const data = await createCommercialExport({
         tenantId: requestedTenantId,
         requestedBy: actor(req as CommercialRequest),
-        format: body.format === "csv" ? "csv" : "json",
+        format: command.format,
       });
       const completed = await processCommercialExport(data.id, requestedTenantId);
       res.status(201).json({ data: completed || data });

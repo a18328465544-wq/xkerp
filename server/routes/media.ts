@@ -1,6 +1,7 @@
-import type {Express, Request, RequestHandler, Response} from "express";
+import type {Express, RequestHandler, Response} from "express";
 import {getMediaAsset, listEntityImages, MEDIA_MAX_BYTES, MEDIA_TARGET_BYTES, replaceEntityImages} from "../mediaRepository.ts";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
+import {mediaListQueryDto, mediaReplaceDto, parseHttpDto} from "../httpDto.ts";
 
 type MediaRequest = AuthenticatedRequest<unknown>;
 
@@ -25,12 +26,13 @@ export function registerMediaRoutes(app: Express, dependencies: MediaRouteDepend
     dependencies.requireAnyMenu(mediaMenuIds),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as MediaRequest;
-      const values = Array.isArray(req.body?.images) ? req.body.images : [req.body?.dataUrl];
+      const command = parseHttpDto(mediaReplaceDto, req.body);
+      const values = command.images !== undefined ? command.images : [command.dataUrl];
       const urls = await replaceEntityImages({
         tenantId: authRequest.tenantId,
-        entityType: String(req.body?.entityType || "").trim(),
-        entityId: String(req.body?.entityId || "").trim(),
-        relationRole: String(req.body?.relationRole || "attachment").trim(),
+        entityType: command.entityType,
+        entityId: command.entityId,
+        relationRole: command.relationRole,
         values,
         createdBy: dependencies.actorForRequest(authRequest),
       });
@@ -43,10 +45,11 @@ export function registerMediaRoutes(app: Express, dependencies: MediaRouteDepend
     dependencies.requireAnyMenu(mediaMenuIds),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as MediaRequest;
+      const query = parseHttpDto(mediaListQueryDto, req.query);
       const assets = await listEntityImages(
-        String(req.query.entityType || "").trim(),
-        String(req.query.entityId || "").trim(),
-        req.query.relationRole ? String(req.query.relationRole) : undefined,
+        query.entityType,
+        query.entityId,
+        query.relationRole || undefined,
         authRequest.tenantId,
       );
       res.json({data: assets});

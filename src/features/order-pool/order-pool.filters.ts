@@ -1,3 +1,4 @@
+import {orderPoolExceptionStages, orderPoolMainStages, orderPoolOrderTypes} from "@/src/types/order-pool";
 import type {OrderPoolFilters, OrderPoolQueue, OrderPoolStage, OrderPoolOrderType} from "@/src/types/order-pool";
 
 export const defaultOrderPoolFilters: OrderPoolFilters = {
@@ -10,8 +11,8 @@ export const defaultOrderPoolFilters: OrderPoolFilters = {
   pageSize: 20,
 };
 
-const stages: readonly OrderPoolStage[] = ["待接单", "跟进中", "待客户", "待执行", "已完成", "暂停", "丢单", "取消", "售后中"];
-const orderTypes: readonly OrderPoolOrderType[] = ["销售", "回收", "置换"];
+const stages: readonly OrderPoolStage[] = [...orderPoolMainStages, ...orderPoolExceptionStages];
+const orderTypes: readonly OrderPoolOrderType[] = orderPoolOrderTypes;
 const queues: readonly OrderPoolQueue[] = ["mine", "all", "unassigned", "waiting_customer", "due_today", "overdue", "exceptions"];
 
 function positive(value: string | null, fallback: number) {

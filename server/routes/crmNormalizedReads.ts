@@ -1,7 +1,8 @@
-import type {Express, Request, RequestHandler} from "express";
+import type {Express, RequestHandler} from "express";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
 import {listCrmAccounts, listCrmTimeline} from "../crmRepository.ts";
 import {listQuickCaptureLeads} from "../crmQuickCaptureRepository.ts";
+import {crmAccountsListQueryDto, crmTimelineListQueryDto, parseHttpDto, quickCaptureLeadsListQueryDto} from "../httpDto.ts";
 
 type CrmNormalizedReadDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -15,14 +16,15 @@ export function registerCrmNormalizedReadRoutes(app: Express, dependencies: CrmN
     dependencies.requireMenu("crm"),
     dependencies.asyncRoute(async (req, res) => {
         const authRequest = req as AuthenticatedRequest<unknown>;
+        const query = parseHttpDto(crmAccountsListQueryDto, req.query);
         const result = await listCrmAccounts({
           tenantId: authRequest.tenantId,
-          page: Number(req.query.page || 1),
-          pageSize: Number(req.query.pageSize || req.query.per_page || 30),
-          keyword: String(req.query.keyword || req.query.search || ""),
-          role: String(req.query.role || ""),
-          ownerId: String(req.query.ownerId || req.query.owner || ""),
-          status: String(req.query.status || ""),
+          page: query.page,
+          pageSize: query.pageSize ?? query.per_page ?? 30,
+          keyword: query.keyword || query.search,
+          role: query.role,
+          ownerId: query.ownerId || query.owner,
+          status: query.status,
         });
         // Keep the standard API envelope while returning both page rows and
         // metadata through the browser adapter.
@@ -35,10 +37,11 @@ export function registerCrmNormalizedReadRoutes(app: Express, dependencies: CrmN
     dependencies.requireMenu("crm"),
     dependencies.asyncRoute(async (req, res) => {
         const authRequest = req as AuthenticatedRequest<unknown>;
+        const query = parseHttpDto(crmTimelineListQueryDto, req.query);
         const result = await listCrmTimeline(req.params.id!, {
           tenantId: authRequest.tenantId,
-          page: Number(req.query.page || 1),
-          pageSize: Number(req.query.pageSize || req.query.per_page || 50),
+          page: query.page,
+          pageSize: query.pageSize ?? query.per_page ?? 50,
         });
         res.json({data: {items: result.data, meta: result.meta}});
     }),
@@ -48,11 +51,12 @@ export function registerCrmNormalizedReadRoutes(app: Express, dependencies: CrmN
     "/api/gpu_erp/crm/quick-capture/leads",
     dependencies.requireMenu("crm"),
     dependencies.asyncRoute(async (req, res) => {
+        const query = parseHttpDto(quickCaptureLeadsListQueryDto, req.query);
         const result = await listQuickCaptureLeads({
-          page: Number(req.query.page || 1),
-          pageSize: Number(req.query.pageSize || req.query.per_page || 20),
-          keyword: String(req.query.keyword || req.query.search || ""),
-          stage: String(req.query.stage || ""),
+          page: query.page,
+          pageSize: query.pageSize ?? query.per_page ?? 20,
+          keyword: query.keyword || query.search,
+          stage: query.stage,
         });
         res.json({data: result});
     }),

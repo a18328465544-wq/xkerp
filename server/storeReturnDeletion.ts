@@ -14,6 +14,7 @@ import {
   removeReturnRemark,
 } from "./storeReturnPlanning.ts";
 import {hasUniqueLegacyName} from "./storePartnerIdentity.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 import type {ReturnOperationsDependencies} from "./storeReturnTypes.ts";
 
 export type ReturnDeletionDependencies = Pick<
@@ -189,7 +190,7 @@ export function createReturnDeletionHelpers(dependencies: ReturnDeletionDependen
 
     const restoredCost = restoredLines.reduce((sum, line) => sum + line.amount, 0);
     const restoredCount = restoredLines.length;
-    const sourceIsPersonal = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    const sourceIsPersonal = isPersonalPurchaseSource(invoice.sourceType);
     if (sourceIsPersonal) {
       const linkedCustomerId = invoice.sourcePartnerId;
       const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.supplierName);
@@ -419,7 +420,7 @@ export function createReturnDeletionHelpers(dependencies: ReturnDeletionDependen
         }
       : item);
 
-    const sourceIsPersonal = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    const sourceIsPersonal = isPersonalPurchaseSource(invoice.sourceType);
     if (sourceIsPersonal) {
       const linkedCustomerId = invoice.sourcePartnerId;
       const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.supplierName);

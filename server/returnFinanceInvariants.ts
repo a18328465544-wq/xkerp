@@ -9,16 +9,12 @@
  * gives the command layer and the operator-run legacy audit the same boundary.
  */
 
+import {financeIncomeCategories} from "../src/types/finance-income.ts";
+
 export const RETURN_PURCHASE_REFUND_TYPE = "采购退款" as const;
 export const RETURN_CUSTOMER_REFUND_TYPE = "客户退款" as const;
 
-export const RETURN_NON_OPERATING_INCOME_TYPES = new Set([
-  "赔偿收入",
-  "返点收入",
-  "配件销售",
-  "利息收入",
-  "其他收入",
-]);
+export const RETURN_NON_OPERATING_INCOME_TYPES = new Set<string>(financeIncomeCategories);
 
 const EPSILON = 0.009;
 

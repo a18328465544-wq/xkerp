@@ -12,6 +12,7 @@ import type {
   SalesInvoice,
   SettlementLedger,
 } from "../src/types.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 import {ConflictError, NotFoundError, ValidationError} from "./errors.ts";
 import {
   hasUniqueLegacyName,
@@ -159,7 +160,7 @@ export function createCrmOperationHelpers(dependencies: CrmOperationsDependencie
       return {...invoice, customerId: id, customerPartnerType: "customer", customerName: nextCustomer.name, contact: nextContact};
     });
     state.purchaseInvoices = state.purchaseInvoices.map((invoice) => {
-      const isPersonalSource = ["个人回收", "客户置换"].includes(invoice.sourceType);
+      const isPersonalSource = isPersonalPurchaseSource(invoice.sourceType);
       const linkedById = invoice.sourcePartnerId === id && (invoice.sourcePartnerType || "customer") === "customer";
       const legacyMatch = legacyNameIsUnique && !invoice.sourcePartnerId && matchesPerson(existing.name, previousContact, invoice.supplierName, invoice.contact);
       if (!isPersonalSource || (!linkedById && !legacyMatch)) return invoice;

@@ -16,15 +16,15 @@
 
 ## 2. 页面布局
 
-- 主内容使用 `ReportPageLayout`；标题和页签不重复渲染。
+- 主内容使用 `ErpAnalyticsPageFrame`/`AnalyticsFrame`；标题和页签不重复渲染。
 - 分析区使用 2—3 列自适应网格；有异常、同比、快捷操作时放在右侧窄栏。
 - 报表首屏在 1440px 下应同时看到标题、筛选、指标卡和第一行分析；不要通过大块空白制造“高级感”。
 - 窄屏下按“标题 → 页签横滚 → 筛选折叠/横滚 → 指标两列 → 分析单列 → 明细横滚”降级。
-- 卡片统一使用 `border-slate-200`、`rounded-xl`、白底和轻阴影；区块标题与操作同一行对齐。
+- 卡片统一使用 `src/styles/tokens.css` 的边框、圆角、白底和轻阴影；区块标题与操作同一行对齐。
 
 ## 3. 数据与交互
 
-- 日期筛选使用门店时区 `storeDate` 和 `DateRangePicker`；快捷范围至少支持今天、昨天、近 7 天、近 30 天、本月、上月、今年和全部。
+- 日期筛选使用门店时区 `storeDate` 和 `ErpDateRangePicker`；快捷范围至少支持今天、昨天、近 7 天、近 30 天、本月、上月、今年和全部。
 - “查询”不能只改变选中样式；若页面采用即时筛选，应隐藏无意义的查询按钮，或让按钮明确重新计算/请求数据。
 - 已选条件必须可读，清空后恢复全部数据；筛选、分页、页大小变化后明细页码回到第 1 页。
 - 图表数据必须与表格使用同一份过滤结果；禁止用固定示例数字、固定百分比或静态排行填充。
@@ -36,20 +36,19 @@
 ## 4. 共享组件
 
 ```tsx
-<ReportPageLayout
-  title="账户流水报表"
-  description="说明统计口径和更新时间"
-  tabs={tabs}
-  activeTab="report"
-  actions={<ReportActions onExport={handleExport} />}
->
+<ErpAnalyticsPageFrame>
+  <ErpPageHeader
+    title="账户流水报表"
+    subtitle="说明统计口径和更新时间"
+    actions={<ReportActions onExport={handleExport} />}
+  />
   <ReportFilterPanel>{filters}</ReportFilterPanel>
   <div className="grid ..."><ReportMetricCard ... /></div>
   <ReportSection title="趋势">...</ReportSection>
-</ReportPageLayout>
+</ErpAnalyticsPageFrame>
 ```
 
-组件位置：`src/components/ReportPageLayout.tsx`。账户流水和销售利润已经使用这套骨架；新报表必须优先复用这些组件，不要在页面里重新定义标题栏、指标卡、区块容器和页签样式。
+组件位置：`src/components/common/ErpPageFrames.tsx`、`src/components/common/page-frames/AnalyticsFrame.tsx`。财务利润、提成、行情和 AI 分析页面已经使用这套骨架；新报表必须优先复用这些组件，不要在页面里重新定义标题栏、指标卡、区块容器和页签样式。
 
 ## 5. 交付检查
 

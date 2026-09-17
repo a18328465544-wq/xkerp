@@ -7,6 +7,7 @@ import {runStateCommand, type StateCommandTransactionHook} from "../stateCommand
 import {compactStateMerge, replacedLinkedPaymentDeletePatch, stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {PaymentInRecord, SalesInvoice, SystemUserAccount} from "../../src/types.ts";
+import {parseHttpDto, salesInvoiceCreateDto, salesInvoiceUpdateDto, salesOutboundDto} from "../httpDto.ts";
 
 type SalesRequest = AuthenticatedRequest<SystemUserAccount>;
 
@@ -22,6 +23,7 @@ type IdempotencyContext = {
 
 type SalesMutationDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
+  requireHistoryEditPermission: RequestHandler;
   requireDeletePermission: RequestHandler;
   requireManualOutboundPermission: RequestHandler;
   asyncRoute: (handler: RequestHandler) => RequestHandler;
@@ -111,6 +113,7 @@ export function registerSalesMutationRoutes(app: Express, dependencies: SalesMut
     dependencies.requireMenu("sales_add"),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as SalesRequest;
+      const command = parseHttpDto(salesInvoiceCreateDto, req.body);
       const idempotency = await dependencies.claimMutationIdempotency(authRequest);
       if (idempotency?.replay) {
         res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
@@ -118,7 +121,7 @@ export function registerSalesMutationRoutes(app: Express, dependencies: SalesMut
       }
       try {
         const {data: created, stateMerge} = await runStateCommand(
-          () => dependencies.actions(authRequest).createSalesInvoice(req.body),
+          () => dependencies.actions(authRequest).createSalesInvoice(command),
           (invoice) => salesInvoiceMerge(dependencies.getState(), invoice),
           undefined,
           dependencies.transactionHookWithIdempotency(idempotency, 201, (client, invoice) => syncCrmSalesInvoiceLink(client, invoice, dependencies.actorForRequest(authRequest))),
@@ -137,14 +140,16 @@ export function registerSalesMutationRoutes(app: Express, dependencies: SalesMut
   app.put(
     "/api/sales-invoices/:id",
     dependencies.requireMenu("sales_list"),
+    dependencies.requireHistoryEditPermission,
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as SalesRequest;
+      const command = parseHttpDto(salesInvoiceUpdateDto, req.body);
       const state = dependencies.getState();
       const existing = state.salesInvoices.find((item) => item.id === req.params.id! || item.invoiceNo === req.params.id!);
       const paymentsBeforeUpdate = existing ? relatedSalesPayments(state, existing) : [];
       const financeBeforeUpdate = existing ? relatedSalesFinanceLedger(state, existing) : [];
       const {data: updated, stateMerge, stateDelete} = await runStateCommand(
-        () => dependencies.actions(authRequest).updateSalesInvoice(req.params.id!, req.body),
+        () => dependencies.actions(authRequest).updateSalesInvoice(req.params.id!, command),
         (invoice) => salesInvoiceUpdatePatch(state, invoice, paymentsBeforeUpdate, financeBeforeUpdate),
         undefined,
         (client, invoice) => syncCrmSalesInvoiceLink(client, invoice, dependencies.actorForRequest(authRequest)),
@@ -194,7 +199,8 @@ export function registerSalesMutationRoutes(app: Express, dependencies: SalesMut
     dependencies.requireMenu("sales_outbound"),
     dependencies.requireManualOutboundPermission,
     dependencies.asyncRoute(async (req, res) => {
-      const preview = dependencies.actions(req as SalesRequest).previewSalesOutbound(req.params.id!, req.body);
+      const command = parseHttpDto(salesOutboundDto, req.body);
+      const preview = dependencies.actions(req as SalesRequest).previewSalesOutbound(req.params.id!, command);
       res.json(dependencies.ok(preview));
     }),
   );
@@ -205,6 +211,7 @@ export function registerSalesMutationRoutes(app: Express, dependencies: SalesMut
     dependencies.requireManualOutboundPermission,
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as SalesRequest;
+      const command = parseHttpDto(salesOutboundDto, req.body);
       const idempotency = await dependencies.claimMutationIdempotency(authRequest);
       if (idempotency?.replay) {
         res.status(idempotency.replay.statusCode).json(idempotency.replay.response);
@@ -212,7 +219,7 @@ export function registerSalesMutationRoutes(app: Express, dependencies: SalesMut
       }
       try {
         const {data: updated, stateMerge} = await runStateCommand(
-          () => dependencies.actions(authRequest).confirmSalesOutbound(req.params.id!, req.body),
+          () => dependencies.actions(authRequest).confirmSalesOutbound(req.params.id!, command),
           (invoice) => salesInvoiceMerge(dependencies.getState(), invoice),
           undefined,
           dependencies.transactionHookWithIdempotency(

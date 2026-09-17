@@ -57,7 +57,7 @@ for (const required of [
   if (!fs.existsSync(path.join(root, required))) fail(`缺少架构边界文件：${required}`);
 }
 
-const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame/;
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame|FinanceEntryPageLayout/;
 for (const file of pageFiles) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
@@ -130,6 +130,8 @@ const allowedStorageBoundaries = new Set([
   "src/services/api/client.ts",
   // Workspace tabs persist shell state, not table preferences.
   "src/app/shell/workspaceTabStorage.ts",
+  // Resizable detail drawers persist a presentation-only width preference.
+  "src/components/common/ErpDetailDrawer.tsx",
 ]);
 const allowedAuthBoundaries = new Set([
   "src/app/auth/AuthProvider.tsx",

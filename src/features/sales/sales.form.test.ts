@@ -78,6 +78,20 @@ test("sales amount calculation respects cost visibility and keeps integer curren
   assert.equal(withoutCost.estimatedProfit, undefined);
 });
 
+test("sales profit preview stays unknown until every selected line has an authoritative cost", () => {
+  const values = validValues();
+  values.items[0]!.costPrice = undefined;
+  const amounts = calculateSalesAmounts(values, true);
+  assert.equal(amounts.estimatedCost, undefined);
+  assert.equal(amounts.estimatedProfit, undefined);
+});
+
+test("sales entry clears stale costs when switching candidates and keeps new rows cost-free", () => {
+  assert.match(salesOrderPageSource, /setValue\(`items\.\$\{index\}\.costPrice`, showCost \? option\.costPrice : undefined/);
+  assert.match(salesOrderPageSource, /setValue\(`items\.\$\{index\}\.costPrice`, undefined/);
+  assert.match(salesOrderPageSource, /append\(createSalesLineDefaults\(values\.aftersalesTerms \|\| ""\)\)/);
+});
+
 test("sales line total and unit price stay linked with integer currency", () => {
   assert.equal(calculateSalesLineTotal(3, 1200), 3600);
   assert.equal(calculateSalesUnitPrice(3600, 3), 1200);

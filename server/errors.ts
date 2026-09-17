@@ -45,6 +45,18 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+function preserveCause<T extends AppError>(mapped: T, original: unknown) {
+  if (original instanceof Error && mapped !== original) {
+    Object.defineProperty(mapped, "cause", {
+      configurable: true,
+      enumerable: false,
+      value: original,
+      writable: false,
+    });
+  }
+  return mapped;
+}
+
 /**
  * Compatibility boundary for legacy service code that still throws plain Error.
  * New domain code should throw one of the explicit errors above; this mapper is
@@ -57,19 +69,19 @@ export function toDomainError(error: unknown) {
 
   const message = error.message;
   if (/账号或密码错误|账号已停用|会话无效|请先登录/.test(message)) {
-    return new UnauthorizedError("账号或密码错误");
+    return preserveCause(new UnauthorizedError("账号或密码错误"), error);
   }
   if (/没有.*权限|无权|仅老板|禁止执行/.test(message)) {
-    return new ForbiddenError(message);
+    return preserveCause(new ForbiddenError(message), error);
   }
-  if (/不存在|未找到|找不到/.test(message)) return new NotFoundError(message);
+  if (/不存在|未找到|找不到/.test(message)) return preserveCause(new NotFoundError(message), error);
   if (/已存在|重复|冲突|不足|已绑定|已关联|占用|不能删除|不能编辑|不能直接/.test(message)) {
-    return new ConflictError(message);
+    return preserveCause(new ConflictError(message), error);
   }
   if (/必须|不能为空|请选择|请输入|无效|不合法|仅支持|尚未|缺少|不能/.test(message)) {
-    return new ValidationError(message);
+    return preserveCause(new ValidationError(message), error);
   }
   // Unknown exceptions must not be presented as client validation failures or leak internal
   // messages. The error middleware logs the original exception with its request id.
-  return new AppError("服务器处理失败，请稍后重试", 500, "SERVER_ERROR");
+  return preserveCause(new AppError("服务器处理失败，请稍后重试", 500, "SERVER_ERROR"), error);
 }

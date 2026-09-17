@@ -8,6 +8,7 @@ import type {
   ReturnRefundAllocation,
   SalesItem,
 } from "../src/types.ts";
+import {inventoryInactiveStatuses} from "../src/utils/inventoryFilters.ts";
 import {ConflictError, NotFoundError, ValidationError} from "./errors.ts";
 import {
   findSalesReturnLine,
@@ -16,6 +17,7 @@ import {
   type ReturnLineMatch,
 } from "./storeReturnPlanning.ts";
 import type {ReturnOperationsDependencies, ReturnOrderCreateInput} from "./storeReturnTypes.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
 export type ReturnCreationDependencies = Pick<
   ReturnOperationsDependencies,
@@ -118,7 +120,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       } else {
         const invoice = purchaseInvoice!;
         if (findPurchaseInvoiceForCard(sourceCard)?.id !== invoice.id) throw new ConflictError(`库存 ${sourceCard.id} 与采购单不匹配`);
-        if (["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(sourceCard.status)) {
+        if (inventoryInactiveStatuses.has(sourceCard.status)) {
           throw new ConflictError(`库存状态为${sourceCard.status}，不能办理整单退货`);
         }
         const line = typeof batchItem.sourcePurchaseItemIndex === "number"
@@ -166,7 +168,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
         throw new ConflictError("直接冲销要求原采购单的唯一采购付款与现金已付金额完全一致；历史金额不一致请先核对付款流水");
       }
     }
-    if (input.type === "进货退货" && input.settlementMode === "抵扣账款" && purchaseInvoice && ["个人回收", "客户置换"].includes(purchaseInvoice.sourceType) && cashSettlementAmount > 0) {
+    if (input.type === "进货退货" && input.settlementMode === "抵扣账款" && purchaseInvoice && isPersonalPurchaseSource(purchaseInvoice.sourceType) && cashSettlementAmount > 0) {
       throw new ValidationError("个人回收的已付款退货不能留作供应商抵扣余额，请选择原路退款");
     }
 
@@ -192,7 +194,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       productName: `整单退货（${resolvedItems.length}件）`,
       sn: `共${resolvedItems.length}件`,
       partyId: input.partyId || salesInvoice?.customerId || purchaseInvoice?.sourcePartnerId,
-      partyType: input.partyType || (input.type === "销售退货" ? (salesInvoice?.customerPartnerType === "vendor" ? "vendor" : "customer") : (purchaseInvoice?.sourcePartnerType || (["个人回收", "客户置换"].includes(purchaseInvoice?.sourceType || "") ? "customer" : "vendor"))),
+      partyType: input.partyType || (input.type === "销售退货" ? (salesInvoice?.customerPartnerType === "vendor" ? "vendor" : "customer") : (purchaseInvoice?.sourcePartnerType || (isPersonalPurchaseSource(purchaseInvoice?.sourceType) ? "customer" : "vendor"))),
       partyName: input.partyName || salesInvoice?.customerName || purchaseInvoice?.supplierName,
       contact: input.contact || salesInvoice?.contact || purchaseInvoice?.contact,
       amount,
@@ -250,7 +252,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       if (!sourceCard || findPurchaseInvoiceForCard(sourceCard)?.id !== purchaseInvoice.id || !purchaseItem) {
         throw new ConflictError("所选库存不属于关联采购单");
       }
-      if (["已售出", "已退货", "已报废", "已拆卸", "已组装"].includes(sourceCard.status)) {
+      if (inventoryInactiveStatuses.has(sourceCard.status)) {
         throw new ConflictError(`库存状态为${sourceCard.status}，不能办理进货退货`);
       }
       if (Math.abs(amount - Number(purchaseItem.buyPrice || sourceCard.costPrice || 0)) > 0.009) throw new ValidationError("进货退货金额必须与原商品进货价一致");
@@ -291,7 +293,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       input.type === "进货退货" &&
       input.settlementMode === "抵扣账款" &&
       purchaseInvoice &&
-      ["个人回收", "客户置换"].includes(purchaseInvoice.sourceType) &&
+      isPersonalPurchaseSource(purchaseInvoice.sourceType) &&
       cashSettlementAmount > 0
     ) {
       throw new ValidationError("个人回收的已付款退货不能留作供应商抵扣余额，请选择原路退款");
@@ -317,7 +319,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       productName: sourceCard?.productName || salesItem?.productName || purchaseItem?.productName || input.productName,
       sn: sourceCard?.sn || salesItem?.sn || purchaseItem?.sn || input.sn,
       partyId: input.partyId || salesInvoice?.customerId || purchaseInvoice?.sourcePartnerId,
-      partyType: input.partyType || (input.type === "销售退货" ? (salesInvoice?.customerPartnerType === "vendor" ? "vendor" : "customer") : (purchaseInvoice?.sourcePartnerType || (["个人回收", "客户置换"].includes(purchaseInvoice?.sourceType || "") ? "customer" : "vendor"))),
+      partyType: input.partyType || (input.type === "销售退货" ? (salesInvoice?.customerPartnerType === "vendor" ? "vendor" : "customer") : (purchaseInvoice?.sourcePartnerType || (isPersonalPurchaseSource(purchaseInvoice?.sourceType) ? "customer" : "vendor"))),
       partyName: input.partyName || salesInvoice?.customerName || purchaseInvoice?.supplierName || sourceCard?.supplierName,
       contact: input.contact || salesInvoice?.contact || purchaseInvoice?.contact,
       amount,

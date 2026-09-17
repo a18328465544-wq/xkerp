@@ -1,12 +1,20 @@
 import type {CardInventory, ProductCategory} from "./core";
 
-export type InspectionResultStatus = "通过" | "轻微问题" | "需要维修" | "拒收入库" | "降价入库";
-export type InspectionExteriorCheck = "完美无瑕" | "轻微刮花" | "氧化发黄" | "挡板生锈" | "严重磕碰";
-export type InspectionFanCheck = "静音顺畅" | "轻微异响" | "抖动偏摆" | "风扇停转";
-export type InspectionPortsCheck = "全部正常" | "部分接口无信号" | "物理变形";
-export type InspectionGpuZCheck = "核对一致" | "规格异常 / 假卡山寨";
-export type InspectionVramResult = "全显存测试通过" | "某显卡测试通道错误" | "黄屏/花屏";
-export type InspectionNoise = "静音" | "适中" | "噪音明显";
+export const inspectionResultStatusValues = ["通过", "轻微问题", "需要维修", "拒收入库", "降价入库"] as const;
+export const inspectionExteriorCheckValues = ["完美无瑕", "轻微刮花", "氧化发黄", "挡板生锈", "严重磕碰"] as const;
+export const inspectionFanCheckValues = ["静音顺畅", "轻微异响", "抖动偏摆", "风扇停转"] as const;
+export const inspectionPortsCheckValues = ["全部正常", "部分接口无信号", "物理变形"] as const;
+export const inspectionGpuZCheckValues = ["核对一致", "规格异常 / 假卡山寨"] as const;
+export const inspectionVramResultValues = ["全显存测试通过", "某显卡测试通道错误", "黄屏/花屏"] as const;
+export const inspectionNoiseValues = ["静音", "适中", "噪音明显"] as const;
+
+export type InspectionResultStatus = (typeof inspectionResultStatusValues)[number];
+export type InspectionExteriorCheck = (typeof inspectionExteriorCheckValues)[number];
+export type InspectionFanCheck = (typeof inspectionFanCheckValues)[number];
+export type InspectionPortsCheck = (typeof inspectionPortsCheckValues)[number];
+export type InspectionGpuZCheck = (typeof inspectionGpuZCheckValues)[number];
+export type InspectionVramResult = (typeof inspectionVramResultValues)[number];
+export type InspectionNoise = (typeof inspectionNoiseValues)[number];
 
 export interface InspectionCandidate {
   id: string;

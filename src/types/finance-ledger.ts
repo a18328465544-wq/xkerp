@@ -9,6 +9,9 @@ export const financeLedgerBusinessTypes = [
   "员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待",
 ] as const;
 
+/** Business types that represent a cash payment made for a purchase-side partner. */
+export const financePurchasePaymentBusinessTypeValues = ["采购付款", "回收付款"] as const;
+
 export interface FinanceLedgerFilters {
   keyword: string;
   accountId: string;

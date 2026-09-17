@@ -9,8 +9,8 @@ import type {
   SalesInvoice,
 } from "../src/types.ts";
 import {createProductIdentityIndex, sameProductIdentity} from "../src/utils/productIdentity.ts";
-import {matchesInventoryListFilters, type InventoryListFilters} from "../src/utils/inventoryFilters.ts";
-import {storeDate, storeDateDiffDays} from "../src/utils/storeTime.ts";
+import {isInventorySellableStatus, matchesInventoryListFilters, normalizeInventoryListFilters, type InventoryListFilters} from "../src/utils/inventoryFilters.ts";
+import {inventoryInspectionPendingStatusValues, inventoryRepairStatusValues} from "../src/types/inventory.ts";
 import {buildPendingSalesNeedByProduct, productIdentityKey} from "./storeInventoryPlanning.ts";
 import {ValidationError} from "./errors.ts";
 
@@ -76,7 +76,14 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
   };
 
   const getInventorySummary = (filters: InventoryListFilters = {}): InventorySummaryRow[] => {
-    const summaryFilters: InventoryListFilters = {...filters, activeOnly: filters.activeOnly ?? !filters.includeSold};
+    // State-snapshot callers include Express query objects in a few legacy routes.
+    // Normalize once here so values such as includeSold="false" cannot become
+    // truthy and alter stock/cost populations used by sales previews.
+    const normalizedFilters = normalizeInventoryListFilters(filters);
+    const summaryFilters: InventoryListFilters = {
+      ...normalizedFilters,
+      activeOnly: normalizedFilters.activeOnly ?? !normalizedFilters.includeSold,
+    };
     const productIdentityIndex = createProductIdentityIndex(state.products);
     const pendingNeedByProduct = buildPendingSalesNeedByProduct(state, productIdentityIndex);
     const rows = new Map<string, InventorySummaryRow>();
@@ -84,7 +91,13 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
       .filter((card) => matchesInventoryListFilters(card, summaryFilters))
       .forEach((card) => {
         const category = (card.category || "显卡") as ProductCategory;
-        const key = [category, card.productName, card.brand, card.model, card.version, card.vram].join("::");
+        // Sales candidates must use the same canonical product identity as
+        // reservation/creation. The normal inventory screen keeps its legacy
+        // display-field grouping, but the sellable-only read model cannot merge
+        // two templates that merely look alike.
+        const key = summaryFilters.sellableOnly
+          ? productIdentityKey(card, productIdentityIndex)
+          : [category, card.productName, card.brand, card.model, card.version, card.vram].join("::");
         const existing = rows.get(key) || {
           key,
           productId: card.productId,
@@ -114,11 +127,11 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
         if (!existing.warehouseLocations?.includes(location)) existing.warehouseLocations = [...(existing.warehouseLocations || []), location];
         existing.warehouseLocation = existing.warehouseLocations.join("、");
         existing.totalCount += 1;
-        existing.availableCount += ["已入库", "已上架"].includes(card.status) ? 1 : 0;
-        existing.pendingCount += ["待检测", "检测中"].includes(card.status) ? 1 : 0;
+        existing.availableCount += isInventorySellableStatus(card.status) ? 1 : 0;
+        existing.pendingCount += inventoryInspectionPendingStatusValues.includes(card.status as (typeof inventoryInspectionPendingStatusValues)[number]) ? 1 : 0;
         existing.lockedCount += card.status === "已锁定" ? 1 : 0;
         existing.soldCount += card.status === "已售出" ? 1 : 0;
-        existing.repairCount += ["维修中", "售后中", "退货中"].includes(card.status) ? 1 : 0;
+        existing.repairCount += inventoryRepairStatusValues.includes(card.status as (typeof inventoryRepairStatusValues)[number]) ? 1 : 0;
         existing.totalCost += Number(card.costPrice || 0);
         existing.totalEstSell += Number(card.estSellPrice || card.marketPrice || 0);
         existing.lastEntryTime = [existing.lastEntryTime, card.entryTime].filter(Boolean).sort().at(-1);

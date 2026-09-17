@@ -14,7 +14,7 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  xs: "h-7 gap-1 px-2 text-[11px]",
+  xs: "h-7 gap-1 px-2 text-xs",
   sm: "h-[var(--erp-control-height-filter)] gap-1.5 px-3 text-xs",
   md: "h-10 gap-2 px-4 text-sm",
   lg: "h-11 gap-2 px-5 text-sm",
@@ -33,7 +33,7 @@ export function Button({variant = "secondary", size = "md", className, children,
     <BaseButton
       {...props}
       type={props.type ?? "button"}
-      className={cn("erp-focus-ring inline-flex shrink-0 items-center justify-center rounded-[var(--erp-radius-control)] font-semibold transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50", variants[variant], sizes[size], className)}
+      className={cn("erp-focus-ring inline-flex shrink-0 items-center justify-center rounded-[var(--erp-radius-control)] font-medium transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50", variants[variant], sizes[size], className)}
     >
       {children}
     </BaseButton>

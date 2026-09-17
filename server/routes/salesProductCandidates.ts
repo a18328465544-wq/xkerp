@@ -1,9 +1,11 @@
 import type { Express, Request, RequestHandler, Response } from "express";
 import type { InventorySummaryRow } from "../../src/types.ts";
+import type { InventoryListFilters } from "../../src/utils/inventoryFilters.ts";
+import { parseHttpDto, salesProductCandidateQueryDto } from "../httpDto.ts";
 
 type SalesProductCandidateDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
-  getInventorySummary: (req: Request, query: Record<string, string>) => InventorySummaryRow[];
+  getInventorySummary: (req: Request, query: InventoryListFilters) => InventorySummaryRow[];
   permissionsForRequest: (req: Request) => { showCost?: boolean };
   storeDateDiffDays: (value: string) => number;
 };
@@ -25,9 +27,13 @@ export function registerSalesProductCandidateRoutes(
     dependencies.requireMenu("sales_add"),
     dependencies.requireMenu("inventory"),
     (req, res: Response) => {
-      const keyword = String(req.query.keyword || req.query.search || "").trim();
+      const query = parseHttpDto(salesProductCandidateQueryDto, req.query);
+      const keyword = query.keyword || query.search;
       const permissions = dependencies.permissionsForRequest(req);
-      const rows = dependencies.getInventorySummary(req, { keyword, activeOnly: "true", includeSold: "false" });
+      // Use booleans at the boundary and ask for the sellable-only population.
+      // The resulting avgCost/avgEstSell now has the same population as the
+      // server-side sales reservation and invoice-profit calculation.
+      const rows = dependencies.getInventorySummary(req, {keyword, activeOnly: true, includeSold: false, sellableOnly: true});
       const data = rows
         .filter((row) => row.availableCount > 0)
         .map((row) => {

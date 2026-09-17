@@ -1,25 +1,41 @@
 # V2 图表使用规则
 
-所有业务图表都通过 `src/components/ui/chart.tsx` 的薄封装接入 Recharts。封装只负责尺寸、主题变量、Tooltip、Legend 和辅助文本，不替换 Recharts 的组合能力。
+所有业务图表都通过 `src/components/ui/chart-primitives.tsx` 的统一 primitives 接入 Recharts。`src/components/ui/chart.tsx` 负责尺寸、主题变量、Tooltip、Legend 和辅助文本；页面不得直接导入 Recharts 或定义独立图表样式。
 
 ## 图表类型
 
-- 面积图：用于单一主趋势，强调总量变化或累计走势；只保留一个面积填充序列，其他对比序列使用虚线折线。
-- 折线图：用于两个及以上同量纲序列的时间趋势，收入、支出、净现金流等必须有固定图例和零基准线。
-- 柱状图：用于离散分类或周期之间的横向比较；同一图内最多保留 2 个系列，系列名称不得只依赖 Hover。
-- 环形图：只用于构成/占比，最多展示 5 类；环形旁必须同时显示名称、数值或占比，不能只靠颜色和 Tooltip。
+系统只使用以下六类图表：
 
-## 统一交互与状态
+- **Sparkline**：KPI 或表格中的快速趋势，不显示坐标轴、网格或 Legend。
+- **Smooth Line Chart**：净值、余额、收入、长期趋势。线宽 2px，默认隐藏数据点，Hover 时显示 marker。
+- **Soft Area Chart**：支出、现金流、余额变化。填充透明度为 5%–8%，不使用高饱和渐变。
+- **Rounded Column Chart**：按日/周/月的离散比较。窄柱、大间距、12–16px 圆角，Hover/选中项使用主色。
+- **Horizontal Bar Chart**：分类比较、排行、金额与占比。默认按数值降序，分类名在左，金额/占比在右。
+- **100% Stacked Bar**：少量分类的结构占比，例如账户、库存或预算构成；每段必须有对应标签或说明。
 
-- 每个有数据的图表固定显示 `ChartLegend`、共享 `ChartTooltip`、坐标轴和更新时间。
-- 图表必须有持久化文字摘要或明细入口，用户不 Hover 也能读懂关键结论。
-- 数据为空时使用 `ErpEmptyState`，说明当前筛选范围并给出调整范围或筛选的下一步。
-- 权限受限时显示“权限受限”状态，不把不可见数据伪装成 0；可展示的公开序列仍可正常显示。
-- 负值必须显示负号，并绘制 `ReferenceLine y=0` 或等价零基准线。
+**禁止使用 Pie Chart / Donut Chart。** 原有饼图或环形图必须按语义迁移为 `HorizontalBarChart` 或 `StackedStructureBar`。
+
+## 统一视觉与交互
+
+- 图表低对比、高留白；单系列使用一个主色，其他系列只在确有必要时增加克制的语义色。
+- 收入/成功使用 `--erp-chart-positive`，支出/损失使用 `--erp-chart-negative`，提醒使用 `--erp-chart-warning`；中性数据使用 `--erp-chart-muted`。
+- 只保留极淡的水平网格线，不绘制完整图表外框；能省略 Y 轴时省略。
+- 单系列不显示 Legend；不要默认显示每个数据点的数值 label。
+- Tooltip 使用共享 `ChartTooltip`，当前值优先，日期或分类为次级信息。
+- 动画使用共享时长，快速且克制，不使用弹跳效果。
+- 负值保留负号并显示零基准线；颜色不能成为唯一状态编码。
+
+## 统一 Tokens
+
+图表组件只消费 `src/styles/tokens.css` 中的图表别名：
+
+`--erp-chart-primary`、`--erp-chart-muted`、`--erp-chart-positive`、`--erp-chart-warning`、`--erp-chart-negative`、`--erp-chart-grid`、`--erp-chart-axis`、`--erp-chart-track`、`--erp-chart-tooltip-bg`、`--erp-chart-tooltip-border`、`--erp-chart-stroke-width`、`--erp-chart-bar-radius`、`--erp-chart-bar-gap`、`--erp-chart-area-opacity`、`--erp-chart-animation-duration`。
+
+页面不得硬编码一套新的图表颜色、阴影或圆角。
 
 ## 响应式与可访问性
 
-- 移动端 X 轴使用 `interval="preserveStartEnd"`、`minTickGap`，Y 轴固定宽度并降低标签密度；禁止挤压成不可读的全量标签。
-- 颜色不是唯一编码：负值使用危险色并配合负号/虚线，系列使用实线、虚线或点线区分；环形片段使用边界描边。
-- 图表容器提供 `role="img"`、可读的 `aria-label`，摘要通过 `aria-describedby` 关联。
-- 图例、摘要和空状态都应在窄屏下换行，不得依赖 Hover、颜色或动画传达唯一信息。
+- 图表必须位于现有页面容器内，响应式只调整图表自身宽高、刻度密度和 Tooltip 位置，不改变外层 Grid、Card 或页面信息架构。
+- 有数据的图表提供 `role="img"` 和可读的 `aria-label`，并保留摘要或明细入口。
+- 空数据使用 `ErpEmptyState`，权限受限时明确说明，不把不可见数据显示为 0。
+- 窄屏保留首尾刻度，Legend/摘要允许换行；不得依赖 Hover、颜色或动画传达唯一信息。

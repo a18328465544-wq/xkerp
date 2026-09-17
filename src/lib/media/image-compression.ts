@@ -1,11 +1,13 @@
+import {imageMimeTypeValues, type ImageMimeType} from "@/src/types/media";
+
 export const IMAGE_MAX_INPUT_BYTES = 12 * 1024 * 1024;
 export const IMAGE_TARGET_BYTES = 100_000;
 export const IMAGE_MAX_STORED_BYTES = 110_000;
 export const IMAGE_MAX_COUNT = 6;
 export const IMAGE_MAX_DIMENSION = 1_440;
 
-export const IMAGE_ACCEPTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export type AcceptedImageMimeType = (typeof IMAGE_ACCEPTED_MIME_TYPES)[number];
+export const IMAGE_ACCEPTED_MIME_TYPES = imageMimeTypeValues;
+export type AcceptedImageMimeType = ImageMimeType;
 
 export interface ImageFileLike {
   type: string;

@@ -4,6 +4,7 @@ import {marketQuotePriceChange, marketQuotePriceChanges, snapshotMarketQuote} fr
 import {stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import type {MarketQuote} from "../../src/types.ts";
 import type {AppState, createStoreActions} from "../store.ts";
+import {marketQuoteCreateDto, marketQuoteImportDto, marketQuoteUpdateDto, parseHttpDto} from "../httpDto.ts";
 
 type MarketQuoteMutationDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -47,7 +48,8 @@ export function registerMarketQuoteMutationRoutes(app: Express, dependencies: Ma
     "/api/market-quotes",
     dependencies.requireMenu("quotes"),
     dependencies.asyncRoute(async (req, res) => {
-      const created = dependencies.actions(req).createMarketQuote(req.body);
+      const command = parseHttpDto(marketQuoteCreateDto, req.body);
+      const created = dependencies.actions(req).createMarketQuote(command);
       const stateMerge = marketQuoteMerge(dependencies.getState(), created);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(201).json(okMerge(created, stateMerge));
@@ -58,15 +60,8 @@ export function registerMarketQuoteMutationRoutes(app: Express, dependencies: Ma
     "/api/market-quotes/import",
     dependencies.requireMenu("quotes"),
     dependencies.asyncRoute(async (req, res) => {
-      const quotes = Array.isArray(req.body?.quotes) ? req.body.quotes : [];
-      if (quotes.length === 0) {
-        dependencies.sendValidationError(req, res, "请至少提供一条行情参考数据。");
-        return;
-      }
-      if (quotes.length > 2000) {
-        dependencies.sendValidationError(req, res, "单次最多导入 2000 条行情参考。");
-        return;
-      }
+      const command = parseHttpDto(marketQuoteImportDto, req.body);
+      const quotes = command.quotes;
       const beforeQuotes = new Map(dependencies.getState().marketQuotes.map((quote) => [quote.id, snapshotMarketQuote(quote)] as const));
       const result = dependencies.actions(req).importMarketQuotes(quotes);
       const stateMerge = marketQuotesMerge(dependencies.getState(), result.quotes);
@@ -80,9 +75,10 @@ export function registerMarketQuoteMutationRoutes(app: Express, dependencies: Ma
     "/api/market-quotes/:id",
     dependencies.requireMenu("quotes"),
     dependencies.asyncRoute(async (req, res) => {
+      const command = parseHttpDto(marketQuoteUpdateDto, req.body);
       const existing = dependencies.getState().marketQuotes.find((quote) => quote.id === req.params.id!);
       const beforeQuote = existing ? snapshotMarketQuote(existing) : undefined;
-      const updated = dependencies.actions(req).updateMarketPrice(req.params.id!, req.body.todayBuyPrice, req.body.todaySellPrice, req.body.remarks);
+      const updated = dependencies.actions(req).updateMarketPrice(req.params.id!, command.todayBuyPrice, command.todaySellPrice, command.remarks);
       const stateMerge = marketQuoteMerge(dependencies.getState(), updated);
       await saveStateRecords(stateMergeRecords(stateMerge));
       const priceChange = marketQuotePriceChange(beforeQuote, updated || undefined);

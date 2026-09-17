@@ -23,8 +23,12 @@ export function toInventoryQueryParams(filters: InventoryFilters, includePaging 
   }
   set("keyword", filters.keyword);
   set("brand", filters.brand);
+  set("model", filters.model);
   set("warehouseLocation", filters.warehouseLocation);
   set("status", filters.status || filters.inspectionStatus);
+  set("condition", filters.condition);
+  set("entryStart", filters.entryStart);
+  set("entryEnd", filters.entryEnd);
   set("risk", filters.risk);
   set("minStorageDays", filters.minStorageDays);
   set("maxStorageDays", filters.maxStorageDays);

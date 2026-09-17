@@ -1,49 +1,55 @@
-import {createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, useParams} from "@tanstack/react-router";
+import {createRootRoute, createRoute, createRouter, Outlet, useParams} from "@tanstack/react-router";
 import {AppShell} from "@/src/app/shell/AppShell";
 import {ErpLoadingState, ErpPageError} from "@/src/components/common";
 import {Card} from "@/src/components/ui";
 import {AuthBoundary, PermissionBoundary} from "@/src/app/auth";
 import {ApiError} from "@/src/services/api";
+import {pageComponents} from "./pageComponents";
+import {stringifyRouterSearch} from "./routerSearch";
 
-const DashboardPage = lazyRouteComponent(() => import("@/src/features/dashboard/pages/DashboardPage"), "DashboardPage");
-const InventoryListPage = lazyRouteComponent(() => import("@/src/features/inventory/pages/InventoryListPage"), "InventoryListPage");
-const SalesListPage = lazyRouteComponent(() => import("@/src/features/sales/pages/SalesListPage"), "SalesListPage");
-const NewSalesOrderPage = lazyRouteComponent(() => import("@/src/features/sales/pages/NewSalesOrderPage"), "NewSalesOrderPage");
-const SalesOutboundPage = lazyRouteComponent(() => import("@/src/features/sales/pages/SalesOutboundPage"), "SalesOutboundPage");
-const AiInsightsPage = lazyRouteComponent(() => import("@/src/features/ai/pages/AiInsightsPage"), "AiInsightsPage");
-const MarketQuotesPage = lazyRouteComponent(() => import("@/src/features/quotes/pages/MarketQuotesPage"), "MarketQuotesPage");
-const ProductLibraryPage = lazyRouteComponent(() => import("@/src/features/products/pages/ProductLibraryPage"), "ProductLibraryPage");
-const AssemblyWorkspacePage = lazyRouteComponent(() => import("@/src/features/assembly/pages/AssemblyWorkspacePage"), "AssemblyWorkspacePage");
-const PurchaseListPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/PurchaseListPage"), "PurchaseListPage");
-const NewPurchaseOrderPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/NewPurchaseOrderPage"), "NewPurchaseOrderPage");
-const PurchaseDetailPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/PurchaseDetailPage"), "PurchaseDetailPage");
-const PurchaseEditPage = lazyRouteComponent(() => import("@/src/features/purchase/pages/PurchaseEditPage"), "PurchaseEditPage");
-const InspectionWorkspacePage = lazyRouteComponent(() => import("@/src/features/inspections/pages/InspectionWorkspacePage"), "InspectionWorkspacePage");
-const PurchaseReturnListPage = lazyRouteComponent(() => import("@/src/features/returns/pages/PurchaseReturnListPage"), "PurchaseReturnListPage");
-const NewPurchaseReturnPage = lazyRouteComponent(() => import("@/src/features/returns/pages/NewPurchaseReturnPage"), "NewPurchaseReturnPage");
-const SalesReturnListPage = lazyRouteComponent(() => import("@/src/features/returns/pages/SalesReturnListPage"), "SalesReturnListPage");
-const NewSalesReturnPage = lazyRouteComponent(() => import("@/src/features/returns/pages/NewSalesReturnPage"), "NewSalesReturnPage");
-const CrmWorkspacePage = lazyRouteComponent(() => import("@/src/features/crm/pages/CrmWorkspacePage"), "CrmWorkspacePage");
-const NewCustomerLeadPage = lazyRouteComponent(() => import("@/src/features/crm/pages/NewCustomerLeadPage"), "NewCustomerLeadPage");
-const CustomerDirectoryPage = lazyRouteComponent(() => import("@/src/features/customers/pages/CustomerDirectoryPage"), "CustomerDirectoryPage");
-const VendorDirectoryPage = lazyRouteComponent(() => import("@/src/features/vendors/pages/VendorDirectoryPage"), "VendorDirectoryPage");
-const OrderPoolPage = lazyRouteComponent(() => import("@/src/features/order-pool/pages/OrderPoolPage"), "OrderPoolPage");
-const AftersalesWorkspacePage = lazyRouteComponent(() => import("@/src/features/aftersales/pages/AftersalesWorkspacePage"), "AftersalesWorkspacePage");
-const FinanceDashboardPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceDashboardPage"), "FinanceDashboardPage");
-const FinanceAccountsPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceAccountsPage"), "FinanceAccountsPage");
-const FinanceLedgerPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceLedgerPage"), "FinanceLedgerPage");
-const FinanceIncomePage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceIncomePage"), "FinanceIncomePage");
-const FinanceExpensePage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceExpensePage"), "FinanceExpensePage");
-const FinanceTransfersPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceTransfersPage"), "FinanceTransfersPage");
-const FinanceProfitPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceProfitPage"), "FinanceProfitPage");
-const FinanceClosingPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceClosingPage"), "FinanceClosingPage");
-const FinanceReturnReconcilePage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceReturnReconcilePage"), "FinanceReturnReconcilePage");
-const FinanceCommissionPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceCommissionPage"), "FinanceCommissionPage");
-const FinanceCustomerFundsPage = lazyRouteComponent(() => import("@/src/features/finance/pages/FinanceCustomerFundsPage"), "FinanceCustomerFundsPage");
-const SettingsUsersPage = lazyRouteComponent(() => import("@/src/features/settings/pages/SettingsUsersPage"), "SettingsUsersPage");
-const SettingsLogsPage = lazyRouteComponent(() => import("@/src/features/settings/pages/SettingsLogsPage"), "SettingsLogsPage");
-const BackupPage = lazyRouteComponent(() => import("@/src/features/settings/pages/BackupPage"), "BackupPage");
-const DesignSystemPage = lazyRouteComponent(() => import("@/src/features/design-system/pages/DesignSystemPage"), "DesignSystemPage");
+const {
+  dashboard: DashboardPage,
+  inventory: InventoryListPage,
+  salesList: SalesListPage,
+  salesNew: NewSalesOrderPage,
+  salesDetail: SalesDetailPage,
+  salesEdit: SalesEditPage,
+  salesOutbound: SalesOutboundPage,
+  aiInsights: AiInsightsPage,
+  quotes: MarketQuotesPage,
+  products: ProductLibraryPage,
+  assembly: AssemblyWorkspacePage,
+  purchaseList: PurchaseListPage,
+  purchaseNew: NewPurchaseOrderPage,
+  purchaseDetail: PurchaseDetailPage,
+  purchaseEdit: PurchaseEditPage,
+  inspections: InspectionWorkspacePage,
+  purchaseReturns: PurchaseReturnListPage,
+  purchaseReturnsNew: NewPurchaseReturnPage,
+  salesReturns: SalesReturnListPage,
+  salesReturnsNew: NewSalesReturnPage,
+  crm: CrmWorkspacePage,
+  crmCustomerNew: NewCustomerLeadPage,
+  customers: CustomerDirectoryPage,
+  vendors: VendorDirectoryPage,
+  orderPool: OrderPoolPage,
+  aftersales: AftersalesWorkspacePage,
+  financeDashboard: FinanceDashboardPage,
+  financeAccounts: FinanceAccountsPage,
+  financeLedger: FinanceLedgerPage,
+  financeIncome: FinanceIncomePage,
+  financeExpense: FinanceExpensePage,
+  financeTransfers: FinanceTransfersPage,
+  financeProfit: FinanceProfitPage,
+  financeClosing: FinanceClosingPage,
+  financeReturnReconcile: FinanceReturnReconcilePage,
+  financeCommission: FinanceCommissionPage,
+  financeCustomerFunds: FinanceCustomerFundsPage,
+  settingsUsers: SettingsUsersPage,
+  settingsLogs: SettingsLogsPage,
+  backup: BackupPage,
+  designSystem: DesignSystemPage,
+} = pageComponents;
 
 function RootLayout() {
   return <AuthBoundary><PermissionBoundary><AppShell><Outlet /></AppShell></PermissionBoundary></AuthBoundary>;
@@ -67,6 +73,16 @@ const dashboardRoute = createRoute({getParentRoute: () => rootRoute, path: "/", 
 const inventoryRoute = createRoute({getParentRoute: () => rootRoute, path: "/inventory", component: InventoryListPage});
 const salesRoute = createRoute({getParentRoute: () => rootRoute, path: "/sales", component: SalesListPage});
 const salesNewRoute = createRoute({getParentRoute: () => rootRoute, path: "/sales/new", component: NewSalesOrderPage});
+function SalesDetailRouteComponent() {
+  const {salesId} = useParams({strict: false}) as {salesId: string};
+  return <SalesDetailPage salesId={salesId} />;
+}
+const salesDetailRoute = createRoute({getParentRoute: () => rootRoute, path: "/sales/$salesId", component: SalesDetailRouteComponent});
+function SalesEditRouteComponent() {
+  const {salesId} = useParams({strict: false}) as {salesId: string};
+  return <SalesEditPage salesId={salesId} />;
+}
+const salesEditRoute = createRoute({getParentRoute: () => rootRoute, path: "/sales/$salesId/edit", component: SalesEditRouteComponent});
 const aiInsightsRoute = createRoute({getParentRoute: () => rootRoute, path: "/ai-insights", component: AiInsightsPage});
 const quotesRoute = createRoute({getParentRoute: () => rootRoute, path: "/quotes", component: MarketQuotesPage});
 const productsRoute = createRoute({getParentRoute: () => rootRoute, path: "/products", component: ProductLibraryPage});
@@ -116,7 +132,7 @@ const designSystemRoute = createRoute({getParentRoute: () => rootRoute, path: "/
 const routeTree = rootRoute.addChildren([
   dashboardRoute, aiInsightsRoute, quotesRoute, inventoryRoute, productsRoute, assemblyRoute,
   purchaseRoute, purchaseNewRoute, purchaseDetailRoute, purchaseEditRoute, inspectionsRoute, purchaseReturnsRoute, purchaseReturnsNewRoute,
-  salesNewRoute, salesRoute, salesOutboundRoute, salesReturnsNewRoute, salesReturnsRoute,
+  salesNewRoute, salesRoute, salesDetailRoute, salesEditRoute, salesOutboundRoute, salesReturnsNewRoute, salesReturnsRoute,
   crmRoute, crmCustomersRoute, crmCustomerNewRoute, crmVendorsRoute, orderPoolRoute, aftersalesRoute,
   financeRoute, financeAccountsRoute, financeLedgerRoute, financeIncomeRoute, financeExpenseRoute, financeTransfersRoute,
   financeProfitRoute, financeClosingRoute, financeReturnReconcileRoute, financePurchaseCommissionRoute,
@@ -126,6 +142,7 @@ const routeTree = rootRoute.addChildren([
 ]);
 export const router = createRouter({
   routeTree,
+  stringifySearch: stringifyRouterSearch,
   // Unopened pages must not fetch route modules on hover, focus, or viewport
   // proximity. The keep-alive registry loads a page only when its Tab opens.
   defaultPreload: false,

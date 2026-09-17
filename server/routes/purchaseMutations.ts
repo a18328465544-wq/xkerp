@@ -7,6 +7,7 @@ import {parseHttpDto, purchaseInvoiceCreateDto, purchaseInvoiceUpdateDto} from "
 import {runStateCommand, type StateCommandTransactionHook} from "../stateCommand.ts";
 import {compactStateMerge, replacedLinkedPaymentDeletePatch, stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import {isInventoryLinkedToPurchase} from "../../src/utils/inventoryRelations.ts";
+import {isPersonalPurchaseSource} from "../../src/utils/purchaseSources.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {PaymentOutRecord, PurchaseInvoice, SystemUserAccount} from "../../src/types.ts";
 
@@ -62,7 +63,7 @@ function purchaseInvoiceCreateMerge(state: AppState, invoice: Pick<PurchaseInvoi
     ...settlementLedger.map((item) => item.accountId),
     ...financeLedger.map((item) => item.settlementAccountId),
   ].filter(Boolean));
-  const isPersonalSource = ["个人回收", "客户置换"].includes(invoice.sourceType);
+  const isPersonalSource = isPersonalPurchaseSource(invoice.sourceType);
   return compactStateMerge({
     purchaseInvoices: state.purchaseInvoices.filter((item) => item.id === invoice.id || item.invoiceNo === invoice.invoiceNo),
     inventory,

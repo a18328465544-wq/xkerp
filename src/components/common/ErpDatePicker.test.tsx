@@ -20,3 +20,8 @@ test("ErpDatePicker uses the shared compact height when requested", () => {
   assert.match(markup, /data-erp-component="date-picker"/);
   assert.match(markup, /data-density="compact"/);
 });
+
+test("ErpDatePicker preserves aria-invalid from a shared field wrapper", () => {
+  const markup = renderToStaticMarkup(<ErpDatePicker value="" onChange={() => undefined} aria-invalid="true" />);
+  assert.match(markup, /aria-invalid="true"/);
+});

@@ -21,6 +21,12 @@ test("tab switching preserves dirty forms while ordinary navigation remains guar
   assert.equal(shouldBlockWorkspaceNavigation(false, "close"), false);
 });
 
+test("a server-confirmed save bypasses only the stale dirty snapshot", () => {
+  assert.equal(shouldBlockWorkspaceNavigation(true, null, true), false);
+  assert.equal(shouldBlockWorkspaceNavigation(true, "close", true), false);
+  assert.equal(shouldBlockWorkspaceNavigation(true, null, false), true);
+});
+
 test("workspace drafts stay isolated by tab and clear when a tab is released", () => {
   const drafts = createWorkspaceDraftStore();
   const salesDraft = {values: {customerName: "客户 A"}};

@@ -10,6 +10,7 @@ import {stateMergeRecords} from "../statePatch.ts";
 import {scanFlowMerge} from "./inventoryMutations.ts";
 import type {AppState, createStoreActions, StoreActionContext} from "../store.ts";
 import {productPriceSyncMerge} from "../productStateMerges.ts";
+import {inventoryListQueryDto, inventoryScanFlowDto, openMarketQuoteQueryDto, openPriceSyncDto, parseHttpDto} from "../httpDto.ts";
 
 type OpenApiDependencies = {
   openApiRateLimiter: RequestHandler;
@@ -65,6 +66,14 @@ function openInventoryItem(card: CardInventory) {
   };
 }
 
+function paginateCollection<T>(items: T[], page: number, pageSize: number) {
+  const start = (page - 1) * pageSize;
+  return {
+    data: items.slice(start, start + pageSize),
+    meta: {page, pageSize, total: items.length},
+  };
+}
+
 const defaultQueryInventoryPage = queryInventoryPage;
 const defaultFindInventoryRecord = findInventoryRecord;
 const defaultFindInventoryRecordBySn = findInventoryRecordBySn;
@@ -78,18 +87,29 @@ export function registerOpenApiRoutes(app: Express, dependencies: OpenApiDepende
   openInventoryRouter.use(dependencies.openApiRateLimiter, dependencies.requireOpenApiToken);
 
   openInventoryRouter.get("/items", dependencies.asyncRoute(async (req, res) => {
+    const query = parseHttpDto(inventoryListQueryDto, req.query);
     const page = await queryInventory<CardInventory>({
       tenantId: dependencies.defaultTenantId,
       storeId: dependencies.defaultStoreId,
-      page: Number(req.query.page || 1),
-      pageSize: Number(req.query.pageSize || req.query.per_page || 20),
-      keyword: String(req.query.keyword || req.query.search || ""),
-      status: String(req.query.status || ""),
-      category: String(req.query.category || ""),
-      warehouseLocation: String(req.query.warehouseLocation || ""),
-      includeSold: String(req.query.includeSold || "") === "true",
-      sortKey: String(req.query.sortKey || ""),
-      sortDirection: req.query.sortDirection === "asc" ? "asc" : "desc",
+      page: query.page,
+      pageSize: query.pageSize ?? query.per_page ?? 20,
+      keyword: query.keyword || query.search,
+      status: query.status || "",
+      category: query.category || "",
+      brand: query.brand,
+      model: query.model,
+      condition: query.condition || "",
+      entryStart: query.entryStart,
+      entryEnd: query.entryEnd,
+      warehouseLocation: query.warehouseLocation,
+      includeSold: query.includeSold,
+      activeOnly: query.activeOnly,
+      risk: query.risk || undefined,
+      minStorageDays: query.minStorageDays,
+      maxStorageDays: query.maxStorageDays,
+      minProfitMargin: query.minProfitMargin,
+      sortKey: query.sortKey,
+      sortDirection: query.sortDirection,
     });
     res.json({data: page.data.map(openInventoryItem), meta: page.meta});
   }));
@@ -117,19 +137,36 @@ export function registerOpenApiRoutes(app: Express, dependencies: OpenApiDepende
   }));
 
   openInventoryRouter.get("/summary", dependencies.asyncRoute(async (req, res) => {
+    const query = parseHttpDto(inventoryListQueryDto, req.query);
     await dependencies.reloadStateCollections(["inventory"]);
-    const rows = dependencies.actions({role: "财务", actor: "OpenAPI"}).getInventorySummary(req.query as Record<string, string>);
-    res.json(dependencies.paginated(rows, req));
+    const rows = dependencies.actions({role: "财务", actor: "OpenAPI"}).getInventorySummary({
+      keyword: query.keyword || query.search,
+      status: query.status || undefined,
+      category: query.category || undefined,
+      brand: query.brand || undefined,
+      model: query.model || undefined,
+      condition: query.condition || undefined,
+      warehouseLocation: query.warehouseLocation || undefined,
+      entryStart: query.entryStart || undefined,
+      entryEnd: query.entryEnd || undefined,
+      risk: query.risk || undefined,
+      minStorageDays: query.minStorageDays,
+      maxStorageDays: query.maxStorageDays,
+      minProfitMargin: query.minProfitMargin,
+      activeOnly: query.activeOnly,
+      includeSold: query.includeSold,
+    });
+    res.json(paginateCollection(rows, query.page, query.pageSize ?? query.per_page ?? 20));
   }));
 
   const scan = (mode: "入库" | "出库" | "移库") => dependencies.asyncRoute(async (req, res) => {
     await dependencies.reloadStateCollections(["inventory", "products", "salesInvoices", "logs"]);
+    const command = parseHttpDto(inventoryScanFlowDto, {...(req.body && typeof req.body === "object" ? req.body : {}), mode});
     const result = dependencies.actions({role: "财务", actor: "OpenAPI"}).scanInventoryFlow({
-      ...req.body,
-      mode,
-      handler: req.body?.handler || "OpenAPI",
+      ...command,
+      handler: command.handler || "OpenAPI",
     });
-    const stateMerge = scanFlowMerge(dependencies.getState(), result, mode === "出库" ? req.body?.salesInvoiceId : undefined);
+    const stateMerge = scanFlowMerge(dependencies.getState(), result, mode === "出库" ? command.salesInvoiceId : undefined);
     await saveStateRecords(stateMergeRecords(stateMerge));
     res.json({data: result});
   });
@@ -144,17 +181,17 @@ export function registerOpenApiRoutes(app: Express, dependencies: OpenApiDepende
   openPricesRouter.post("/sync-est-sell", dependencies.asyncRoute(async (req, res) => {
     await dependencies.reloadStateCollections(["products", "inventory", "marketQuotes", "logs"]);
     const state = dependencies.getState();
-    const body = req.body || {};
+    const command = parseHttpDto(openPriceSyncDto, req.body);
     const beforeQuotes = new Map(
       state.marketQuotes
-        .filter((quote) => quote.productId === String(body.productId || "").trim())
+        .filter((quote) => quote.productId === command.productId)
         .map((quote) => [quote.id, snapshotMarketQuote(quote)] as const),
     );
     const result = dependencies.actions({role: "财务", actor: "OpenAPI"}).syncEstimatedSellPrice({
-      productId: String(body.productId || ""),
-      estSellPrice: Number(body.estSellPrice ?? body.suggestSellPrice ?? body.refSellPrice ?? body.todaySellPrice),
-      priceSource: body.priceSource || body.source,
-      remarks: body.remarks,
+      productId: command.productId,
+      estSellPrice: command.estSellPrice ?? command.suggestSellPrice ?? command.refSellPrice ?? command.todaySellPrice!,
+      priceSource: command.priceSource || command.source,
+      remarks: command.remarks,
     });
     const stateMerge = productPriceSyncMerge(state, result.productId);
     await saveStateRecords(stateMergeRecords(stateMerge));
@@ -165,8 +202,9 @@ export function registerOpenApiRoutes(app: Express, dependencies: OpenApiDepende
   openPricesRouter.get("/market-quotes", dependencies.asyncRoute(async (req, res) => {
     await dependencies.reloadStateCollections(["marketQuotes"]);
     const state = dependencies.getState();
-    const keyword = String(req.query.q || req.query.search || "").trim();
-    const brand = normalizeSearchText(req.query.brand);
+    const query = parseHttpDto(openMarketQuoteQueryDto, req.query);
+    const keyword = query.q || query.search;
+    const brand = normalizeSearchText(query.brand);
     const rows = state.marketQuotes
       .filter((quote) => {
         const matchSearch = matchesKeyword([quote.model, quote.productName, quote.brand], keyword);
@@ -188,7 +226,7 @@ export function registerOpenApiRoutes(app: Express, dependencies: OpenApiDepende
         updateTime: quote.updateTime || quote.date,
         history: quote.history || [],
       }));
-    res.json(dependencies.paginated(rows, req));
+    res.json(paginateCollection(rows, query.page, query.pageSize ?? query.per_page ?? 20));
   }));
 
   app.use("/api/open/prices", openPricesRouter);

@@ -3,6 +3,7 @@ import {getFinanceDashboard, listAccountTransfers} from "../financeDashboardRepo
 import {getCustomerFundsSnapshot} from "../customerFundsRepository.ts";
 import type {AppState} from "../store.ts";
 import type {createStoreActions} from "../store.ts";
+import {customerFundsQueryDto, financeAccountListQueryDto, financeDashboardQueryDto, financeSummaryQueryDto, financeTransferListQueryDto, parseHttpDto} from "../httpDto.ts";
 
 type FinanceRequest = Request & { authUser?: unknown; tenantId?: string; storeId?: string };
 
@@ -36,23 +37,27 @@ function dateRangeDays(startDate: string, endDate: string) {
 /** Finance read models are kept out of the composition root and expose only scoped projections. */
 export function registerFinanceReadModelRoutes(app: Express, dependencies: FinanceReadModelDependencies) {
   app.get("/api/gpu_erp/finance/settlement-accounts", dependencies.requireMenu("settlement_accounts"), (req, res) => {
+    parseHttpDto(financeAccountListQueryDto, req.query);
     res.json(dependencies.paginated(dependencies.state.settlementAccounts, req));
   });
 
   app.get("/api/gpu_erp/finance/account-summary", dependencies.requireMenu("finance_reports"), (req, res) => {
-    res.json({data: dependencies.actions(req).getAccountSummary(req.query as Record<string, string>)});
+    const query = parseHttpDto(financeSummaryQueryDto, req.query);
+    res.json({data: dependencies.actions(req).getAccountSummary(query)});
   });
 
   app.get("/api/gpu_erp/reports/employee-payment-summary", dependencies.requireMenu("finance_reports"), (req, res) => {
-    const summary = dependencies.actions(req).getAccountSummary(req.query as Record<string, string>).employeeSummary;
+    const query = parseHttpDto(financeSummaryQueryDto, req.query);
+    const summary = dependencies.actions(req).getAccountSummary(query).employeeSummary;
     res.json(dependencies.paginated(summary, req));
   });
 
   app.get("/api/finance/dashboard", dependencies.requireMenu("finance"), async (req: FinanceRequest, res, next) => {
     try {
       const today = dependencies.getStoreDate();
-      const startDate = String(req.query.startDate || dependencies.addDateDays(today, -6));
-      const endDate = String(req.query.endDate || today);
+      const query = parseHttpDto(financeDashboardQueryDto, req.query);
+      const startDate = query.startDate || dependencies.addDateDays(today, -6);
+      const endDate = query.endDate || today;
       if (![startDate, endDate].every(validDateKey) || startDate > endDate || dateRangeDays(startDate, endDate) > 366) {
         dependencies.sendValidationError(req, res, "财务总览日期范围无效或超过 366 天");
         return;
@@ -64,17 +69,19 @@ export function registerFinanceReadModelRoutes(app: Express, dependencies: Finan
 
   app.get("/api/gpu_erp/finance/account-transfers", dependencies.requireMenu("account_transfer"), async (req: FinanceRequest, res, next) => {
     try {
-      res.json(await listAccountTransfers({tenantId: req.tenantId, storeId: req.storeId}, {page: Number(req.query.page || 1), pageSize: Number(req.query.pageSize || 20), keyword: String(req.query.keyword || ""), accountId: String(req.query.accountId || "all"), handler: String(req.query.handler || ""), startDate: String(req.query.startDate || ""), endDate: String(req.query.endDate || "")}));
+      const query = parseHttpDto(financeTransferListQueryDto, req.query);
+      res.json(await listAccountTransfers({tenantId: req.tenantId, storeId: req.storeId}, {page: query.page, pageSize: query.pageSize, keyword: query.keyword, accountId: query.accountId || "all", handler: query.handler, startDate: query.startDate, endDate: query.endDate}));
     } catch (error) {next(error);}
   });
 
   app.get("/api/gpu_erp/finance/customer-funds", dependencies.requireMenu("customer_funds"), async (req: FinanceRequest, res, next) => {
     try {
       const today = dependencies.getStoreDate();
-      const startDate = String(req.query.startDate || dependencies.startOfMonth(today));
-      const endDate = String(req.query.endDate || today);
-      const trendStartDate = String(req.query.trendStartDate || dependencies.addDateDays(today, -6));
-      const trendEndDate = String(req.query.trendEndDate || today);
+      const query = parseHttpDto(customerFundsQueryDto, req.query);
+      const startDate = query.startDate || dependencies.startOfMonth(today);
+      const endDate = query.endDate || today;
+      const trendStartDate = query.trendStartDate || dependencies.addDateDays(today, -6);
+      const trendEndDate = query.trendEndDate || today;
       const dates = [startDate, endDate, trendStartDate, trendEndDate];
       if (dates.some((date) => !validDateKey(date)) || startDate > endDate || trendStartDate > trendEndDate) {
         dependencies.sendValidationError(req, res, "资金往来日期范围无效");

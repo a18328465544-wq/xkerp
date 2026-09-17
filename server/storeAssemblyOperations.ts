@@ -5,6 +5,7 @@ import type {
   CardStatus,
   ProductCategory,
 } from "../src/types.ts";
+import {isInventorySellableStatus} from "../src/utils/inventoryFilters.ts";
 import {isInventoryLinkedToAssembly} from "../src/utils/inventoryRelations.ts";
 import {ConflictError, NotFoundError, ValidationError} from "./errors.ts";
 
@@ -170,7 +171,7 @@ export function createAssemblyOperationHelpers(dependencies: AssemblyOperationsD
     const sourceParts = beforeParts.map((part) => {
       const sourcePart = state.inventory.find((item) => item.sn.toLowerCase() === part.sn.toLowerCase());
       if (!sourcePart) throw new NotFoundError(`未找到来源配件SN: ${part.sn}`);
-      if (!["已入库", "已上架"].includes(sourcePart.status)) {
+      if (!isInventorySellableStatus(sourcePart.status)) {
         throw new ConflictError(`来源配件不可组装: ${part.sn} 当前状态为 ${sourcePart.status}`);
       }
       return sourcePart;

@@ -1,5 +1,7 @@
 import type {ProductCategory} from "@/src/types/core";
 import type {InspectionCandidate, InspectionCreateResult, InspectionFormValues, InspectionHistoryItem, InspectionResultStatus, InspectionWorkspace} from "@/src/types/inspection";
+import {inventoryInspectionPendingStatusValues} from "@/src/types/inventory";
+import {isInventoryInactiveStatus} from "@/src/utils/inventoryFilters";
 import {storeDateDiffDays} from "@/src/utils/storeTime";
 import type {InspectionCreateRequestDto, InspectionUpdateRequestDto} from "../dto/inspection.dto";
 
@@ -139,13 +141,12 @@ export function adaptInspectionWorkspace(response: {data?: unknown; meta?: unkno
   const inventory = collection(state, "inventory");
   const inspections = collection(state, "inspections");
   const inspectedInventoryIds = new Set(inspections.map((item) => text(item.inventoryId)).filter(Boolean));
-  const terminalStatuses = new Set(["已售出", "已报废", "已退货"]);
   const candidates = inventory
     .filter((item) => {
       const category = categoryValue(item.category);
       const status = text(item.status);
-      if (category === "显卡") return status === "待检测" || status === "检测中";
-      return !inspectedInventoryIds.has(text(item.id)) && !terminalStatuses.has(status);
+      if (category === "显卡") return inventoryInspectionPendingStatusValues.includes(status as (typeof inventoryInspectionPendingStatusValues)[number]);
+      return !inspectedInventoryIds.has(text(item.id)) && !isInventoryInactiveStatus(status);
     })
     .map(adaptCandidate)
     .filter((item) => Boolean(item.id));

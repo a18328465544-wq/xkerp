@@ -1,6 +1,8 @@
 import {z} from "zod";
+import {assemblyOperationTypeValues} from "@/src/types/assembly";
+import {productCategoryValues} from "@/src/types/core";
 
-const categories = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"] as const;
+const categories = productCategoryValues;
 
 const partSchema = z.object({
   productId: z.string(),
@@ -14,7 +16,7 @@ const partSchema = z.object({
 });
 
 export const assemblyFormSchema = z.object({
-  type: z.enum(["拆卸", "组装"]),
+  type: z.enum(assemblyOperationTypeValues),
   handler: z.string().trim().min(1, "缺少经办人"),
   beforeSn: z.string(),
   beforeParts: z.array(partSchema),
@@ -36,4 +38,3 @@ export const assemblyFormSchema = z.object({
     if (sn) seen.add(sn);
   });
 });
-

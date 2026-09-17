@@ -1,6 +1,5 @@
 import type {
   CardInventory,
-  PaymentInRecord,
   PaymentOutRecord,
   PurchaseInvoice,
   PurchaseItem,
@@ -10,6 +9,7 @@ import {ConflictError, NotFoundError} from "./errors.ts";
 import {findSalesReturnLine, type ReturnLineMatch} from "./storeReturnPlanning.ts";
 import {findExistingReturnFinancialArtifacts, inspectReturnFinancialOrder} from "./returnFinanceInvariants.ts";
 import {hasUniqueLegacyName} from "./storePartnerIdentity.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 import type {ReturnOperationsDependencies} from "./storeReturnTypes.ts";
 
 export type ReturnCompletionDependencies = Pick<
@@ -33,7 +33,6 @@ export type ReturnCompletionDependencies = Pick<
     order: Pick<ReturnOrder, "sourcePurchaseItemId" | "sourcePurchaseItemIndex" | "sourceInventoryId" | "sn" | "amount">,
     sourceCard?: CardInventory,
   ) => ReturnLineMatch<PurchaseItem> | undefined;
-  returnRefundPayments: (order: ReturnOrder) => PaymentInRecord[] | PaymentOutRecord[];
 };
 
 export function createReturnCompletionHelpers(dependencies: ReturnCompletionDependencies) {
@@ -52,7 +51,6 @@ export function createReturnCompletionHelpers(dependencies: ReturnCompletionDepe
     addLog,
     findReturnInventory,
     findPurchaseReturnLine,
-    returnRefundPayments,
   } = dependencies;
 
   const reverseSalesReturnBatch = (order: ReturnOrder) => {
@@ -260,7 +258,7 @@ export function createReturnCompletionHelpers(dependencies: ReturnCompletionDepe
 
     const returnedCost = matches.reduce((sum, match) => sum + Number(match.line.item.buyPrice || 0), 0);
     const returnedCount = matches.length;
-    const sourceIsPersonal = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    const sourceIsPersonal = isPersonalPurchaseSource(invoice.sourceType);
     if (sourceIsPersonal) {
       const linkedCustomerId = invoice.sourcePartnerId;
       const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.supplierName);
@@ -480,7 +478,7 @@ export function createReturnCompletionHelpers(dependencies: ReturnCompletionDepe
         }
       : item);
 
-    const sourceIsPersonal = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    const sourceIsPersonal = isPersonalPurchaseSource(invoice.sourceType);
     if (sourceIsPersonal) {
       const linkedCustomerId = invoice.sourcePartnerId;
       const legacyCustomerNameIsUnique = hasUniqueLegacyName(state.customers, invoice.supplierName);
@@ -552,7 +550,11 @@ export function createReturnCompletionHelpers(dependencies: ReturnCompletionDepe
     // Reverse operations touch several collections. Keep the in-memory aggregate
     // atomic as well as the PostgreSQL request: a failed invariant must not leave
     // stock or the source invoice half-reversed for a later retry.
-    const before = structuredClone(state);
+    // Keep the rollback snapshot cloneable even if a legacy caller passes the
+    // request-aware state Proxy directly. The route now resolves concrete
+    // tenant state before constructing actions; spreading here is a defensive
+    // boundary for direct/unit callers as well.
+    const before = structuredClone({...state});
     try {
       const result = existing.type === "销售退货" ? reverseSalesReturn(existing) : reversePurchaseReturn(existing);
       const completed: ReturnOrder = {

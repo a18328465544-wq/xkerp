@@ -1,9 +1,10 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
-import {AlertTriangle, Camera, CheckCircle2, Database, PackageCheck, RefreshCw, ScanLine, Search, ShieldAlert, Truck} from "lucide-react";
+import {AlertTriangle, Camera, CheckCircle2, Database, PackageCheck, RefreshCw, ScanLine, ShieldAlert, Truck} from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from "react";
-import {toast} from "sonner";
-import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
+import {notify} from "@/src/utils/notification";
+import {Button, Card, Input, Textarea} from "@/src/components/ui";
 import {DashboardSection, ErpDataTable, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, createIdempotencyKey, queryKeys, refreshErpAfterDocument, salesApi} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
@@ -12,7 +13,7 @@ import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
 import type {SalesOutboundInvoice, SalesOutboundPreflightResult} from "@/src/types/sales";
 import {createSalesOutboundColumns} from "../sales.outbound.columns";
-import {countManualOutboundAvailability, verifySalesOutbound} from "../sales.outbound";
+import {clampOutboundPage, countManualOutboundAvailability, resolveOutboundInvoice, verifySalesOutbound} from "../sales.outbound";
 import {SalesOutboundCameraDialog} from "../components/SalesOutboundCameraDialog";
 
 const outboundPageSize = 20;
@@ -50,9 +51,23 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
   const scanInputRef = useRef<HTMLInputElement>(null);
   const outboundIdempotencyKeyRef = useRef(createIdempotencyKey("sales-outbound"));
   const invoices = query.data?.invoices || [];
-  const selectedInvoice = useMemo(() => invoices.find((invoice) => invoice.id === invoiceId || invoice.invoiceNo === invoiceId) || invoices[0] || null, [invoiceId, invoices]);
+  const selectedInvoice = useMemo(() => resolveOutboundInvoice(invoices, invoiceId), [invoiceId, invoices]);
   const verification = useMemo(() => verifySalesOutbound(selectedInvoice, query.data?.inventory || [], scanCodes), [query.data?.inventory, scanCodes, selectedInvoice]);
   const manualAvailability = useMemo(() => countManualOutboundAvailability(selectedInvoice, query.data?.inventory || []), [query.data?.inventory, selectedInvoice]);
+
+  useEffect(() => {
+    // A confirmed order can shrink the pending pool while the operator is on
+    // a later page. Reconcile the URL after the fresh response arrives instead
+    // of leaving the table on an out-of-range empty page. Keep a stale invoice
+    // reference unresolved until the operator explicitly chooses a row; if we
+    // cleared it here, the no-reference default would silently select another
+    // invoice on the next render.
+    if (query.isPending || query.isFetching || !query.data?.meta) return;
+    const nextPage = clampOutboundPage(page, query.data.meta.totalPages);
+    if (nextPage === page) return;
+    commitOutboundState({...outboundState, page: nextPage});
+  }, [commitOutboundState, outboundState, page, query.data?.meta, query.isFetching, query.isPending]);
+
   const selectInvoice = useCallback((invoice: SalesOutboundInvoice) => {
     setInvoiceId(invoice.id);
     setScanCodes("");
@@ -78,7 +93,7 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
     return salesApi.confirmOutbound(selectedInvoice.id, values, undefined, outboundIdempotencyKeyRef.current);
   }, onSuccess: async (result) => {
     outboundIdempotencyKeyRef.current = createIdempotencyKey("sales-outbound");
-    toast.success(`${result.invoiceNo} 已完成销售出库`);
+    notify.success(`${result.invoiceNo} 已完成销售出库`);
     setScanCodes(""); setScanInput(""); setRemarks(""); setServerPreflight(null); setInvoiceId(null);
     await refreshErpAfterDocument(queryClient);
   }, onError: (error) => {
@@ -117,17 +132,17 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
     </MetricsRegion>
     <MainRegion variant="60-40">
       <MainRegion.Primary>
-        <DashboardSection title="待出库销售单" actions={<div className="relative w-72 max-w-full"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="单号、客户、商品或 SN" aria-label="搜索待出库销售单" /></div>}>
-          <ErpDataTable columns={columns} data={invoices} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="待出库数据加载失败" emptyTitle="暂无待出库销售单" emptyDescription={keyword ? "当前搜索没有匹配的待出库销售单。" : "销售出库池已清空。"} onRetry={() => void query.refetch()} onRowClick={selectInvoice} page={query.data?.meta?.page || page} pageSize={query.data?.meta?.pageSize || outboundPageSize} total={query.data?.meta?.total ?? invoices.length} onPageChange={(nextPage) => commitOutboundState({...outboundState, page: nextPage, invoiceId: null})} density="compact" stickyHeader />
+        <DashboardSection title="待出库销售单" actions={<ErpSearchInput className="w-72 max-w-full" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="单号、客户、商品或 SN" aria-label="搜索待出库销售单" />}>
+          <ErpDataTable ariaLabel="待出库销售单" columns={columns} data={invoices} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="待出库数据加载失败" emptyTitle="暂无待出库销售单" emptyDescription={keyword ? "当前搜索没有匹配的待出库销售单。" : "销售出库池已清空。"} onRetry={() => void query.refetch()} onRowClick={selectInvoice} page={query.data?.meta?.page || page} pageSize={query.data?.meta?.pageSize || outboundPageSize} total={query.data?.meta?.total ?? invoices.length} onPageChange={(nextPage) => commitOutboundState({...outboundState, page: nextPage, invoiceId: null})} density="compact" stickyHeader />
         </DashboardSection>
       </MainRegion.Primary>
       <MainRegion.Secondary>
         <DashboardSection title="出库核验" density="default" description="扫码模式必须完成全部实物核验；手动模式必须有权限且填写原因。">
           {!selectedInvoice ? <ErpEmptyState title="选择待出库销售单" description="选择左侧销售单后开始核验库存 ID 或 SN。" /> : <div className="space-y-4">
-            <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-xs font-bold text-[var(--erp-color-primary)]">{selectedInvoice.invoiceNo}</span><ErpStatusBadge label={`${verification.verifiedCount}/${verification.expectedCount} 已核验`} tone={verification.ready ? "success" : "warning"} /></div><p className="mt-2 font-semibold">{selectedInvoice.customerName}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{selectedInvoice.lines.length} 件 · {formatCurrency(selectedInvoice.totalAmount)}</p></div>
-            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">{verification.rows.map((row) => <div key={row.lineId} className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{row.productName}</p><p className="mt-1 font-mono text-xs text-[var(--erp-color-text-muted)]">{row.matchedInventory ? `${row.matchedInventory.id} · ${row.matchedInventory.serialNumber || "无 SN"}` : row.reason}</p></div><ErpStatusBadge label={row.verified ? "已核验" : "待扫码"} tone={row.verified ? "success" : "neutral"} /></div></div>)}</div>
+            <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><div className="flex items-center justify-between gap-2"><span className="erp-data-number text-xs font-semibold text-[var(--erp-color-primary)]">{selectedInvoice.invoiceNo}</span><ErpStatusBadge label={`${verification.verifiedCount}/${verification.expectedCount} 已核验`} tone={verification.ready ? "success" : "warning"} /></div><p className="mt-2 font-semibold">{selectedInvoice.customerName}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{selectedInvoice.lines.length} 件 · {formatCurrency(selectedInvoice.totalAmount)}</p></div>
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">{verification.rows.map((row) => <div key={row.lineId} className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{row.productName}</p><p className="mt-1 erp-data-number text-xs text-[var(--erp-color-text-muted)]">{row.matchedInventory ? `${row.matchedInventory.id} · ${row.matchedInventory.serialNumber || "无 SN"}` : row.reason}</p></div><ErpStatusBadge label={row.verified ? "已核验" : "待扫码"} tone={row.verified ? "success" : "neutral"} /></div></div>)}</div>
             <div><label className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">扫码枪输入</label><div className="mt-2 flex gap-2"><Input ref={scanInputRef} value={scanInput} onChange={(event) => setScanInput(event.target.value)} onKeyDown={(event) => {if (event.key === "Enter") {event.preventDefault(); appendCode(scanInput);}}} placeholder="扫描后按回车追加" aria-label="销售出库扫码枪输入" autoFocus /><Button type="button" size="icon" variant="secondary" onClick={() => appendCode(scanInput)} aria-label="追加扫码内容"><ScanLine className="h-4 w-4" /></Button><Button type="button" size="icon" variant="secondary" onClick={() => setCameraOpen(true)} aria-label="打开摄像头扫码"><Camera className="h-4 w-4" /></Button></div></div>
-            <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">已扫描库存 ID / SN<Textarea className="mt-2 min-h-24 font-mono" value={scanCodes} onChange={(event) => setScanCodes(event.target.value)} placeholder="支持逐行、空格或逗号分隔" /></label>
+            <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">已扫描库存 ID / SN<Textarea className="mt-2 min-h-24 erp-data-number" value={scanCodes} onChange={(event) => setScanCodes(event.target.value)} placeholder="支持逐行、空格或逗号分隔" /></label>
             {(verification.unknownCodes.length > 0 || verification.duplicateCodes.length > 0) && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]"><p className="font-semibold">核验提示</p>{verification.unknownCodes.length > 0 && <p className="mt-1">未匹配：{verification.unknownCodes.join("、")}</p>}{verification.duplicateCodes.length > 0 && <p className="mt-1">重复扫码：{verification.duplicateCodes.join("、")}</p>}</div>}
             {serverPreflight && !serverPreflight.ready && <div className="space-y-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]"><p className="font-semibold">服务器权威校验未通过</p>{serverPreflight.rows.filter((row) => !row.matched).map((row) => <p key={row.lineId}>{row.productName}：{row.reason}</p>)}{serverPreflight.unknownCodes.length > 0 && <p>无效扫码：{serverPreflight.unknownCodes.join("、")}</p>}{serverPreflight.duplicateCodes.length > 0 && <p>重复扫码：{serverPreflight.duplicateCodes.join("、")}</p>}</div>}
             <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">出库经办人<Input className="mt-2" value={session.user.displayName} disabled /></label>
@@ -135,7 +150,9 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
             {!manualAvailability.ready && <div className="flex gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]"><AlertTriangle className="h-4 w-4 shrink-0" /><span>当前可售库存只能匹配 {manualAvailability.available}/{manualAvailability.expected} 件，最终提交会由服务端再次校验。</span></div>}
             {errorMessage && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] p-3 text-xs text-[var(--erp-color-danger)]">{errorMessage}</p>}
             <div className="grid gap-2 sm:grid-cols-2"><Button type="button" variant="primary" disabled={!verification.ready || mutation.isPending} onClick={() => mutation.mutate({manual: false})}>{mutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}扫码确认出库</Button><Button type="button" variant="secondary" disabled={!session.permissions.canManualOutbound || !remarks.trim() || mutation.isPending} onClick={() => mutation.mutate({manual: true})}><ShieldAlert className="h-4 w-4" />手动确认</Button></div>
-            {!session.permissions.canManualOutbound && <p className="text-center text-xs text-[var(--erp-color-text-muted)]">当前账号未获手动出库授权，请扫码核验或联系管理员。</p>}
+            {!session.permissions.canManualOutbound
+              ? <p className="text-center text-xs text-[var(--erp-color-text-muted)]">当前账号未获手动出库授权，请扫码核验或联系管理员。</p>
+              : !remarks.trim() && <p className="text-center text-xs text-[var(--erp-color-text-muted)]">填写出库备注 / 手动原因后即可直接手动确认。</p>}
           </div>}
         </DashboardSection>
       </MainRegion.Secondary>

@@ -2,7 +2,7 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import type {UseFormSetValue} from "react-hook-form";
 import {mediaApi} from "@/src/services/api";
 import type {PurchaseFormValues} from "@/src/types/purchase";
-import {compressImageFile, IMAGE_ACCEPTED_MIME_TYPES, IMAGE_MAX_COUNT, validateImageFile} from "@/src/lib/media/image-compression";
+import {compressImageFile, IMAGE_MAX_COUNT, validateImageFile} from "@/src/lib/media/image-compression";
 import {createPurchaseDraftId, hasBlockingPurchaseMedia, PURCHASE_MEDIA_ENTITY_TYPE, PURCHASE_MEDIA_RELATION_ROLE, purchaseMediaFormUrls} from "../utils/purchase-media";
 
 export type PurchaseMediaStatus = "local" | "compressing" | "uploading" | "uploaded" | "failed";

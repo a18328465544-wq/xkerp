@@ -1,7 +1,8 @@
 import {z} from "zod";
+import {vendorTypes} from "@/src/types/vendor";
 
 export const customerChannelValues = ["到店", "闲鱼", "微信私域", "小红书", "抖音"] as const;
-export const vendorTypeValues = ["上游供应商", "下游采购方", "核心采购方"] as const;
+export const vendorTypeValues = vendorTypes;
 
 const requiredText = (label: string, max: number) => z.string().trim().min(1, `${label}不能为空`).max(max, `${label}最多 ${max} 字`);
 const optionalText = (label: string, max: number) => z.string().trim().max(max, `${label}最多 ${max} 字`);

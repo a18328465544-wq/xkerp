@@ -1,3 +1,4 @@
+import {productCategoryValues} from "@/src/types/core";
 import type {ProductCategory} from "@/src/types/core";
 import type {ProductTemplateFormValues} from "@/src/types/product";
 import type {PurchaseProductOption, PurchaseSourceOption} from "@/src/types/purchase";
@@ -41,7 +42,7 @@ function optionalNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-const categories: readonly ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
+const categories = productCategoryValues;
 
 function category(value: unknown): ProductCategory {
   return categories.includes(value as ProductCategory) ? value as ProductCategory : "其他配件";

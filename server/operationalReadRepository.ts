@@ -1,9 +1,14 @@
 import type {CardInventory, InspectionRecord, ProductTemplate} from "../src/types.ts";
 import type {AssemblyOperation} from "../src/types/assembly.ts";
+import {inventoryAftersalesCandidateStatusValues, inventoryInspectionPendingStatusValues, inventoryReturnBlockedStatusValues, inventorySellableStatusValues} from "../src/types/inventory.ts";
 import {withDatabaseTransaction} from "./db.ts";
 
 type Scope = {tenantId?: string; storeId?: string};
 type FinancialVisibility = {showCost: boolean; showProfit: boolean};
+const inventorySellableStatusSql = inventorySellableStatusValues.map((status) => `'${status}'`).join(", ");
+const inventoryInspectionPendingStatusSql = inventoryInspectionPendingStatusValues.map((status) => `'${status}'`).join(", ");
+const inventoryInspectionBlockedStatusSql = inventoryReturnBlockedStatusValues.map((status) => `'${status}'`).join(", ");
+const inventoryAftersalesCandidateStatusSql = inventoryAftersalesCandidateStatusValues.map((status) => `'${status}'`).join(", ");
 
 function scoped(scope: Scope, alias = "") {
   const prefix = alias ? `${alias}.` : "";
@@ -51,7 +56,7 @@ function redactAssembly(operation: AssemblyOperation, visibility: FinancialVisib
 export async function getInspectionWorkspace(scope: Scope, visibility: FinancialVisibility) {
   return withDatabaseTransaction(async (client) => {
     const candidateScope = scoped(scope, "i");
-    const candidates = await client.query<{id: string; data: CardInventory}>(`SELECT i.id, i.data FROM gpu_inventory i WHERE ${candidateScope.clauses.length ? `${candidateScope.clauses.join(" AND ")} AND` : ""} ((COALESCE(i.data->>'category','显卡') = '显卡' AND COALESCE(i.data->>'status','') IN ('待检测','检测中')) OR (COALESCE(i.data->>'category','显卡') <> '显卡' AND COALESCE(i.data->>'status','') NOT IN ('已售出','已报废','已退货') AND NOT EXISTS (SELECT 1 FROM gpu_inspections x WHERE x.tenant_id = i.tenant_id AND x.store_id = i.store_id AND x.data->>'inventoryId' = i.id))) ORDER BY COALESCE(i.data->>'entryTime','') ASC, i.id ASC LIMIT 300`, candidateScope.values);
+    const candidates = await client.query<{id: string; data: CardInventory}>(`SELECT i.id, i.data FROM gpu_inventory i WHERE ${candidateScope.clauses.length ? `${candidateScope.clauses.join(" AND ")} AND` : ""} ((COALESCE(i.data->>'category','显卡') = '显卡' AND COALESCE(i.data->>'status','') IN (${inventoryInspectionPendingStatusSql})) OR (COALESCE(i.data->>'category','显卡') <> '显卡' AND COALESCE(i.data->>'status','') NOT IN (${inventoryInspectionBlockedStatusSql}) AND NOT EXISTS (SELECT 1 FROM gpu_inspections x WHERE x.tenant_id = i.tenant_id AND x.store_id = i.store_id AND x.data->>'inventoryId' = i.id))) ORDER BY COALESCE(i.data->>'entryTime','') ASC, i.id ASC LIMIT 300`, candidateScope.values);
 
     const historyScope = scoped(scope, "x");
     const history = await client.query<{id: string; data: InspectionRecord}>(`SELECT x.id, x.data FROM gpu_inspections x ${historyScope.clauses.length ? `WHERE ${historyScope.clauses.join(" AND ")}` : ""} ORDER BY COALESCE(x.data->>'inspectTime','') DESC, x.id DESC LIMIT 300`, historyScope.values);
@@ -86,7 +91,7 @@ export async function listAssemblyOperations(scope: Scope, filters: {page?: numb
 export async function getAssemblyReference(scope: Scope, visibility: FinancialVisibility, keyword = "") {
   return withDatabaseTransaction(async (client) => {
     const inventoryScope = scoped(scope);
-    inventoryScope.clauses.push(`COALESCE(data->>'sn','') <> ''`, `COALESCE(data->>'status','') IN ('已入库','已上架')`);
+    inventoryScope.clauses.push(`COALESCE(data->>'sn','') <> ''`, `COALESCE(data->>'status','') IN (${inventorySellableStatusSql})`);
     if (keyword.trim()) {inventoryScope.values.push(`%${keyword.trim()}%`); inventoryScope.clauses.push(`CONCAT_WS(' ', id, data->>'sn', data->>'productName', data->>'brand', data->>'model') ILIKE $${inventoryScope.values.length}`);}
     const inventory = await client.query<{id: string; data: CardInventory}>(`SELECT id, data FROM gpu_inventory WHERE ${inventoryScope.clauses.join(" AND ")} ORDER BY COALESCE(data->>'entryTime','') DESC, id LIMIT 200`, inventoryScope.values);
     const productScope = scoped(scope);
@@ -124,7 +129,7 @@ export async function getAftersalesWorkspace(scope: Scope) {
     const claimScope = scoped(scope);
     const claims = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_aftersales ${claimScope.clauses.length ? `WHERE ${claimScope.clauses.join(" AND ")}` : ""} ORDER BY COALESCE(data->>'createTime','') DESC, id DESC LIMIT 500`, claimScope.values);
     const inventoryScope = scoped(scope, "i");
-    const inventory = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT i.id, i.data FROM gpu_inventory i WHERE ${inventoryScope.clauses.length ? `${inventoryScope.clauses.join(" AND ")} AND` : ""} COALESCE(i.data->>'status','') IN ('已售出','售后中') ORDER BY COALESCE(i.data->>'soldAt','') DESC, i.id DESC LIMIT 500`, inventoryScope.values);
+    const inventory = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT i.id, i.data FROM gpu_inventory i WHERE ${inventoryScope.clauses.length ? `${inventoryScope.clauses.join(" AND ")} AND` : ""} COALESCE(i.data->>'status','') IN (${inventoryAftersalesCandidateStatusSql}) ORDER BY COALESCE(i.data->>'soldAt','') DESC, i.id DESC LIMIT 500`, inventoryScope.values);
     const saleIds = Array.from(new Set(inventory.rows.map((row) => String(row.data.salesInvoiceId || "")).filter(Boolean)));
     const invoices: Array<{id: string; data: Record<string, unknown>}> = [];
     if (saleIds.length) {

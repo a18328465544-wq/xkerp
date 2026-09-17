@@ -1,6 +1,19 @@
 export const customerLevels = ["S级", "A级", "B级", "C级", "D级", "R级"] as const;
 export type CustomerLevel = typeof customerLevels[number];
 
+export const customerTypeValues = [
+  "个人买家客户",
+  "个人卖家客户",
+  "回收客户",
+  "购买客户",
+  "优质同行",
+  "批发同行",
+  "散客玩家",
+  "售后敏感户",
+  "老主顾",
+] as const;
+export type CustomerType = typeof customerTypeValues[number];
+
 /**
  * Stable option contract for the shared customer / partner picker.
  *
@@ -9,7 +22,8 @@ export type CustomerLevel = typeof customerLevels[number];
  * contract here prevents each feature from creating a visually identical,
  * incompatible selector.
  */
-export type CustomerPartnerType = "customer" | "vendor";
+export const customerPartnerTypes = ["customer", "vendor"] as const;
+export type CustomerPartnerType = (typeof customerPartnerTypes)[number];
 
 export interface CustomerPickerOption {
   id: string;

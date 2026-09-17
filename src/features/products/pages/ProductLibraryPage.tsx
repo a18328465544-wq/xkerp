@@ -1,10 +1,11 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import type {OnChangeFn, SortingState} from "@tanstack/react-table";
-import {Boxes, Download, Filter, Layers3, PackageCheck, Plus, RefreshCw, Search, ShieldAlert, Upload} from "lucide-react";
+import {Boxes, Download, Filter, Layers3, PackageCheck, Plus, RefreshCw, ShieldAlert, Upload} from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
-import {toast} from "sonner";
-import {Button, Card, CardContent, Dialog, Input, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, ErpStatusBadge, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
+import {notify} from "@/src/utils/notification";
+import {Button, Card, Select} from "@/src/components/ui";
+import {DashboardSection, ErpConfirmDialog, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, productsApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -20,6 +21,10 @@ import {parseProductImportCsv, productCsv, productImportHeaders, type ProductImp
 
 function useProductUrlState() {
   return useUrlSearchState({defaultValue: defaultProductFilters, parse: parseProductFilters, serialize: productFiltersToSearch});
+}
+
+function toProductLedgerSubject(product: ProductLibraryItem): ProductLedgerSubject {
+  return {key: product.id, productName: product.name, category: product.category, brand: product.brand, model: product.model, version: product.version, vram: product.vram, currentStock: product.currentStock, imageUrl: product.imageUrls[0]};
 }
 
 export function ProductLibraryPage() {
@@ -47,6 +52,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const productLedger = useProductLedger({open: Boolean(ledgerSubject), productSkuId: ledgerSubject?.key || "", permissions: session.permissions});
   const navigate = useNavigate();
   const products = query.data?.products || [];
+  const ledgerSubjects = useMemo(() => products.map(toProductLedgerSubject), [products]);
   const fullPriceAccess = session.permissions.showCost && session.permissions.showProfit;
 
   const total = query.data?.meta?.total ?? products.length;
@@ -58,19 +64,19 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const invalidate = () => invalidateErpDomains(queryClient, ["products", "state"]);
   const handleMutationError = (error: Error) => {
     if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;}
-    toast.error(error.message);
+    notify.error(error.message);
   };
   const saveMutation = useMutation({
     mutationFn: ({values, product}: {values: ProductTemplateFormValues; product: ProductLibraryItem | null}) => product ? productsApi.update(product.id, values, session.permissions) : productsApi.create(values, session.permissions),
-    onSuccess: async (product) => {toast.success(`${product.name} 已保存`); setDialogOpen(false); setEditing(null); await invalidate();},
+    onSuccess: async (product) => {notify.success(`${product.name} 已保存`); setDialogOpen(false); setEditing(null); await invalidate();},
     onError: handleMutationError,
   });
-  const deleteMutation = useMutation({mutationFn: (id: string) => productsApi.remove(id), onSuccess: async () => {toast.success("商品模板已删除"); setConfirmState(null); await invalidate();}, onError: handleMutationError});
-  const importMutation = useMutation({mutationFn: (rows: ProductImportRow[]) => productsApi.importTemplates(rows), onSuccess: async (count) => {toast.success(`已导入 ${count} 行商品模板`); setConfirmState(null); onFiltersChange(defaultProductFilters); await invalidate();}, onError: handleMutationError});
+  const deleteMutation = useMutation({mutationFn: (id: string) => productsApi.remove(id), onSuccess: async () => {notify.success("商品模板已删除"); setConfirmState(null); await invalidate();}, onError: handleMutationError});
+  const importMutation = useMutation({mutationFn: (rows: ProductImportRow[]) => productsApi.importTemplates(rows), onSuccess: async (count) => {notify.success(`已导入 ${count} 行商品模板`); setConfirmState(null); onFiltersChange(defaultProductFilters); await invalidate();}, onError: handleMutationError});
 
   const openCreate = () => {setEditing(null); setDialogOpen(true); saveMutation.reset();};
   const openEdit = (product: ProductLibraryItem) => {if (!fullPriceAccess) return; setEditing(product); setDialogOpen(true); saveMutation.reset();};
-  const openLedger = (product: ProductLibraryItem) => setLedgerSubject({key: product.id, productName: product.name, category: product.category, brand: product.brand, model: product.model, version: product.version, vram: product.vram, currentStock: product.currentStock, imageUrl: product.imageUrls[0]});
+  const openLedger = (product: ProductLibraryItem) => setLedgerSubject(toProductLedgerSubject(product));
   const openProductLedgerDocument = (row: ProductLedgerRow) => {
     setLedgerSubject(null);
     if (row.documentType === "采购入库") return void navigate({to: "/purchase", search: {keyword: row.documentNo}});
@@ -83,9 +89,9 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const columns = useMemo(() => createProductColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canEdit: fullPriceAccess, canDelete: session.permissions.canDelete, onEdit: openEdit, onDelete: (product) => setConfirmState({kind: "delete", product}), onOpenLedger: canViewLedger ? openLedger : undefined}), [canViewLedger, fullPriceAccess, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
 
   const onImportFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {toast.error("商品库仅支持 CSV；请先在 Excel/WPS 中另存为 CSV。"); return;}
+    if (!file.name.toLowerCase().endsWith(".csv")) {notify.error("商品库仅支持 CSV；请先在 Excel/WPS 中另存为 CSV。"); return;}
     const rows = parseProductImportCsv(await file.text());
-    if (!rows.length) {toast.error("没有识别到有效商品；请检查表头以及商品名称、型号、品牌列。"); return;}
+    if (!rows.length) {notify.error("没有识别到有效商品；请检查表头以及商品名称、型号、品牌列。"); return;}
     const ids = new Set(products.map((item) => item.id));
     const overwrite = new Set(rows.map((item) => item.id).filter((id): id is string => Boolean(id && ids.has(id)))).size;
     if (overwrite) setConfirmState({kind: "import", rows, overwrite}); else importMutation.mutate(rows);
@@ -115,18 +121,18 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
       <MetricCard label="当前筛选" value={`${total} 款`} detail={activeFilters ? `${activeFilters} 项筛选生效` : "全部商品模板"} icon={<Filter className="h-4 w-4" />} tone={activeFilters ? "warning" : "neutral"} />
     </MetricsRegion>
     <ErpPageToolbar><ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultProductFilters)}>重置</Button><Button type="button" size="sm" variant="secondary" onClick={downloadTemplate}><Download className="h-4 w-4" />导入模板</Button><Button type="button" size="sm" variant="secondary" onClick={() => importRef.current?.click()} disabled={importMutation.isPending}><Upload className="h-4 w-4" />CSV 导入</Button><Button type="button" size="sm" variant="secondary" onClick={exportProducts}><Download className="h-4 w-4" />导出</Button></>}>
-      <div className="relative min-w-64 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="商品名称、型号、品牌、版本、规格或配件 ID" aria-label="搜索商品模板" /></div>
+      <ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="商品名称、型号、品牌、版本、规格或配件 ID" aria-label="搜索商品模板" />
       <Select value={filters.category} onValueChange={(category) => onFiltersChange({...filters, category, page: 1})} options={[{value: "all", label: "全部品类"}, ...(query.data?.categories || []).map((value) => ({value, label: value}))]} className="w-40" aria-label="筛选商品品类" />
       <Select value={filters.brand} onValueChange={(brand) => onFiltersChange({...filters, brand, page: 1})} options={[{value: "all", label: "全部品牌"}, ...(query.data?.brands || []).map((value) => ({value, label: value}))]} className="w-40" aria-label="筛选商品品牌" />
     </ErpFilterBar></ErpPageToolbar>
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {!fullPriceAccess && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div>}
     <DashboardSection title="商品规格列表">
-      <ErpDataTable columns={columns} data={products} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="商品库加载失败" emptyTitle="暂无匹配商品" emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击新建模板创建第一条商品规格。"} onRetry={() => void query.refetch()} onRowClick={fullPriceAccess ? openEdit : undefined} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={filters.page} pageSize={filters.pageSize} total={total} onPageChange={(page) => onFiltersChange({...filters, page})} onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})} enableColumnResizing density="compact" stickyHeader />
+      <ErpDataTable ariaLabel="商品规格库" columns={columns} data={products} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="商品库加载失败" emptyTitle="暂无匹配商品" emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击新建模板创建第一条商品规格。"} onRetry={() => void query.refetch()} onRowClick={fullPriceAccess ? openEdit : undefined} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={filters.page} pageSize={filters.pageSize} total={total} onPageChange={(page) => onFiltersChange({...filters, page})} onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})} enableColumnResizing density="compact" stickyHeader />
     </DashboardSection>
     <ErpProductTemplateDialog open={dialogOpen} product={editing} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, product: editing});}} />
     <ConfirmationDialog state={confirmState} pending={deleteMutation.isPending || importMutation.isPending} onClose={() => setConfirmState(null)} onConfirm={() => {if (confirmState?.kind === "delete") deleteMutation.mutate(confirmState.product.id); if (confirmState?.kind === "import") importMutation.mutate(confirmState.rows);}} />
-    <ErpProductLedgerDrawer open={Boolean(ledgerSubject)} subject={ledgerSubject} permissions={session.permissions} filters={productLedger.filters} page={productLedger.query.data} loading={productLedger.query.isPending} fetching={productLedger.query.isFetching} error={productLedger.query.error as Error | null} onRetry={() => { void productLedger.query.refetch(); }} onFiltersChange={productLedger.updateFilter} onResetFilters={productLedger.clearFilters} onPageChange={productLedger.changePage} onPageSizeChange={productLedger.changePageSize} onOpenChange={(open) => {if (!open) setLedgerSubject(null);}} onOpenDocument={openProductLedgerDocument} />
+    <ErpProductLedgerDrawer open={Boolean(ledgerSubject)} subject={ledgerSubject} subjects={ledgerSubjects} onSubjectChange={setLedgerSubject} filters={productLedger.filters} page={productLedger.query.data} loading={productLedger.query.isPending} fetching={productLedger.query.isFetching} error={productLedger.query.error as Error | null} onRetry={() => { void productLedger.query.refetch(); }} onFiltersChange={productLedger.updateFilter} onResetFilters={productLedger.clearFilters} onPageChange={productLedger.changePage} onPageSizeChange={productLedger.changePageSize} onOpenChange={(open) => {if (!open) setLedgerSubject(null);}} onOpenDocument={openProductLedgerDocument} />
     </ErpPageContent>
   </ErpListPageFrame>;
 }
@@ -137,5 +143,5 @@ function MetricCard({label, value, detail, icon, tone = "info"}: {label: string;
 
 function ConfirmationDialog({state, pending, onClose, onConfirm}: {state: {kind: "delete"; product: ProductLibraryItem} | {kind: "import"; rows: ProductImportRow[]; overwrite: number} | null; pending: boolean; onClose: () => void; onConfirm: () => void}) {
   const deleting = state?.kind === "delete";
-  return <Dialog.Root open={Boolean(state)} onOpenChange={(open) => {if (!open && !pending) onClose();}}><Dialog.Portal><Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)]" /><Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-4"><Dialog.Popup className="w-full max-w-md rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-5 shadow-[var(--erp-shadow-popover)]"><Dialog.Title className="text-base font-bold">{deleting ? "删除商品模板" : "导入将覆盖已有模板"}</Dialog.Title><Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--erp-color-text-secondary)]">{deleting ? `确认删除「${state?.kind === "delete" ? state.product.name : ""}」？被库存或单据引用的模板会由服务端拒绝删除。` : `本次共识别 ${state?.kind === "import" ? state.rows.length : 0} 行，其中 ${state?.kind === "import" ? state.overwrite : 0} 个配件 ID 已存在。继续后将按现有后端规则覆盖模板，但不改写历史单据名称。`}</Dialog.Description><div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose} disabled={pending}>取消</Button><Button type="button" variant={deleting ? "danger" : "primary"} onClick={onConfirm} disabled={pending}>{pending ? "处理中…" : deleting ? "确认删除" : "继续导入"}</Button></div></Dialog.Popup></Dialog.Viewport></Dialog.Portal></Dialog.Root>;
+  return <ErpConfirmDialog open={Boolean(state)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title={deleting ? "删除商品模板" : "导入将覆盖已有模板"} description={deleting ? "被库存或单据引用的模板会由服务端拒绝删除。" : `本次共识别 ${state?.kind === "import" ? state.rows.length : 0} 行，其中 ${state?.kind === "import" ? state.overwrite : 0} 个配件 ID 已存在。继续后将按现有后端规则覆盖模板，但不改写历史单据名称。`} documentName={deleting && state?.kind === "delete" ? state.product.name : undefined} confirmLabel={deleting ? "确认删除" : "继续导入"} pendingLabel="处理中…" confirmVariant={deleting ? "danger" : "primary"} pending={pending} onConfirm={onConfirm} />;
 }

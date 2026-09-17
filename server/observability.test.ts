@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {EventEmitter} from "node:events";
 import test from "node:test";
-import { createRequestMetrics, normalizeMetricRoute, redactRequestPath, safeErrorMessage } from "./observability.ts";
+import { createRequestMetrics, normalizeMetricRoute, redactRequestPath, safeErrorMessage, safeErrorStack } from "./observability.ts";
 
 test("request logs redact sensitive query values while keeping safe filters", () => {
   const redacted = redactRequestPath("/api/export/finance?token=private-token&page=2&keyword=RTX%204090");
@@ -16,6 +16,15 @@ test("error logs redact bearer credentials and labeled secrets", () => {
   const message = safeErrorMessage(new Error("Authorization: Bearer private-token password=private-password"));
   assert.doesNotMatch(message, /private-token|private-password/);
   assert.match(message, /REDACTED/);
+});
+
+test("error stacks stay bounded and redact labeled secrets", () => {
+  const error = new Error("password=private-password");
+  error.stack = `Error: password=private-password\n    at handler (server/index.ts:1:1)`;
+  const stack = safeErrorStack(error);
+  assert.doesNotMatch(stack, /private-password/);
+  assert.match(stack, /REDACTED/);
+  assert.ok(stack.length < 8_001);
 });
 
 test("request metrics normalize identifiers and keep bounded route aggregates", () => {

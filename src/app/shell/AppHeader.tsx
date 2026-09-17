@@ -1,8 +1,7 @@
-import {Popover as BasePopover} from "@base-ui/react/popover";
 import {lazy, Suspense, useEffect, useState} from "react";
-import {LogOut, Menu, Search, Sparkles, UserRound} from "lucide-react";
-import {useRouterState} from "@tanstack/react-router";
-import {Button} from "@/src/components/ui";
+import {Link, useRouterState} from "@tanstack/react-router";
+import {LogOut, Menu, Search, Settings, Sparkles, UserRound} from "lucide-react";
+import {Button, Popover} from "@/src/components/ui";
 import {useUiStore} from "@/src/stores";
 import {useAuth} from "@/src/app/auth";
 import {WorkspaceTabs} from "./WorkspaceTabs";
@@ -32,6 +31,11 @@ export function AppHeader() {
 
   useEffect(() => setAccountOpen(false), [pathname]);
 
+  const canManageUsers = Boolean(
+    session?.permissions.allowedMenus.includes("all") ||
+    session?.permissions.allowedMenus.includes("permissions"),
+  );
+
   return (
     <>
       <header className="erp-tab-navigation relative flex h-[var(--erp-workspace-bar-height)] min-h-[var(--erp-workspace-bar-height)] shrink-0 items-center gap-1 border-b border-[var(--erp-color-border)] bg-white/95 px-2 backdrop-blur sm:gap-2 sm:px-3 lg:px-4">
@@ -56,54 +60,54 @@ export function AppHeader() {
           >
             <Search className="h-4 w-4" />
           </Button>
-          <div className="lg:hidden">
-            <BasePopover.Root open={accountOpen} onOpenChange={setAccountOpen}>
-              <BasePopover.Trigger
-                className="erp-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-[var(--erp-radius-md)] text-[var(--erp-color-text-secondary)] transition-colors hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]"
-                aria-label="账号菜单"
-                title="账号菜单"
-              >
-                <UserRound className="h-4 w-4" />
-              </BasePopover.Trigger>
-              <BasePopover.Portal>
-                <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="end">
-                  <BasePopover.Popup className="erp-popover-surface w-52 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1.5 shadow-[var(--erp-shadow-popover)] outline-none">
-                    <Button type="button" variant="ghost" className="w-full justify-start" onClick={() => { setAiDrawerOpen(true); setAccountOpen(false); }}>
-                      <Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />
-                      AI 助手
-                    </Button>
-                    <Button type="button" variant="ghost" className="w-full justify-start" onClick={() => { setAccountOpen(false); logout(); }}>
-                      <LogOut className="h-4 w-4" />
-                      退出登录
-                      {session?.user.displayName ? <span className="ml-auto max-w-20 truncate text-xs font-normal text-[var(--erp-color-text-muted)]">{session.user.displayName}</span> : null}
-                    </Button>
-                  </BasePopover.Popup>
-                </BasePopover.Positioner>
-              </BasePopover.Portal>
-            </BasePopover.Root>
-          </div>
-          <div className="hidden items-center gap-1 lg:flex">
-            <Button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="AI 助手"
+            title="AI 助手"
+            onClick={() => setAiDrawerOpen(true)}
+          >
+            <Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />
+          </Button>
+          <Popover.Root open={accountOpen} onOpenChange={setAccountOpen}>
+            <Popover.Trigger
               type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="AI 助手"
-              title="AI 助手"
-              onClick={() => setAiDrawerOpen(true)}
-            >
-              <Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`退出登录${session?.user.displayName ? `（${session.user.displayName}）` : ""}`}
-              title="退出登录"
-              onClick={logout}
+              className="erp-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-[var(--erp-radius-md)] text-[var(--erp-color-text-secondary)] transition-colors hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]"
+              aria-label="账号菜单"
+              title="账号菜单"
             >
               <UserRound className="h-4 w-4" />
-            </Button>
-          </div>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Positioner className="outline-none" sideOffset={6} align="end">
+                <Popover.Popup className="w-64 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1.5 shadow-[var(--erp-shadow-popover)] outline-none">
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--erp-color-info-soft)] text-sm font-semibold text-[var(--erp-color-primary)]" aria-hidden="true">
+                      {(session?.user.displayName || session?.user.username || "用").slice(0, 1)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--erp-color-text)]">{session?.user.displayName || "当前用户"}</p>
+                      <p className="mt-0.5 truncate text-xs text-[var(--erp-color-text-muted)]">{session?.user.username || ""} · {session?.user.role || "员工"}</p>
+                    </div>
+                  </div>
+                  <div className="my-1 h-px bg-[var(--erp-color-border)]" aria-hidden="true" />
+                  {canManageUsers && <Link
+                    to="/settings/users"
+                    onClick={() => setAccountOpen(false)}
+                    className="erp-focus-ring flex min-h-9 w-full items-center gap-2 rounded-[var(--erp-radius-md)] px-3 text-sm font-medium text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]"
+                  >
+                    <Settings className="h-4 w-4" aria-hidden="true" />
+                    员工管理
+                  </Link>}
+                  <Button type="button" variant="ghost" className="w-full justify-start" onClick={() => { setAccountOpen(false); logout(); }}>
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    退出登录
+                  </Button>
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
       </header>
       {searchOpen && (

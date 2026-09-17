@@ -224,7 +224,7 @@ export function ErpDateRangePicker({
       className={cn(
         "erp-focus-ring flex min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-control)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-[border-color,box-shadow] hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]",
         controlHeight,
-        !hasExplicitWidth && "md:min-w-56",
+        !hasExplicitWidth && "lg:min-w-56",
         visibleError && "border-[var(--erp-color-danger)]",
         hasCustomWidth ? undefined : "w-full",
         resolvedTriggerClassName,
@@ -234,7 +234,7 @@ export function ErpDateRangePicker({
       aria-invalid={Boolean(visibleError) || undefined}
       aria-describedby={ariaDescribedBy}
     >
-      <span className={cn("truncate font-mono", !displayStart && !displayEnd && "font-sans text-[var(--erp-color-text-muted)]")}>
+      <span className={cn("erp-data-number truncate", !displayStart && !displayEnd && "font-sans text-[var(--erp-color-text-muted)]")}>
         {displayValue}
       </span>
       <CalendarRange className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
@@ -242,11 +242,11 @@ export function ErpDateRangePicker({
   );
 
   return (
-    <div className={cn("min-w-0 w-full md:w-auto", className)} role="group" aria-label={ariaLabel}>
+    <div data-erp-filter-field="date-range" className={cn("min-w-0 w-full lg:w-auto", className)} role="group" aria-label={ariaLabel}>
       <ErpDateOverlay open={open} onOpenChange={handleOpenChange} trigger={trigger} title="选择日期范围" description="支持快捷选择，也可以直接输入日期" closeLabel="关闭日期范围" sideOffset={6} panelClassName="max-h-[min(90dvh,720px)] overflow-y-auto rounded-[var(--erp-radius-xl)]">
       {({compactViewport}) => <>
-              <div className="flex flex-col md:flex-row">
-                <div className="grid grid-cols-3 gap-1 border-b border-[var(--erp-color-border)] p-2 md:flex md:w-32 md:shrink-0 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:p-3">
+              <div className="flex flex-col lg:flex-row">
+                <div className="grid grid-cols-3 gap-1 border-b border-[var(--erp-color-border)] p-2 lg:flex lg:w-32 lg:shrink-0 lg:flex-col lg:overflow-visible lg:border-b-0 lg:border-r lg:p-3">
                   {presets.map((preset) => (
                     <Button
                       key={preset.value}
@@ -261,8 +261,8 @@ export function ErpDateRangePicker({
                   ))}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="border-b border-[var(--erp-color-border)] px-3 pb-3 pt-3 md:px-4">
-                    <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+                  <div className="border-b border-[var(--erp-color-border)] px-3 pb-3 pt-3 lg:px-4">
+                    <label className="block text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">
                       快速输入
                       <div className="mt-1 flex min-w-0 gap-2">
                         <Input
@@ -280,12 +280,12 @@ export function ErpDateRangePicker({
                       {naturalError && <p className="mt-1 text-xs font-normal text-[var(--erp-color-danger)]" role="alert">{naturalError}</p>}
                     </label>
                   </div>
-                  <div className="grid gap-2 p-3 md:grid-cols-2 md:px-4">
-                    <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+                  <div className="grid gap-2 p-3 lg:grid-cols-2 lg:px-4">
+                    <label className="min-w-0 text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">
                       {startPlaceholder}
                       <Input
                         density="compact"
-                        className="mt-1 w-full font-mono text-xs placeholder:font-sans"
+                        className="erp-data-number mt-1 w-full text-xs placeholder:font-sans"
                         value={startInput}
                         onChange={(event) => updateInput("startDate", event.target.value)}
                         onBlur={(event) => normalizeInput("startDate", event.target.value)}
@@ -295,11 +295,11 @@ export function ErpDateRangePicker({
                         aria-label={startAriaLabel}
                       />
                     </label>
-                    <label className="min-w-0 text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+                    <label className="min-w-0 text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">
                       {endPlaceholder}
                       <Input
                         density="compact"
-                        className="mt-1 w-full font-mono text-xs placeholder:font-sans"
+                        className="erp-data-number mt-1 w-full text-xs placeholder:font-sans"
                         value={endInput}
                         onChange={(event) => updateInput("endDate", event.target.value)}
                         onBlur={(event) => normalizeInput("endDate", event.target.value)}
@@ -324,9 +324,9 @@ export function ErpDateRangePicker({
                       endMonth={maxDate || undefined}
                     />
                   </div>
-                  <div className="border-t border-[var(--erp-color-border)] px-3 py-2.5 md:px-4">
+                  <div className="border-t border-[var(--erp-color-border)] px-3 py-2.5 lg:px-4">
                     {draftError && <p className="mb-2 text-xs text-[var(--erp-color-danger)]" role="alert">{draftError}</p>}
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                       <p className="min-w-0 truncate text-xs text-[var(--erp-color-text-muted)]" aria-live="polite">
                         {draftRange.startDate || draftRange.endDate ? `${draftRange.startDate || "未选择"} 至 ${draftRange.endDate || "未选择"}` : "尚未选择日期"}
                       </p>

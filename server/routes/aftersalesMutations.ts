@@ -3,6 +3,7 @@ import {saveStateRecords} from "../db.ts";
 import {stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {Request as ExpressRequest} from "express";
+import {aftersalesCreateDto, aftersalesUpdateDto, parseHttpDto} from "../httpDto.ts";
 
 type AftersalesMutationDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -37,7 +38,8 @@ export function registerAftersalesMutationRoutes(app: Express, dependencies: Aft
     "/api/aftersales",
     dependencies.requireMenu("aftersales"),
     dependencies.asyncRoute(async (req, res) => {
-      const created = dependencies.actions(req).addAftersalesClaim(req.body);
+      const command = parseHttpDto(aftersalesCreateDto, req.body);
+      const created = dependencies.actions(req).addAftersalesClaim(command);
       const stateMerge = aftersalesMerge(dependencies.getState(), created);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(201).json(okMerge(created, stateMerge));
@@ -48,7 +50,8 @@ export function registerAftersalesMutationRoutes(app: Express, dependencies: Aft
     "/api/aftersales/:id",
     dependencies.requireMenu("aftersales"),
     dependencies.asyncRoute(async (req, res) => {
-      const updated = dependencies.actions(req).updateAftersalesStatus(req.params.id!, req.body);
+      const command = parseHttpDto(aftersalesUpdateDto, req.body);
+      const updated = dependencies.actions(req).updateAftersalesStatus(req.params.id!, command);
       const stateMerge = aftersalesMerge(dependencies.getState(), updated);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));

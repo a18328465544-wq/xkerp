@@ -5,7 +5,7 @@
 ## 1. 拆包策略
 
 - 路由使用 `lazyRouteComponent`，业务页面不会进入 App Shell 首屏入口。
-- Vite 将高成本依赖拆成可独立缓存的 chunk：`vendor-charts`、`vendor-date`、`vendor-base-ui`、`vendor-command`。
+- Vite 将高成本依赖拆成可独立缓存的 chunk：图表依赖以 `recharts-*` 异步 chunk（兼容旧构建的 `vendor-charts-*`）、日期依赖 `vendor-date-*`、基础 UI 依赖 `vendor-base-ui-*`。图表 chunk 不进入入口 HTML 的 `modulepreload`，仅在首个图表实际渲染时请求。
 - 全局搜索弹窗按需加载；AI Drawer 也按需加载。搜索按钮只负责打开现有 Command/Search 能力，不复制搜索逻辑。
 - 图表、日期和 Select 的业务页面仍复用现有组件，拆包不改变路由、权限或 API 契约。
 - 经营首页趋势图继续延迟到首屏内容完成后加载；`DashboardPage` 不再直接引入 Recharts，图表仅通过 `DashboardTrendChart` 动态 chunk 请求。
@@ -34,7 +34,7 @@
 - 移动端侧栏由 Escape 关闭，遮罩按钮有明确可访问名称。
 - 对话框继续使用 Base UI 的焦点陷阱、Escape 关闭和恢复焦点能力。
 - 表格列使用 `scope="col"` 和可读 `aria-label`；加载刷新使用 `role="status"`，可点击行支持 Enter/Space。
-- 固定 Workspace Bar 的层级高于页面抽屉；抽屉位于 Tab 栏下方，避免遮挡工作区切换。
+- 固定 Workspace Bar 的层级高于页面抽屉；抽屉位于 Tab 栏下方，避免遮挡工作区切换。浏览型详情抽屉可使用 `modal={false}` 让底层列表继续操作，模态流程抽屉仍保留遮罩和焦点约束。
 
 ## 4. 窄屏验收
 
@@ -67,6 +67,10 @@ npm run lint
 npm test
 npm run build:web
 npm run check:performance
+npm run smoke:browser
+npm run check:visual
 ```
+
+`smoke:browser` 需要先启动 Vite 前端，使用路由级 API fixture 验证真实导航和窄屏交互；`check:visual` 读取 `scripts/visual-baseline.json`，只锁定关键流程的 PNG 尺寸与 SHA-256 指纹。视觉改动必须在同一变更中更新基线并说明原因。
 
 本轮禁止后端/数据库/API 修改；若发现后端缺少日志关联能力，记录到对应 API Gap 文档后再单独排期。

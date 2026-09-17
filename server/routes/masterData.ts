@@ -1,5 +1,6 @@
 import type {Express, Request, RequestHandler} from "express";
 import {listProductPage, listVendorPage} from "../masterDataRepository.ts";
+import {parseHttpDto, productListQueryDto, vendorListQueryDto} from "../httpDto.ts";
 
 type AuthenticatedRequest = Request & {tenantId?: string; storeId?: string};
 type MasterDataDependencies = {
@@ -8,23 +9,20 @@ type MasterDataDependencies = {
   permissionsForRequest: (req: Request) => {showCost?: boolean; showProfit?: boolean};
 };
 
-function queryNumber(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 export function registerMasterDataRoutes(app: Express, dependencies: MasterDataDependencies) {
   app.get("/api/vendors", dependencies.requireMenu("vendors"), async (req: AuthenticatedRequest, res, next) => {
     try {
+      const query = parseHttpDto(vendorListQueryDto, req.query);
       const permissions = dependencies.permissionsForRequest(req);
-      res.json(await listVendorPage({tenantId: req.tenantId, storeId: req.storeId, page: queryNumber(req.query.page, 1), pageSize: queryNumber(req.query.pageSize, 20), keyword: String(req.query.keyword || ""), type: String(req.query.type || "all"), level: String(req.query.level || "all"), balance: String(req.query.balance || "all"), sortKey: String(req.query.sortKey || ""), sortDirection: String(req.query.sortDirection || "desc")}, {showProfit: permissions.showProfit === true}));
+      res.json(await listVendorPage({tenantId: req.tenantId, storeId: req.storeId, page: query.page, pageSize: query.pageSize, keyword: query.keyword, type: query.type, level: query.level, balance: query.balance, sortKey: query.sortKey, sortDirection: query.sortDirection}, {showProfit: permissions.showProfit === true}));
     } catch (error) { next(error); }
   });
 
   app.get("/api/products", dependencies.requireAnyMenu(["products", "purchase_add", "sales_add", "assembly", "quotes", "finance_reports"]), async (req: AuthenticatedRequest, res, next) => {
     try {
+      const query = parseHttpDto(productListQueryDto, req.query);
       const permissions = dependencies.permissionsForRequest(req);
-      res.json(await listProductPage({tenantId: req.tenantId, storeId: req.storeId, page: queryNumber(req.query.page, 1), pageSize: queryNumber(req.query.pageSize, 20), keyword: String(req.query.keyword || ""), category: String(req.query.category || "all"), brand: String(req.query.brand || "all"), sortKey: String(req.query.sortKey || ""), sortDirection: String(req.query.sortDirection || "desc")}, {showCost: permissions.showCost === true, showProfit: permissions.showProfit === true}));
+      res.json(await listProductPage({tenantId: req.tenantId, storeId: req.storeId, page: query.page, pageSize: query.pageSize, keyword: query.keyword, category: query.category, brand: query.brand, sortKey: query.sortKey, sortDirection: query.sortDirection}, {showCost: permissions.showCost === true, showProfit: permissions.showProfit === true}));
     } catch (error) { next(error); }
   });
 }

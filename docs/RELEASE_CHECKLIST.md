@@ -32,6 +32,15 @@ npm run check:release
 ```bash
 NODE_ENV=production npm run preflight:production
 sudo nginx -t
+```
+
+生产站点的静态资源压缩使用仓库内的 `ops/nginx/performance.conf` 片段。将其
+include 到 `gpu-erp.cdgpu.cn` 的 HTTPS server 块后，再执行配置检查；上线验收
+时要带 `Accept-Encoding: gzip` 确认 JS/CSS 返回 `Content-Encoding: gzip`。
+
+```bash
+sudo nginx -t
+curl -fsSI -H 'Accept-Encoding: gzip' https://gpu-erp.cdgpu.cn/assets/<当前入口 chunk>.js
 sudo install -m 0644 ops/systemd/gpu-erp-backup.service ops/systemd/gpu-erp-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gpu-erp-backup.timer

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {DashboardSection} from "./DashboardShell";
+import {ErpFormSection} from "./ErpFormSection";
 import {ErpPageHeader} from "./ErpPageHeader";
 
 test("compact page headers keep explanatory subtitles out of the first screen", () => {
@@ -18,8 +19,8 @@ test("default page headers preserve safety and decision context when opted in", 
   assert.match(markup, /data-erp-region="page-identity"/);
   assert.match(markup, /扫码核验完成后才会扣减库存/);
   const withoutSubtitle = renderToStaticMarkup(<ErpPageHeader density="default" title="销售出库" />);
-  assert.match(withoutSubtitle, /erp-annotation-slot/);
-  assert.match(withoutSubtitle, /data-empty="true"/);
+  assert.doesNotMatch(withoutSubtitle, /erp-annotation-slot/);
+  assert.doesNotMatch(withoutSubtitle, /data-empty="true"/);
 });
 
 test("compact sections hide implementation notes while default sections can show them", () => {
@@ -30,6 +31,13 @@ test("compact sections hide implementation notes while default sections can show
   assert.match(expanded, /data-density="default"/);
   assert.match(expanded, /扫码模式必须完成全部实物核验/);
   const withoutDescription = renderToStaticMarkup(<DashboardSection density="default" title="出库核验"><span>form</span></DashboardSection>);
-  assert.match(withoutDescription, /erp-annotation-slot/);
-  assert.match(withoutDescription, /data-empty="true"/);
+  assert.doesNotMatch(withoutDescription, /erp-annotation-slot/);
+  assert.doesNotMatch(withoutDescription, /data-empty="true"/);
+});
+
+test("form sections do not reserve a blank annotation line", () => {
+  const withoutDescription = renderToStaticMarkup(<ErpFormSection title="采购明细"><span>form</span></ErpFormSection>);
+  const withDescription = renderToStaticMarkup(<ErpFormSection title="采购明细" description="记录采购明细"><span>form</span></ErpFormSection>);
+  assert.doesNotMatch(withoutDescription, /erp-annotation-slot/);
+  assert.match(withDescription, /记录采购明细/);
 });

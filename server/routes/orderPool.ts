@@ -4,7 +4,9 @@ import type {AppState, createStoreActions} from "../store.ts";
 import {matchesKeyword} from "../../src/utils/search.ts";
 import {isStoreDateTimeBeforeNow, storeDate} from "../../src/utils/storeTime.ts";
 import type {SystemUserAccount} from "../../src/types.ts";
-import type {CustomerOrder, OrderPoolCreateInput, OrderPoolDocumentLinkInput, OrderPoolEventInput, OrderPoolQueue, OrderPoolUpdateInput} from "../../src/types/order-pool.ts";
+import {orderPoolExceptionStages, orderPoolInactiveStageValues, orderPoolQueueValues} from "../../src/types/order-pool.ts";
+import type {CustomerOrder, OrderPoolQueue} from "../../src/types/order-pool.ts";
+import {orderPoolCreateDto, orderPoolDocumentLinkDto, orderPoolEventDto, orderPoolListQueryDto, orderPoolUpdateDto, parseHttpDto} from "../httpDto.ts";
 
 type OrderPoolActions = Pick<ReturnType<typeof createStoreActions>, "createCustomerOrder" | "updateCustomerOrder" | "appendCustomerOrderNote" | "linkCustomerOrderDocument">;
 
@@ -25,9 +27,9 @@ function cleanQuery(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-const orderPoolQueues = new Set<OrderPoolQueue>(["mine", "all", "unassigned", "waiting_customer", "due_today", "overdue", "exceptions"]);
-const inactiveStages = new Set(["已完成", "丢单", "取消"]);
-const exceptionStages = new Set(["暂停", "丢单", "取消", "售后中"]);
+const orderPoolQueues = new Set<OrderPoolQueue>(orderPoolQueueValues);
+const inactiveStages = new Set<string>(orderPoolInactiveStageValues);
+const exceptionStages = new Set<string>(orderPoolExceptionStages);
 
 function isActiveOrder(order: CustomerOrder) {
   return !inactiveStages.has(order.mainStage);
@@ -69,13 +71,41 @@ function listCollaborators(state: AppState) {
     .sort((left, right) => left.displayName.localeCompare(right.displayName, "zh-CN") || left.id.localeCompare(right.id));
 }
 
-export function listOrders(state: AppState, req: AuthenticatedRequest<SystemUserAccount>) {
-  const keyword = cleanQuery(req.query.keyword);
-  const orderType = cleanQuery(req.query.orderType);
-  const mainStage = cleanQuery(req.query.mainStage);
-  const owner = cleanQuery(req.query.owner);
-  const requestedQueue = cleanQuery(req.query.queue);
-  const queue: OrderPoolQueue = orderPoolQueues.has(requestedQueue as OrderPoolQueue) ? requestedQueue as OrderPoolQueue : "mine";
+type ParsedOrderPoolQuery = {
+  keyword: string;
+  orderType: string;
+  mainStage: string;
+  owner: string;
+  queue: OrderPoolQueue;
+  page: number;
+  pageSize: number;
+};
+
+export function listOrders(state: AppState, req: AuthenticatedRequest<SystemUserAccount>, parsedQuery?: Partial<ParsedOrderPoolQuery>) {
+  const source = parsedQuery || {
+    keyword: req.query.keyword,
+    orderType: req.query.orderType,
+    mainStage: req.query.mainStage,
+    owner: req.query.owner,
+    queue: req.query.queue,
+    page: req.query.page,
+    pageSize: req.query.pageSize,
+  };
+  const requestedQueue = cleanQuery(source.queue);
+  const query: ParsedOrderPoolQuery = {
+    keyword: cleanQuery(source.keyword),
+    orderType: cleanQuery(source.orderType),
+    mainStage: cleanQuery(source.mainStage),
+    owner: cleanQuery(source.owner),
+    queue: orderPoolQueues.has(requestedQueue as OrderPoolQueue) ? requestedQueue as OrderPoolQueue : "mine",
+    page: pageValue(source.page, 1, 10_000),
+    pageSize: pageValue(source.pageSize, 20, 200),
+  };
+  const keyword = query.keyword;
+  const orderType = query.orderType;
+  const mainStage = query.mainStage;
+  const owner = query.owner;
+  const queue: OrderPoolQueue = query.queue;
   const currentUser = req.authUser;
   const filtered = state.customerOrders
     .filter((order) => matchesQueue(order, queue, currentUser))
@@ -94,8 +124,8 @@ export function listOrders(state: AppState, req: AuthenticatedRequest<SystemUser
     .filter((order) => !mainStage || mainStage === "all" || order.mainStage === mainStage)
     .filter((order) => !owner || owner === "all" || order.ownerId === owner || order.ownerName === owner || order.collaborators.some((item) => item.userId === owner || item.displayName === owner));
   const sorted = [...filtered].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id));
-  const page = pageValue(req.query.page, 1, 10_000);
-  const pageSize = pageValue(req.query.pageSize, 20, 200);
+  const page = query.page;
+  const pageSize = query.pageSize;
   const start = (page - 1) * pageSize;
   const summary = state.customerOrders.reduce((result, order) => {
     result.total += 1;
@@ -125,7 +155,8 @@ export function registerOrderPoolRoutes(app: Express, dependencies: OrderPoolRou
   }));
 
   app.get("/api/order-pool", dependencies.requireMenu("order_pool"), dependencies.asyncRoute(async (req, res) => {
-    res.json({data: listOrders(dependencies.getState(req), req as AuthenticatedRequest<SystemUserAccount>)});
+    const query = parseHttpDto(orderPoolListQueryDto, req.query);
+    res.json({data: listOrders(dependencies.getState(req), req as AuthenticatedRequest<SystemUserAccount>, query)});
   }));
 
   app.get("/api/order-pool/:id", dependencies.requireMenu("order_pool"), dependencies.asyncRoute(async (req, res) => {
@@ -140,28 +171,32 @@ export function registerOrderPoolRoutes(app: Express, dependencies: OrderPoolRou
 
   app.post("/api/order-pool", dependencies.requireMenu("order_pool"), dependencies.asyncRoute(async (req, res) => {
     const authRequest = req as AuthenticatedRequest<SystemUserAccount>;
-    const order = dependencies.actions(authRequest).createCustomerOrder(req.body as OrderPoolCreateInput);
+    const command = parseHttpDto(orderPoolCreateDto, req.body);
+    const order = dependencies.actions(authRequest).createCustomerOrder(command);
     await dependencies.persist(authRequest, order);
     res.status(201).json({data: order});
   }));
 
   app.patch("/api/order-pool/:id", dependencies.requireMenu("order_pool"), dependencies.asyncRoute(async (req, res) => {
     const authRequest = req as AuthenticatedRequest<SystemUserAccount>;
-    const order = dependencies.actions(authRequest).updateCustomerOrder(cleanQuery(req.params.id), req.body as OrderPoolUpdateInput);
+    const command = parseHttpDto(orderPoolUpdateDto, req.body);
+    const order = dependencies.actions(authRequest).updateCustomerOrder(cleanQuery(req.params.id), command);
     await dependencies.persist(authRequest, order);
     res.json({data: order});
   }));
 
   app.post("/api/order-pool/:id/events", dependencies.requireMenu("order_pool"), dependencies.asyncRoute(async (req, res) => {
     const authRequest = req as AuthenticatedRequest<SystemUserAccount>;
-    const order = dependencies.actions(authRequest).appendCustomerOrderNote(cleanQuery(req.params.id), req.body as OrderPoolEventInput);
+    const command = parseHttpDto(orderPoolEventDto, req.body);
+    const order = dependencies.actions(authRequest).appendCustomerOrderNote(cleanQuery(req.params.id), command);
     await dependencies.persist(authRequest, order);
     res.status(201).json({data: order});
   }));
 
   app.post("/api/order-pool/:id/links", dependencies.requireMenu("order_pool"), dependencies.asyncRoute(async (req, res) => {
     const authRequest = req as AuthenticatedRequest<SystemUserAccount>;
-    const order = dependencies.actions(authRequest).linkCustomerOrderDocument(cleanQuery(req.params.id), req.body as OrderPoolDocumentLinkInput);
+    const command = parseHttpDto(orderPoolDocumentLinkDto, req.body);
+    const order = dependencies.actions(authRequest).linkCustomerOrderDocument(cleanQuery(req.params.id), command);
     await dependencies.persist(authRequest, order);
     res.status(201).json({data: order});
   }));

@@ -87,7 +87,7 @@ export function ErpUploader({items, maxCount, accept, disabled = false, descript
         </div>
         <div className={compact ? "space-y-1.5 p-2" : "space-y-2 p-3"}>
           <p className="truncate text-xs font-semibold text-[var(--erp-color-text)]" title={item.name}>{item.name}</p>
-          <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--erp-color-text-muted)]"><span>{formatBytes(item.compressedBytes || item.sizeBytes)}</span>{item.compressedBytes ? <span>压缩后</span> : null}</div>
+          <div className="flex items-center justify-between gap-2 text-xs text-[var(--erp-color-text-muted)]"><span>{formatBytes(item.compressedBytes || item.sizeBytes)}</span>{item.compressedBytes ? <span>压缩后</span> : null}</div>
           {item.error && <p role="alert" className="text-xs text-[var(--erp-color-danger)]">{item.error}</p>}
           {item.status === "uploaded" && <p className="text-xs text-[var(--erp-color-success)]">{uploadedDescription}</p>}
           <div className="flex items-center justify-end gap-1">
@@ -98,6 +98,6 @@ export function ErpUploader({items, maxCount, accept, disabled = false, descript
         </div>
       </div>)}
     </div>}
-    <p className="text-[11px] text-[var(--erp-color-text-muted)]">{footerDescription || `已选择 ${items.length} / ${maxCount} 张。图片会在上传前压缩到约 100KB。`}</p>
+    <p className="text-xs text-[var(--erp-color-text-muted)]">{footerDescription || `已选择 ${items.length} / ${maxCount} 张。图片会在上传前压缩到约 100KB。`}</p>
   </div>;
 }

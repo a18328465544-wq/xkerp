@@ -6,10 +6,11 @@ import {
   ledgerItemMatchesSelectedInventoryCards,
 } from "../productLedger.ts";
 import type { AppState } from "../store.ts";
-import type { AuthenticatedRequest } from "../httpAuth.ts";
-import type { CardInventory, ProductLedgerRow, SystemUserAccount } from "../../src/types.ts";
+import type { CardInventory, ProductLedgerRow } from "../../src/types.ts";
 import { matchesKeyword, normalizeSearchText } from "../../src/utils/search.ts";
 import { createProductIdentityIndex, sameProductIdentity } from "../../src/utils/productIdentity.ts";
+import { parseHttpDto, productLedgerListQueryDto } from "../httpDto.ts";
+import type { z } from "zod";
 
 type ProductLedgerDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -18,7 +19,7 @@ type ProductLedgerDependencies = {
   ok: (data: unknown) => unknown;
 };
 
-type AuthRequest = AuthenticatedRequest<SystemUserAccount>;
+type ProductLedgerQuery = z.output<typeof productLedgerListQueryDto>;
 
 const normalizedText = (value?: string | number | null) => normalizeSearchText(value);
 
@@ -44,15 +45,15 @@ function productTemplateKey(product: AppState["products"][number]) {
   ].join("::");
 }
 
-function buildProductLedger(state: AppState, req: AuthRequest, canShowCost: boolean) {
-  const productSkuId = String(req.query.productSkuId || "").trim();
-  const page = Math.max(1, Number(req.query.page || 1) || 1);
-  const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize || 30) || 30));
-  const documentNo = String(req.query.documentNo || "").trim();
-  const createdBy = String(req.query.createdBy || "").trim();
-  const documentType = String(req.query.documentType || "").trim();
-  const startDate = String(req.query.startDate || "").trim();
-  const endDate = String(req.query.endDate || "").trim();
+function buildProductLedger(state: AppState, canShowCost: boolean, query: ProductLedgerQuery) {
+  const productSkuId = query.productSkuId;
+  const page = query.page;
+  const pageSize = query.pageSize;
+  const documentNo = query.documentNo;
+  const createdBy = query.createdBy;
+  const documentType = query.documentType;
+  const startDate = query.startDate;
+  const endDate = query.endDate;
 
   const productIdentityIndex = createProductIdentityIndex(state.products || []);
   const selectedProduct = (state.products || []).find((product) =>
@@ -282,8 +283,8 @@ function buildProductLedger(state: AppState, req: AuthRequest, canShowCost: bool
 
 export function registerProductLedgerRoutes(app: Express, dependencies: ProductLedgerDependencies) {
   app.get("/api/inventory/product-ledger", dependencies.requireMenu("inventory"), (req, res: Response) => {
-    const authRequest = req as AuthRequest;
     const permissions = dependencies.permissionsForRequest(req);
-    res.json(dependencies.ok(buildProductLedger(dependencies.getState(), authRequest, Boolean(permissions.showCost))));
+    const query = parseHttpDto(productLedgerListQueryDto, req.query);
+    res.json(dependencies.ok(buildProductLedger(dependencies.getState(), Boolean(permissions.showCost), query)));
   });
 }

@@ -7,8 +7,10 @@ import {useWorkspaceTabRuntime} from "@/src/hooks/useWorkspaceTabRuntime";
 import {dedupeWorkspaceTabItems} from "./workspaceTabItems";
 import {readStoredWorkspaceState, writeStoredWorkspaceState} from "./workspaceTabStorage";
 import {closeWorkspaceTab, filterWorkspaceStateByPermissions, openWorkspaceTab, type WorkspaceTabState, WORKSPACE_HOME_ID} from "./workspaceTabState";
+import {searchForTabRoute} from "./navigationSearch";
 
-type WorkspaceTabRouteMap = Record<string, string>;
+type WorkspaceTabRoute = {pathname: string; search: Record<string, string>};
+type WorkspaceTabRouteMap = Record<string, WorkspaceTabRoute>;
 
 type WorkspaceTabWorkspaceValue = {
   state: WorkspaceTabState;
@@ -37,22 +39,11 @@ function itemById(id: string) {
   return navigationItems.find((item) => item.id === id);
 }
 
-/**
- * Detail drawers are page-scoped URL state. Keep ordinary list filters when
- * switching workspace tabs, but never carry a drawer reference into another
- * page where the same query key can mean a different entity.
- */
-function searchWithoutDetail() {
-  if (typeof window === "undefined") return {};
-  const params = new URLSearchParams(window.location.search);
-  params.delete("detail");
-  return Object.fromEntries(params.entries());
-}
-
 export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode}) {
   const {session} = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({select: (state) => state.location.pathname});
+  const searchStr = useRouterState({select: (state) => state.location.searchStr});
   const allowedIds = useMemo(() => {
     const ids = navigationItems
       .filter((item) => isMenuAllowed(session?.permissions.allowedMenus || [], item.id))
@@ -71,10 +62,18 @@ export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode})
 
   stateRef.current = state;
 
-  const recordRoute = useCallback((tabId: string, routePath: string) => {
-    if (!tabId || !routePath || routeByTabRef.current[tabId] === routePath) return;
-    routeByTabRef.current = {...routeByTabRef.current, [tabId]: routePath};
-    setRouteByTab((current) => current[tabId] === routePath ? current : {...current, [tabId]: routePath});
+  const recordRoute = useCallback((tabId: string, routePath: string, routeSearch: string) => {
+    if (!tabId || !routePath) return;
+    const nextRoute: WorkspaceTabRoute = {pathname: routePath, search: searchForTabRoute(routeSearch)};
+    const previousRoute = routeByTabRef.current[tabId];
+    if (previousRoute && previousRoute.pathname === nextRoute.pathname && JSON.stringify(previousRoute.search) === JSON.stringify(nextRoute.search)) return;
+    routeByTabRef.current = {...routeByTabRef.current, [tabId]: nextRoute};
+    setRouteByTab((current) => {
+      const currentRoute = current[tabId];
+      return currentRoute && currentRoute.pathname === nextRoute.pathname && JSON.stringify(currentRoute.search) === JSON.stringify(nextRoute.search)
+        ? current
+        : {...current, [tabId]: nextRoute};
+    });
   }, []);
 
   const removeRoutes = useCallback((ids: string[]) => {
@@ -122,8 +121,8 @@ export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode})
   }, [currentItem?.id]);
 
   useEffect(() => {
-    if (currentItem) recordRoute(currentItem.id, pathname);
-  }, [currentItem?.id, pathname, recordRoute]);
+    if (currentItem) recordRoute(currentItem.id, pathname, searchStr);
+  }, [currentItem?.id, pathname, recordRoute, searchStr]);
 
   useEffect(() => {
     if (!pendingClose || pathname === pendingClose.startPathname) return;
@@ -159,12 +158,13 @@ export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode})
     event.preventDefault();
     const current = currentItem?.id === item.id;
     setNavigationIntent(current ? null : "switch");
+    if (currentItem) recordRoute(currentItem.id, pathname, searchStr);
     activate(item.id);
     if (!current) {
-      const targetPath = routeByTabRef.current[item.id] || item.path;
-      void navigate({to: targetPath, search: searchWithoutDetail()});
+      const targetRoute = routeByTabRef.current[item.id] || {pathname: item.path, search: {}};
+      void navigate({to: targetRoute.pathname, search: targetRoute.search});
     }
-  }, [activate, currentItem?.id, navigate, setNavigationIntent]);
+  }, [activate, currentItem, navigate, pathname, recordRoute, searchStr, setNavigationIntent]);
 
   const closeTab = useCallback((id: string) => {
     const previous = stateRef.current;
@@ -178,14 +178,14 @@ export function WorkspaceTabWorkspaceProvider({children}: {children: ReactNode})
     }
     const next = closeWorkspaceTab(previous, id);
     const item = itemById(next.activeId);
-    const targetPath = item ? routeByTabRef.current[next.activeId] || item.path : "/";
-    if (!item || targetPath === pathname) {
+    const targetRoute = item ? routeByTabRef.current[next.activeId] || {pathname: item.path, search: {}} : {pathname: "/", search: {}};
+    if (!item || targetRoute.pathname === pathname) {
       transition(() => next);
       return;
     }
     setPendingClose({id, targetId: next.activeId, startPathname: pathname});
     setNavigationIntent("close");
-    void navigate({to: targetPath, search: searchWithoutDetail()});
+    void navigate({to: targetRoute.pathname, search: targetRoute.search});
   }, [isTabDirty, navigate, pathname, setNavigationIntent, transition]);
 
   const confirmDirtyClose = useCallback(() => {

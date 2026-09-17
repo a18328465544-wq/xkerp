@@ -8,6 +8,7 @@ import {
   Landmark,
 } from "lucide-react";
 import {ErpEmptyState, ErpStatusBadge} from "@/src/components/common";
+import {Button} from "@/src/components/ui";
 import {formatCurrency} from "@/src/lib/format";
 import type {FinanceDashboardView} from "@/src/types/finance";
 import type {financeApi} from "@/src/services/api";
@@ -52,7 +53,7 @@ export function FinanceHealthPanel({view}: {view: FinanceDashboardView}) {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-3xl font-bold">{view.healthScore}</span>
+          <span className="erp-data-number text-3xl font-semibold">{view.healthScore}</span>
           <span className="text-xs text-[var(--erp-color-text-muted)]">健康分</span>
         </div>
       </div>
@@ -102,7 +103,7 @@ export function FinanceAccountList({
               <p className="truncate text-sm font-semibold">{item.name}</p>
               <p className="text-xs text-[var(--erp-color-text-muted)]">{item.type || "资金账户"}</p>
             </div>
-            <span className={`font-mono text-sm font-bold ${item.availableBalance < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-text)]"}`}>
+            <span className={`erp-data-number text-sm font-semibold ${item.availableBalance < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-text)]"}`}>
               {formatCurrency(item.availableBalance)}
             </span>
           </div>
@@ -123,11 +124,13 @@ export function FinanceExceptionList({
   return (
     <div className="divide-y divide-[var(--erp-color-border)]">
       {view.exceptions.slice(0, 5).map((item) => (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           key={item.id}
           onClick={() => onOpen(item.route)}
-          className="erp-focus-ring flex w-full items-center gap-3 py-3 text-left first:pt-0 last:pb-0"
+          className="h-auto w-full justify-start gap-3 rounded-none py-3 text-left first:pt-0 last:pb-0"
         >
           <ErpStatusBadge label={item.tone === "danger" ? "高" : "关注"} tone={item.tone} />
           <span className="min-w-0 flex-1">
@@ -135,7 +138,7 @@ export function FinanceExceptionList({
             <span className="block truncate text-xs text-[var(--erp-color-text-muted)]">{item.detail}</span>
           </span>
           <ArrowRight className="h-4 w-4 text-[var(--erp-color-text-muted)]" />
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -161,9 +164,9 @@ export function FinanceEventList({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{item.businessType}</span>
-            <span className="block truncate font-mono text-xs text-[var(--erp-color-text-muted)]">{item.time} · {item.accountName || "未标记账户"}</span>
+            <span className="block truncate erp-data-number text-xs text-[var(--erp-color-text-muted)]">{item.time} · {item.accountName || "未标记账户"}</span>
           </span>
-          <span className={`font-mono text-sm font-bold ${item.net >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}>
+          <span className={`erp-data-number text-sm font-semibold ${item.net >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}>
             {item.net >= 0 ? "+" : ""}{formatCurrency(item.net)}
           </span>
         </div>
@@ -179,13 +182,13 @@ export function FinanceSummaryCell({
 }: {
   label: string;
   value: string;
-  tone: "success" | "danger" | "info";
+  tone: "neutral" | "success" | "danger" | "info";
 }) {
-  const color = tone === "success" ? "var(--erp-color-success)" : tone === "danger" ? "var(--erp-color-danger)" : "var(--erp-color-primary)";
+  const color = tone === "success" ? "var(--erp-color-income)" : tone === "danger" ? "var(--erp-color-expense)" : "var(--erp-color-net)";
   return (
     <div>
       <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p className="mt-1 font-mono text-sm font-bold" style={{color}}>{value}</p>
+      <p className="mt-1 erp-data-number text-sm font-semibold" style={{color}}>{value}</p>
     </div>
   );
 }

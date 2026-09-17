@@ -1,6 +1,14 @@
 import type {NextFunction, Request, RequestHandler, Response} from "express";
 
 const sensitiveQueryKey = /^(authorization|token|access[_-]?token|refresh[_-]?token|password|secret|cookie|api[_-]?key|signature|webhook)$/i;
+const sensitiveValuePattern = /\bBearer\s+[^\s,;]+/gi;
+const labeledSecretPattern = /(authorization|token|password|secret|cookie)\s*[:=]\s*[^\s,;]+/gi;
+
+function redactSensitiveText(value: string) {
+  return value
+    .replace(sensitiveValuePattern, "Bearer [REDACTED]")
+    .replace(labeledSecretPattern, "$1=[REDACTED]");
+}
 
 export function redactRequestPath(rawPath: string) {
   const value = String(rawPath || "/");
@@ -18,10 +26,14 @@ export function redactRequestPath(rawPath: string) {
 
 export function safeErrorMessage(error: unknown) {
   const rawMessage = error instanceof Error ? error.message : "Unknown server error";
-  return rawMessage
-    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [REDACTED]")
-    .replace(/(authorization|token|password|secret|cookie)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
-    .slice(0, 500);
+  return redactSensitiveText(rawMessage).slice(0, 500);
+}
+
+/** Return a bounded, redacted stack for server-side correlation by request id. */
+export function safeErrorStack(error: unknown) {
+  if (!(error instanceof Error)) return "";
+  const rawStack = error.stack || `${error.name}: ${error.message}`;
+  return redactSensitiveText(rawStack).slice(0, 8_000);
 }
 
 type RouteMetric = {count: number; errors: number; totalDurationMs: number; maxDurationMs: number};

@@ -21,13 +21,17 @@ export interface ErpPageHeaderProps {
 export function ErpPageHeader({title, subtitle, density = "compact", quickStatus, quickStatusVariant = "compact", dateContent, actions}: ErpPageHeaderProps) {
   const hasQuickStatus = Boolean(quickStatus?.length);
   const showSubtitle = density === "default";
-  const rightArea = dateContent || actions ? <ErpPageActions>{dateContent}{actions}</ErpPageActions> : null;
+  const rightArea = dateContent || actions ? <ErpPageActions className={hasQuickStatus ? "lg:w-full xl:w-auto" : undefined}>{dateContent}{actions}</ErpPageActions> : null;
   return <ErpPageTopbar
     data-erp-component="page-header"
     data-density={density}
-    className={cn(density === "default" && "gap-4", hasQuickStatus && "lg:grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_auto] lg:items-start lg:gap-4")}
+    // The persistent sidebar leaves a narrow canvas at tablet widths. Keep
+    // the identity, quick-status strip, and actions in a readable stack until
+    // the wide desktop canvas is available; otherwise short titles wrap into
+    // two lines beside a partially wrapped status strip.
+    className={cn(density === "default" && "gap-4", hasQuickStatus && "xl:grid xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_auto] xl:items-start xl:gap-4")}
   >
-    <ErpPageIdentity title={title} subtitle={showSubtitle ? subtitle : undefined} reserveSubtitle={showSubtitle} />
+    <ErpPageIdentity title={title} subtitle={showSubtitle ? subtitle : undefined} reserveSubtitle={showSubtitle && Boolean(subtitle)} />
     {hasQuickStatus ? <ErpPageContext><QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} className="min-w-0" /></ErpPageContext> : null}
     {rightArea}
   </ErpPageTopbar>;

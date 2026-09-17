@@ -2946,6 +2946,69 @@ test("sales product availability subtracts pending model-level reservations", ()
   assert.equal(after.availableForSalesCount, Math.max(0, before.availableCount - (before.reservedCount || 0) - 1));
 });
 
+test("sales profit preview uses the same sellable cost population as invoice creation", () => {
+  const state = createInitialState();
+  const seedCard = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
+  assert.ok(seedCard);
+  const product = state.products.find((item) => item.id === seedCard.productId);
+  assert.ok(product);
+
+  // Keep one physical unit sellable and add non-sellable units for the same
+  // product. Their costs deliberately differ so an incorrect average is visible.
+  state.inventory = [
+    {...seedCard, id: "KC-COST-SELLABLE", status: "已入库", costPrice: 10400, estSellPrice: 12000, marketPrice: 12000, salesInvoiceId: undefined},
+    {...seedCard, id: "KC-COST-PENDING", status: "待检测", costPrice: 12000, estSellPrice: 13000, marketPrice: 13000, salesInvoiceId: undefined},
+    {...seedCard, id: "KC-COST-SOLD", status: "已售出", costPrice: 16000, estSellPrice: 15000, marketPrice: 15000, salesInvoiceId: "XS-OLD", buyerName: "历史客户"},
+  ];
+  state.salesInvoices = [];
+  const actions = createStoreActions(state);
+
+  // This is intentionally query-shaped input: the same values Express gives
+  // to legacy state-snapshot routes. Normalization must make it equivalent to
+  // the typed boolean form used by the sales candidate route.
+  const candidate = actions.getInventorySummary({
+    keyword: product.name,
+    activeOnly: "true" as any,
+    includeSold: "false" as any,
+    sellableOnly: "true" as any,
+  }).find((row) => row.productId === product.id);
+  assert.ok(candidate);
+  assert.equal(candidate.totalCount, 1);
+  assert.equal(candidate.availableCount, 1);
+  assert.equal(candidate.avgCost, 10400);
+  assert.equal(candidate.avgEstSell, 12000);
+
+  const invoice = actions.createSalesInvoice({
+    date: "2026-08-20",
+    customerName: "预计利润口径测试客户",
+    contact: "13900000009",
+    channel: "到店",
+    paymentMethod: "支付宝",
+    isPaid: false,
+    paidAmount: 0,
+    unpaidAmount: 12000,
+    needInvoice: false,
+    freeShipping: true,
+    aftersalesTerms: "",
+    handleBy: "店长",
+    items: [{
+      inventoryId: "",
+      productId: product.id,
+      productName: product.name,
+      sn: "",
+      condition: "出库核验",
+      quantity: 1,
+      costPrice: 0,
+      sellPrice: 12000,
+      profit: 12000,
+      aftersalesTerms: "",
+    }],
+  });
+  assert.equal(invoice.items[0]?.costPrice, candidate.avgCost);
+  assert.equal(invoice.items[0]?.profit, 1600);
+  assert.equal(invoice.totalProfit, 1600);
+});
+
 // --- 上线前补充:毛利权威成本、SN 唯一性、单号防重号 ---
 
 function buildPurchaseItem(product: ProductTemplate, sn: string, buyPrice = 3000): PurchaseItem {

@@ -1,10 +1,7 @@
 import type {InventoryItemDto, InventoryJourneyResponseDto, InventoryPageResponseDto, InventorySummaryResponseDto, InventorySummaryRowDto} from "../dto/inventory.dto";
 import type {InventoryJourney, InventoryJourneyAftersales, InventoryJourneyAssembly, InventoryJourneyEvent, InventoryJourneyEventType, InventoryJourneyInspection, InventoryJourneyPayment, InventoryJourneyPurchase, InventoryJourneyReturn, InventoryJourneySale, InventoryListItem, InventoryListResult, InventoryModelSummary, InventoryPageMeta, InventorySummary, InventoryStatusValue} from "@/src/types/inventory";
+import {inventoryInspectionPendingStatusValues, inventoryStatuses} from "@/src/types/inventory";
 import {storeDateDiffDays} from "@/src/utils/storeTime";
-
-const inventoryStatuses: readonly InventoryStatusValue[] = [
-  "待检测", "检测中", "已入库", "已上架", "已锁定", "已售出", "已拆卸", "已组装", "退货中", "已退货", "售后中", "维修中", "已报废",
-];
 
 function text(value: unknown, fallback = "") {
   return typeof value === "string" ? value : value === null || value === undefined ? fallback : String(value);
@@ -69,7 +66,7 @@ export function adaptInventoryItem(dto: InventoryItemDto, permissions: {showCost
     vram: text(dto.vram),
     condition: text(dto.condition, "未标注"),
     warehouse: text(dto.warehouseLocation, "未分配库位"),
-    inspectionStatus: inventoryStatus === "待检测" || inventoryStatus === "检测中" ? inventoryStatus : "已完成",
+    inspectionStatus: inventoryInspectionPendingStatusValues.includes(inventoryStatus as (typeof inventoryInspectionPendingStatusValues)[number]) ? inventoryStatus : "已完成",
     inventoryStatus,
     sourceType: text(dto.sourceType),
     supplierName: text(dto.supplierName),

@@ -143,12 +143,17 @@ export function createProductOperationHelpers(dependencies: ProductOperationsDep
     return results;
   };
 
-  const updateProductTemplate = (updated: ProductTemplate) => {
+  const updateProductTemplate = (updated: ProductTemplateInput) => {
     const existing = state.products.find((product) => product.id === updated.id);
     if (!existing) throw new NotFoundError(`商品模板不存在: ${updated.id}`);
-    applyProductTemplateUpdate(updated);
-    addLog(systemActor(), "商品库", "修改商品模板", updated.name, existing.name, "已同步未售出库存和行情名称");
-    return updated;
+    const nextProduct: ProductTemplate = {
+      ...updated,
+      id: existing.id,
+      currentStock: updated.currentStock ?? existing.currentStock,
+    };
+    applyProductTemplateUpdate(nextProduct);
+    addLog(systemActor(), "商品库", "修改商品模板", nextProduct.name, existing.name, "已同步未售出库存和行情名称");
+    return nextProduct;
   };
 
   const deleteProductTemplate = (id: string) => {

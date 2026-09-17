@@ -5,6 +5,14 @@ import type {PurchaseReturnFormValues, SalesReturnFormValues, SalesReturnListFil
 import {adaptPublicState} from "../adapters/state.adapter";
 import type {PublicStateResponseDto} from "../dto/state.dto";
 
+function completionIdempotencyKey(id: string) {
+  // Return ids are stable for the lifetime of a return order. Keep the key
+  // deterministic so a browser retry replays the same server result instead
+  // of running the refund/inventory command again.
+  const safeId = id.trim().replace(/[^A-Za-z0-9._:-]/g, "_").slice(0, 160) || "unknown";
+  return `return-complete-${safeId}`;
+}
+
 export function toSalesReturnListQueryParams(filters: SalesReturnListFilters) {
   const params = new URLSearchParams({type: "销售退货", page: String(filters.page), pageSize: String(filters.pageSize)});
   if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
@@ -65,8 +73,8 @@ export const returnsApi = {
     return apiRequest<{data?: unknown; state?: unknown}>("/api/returns", {method: "POST", body: JSON.stringify(toPurchaseReturnRequestDto(values)), signal});
   },
 
-  async complete(id: string, signal?: AbortSignal) {
-    const response = await apiRequest<SalesReturnCompleteResponseDto>(`/api/returns/${encodeURIComponent(id)}/complete`, {method: "POST", signal});
+  async complete(id: string, signal?: AbortSignal, idempotencyKey = completionIdempotencyKey(id)) {
+    const response = await apiRequest<SalesReturnCompleteResponseDto>(`/api/returns/${encodeURIComponent(id)}/complete`, {method: "POST", signal, headers: {"Idempotency-Key": idempotencyKey}});
     return adaptSalesReturnComplete(response.data);
   },
 

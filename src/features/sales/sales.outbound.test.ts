@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {SalesOutboundInventoryItem, SalesOutboundInvoice} from "@/src/types/sales";
-import {countManualOutboundAvailability, parseOutboundCodes, verifySalesOutbound} from "./sales.outbound";
+import {clampOutboundPage, countManualOutboundAvailability, parseOutboundCodes, resolveOutboundInvoice, verifySalesOutbound} from "./sales.outbound";
 
 const inventory: SalesOutboundInventoryItem[] = [
   {id: "KC-1", serialNumber: "SN-1", productId: "P-1", productName: "RTX 4090", productIdentityKey: "P-1", status: "已入库", condition: "99新", warehouse: "A区"},
@@ -33,4 +33,15 @@ test("unknown scan codes do not satisfy outbound lines", () => {
 test("manual availability mirrors inventory sufficiency without creating fake bindings", () => {
   assert.deepEqual(countManualOutboundAvailability(invoice, inventory), {available: 2, expected: 2, ready: true});
   assert.deepEqual(countManualOutboundAvailability(invoice, inventory.slice(0, 1)), {available: 1, expected: 2, ready: false});
+});
+
+test("stale outbound URL selection never falls back to a different invoice", () => {
+  assert.equal(resolveOutboundInvoice([invoice], "missing-invoice"), null);
+  assert.equal(resolveOutboundInvoice([invoice], null)?.id, "S-1");
+  assert.equal(resolveOutboundInvoice([invoice], "XS-1")?.id, "S-1");
+});
+
+test("outbound page is clamped after the pending pool shrinks", () => {
+  assert.equal(clampOutboundPage(3, 2), 2);
+  assert.equal(clampOutboundPage(0, 0), 1);
 });

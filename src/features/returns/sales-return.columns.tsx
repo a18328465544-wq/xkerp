@@ -11,11 +11,11 @@ function statusTone(status: SalesReturnListItem["status"]): "warning" | "success
 
 export function createSalesReturnColumns({onDetail, onComplete, onEdit, onDelete, canEdit, canDelete}: {onDetail: (item: SalesReturnListItem) => void; onComplete: (item: SalesReturnListItem) => void; onEdit?: (item: SalesReturnListItem) => void; onDelete?: (item: SalesReturnListItem) => void; canEdit?: boolean; canDelete?: boolean}): ColumnDef<SalesReturnListItem, unknown>[] {
   return [
-    {accessorKey: "returnNo", header: "退货单号", size: 170, cell: ({row}) => <div><p className="font-mono text-xs font-bold text-[var(--erp-color-primary)]">{row.original.returnNo}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{row.original.date || "—"}</p></div>},
-    {accessorKey: "relatedDocNo", header: "关联销售单", size: 160, cell: ({getValue}) => <span className="font-mono text-xs font-semibold">{String(getValue() || "—")}</span>},
+    {accessorKey: "returnNo", header: "退货单号", size: 170, cell: ({row}) => <div><p className="erp-data-number text-xs font-semibold text-[var(--erp-color-primary)]">{row.original.returnNo}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{row.original.date || "—"}</p></div>},
+    {accessorKey: "relatedDocNo", header: "关联销售单", size: 160, cell: ({getValue}) => <span className="erp-data-number text-xs font-semibold">{String(getValue() || "—")}</span>},
     {accessorKey: "partyName", header: "客户", size: 150, cell: ({row}) => <div><p className="font-semibold">{row.original.partyName || "—"}</p><p className="mt-1 max-w-36 truncate text-xs text-[var(--erp-color-text-muted)]">{row.original.contact || "未填写联系方式"}</p></div>},
-    {accessorKey: "productName", header: "退货商品", size: 230, cell: ({row}) => <div><p className="max-w-56 truncate font-semibold" title={row.original.productName}>{row.original.productName}</p><p className="mt-1 font-mono text-xs text-[var(--erp-color-text-muted)]">{row.original.sn || "未记录 SN"}</p></div>},
-    {accessorKey: "amount", header: "退款金额", size: 120, cell: ({getValue}) => <span className="font-mono font-semibold">{formatCurrency(Number(getValue() || 0))}</span>},
+    {accessorKey: "productName", header: "退货商品", size: 230, cell: ({row}) => <div><p className="max-w-56 truncate font-semibold" title={row.original.productName}>{row.original.productName}</p><p className="mt-1 erp-data-number text-xs text-[var(--erp-color-text-muted)]">{row.original.sn || "未记录 SN"}</p></div>},
+    {accessorKey: "amount", header: "退款金额", size: 120, cell: ({getValue}) => <span className="erp-data-number font-semibold">{formatCurrency(Number(getValue() || 0))}</span>},
     {accessorKey: "settlementMode", header: "退款方式", size: 110, cell: ({getValue}) => <ErpStatusBadge label={String(getValue() || "—")} tone="info" />},
     {accessorKey: "inventoryAction", header: "库存处理", size: 120, cell: ({getValue}) => String(getValue() || "—")},
     {accessorKey: "status", header: "状态", size: 100, cell: ({row}) => <ErpStatusBadge label={row.original.status} tone={statusTone(row.original.status)} />},

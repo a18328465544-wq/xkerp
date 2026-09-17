@@ -1,6 +1,7 @@
 import type {PermissionModel} from "../endpoints/auth";
 import type {MarketQuoteCreateRequestDto, MarketQuoteSnapshotResponseDto, MarketQuoteUpdateRequestDto} from "../dto/quote.dto";
 import type {MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend} from "@/src/types/quote";
+import {inventoryQuoteStatusValues} from "@/src/types/inventory";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -37,7 +38,7 @@ type InventoryAggregate = {count: number; totalCost: number; maximumCost: number
 
 function inventoryIndex(value: unknown, showCost: boolean) {
   const byProduct = new Map<string, InventoryAggregate>();
-  const active = new Set(["已入库", "已上架", "已锁定"]);
+  const active = new Set<string>(inventoryQuoteStatusValues);
   if (!Array.isArray(value)) return byProduct;
   value.forEach((raw) => {
     const item = record(raw);

@@ -17,9 +17,12 @@ import {
   type SettlementState,
 } from "./storeSettlementLedger.ts";
 import {hasUniqueLegacyName, matchesCustomerByIdOrLegacyName} from "./storePartnerIdentity.ts";
+import {financeExpenseCategories} from "../src/types/finance-expense.ts";
+import {financeIncomeCategories} from "../src/types/finance-income.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
-export const NON_OPERATING_INCOME_TYPES = new Set<string>(["赔偿收入", "返点收入", "配件销售", "利息收入", "其他收入"]);
-export const NON_OPERATING_EXPENSE_TYPES = new Set<string>(["员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待", "其他支出"]);
+export const NON_OPERATING_INCOME_TYPES = new Set<string>(financeIncomeCategories);
+export const NON_OPERATING_EXPENSE_TYPES = new Set<string>(financeExpenseCategories);
 
 export type PaymentOperationsState = SettlementState & {
   returnOrders: ReturnOrder[];
@@ -278,7 +281,7 @@ export function createPaymentOperationHelpers(dependencies: PaymentOperationsDep
     const account = findSettlementAccount(payment.accountId);
     const linkedPurchaseInvoice = findPurchaseInvoiceByDocNo(payment.relatedDocNo);
     const effectiveSupplierId = payment.supplierId || purchaseInvoiceVendorId(linkedPurchaseInvoice);
-    const effectiveCustomerId = payment.customerId || (linkedPurchaseInvoice && ["个人回收", "客户置换"].includes(linkedPurchaseInvoice.sourceType) ? linkedPurchaseInvoice.sourcePartnerId : undefined);
+    const effectiveCustomerId = payment.customerId || (linkedPurchaseInvoice && isPersonalPurchaseSource(linkedPurchaseInvoice.sourceType) ? linkedPurchaseInvoice.sourcePartnerId : undefined);
     const baseRecord: PaymentOutRecord = {...payment, amount: paymentAmount, supplierId: effectiveSupplierId, customerId: effectiveCustomerId, id: genId("FK"), accountName: account.name, time: payment.time || nowStamp()};
     const settlementLedger = recordSettlementMovement({
       accountId: account.id,
@@ -325,7 +328,7 @@ export function createPaymentOperationHelpers(dependencies: PaymentOperationsDep
             : vendor,
         );
       }
-      if (record.customerId || (linkedPurchaseInvoice && ["个人回收", "客户置换"].includes(linkedPurchaseInvoice.sourceType))) {
+      if (record.customerId || (linkedPurchaseInvoice && isPersonalPurchaseSource(linkedPurchaseInvoice.sourceType))) {
         state.customers = state.customers.map((customer) =>
           matchesCustomerByIdOrLegacyName(customer, record.customerId, record.customerName)
             ? {...customer, ...applyCustomerBalance(customer, {payable: -payableReduction})}

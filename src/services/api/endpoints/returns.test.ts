@@ -6,9 +6,10 @@ import type {SalesReturnFormValues} from "@/src/types/returns";
 
 test("sales returns endpoint keeps type filtering and uses existing completion/edit/delete routes", async () => {
   const previous = globalThis.fetch;
-  const calls: Array<{url: string; method: string; body?: string}> = [];
+  const calls: Array<{url: string; method: string; body?: string; idempotencyKey?: string}> = [];
   globalThis.fetch = async (input, init) => {
-    calls.push({url: String(input), method: init?.method || "GET", ...(typeof init?.body === "string" ? {body: init.body} : {})});
+    const idempotencyKey = new Headers(init?.headers).get("Idempotency-Key") || undefined;
+    calls.push({url: String(input), method: init?.method || "GET", ...(typeof init?.body === "string" ? {body: init.body} : {}), ...(idempotencyKey ? {idempotencyKey} : {})});
     const payload = String(input).includes("/api/returns?")
       ? {data: {data: [{id: "RET-1", returnNo: "XSTH-1", type: "销售退货", status: "待处理", amount: 1000}], meta: {page: 1, pageSize: 20, total: 1}}}
       : {data: {id: "RET-1", returnNo: "XSTH-1", type: "销售退货", status: "已完成", amount: 1000, completedAt: "2026-08-11 12:00:00"}};
@@ -25,7 +26,23 @@ test("sales returns endpoint keeps type filtering and uses existing completion/e
       {url: "/api/returns/RET%2F1", method: "PATCH"},
       {url: "/api/returns/RET%2F1", method: "DELETE"},
     ]);
+    assert.match(calls[1]?.idempotencyKey || "", /^return-complete-/);
     assert.deepEqual(JSON.parse(calls[2]?.body || "{}"), {handler: "郭鑫", reason: "客户拒收", remarks: ""});
+  } finally { globalThis.fetch = previous; }
+});
+
+test("return completion retries reuse the same idempotency key", async () => {
+  const previous = globalThis.fetch;
+  const keys: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    keys.push(new Headers(init?.headers).get("Idempotency-Key") || "");
+    return new Response(JSON.stringify({data: {id: "RET-1", returnNo: "XSTH-1", type: "销售退货", status: "已完成", amount: 1000}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    await returnsApi.complete("RET/1");
+    await returnsApi.complete("RET/1");
+    assert.equal(keys.length, 2);
+    assert.equal(keys[0], keys[1]);
   } finally { globalThis.fetch = previous; }
 });
 

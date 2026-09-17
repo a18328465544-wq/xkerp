@@ -36,7 +36,7 @@ export function registerBackupRoutes(app: Express, dependencies: BackupDependenc
     res.json(dependencies.ok(await listBackups(req.tenantId)));
   }));
 
-  app.get("/api/backup/download", dependencies.requireBoss, (req: BackupRequest, res) => {
+  app.get("/api/backup/download", dependencies.requireBoss, (_req: BackupRequest, res) => {
     const stamp = dependencies.getStoreDate();
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(`成都显卡一号店数据备份_${stamp}.json`)}`);

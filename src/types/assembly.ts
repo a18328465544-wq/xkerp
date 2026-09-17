@@ -1,6 +1,7 @@
 import type {ProductCategory} from "./core";
 
-export type AssemblyOperationType = "拆卸" | "组装";
+export const assemblyOperationTypeValues = ["拆卸", "组装"] as const;
+export type AssemblyOperationType = (typeof assemblyOperationTypeValues)[number];
 
 export interface AssemblyPart {
   productId?: string;

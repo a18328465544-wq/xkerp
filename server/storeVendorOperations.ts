@@ -1,6 +1,7 @@
 import type {CardInventory, PaymentOutRecord, PurchaseInvoice, SalesInvoice, SettlementLedger, Vendor} from "../src/types.ts";
 import {ConflictError, NotFoundError, ValidationError} from "./errors.ts";
-import {isInvoiceLinkedToVendor, matchesPerson, nextPartnerArchiveId, normalizeCustomerLevel} from "./storePartnerIdentity.ts";
+import {isInvoiceLinkedToVendor, matchesPerson, normalizeCustomerLevel} from "./storePartnerIdentity.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
 export type VendorOperationsState = {
   vendors: Vendor[];
@@ -111,7 +112,7 @@ export function createVendorOperationHelpers(dependencies: VendorOperationsDepen
     state.vendors = state.vendors.map((item) => item.id === id ? nextVendor : item);
     state.purchaseInvoices = state.purchaseInvoices.map((invoice) => {
       const linkedById = invoice.sourcePartnerId === id && (invoice.sourcePartnerType || "vendor") === "vendor";
-      const legacyMatch = legacyNameIsUnique && !invoice.sourcePartnerId && !["个人回收", "客户置换"].includes(invoice.sourceType) &&
+      const legacyMatch = legacyNameIsUnique && !invoice.sourcePartnerId && !isPersonalPurchaseSource(invoice.sourceType) &&
         personMatches(existing.name, previousContact, invoice.supplierName, invoice.contact);
       if (!linkedById && !legacyMatch) return invoice;
       return {...invoice, sourcePartnerId: id, sourcePartnerType: "vendor", supplierName: nextVendor.name, contact: nextContact};

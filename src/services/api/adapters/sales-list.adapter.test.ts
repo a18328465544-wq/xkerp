@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {adaptSalesListState, adaptSalesOutboundState, toSalesOutboundRequestDto} from "./sales.adapter";
+import {adaptSalesInvoiceRecord, adaptSalesListState, adaptSalesOutboundState, toSalesOutboundRequestDto} from "./sales.adapter";
 
 function response() {
   return {data: {
@@ -74,6 +74,15 @@ test("sales outbound request adapter trims but preserves repeated scans for serv
   });
 });
 
+test("manual outbound request satisfies the existing DTO without inventing an inventory binding", () => {
+  assert.deepEqual(toSalesOutboundRequestDto({handler: " 仓库小李 ", codes: [], manual: true, remarks: "扫码设备异常"}), {
+    handler: "仓库小李",
+    codes: ["__manual_confirmation__"],
+    manual: true,
+    remarks: "扫码设备异常",
+  });
+});
+
 test("sales list adapter redacts cost and profit before feature consumption", () => {
   const result = adaptSalesListState(response(), {showCost: false, showProfit: false});
   assert.equal(result.items[0]?.totalCost, undefined);
@@ -81,4 +90,22 @@ test("sales list adapter redacts cost and profit before feature consumption", ()
   assert.equal(result.items[0]?.lines[0]?.costPrice, undefined);
   assert.equal(result.items[0]?.lines[0]?.profit, undefined);
   assert.equal(result.items[0]?.searchText.includes("2400"), false);
+});
+
+test("sales detail adapter preserves model quantities and redacts restricted totals", () => {
+  const invoice = adaptSalesInvoiceRecord({
+    id: "S-1",
+    invoiceNo: "XS-1",
+    customerName: "客户",
+    items: [{productId: "P-1", productName: "RTX 4090", quantity: 2, sellPrice: 1500, costPrice: 1200, profit: 300}],
+    totalAmount: 3000,
+    paidAmount: 0,
+    unpaidAmount: 3000,
+  }, {showCost: false, showProfit: false});
+  assert.equal(invoice.items[0]?.quantity, 2);
+  assert.equal(invoice.totalAmount, 3000);
+  assert.equal(invoice.totalCost, 0);
+  assert.equal(invoice.totalProfit, 0);
+  assert.equal(invoice.items[0]?.costPrice, 0);
+  assert.equal(invoice.items[0]?.profit, 0);
 });

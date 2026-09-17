@@ -113,19 +113,31 @@ export function useWorkspaceTabDraft<T>(tabId: string) {
   return {draft: getDraft<T>(tabId), saveDraft, discardDraft};
 }
 
-export function shouldBlockWorkspaceNavigation(dirty: boolean, navigationIntent: WorkspaceNavigationIntent) {
-  return dirty && navigationIntent !== "switch";
+export function shouldBlockWorkspaceNavigation(dirty: boolean, navigationIntent: WorkspaceNavigationIntent, saveCompleted = false) {
+  return dirty && !saveCompleted && navigationIntent !== "switch";
 }
 
 export function useWorkspaceTabBlocker(dirty: boolean) {
   const {navigationIntentRef} = useWorkspaceTabRuntime();
   const {active} = useWorkspaceTabActivity();
-  return useBlocker({
+  const saveCompletedRef = useRef(false);
+  useEffect(() => {
+    if (!dirty) saveCompletedRef.current = false;
+  }, [dirty]);
+  const markSaved = useCallback(() => {
+    // A successful mutation may be followed by navigation before React has
+    // published the reset dirty state. Keep this escape hatch local to the
+    // current form and require callers to invoke it only after the server
+    // mutation has resolved successfully.
+    saveCompletedRef.current = true;
+  }, []);
+  const blocker = useBlocker({
     withResolver: true,
-    shouldBlockFn: () => active && shouldBlockWorkspaceNavigation(dirty, navigationIntentRef.current),
+    shouldBlockFn: () => active && shouldBlockWorkspaceNavigation(dirty, navigationIntentRef.current, saveCompletedRef.current),
     enableBeforeUnload: false,
     disabled: !dirty || !active,
   });
+  return {...blocker, markSaved};
 }
 
 export function useWorkspaceTabDirty(tabId: string, dirty: boolean) {

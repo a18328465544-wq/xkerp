@@ -1,10 +1,11 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {SortingState, VisibilityState} from "@tanstack/react-table";
-import {CircleDollarSign, ClipboardList, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, Search} from "lucide-react";
+import {CircleDollarSign, ClipboardList, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw} from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {useMemo, useState, type ReactNode} from "react";
-import {toast} from "sonner";
-import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
+import {notify} from "@/src/utils/notification";
+import {Button, Card, Select} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, purchaseApi, queryKeys} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api";
@@ -13,7 +14,9 @@ import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import type {AuthSession} from "@/src/services/api";
 import {formatCurrency} from "@/src/lib/format";
+import {purchasePaymentStatusValues} from "@/src/types/purchase";
 import type {PurchaseListFilters, PurchaseListItem, PurchaseListSortKey} from "@/src/types/purchase";
+import {sourceTypeValues} from "@/src/types/core";
 import {createPurchaseListColumns} from "../purchase.columns";
 import {countActivePurchaseListFilters, defaultPurchaseListFilters, parsePurchaseListFilters, purchaseListFiltersToSearch, selectPurchaseList} from "../purchase.filters";
 
@@ -21,11 +24,11 @@ const permissionDefaults = {showCost: false, showProfit: false, canDelete: false
 const emptyVisibility: VisibilityState = {};
 const sourceOptions = [
   {value: "", label: "全部采购来源"},
-  ...["个人回收", "同行拿货", "批量采购", "客户置换", "门店自采", "门市自采"].map((value) => ({value, label: value})),
+  ...sourceTypeValues.map((value) => ({value, label: value})),
 ];
 const paymentOptions = [
   {value: "", label: "全部付款状态"},
-  ...["未付款", "部分付款", "已付款", "已退款"].map((value) => ({value, label: value})),
+  ...purchasePaymentStatusValues.map((value) => ({value, label: value})),
 ];
 
 function usePurchaseListUrlState() {
@@ -82,8 +85,8 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "purchase-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectPurchaseList(query.data?.items || [], filters), [filters, query.data]);
   const invalidate = () => invalidateErpDomains(queryClient, ["purchase", "inventory", "finance", "customers", "crm", "state"]);
-  const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} toast.error(error.message);};
-  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); toast.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
+  const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} notify.error(error.message);};
+  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); notify.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
   const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail, onDelete: setDeleting}), [onDetail, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
   const activeFilterCount = countActivePurchaseListFilters(filters);
   const canCreate = createCapabilities(session).menu("purchase_add");
@@ -120,7 +123,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
     </MetricsRegion>
 
     <ErpPageToolbar><ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultPurchaseListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
-      <div className="relative min-w-[260px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索采购单号、来源、商品或经办人" aria-label="搜索采购单据" /></div>
+      <ErpSearchInput className="min-w-[260px] flex-1" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索采购单号、来源、商品或经办人" aria-label="搜索采购单据" />
       <Select className="w-36" value={filters.sourceType} options={sourceOptions} onValueChange={(value) => updateFilters({sourceType: value as PurchaseListFilters["sourceType"]})} aria-label="采购来源筛选" />
       <Select className="w-36" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as PurchaseListFilters["paymentStatus"]})} aria-label="付款状态筛选" />
       <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-36" startAriaLabel="采购开始日期" endAriaLabel="采购结束日期" ariaLabel="采购日期范围" />
@@ -138,6 +141,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
     <ErpDataTable
       columns={columns}
       data={selection.data}
+      ariaLabel="采购单据明细"
       getRowId={(row) => row.id}
       loading={query.isPending}
       fetching={query.isFetching}

@@ -1,6 +1,7 @@
 import type { AppState } from "./store.ts";
 import type { AiInsightsPayload } from "./aiInsights.ts";
 import type { DailySalesAiNarrative, DailySalesSummary } from "../src/types/ai.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
 const money = (value: unknown) => Number(value || 0) || 0;
 
@@ -45,7 +46,7 @@ export interface DailyBusinessReport {
 
 export function buildDailyBusinessReport(state: AppState, date: string, cutoff = "20:00"): DailyBusinessReport {
   const purchases = state.purchaseInvoices.filter(invoice => beforeCutoff(invoice.date, date, cutoff));
-  const personalPurchases = purchases.filter(invoice => invoice.sourceType === "个人回收" || invoice.sourceType === "客户置换");
+  const personalPurchases = purchases.filter(invoice => isPersonalPurchaseSource(invoice.sourceType));
   const peerPurchases = purchases.filter(invoice => !personalPurchases.includes(invoice));
   const outboundCards = state.inventory.filter(card => card.status === "已售出" && beforeCutoff(card.salesTime, date, cutoff));
   const salesOrders = state.salesInvoices.filter(invoice => beforeCutoff(invoice.date, date, cutoff));

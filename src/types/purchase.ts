@@ -57,7 +57,11 @@ export interface PurchaseInvoice {
 
 export type PurchaseCondition = CardInventory["condition"];
 export type PurchasePartnerType = CustomerPartnerType;
-export type PurchasePaymentStatus = "未付款" | "部分付款" | "已付款" | "已退款";
+export const purchasePersonalSourceValues = ["个人回收", "客户置换"] as const;
+export type PurchasePersonalSource = (typeof purchasePersonalSourceValues)[number];
+export const purchasePaymentMethodValues = ["微信", "支付宝", "现金", "银行卡", "货到付款", "账期欠款"] as const;
+export const purchasePaymentStatusValues = ["未付款", "部分付款", "已付款", "已退款"] as const;
+export type PurchasePaymentStatus = (typeof purchasePaymentStatusValues)[number];
 export type PurchaseListSortKey = "date" | "invoiceNo" | "supplierName" | "totalCount" | "totalCost" | "paymentStatus" | "handleBy";
 export type PurchaseListSortDirection = "asc" | "desc";
 

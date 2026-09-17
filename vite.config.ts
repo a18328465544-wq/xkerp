@@ -35,12 +35,12 @@ export default defineConfig(({mode}) => {
             const moduleId = id.replaceAll("\\", "/");
             if (moduleId.includes("/node_modules/react/") || moduleId.includes("/node_modules/react-dom/") || moduleId.includes("/node_modules/scheduler/")) return "vendor-react";
             if (moduleId.includes("/node_modules/lucide-react/")) return "vendor-icons";
-            // Keep high-cost optional libraries out of the application shell chunk.
-            // Route-level lazy loading still decides when these chunks are requested.
-            if (moduleId.includes("/node_modules/recharts/")) return "vendor-charts";
+            // Keep high-cost optional libraries in a separately cacheable chunk.
+            // Chart primitives stay synchronous at runtime; React.lazy is unsafe
+            // for Recharts forwardRef components such as ResponsiveContainer.
+            if (moduleId.includes("/node_modules/recharts/") || moduleId.includes("/node_modules/victory-vendor/")) return "vendor-charts";
             if (moduleId.includes("/node_modules/react-day-picker/")) return "vendor-date";
             if (moduleId.includes("/node_modules/@base-ui/react/")) return "vendor-base-ui";
-            if (moduleId.includes("/node_modules/cmdk/")) return "vendor-command";
           },
         },
       },

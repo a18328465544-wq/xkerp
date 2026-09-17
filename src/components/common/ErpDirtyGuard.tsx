@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {ErpUnsavedChangesDialog} from "./ErpUnsavedChangesDialog";
 
 export function useErpDirtyGuard(dirty: boolean) {
@@ -24,8 +24,18 @@ export function shouldBlockNavigationIfDirty(dirty: boolean) {
 
 export function useErpUnsavedChangesGuard(dirty: boolean) {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const saveCompletedRef = useRef(false);
+  useEffect(() => {
+    if (!dirty) saveCompletedRef.current = false;
+  }, [dirty]);
+  const markSaved = useCallback(() => {
+    // Close a stale leave prompt as soon as the server accepts the save.
+    // The form is still responsible for resetting its own dirty baseline.
+    saveCompletedRef.current = true;
+    setPendingAction(null);
+  }, []);
   const requestLeave = useCallback((action: () => void) => {
-    if (!dirty) {
+    if (!dirty || saveCompletedRef.current) {
       action();
       return;
     }
@@ -39,6 +49,7 @@ export function useErpUnsavedChangesGuard(dirty: boolean) {
   }, [pendingAction]);
   return {
     requestLeave,
+    markSaved,
     dialog: <ErpUnsavedChangesDialog open={Boolean(pendingAction)} onStay={stay} onLeave={leave} />,
   };
 }

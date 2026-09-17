@@ -1,6 +1,6 @@
 export {adaptInventoryItem, adaptInventoryJourney, adaptInventoryPage, adaptInventorySummary} from "./inventory.adapter";
 export {adaptProductLedgerPage} from "./product-ledger.adapter";
-export {adaptSalesCustomer, adaptSalesCustomers, adaptSalesInventoryCandidate, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesProductCandidate, adaptSalesProductCandidates, adaptSalesSettlementAccount, adaptSalesSettlementAccounts, toCreateSalesRequest} from "./sales.adapter";
+export {adaptSalesCustomer, adaptSalesCustomers, adaptSalesInventoryCandidate, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesInvoiceRecord, adaptSalesMutationResponse, adaptSalesProductCandidate, adaptSalesProductCandidates, adaptSalesSettlementAccount, adaptSalesSettlementAccounts, toCreateSalesRequest, toSalesUpdateRequestDto} from "./sales.adapter";
 export {adaptPermissions} from "../endpoints/auth";
 export {adaptPublicState} from "./state.adapter";
 export type {ErpStateSnapshot} from "./state.adapter";
@@ -23,3 +23,4 @@ export {adaptFinanceDailyClosing, adaptFinanceDailyClosingMutation, adaptFinance
 export {adaptFinanceAccount, adaptFinanceAccountLedgerPage, adaptFinanceAccountMutation, adaptFinanceAccountPage, mergeFinanceAccountPages, toFinanceAccountCreateRequest, toFinanceAccountReconcileRequest} from "./finance-account.adapter";
 export {adaptFinanceTransfer, adaptFinanceTransferCollection, adaptFinanceTransferMutation, adaptFinanceTransferSnapshot, filterFinanceTransferCollection, toFinanceTransferRequest} from "./finance-transfer.adapter";
 export {adaptOrderPoolCollaborators, adaptOrderPoolCollection, adaptOrderPoolMutation} from "./order-pool.adapter";
+export {adaptGlobalSearch} from "./global-search.adapter";

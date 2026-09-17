@@ -5,6 +5,7 @@ import test from "node:test";
 const purchaseTableSource = readFileSync(new URL("./components/PurchaseLineItemsTable.tsx", import.meta.url), "utf8");
 const purchaseSourcePicker = readFileSync(new URL("./components/PurchaseSourcePicker.tsx", import.meta.url), "utf8");
 const purchasePageSource = readFileSync(new URL("./pages/NewPurchaseOrderPage.tsx", import.meta.url), "utf8");
+const purchaseEditPageSource = readFileSync(new URL("./pages/PurchaseEditPage.tsx", import.meta.url), "utf8");
 const inspectionSource = readFileSync(new URL("../inspections/pages/InspectionWorkspacePage.tsx", import.meta.url), "utf8");
 
 test("purchase entry does not render inspection-owned physical fields", () => {
@@ -49,10 +50,28 @@ test("live purchase entry keeps its workspace draft without an unsaved-leave gua
   assert.doesNotMatch(purchasePageSource, /ErpUnsavedChangesDialog|useErpDirtyGuard|useWorkspaceTabBlocker|useWorkspaceTabDirty/);
 });
 
+test("successful purchase entry stays on the form instead of redirecting", () => {
+  const saveIndex = purchasePageSource.indexOf("const result = await createMutation.mutateAsync(submitted)");
+  const refreshIndex = purchasePageSource.indexOf("await refreshErpAfterDocument(queryClient)", saveIndex);
+  assert.ok(saveIndex >= 0, "purchase entry must await the create mutation");
+  assert.ok(refreshIndex > saveIndex, "purchase entry must refresh reference data after saving");
+  assert.match(purchasePageSource.slice(saveIndex, refreshIndex), /setSuccessMessage\(/);
+  assert.doesNotMatch(purchasePageSource.slice(saveIndex), /navigate\(\{to: nextPath\}\)/);
+});
+
 test("purchase product selection updates identity atomically and hides stale selection errors", () => {
   assert.match(purchasePageSource, /setValue\(`items\.\$\{index\}`/);
   assert.match(purchasePageSource, /clearErrors\(\[`items\.\$\{index\}\.productId`, `items\.\$\{index\}\.productName`\]\)/);
   assert.match(purchaseTableSource, /\(!item\.productId \|\| !item\.productName\.trim\(\)\)/);
   assert.match(purchaseTableSource, /onClear=\{\(\) => onProductClear\(index\)\}/);
   assert.match(purchasePageSource, /setValue\(`items\.\$\{index\}`, createPurchaseLineDefaults\(\)/);
+});
+
+test("successful purchase edits clear the dirty snapshot before returning to detail", () => {
+  const saveIndex = purchaseEditPageSource.indexOf("const result = await mutation.mutateAsync(submitted)");
+  const resetIndex = purchaseEditPageSource.indexOf("reset(createPurchaseEditValues(result.invoice))", saveIndex);
+  const navigateIndex = purchaseEditPageSource.indexOf("ignoreBlocker: true", resetIndex);
+  assert.ok(saveIndex >= 0, "purchase edit must await the update mutation");
+  assert.ok(resetIndex > saveIndex, "purchase edit must reset the form from the saved invoice");
+  assert.ok(navigateIndex > resetIndex, "purchase edit must bypass the stale blocker snapshot only after save");
 });

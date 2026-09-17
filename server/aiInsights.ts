@@ -3,6 +3,7 @@ import type { AppState } from "./store.ts";
 import { getAiInsightsCache, saveAiInsightsCache } from "./db.ts";
 import { getCurrentTenantContext } from "./requestTenantContext.ts";
 import { storeDate, storeDateAfterDays, storeDateDiffDays } from "../src/utils/storeTime.ts";
+import {inventoryInactiveStatuses} from "../src/utils/inventoryFilters.ts";
 
 export type AiInsightSeverity = "high" | "medium" | "low";
 export type AiInsightActionTab = "inventory" | "finance_reports" | "purchase_add" | "quotes" | "sales_list";
@@ -54,8 +55,6 @@ let lastAiProviderFailureAt = 0;
 const money = (value: unknown) => Math.round(Number(value || 0) * 100) / 100;
 const formatMoney = (value: number) => `¥${Math.round(value || 0).toLocaleString("zh-CN")}`;
 const dateKey = (value?: string) => String(value || "").slice(0, 10);
-const inactiveStatuses = new Set(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
-
 function truncate(value: unknown, maxLength: number) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
@@ -69,7 +68,7 @@ function safeSeverity(value: unknown): AiInsightSeverity {
 }
 
 function isActiveInventory(card: AppState["inventory"][number]) {
-  return !inactiveStatuses.has(card.status);
+  return !inventoryInactiveStatuses.has(card.status);
 }
 
 export function buildAiBusinessSnapshot(state: AppState, businessDate = storeDate()): AiBusinessSnapshot {

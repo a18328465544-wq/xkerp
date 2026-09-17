@@ -1,9 +1,11 @@
 import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import type {ColumnDef, VisibilityState} from "@tanstack/react-table";
-import {BarChart3, CircleDollarSign, Download, FileText, Layers3, LockKeyhole, RefreshCw, RotateCcw, Search, TrendingUp, WalletCards} from "lucide-react";
-import {Area, AreaChart, CartesianGrid, Line, ReferenceLine, XAxis, YAxis} from "recharts";
+import {BarChart3, CircleDollarSign, Download, FileText, Layers3, LockKeyhole, RefreshCw, RotateCcw, TrendingUp, WalletCards} from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo} from "react";
-import {Button, Card, ChartContainer, ChartLegend, ChartMeta, ChartTooltip, ChartTooltipContent, Input, Select, type ChartConfig} from "@/src/components/ui";
+import {Button, Card, Select} from "@/src/components/ui";
+import {AreaTrendChart} from "@/src/components/ui/chart-primitives";
+import {ChartMeta} from "@/src/components/ui/chart";
 import {AnalyticsDetailRegion, AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDateRangePicker, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type AnalyticsVisualizationSize, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, financeApi, queryKeys, salesApi, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -14,6 +16,7 @@ import {formatCurrency} from "@/src/lib/format";
 import {storeDate} from "@/src/utils/storeTime";
 import {FinanceTableControls} from "../components/FinanceTableControls";
 import {countActiveFinanceProfitFilters, defaultFinanceProfitFilters, financeProfitFiltersToSearch, parseFinanceProfitFilters, selectFinanceProfitInsights, selectFinanceProfitReport, type FinanceProfitDimension, type FinanceProfitFilters, type FinanceProfitGroupRow, type FinanceProfitInsight, type FinanceProfitReport} from "../finance-profit";
+import {financeNetTone, financeProfitChartConfig} from "../finance-chart.utils";
 
 const dimensionOptions = [
   {value: "product", label: "按商品"},
@@ -21,12 +24,6 @@ const dimensionOptions = [
   {value: "channel", label: "按渠道"},
   {value: "handler", label: "按经办人"},
 ];
-
-const financeProfitChartConfig = {
-  revenue: {label: "销售额", color: "var(--erp-color-primary)", indicator: "line" as const},
-  profit: {label: "毛利", color: "var(--erp-color-success)", indicator: "dashed" as const},
-  netProfit: {label: "净利润", color: "var(--erp-color-warning)", indicator: "dashed" as const},
-} satisfies ChartConfig;
 
 function useFinanceProfitUrlState() {
   return useUrlSearchState({
@@ -94,7 +91,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query, flowQue
       primary={<>
         <ErpMetricCard label="销售额" value={formatCurrency(report.summary.revenue)} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} tone="info" />
         <ErpMetricCard label="销售毛利" value={session.permissions.showProfit && report.summary.profit !== undefined ? formatCurrency(report.summary.profit) : "—"} detail={session.permissions.showProfit ? "销售额 − 商品成本" : "当前账号无利润权限"} icon={<TrendingUp className="h-4 w-4" />} tone={report.summary.profit !== undefined && report.summary.profit < 0 ? "danger" : "success"} />
-        <ErpMetricCard label="净利润" value={session.permissions.showProfit && report.summary.netProfit !== undefined ? formatCurrency(report.summary.netProfit) : "—"} detail={session.permissions.showProfit ? "销售毛利 + 其他收入 − 其他支出" : "当前账号无利润权限"} icon={<BarChart3 className="h-4 w-4" />} tone={report.summary.netProfit !== undefined && report.summary.netProfit < 0 ? "danger" : "success"} />
+        <ErpMetricCard label="净利润" value={session.permissions.showProfit && report.summary.netProfit !== undefined ? formatCurrency(report.summary.netProfit) : "—"} detail={session.permissions.showProfit ? "销售毛利 + 其他收入 − 其他支出" : "当前账号无利润权限"} icon={<BarChart3 className="h-4 w-4" />} tone={session.permissions.showProfit && report.summary.netProfit !== undefined ? financeNetTone(report.summary.netProfit) : "neutral"} />
       </>}
       secondary={<>
         {session.permissions.showCost && <ErpMetricCard label="销售成本" value={report.summary.cost === undefined ? "—" : formatCurrency(report.summary.cost)} detail="当前筛选汇总" icon={<WalletCards className="h-4 w-4" />} tone="danger" variant="compact" />}
@@ -108,7 +105,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query, flowQue
       </>}
     />
     <AnalyticsToolbar actions={<Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceProfitFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}>
-      <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" /><Input className="pl-9" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索商品、客户、销售单号或经办人" aria-label="搜索销售利润" /></div>
+      <ErpSearchInput className="min-w-56 flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索商品、客户、销售单号或经办人" aria-label="搜索销售利润" />
       <Select className="w-32" value={filters.dimension} options={dimensionOptions} onValueChange={(value) => update({dimension: value as FinanceProfitDimension})} aria-label="利润分析维度" />
       <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} density="compact" triggerClassName="sm:w-36" startAriaLabel="利润开始日期" endAriaLabel="利润结束日期" ariaLabel="利润日期范围" />
     </AnalyticsToolbar>
@@ -116,7 +113,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query, flowQue
       <AnalyticsMainRegion.Visualization size={visualizationSize}><DashboardSection title="毛利趋势" description="销售毛利来自销售额减商品成本；净利润额外叠加日期范围内的其他收支。" actions={<ErpStatusBadge label={`${report.trend.length} 个日期`} tone="info" />}><ProfitTrend trend={report.trend} showProfit={session.permissions.showProfit} showNetProfit={session.permissions.showProfit && report.summary.netProfit !== undefined} updatedAt={storeDate()} /></DashboardSection></AnalyticsMainRegion.Visualization>
       <AnalyticsMainRegion.Insights><DashboardSection title="毛利洞察" description="从当前销售毛利结果中优先展示机会与风险。"><ProfitInsights insights={insights} showProfit={session.permissions.showProfit} /></DashboardSection></AnalyticsMainRegion.Insights>
     </AnalyticsMainRegion>
-    <AnalyticsDetailRegion><DashboardSection title="毛利明细" description="按当前维度展示销售毛利；其他收支只在净利润汇总中体现，不分摊到商品、客户或经办人。" actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`${report.meta.page} / ${report.meta.totalPages} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}><ErpDataTable surface="plain" columns={columns} data={report.pageRows} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="销售毛利加载失败" emptyTitle="暂无毛利数据" emptyDescription={activeFilters ? "当前筛选条件没有匹配的销售单。" : "当前没有可展示的销售单据。"} onRetry={() => void query.refetch()} page={report.meta.page} pageSize={report.meta.pageSize} total={report.meta.total} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader /></DashboardSection></AnalyticsDetailRegion>
+    <AnalyticsDetailRegion><DashboardSection title="毛利明细" description="按当前维度展示销售毛利；其他收支只在净利润汇总中体现，不分摊到商品、客户或经办人。" actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`${report.meta.page} / ${report.meta.totalPages} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}><ErpDataTable ariaLabel="销售毛利明细" surface="plain" columns={columns} data={report.pageRows} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="销售毛利加载失败" emptyTitle="暂无毛利数据" emptyDescription={activeFilters ? "当前筛选条件没有匹配的销售单。" : "当前没有可展示的销售单据。"} onRetry={() => void query.refetch()} page={report.meta.page} pageSize={report.meta.pageSize} total={report.meta.total} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader /></DashboardSection></AnalyticsDetailRegion>
     </ErpPageContent>
   </ErpAnalyticsPageFrame>;
 }
@@ -124,18 +121,18 @@ function FinanceProfitContent({session, filters, onFiltersChange, query, flowQue
 function createFinanceProfitColumns({showCost, showProfit}: {showCost: boolean; showProfit: boolean}): ColumnDef<FinanceProfitGroupRow, unknown>[] {
   const columns: ColumnDef<FinanceProfitGroupRow, unknown>[] = [
     {accessorKey: "label", header: "分组", size: 220, cell: ({row}) => <div><p className="font-semibold">{row.original.label}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{row.original.secondary}</p></div>},
-    {accessorKey: "orderCount", header: "订单数", size: 90, cell: ({row}) => <span className="font-mono">{row.original.orderCount} 单</span>},
-    {accessorKey: "quantity", header: "数量", size: 90, cell: ({row}) => <span className="font-mono">{row.original.quantity} 件</span>},
-    {accessorKey: "revenue", header: "销售额", size: 130, cell: ({row}) => <span className="font-mono font-semibold">{formatCurrency(row.original.revenue)}</span>},
+    {accessorKey: "orderCount", header: "订单数", size: 90, cell: ({row}) => <span className="erp-data-number">{row.original.orderCount} 单</span>},
+    {accessorKey: "quantity", header: "数量", size: 90, cell: ({row}) => <span className="erp-data-number">{row.original.quantity} 件</span>},
+    {accessorKey: "revenue", header: "销售额", size: 130, cell: ({row}) => <span className="erp-data-number font-semibold">{formatCurrency(row.original.revenue)}</span>},
   ];
-  if (showCost) columns.push({accessorKey: "cost", header: "成本", size: 125, cell: ({row}) => row.original.cost === undefined ? <span className="text-[var(--erp-color-text-muted)]">—</span> : <span className="font-mono">{formatCurrency(row.original.cost)}</span>});
-  if (showProfit) columns.push({accessorKey: "profit", header: "毛利", size: 125, cell: ({row}) => <span className={`font-mono font-semibold ${row.original.profit !== undefined && row.original.profit < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-success)]"}`}>{row.original.profit === undefined ? "—" : formatCurrency(row.original.profit)}</span>});
+  if (showCost) columns.push({accessorKey: "cost", header: "成本", size: 125, cell: ({row}) => row.original.cost === undefined ? <span className="text-[var(--erp-color-text-muted)]">—</span> : <span className="erp-data-number">{formatCurrency(row.original.cost)}</span>});
+  if (showProfit) columns.push({accessorKey: "profit", header: "毛利", size: 125, cell: ({row}) => <span className={`erp-data-number font-semibold ${row.original.profit !== undefined && row.original.profit < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-success)]"}`}>{row.original.profit === undefined ? "—" : formatCurrency(row.original.profit)}</span>});
   if (showProfit) columns.push({accessorKey: "margin", header: "毛利率", size: 100, cell: ({row}) => row.original.margin === undefined ? "—" : `${(row.original.margin * 100).toFixed(2)}%`});
   return columns;
 }
 
 function ProfitTrend({trend, showProfit, showNetProfit, updatedAt}: {trend: FinanceProfitReport["trend"]; showProfit: boolean; showNetProfit: boolean; updatedAt: string}) {
-  if (!trend.length) return <div className="space-y-2">{!showProfit && <div className="flex items-center gap-2 bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs text-[var(--erp-color-text-secondary)]"><LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[var(--erp-color-warning)]" />当前账号仅可查看销售额，毛利曲线与利润明细受权限限制。</div>}<ErpEmptyState title="当前筛选暂无利润趋势" description="调整日期、商品或客户筛选条件后再试。" /><ChartMeta summary="当前筛选没有可展示的趋势数据" updatedAt={updatedAt} /></div>;
+  if (!trend.length) return <div className="space-y-2">{!showProfit && <div className="flex items-center gap-2 bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs text-[var(--erp-color-text-secondary)]"><LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[var(--erp-color-warning)]" />当前账号仅可查看销售额，毛利曲线与利润明细受权限限制。</div>}<ErpEmptyState density="compact" title="当前筛选暂无利润趋势" description="调整日期、商品或客户筛选条件后再试。" /><ChartMeta summary="当前筛选没有可展示的趋势数据" updatedAt={updatedAt} /></div>;
   const rows = trend.slice(-14);
   const revenue = rows.reduce((sum, row) => sum + row.revenue, 0);
   const profit = rows.reduce((sum, row) => sum + (row.profit || 0), 0);
@@ -143,25 +140,19 @@ function ProfitTrend({trend, showProfit, showNetProfit, updatedAt}: {trend: Fina
   return <div className="space-y-2" data-analytics-chart="profit-trend">
     {!showProfit && <div className="flex items-center gap-2 bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs text-[var(--erp-color-text-secondary)]"><LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[var(--erp-color-warning)]" />当前账号仅可查看销售额，毛利曲线与利润明细受权限限制。</div>}
     <div className="h-56 sm:h-64">
-      <ChartContainer config={financeProfitChartConfig} className="h-full">
-        <AreaChart data={rows} margin={{top: 8, right: 8, left: -16, bottom: 0}}>
-          <defs>
-            <linearGradient id="finance-profit-revenue-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--color-revenue)" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="var(--color-revenue)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 5" stroke="var(--erp-chart-grid)" vertical={false} />
-          <ChartLegend />
-          <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={24} tickMargin={8} tick={{fontSize: 10, fill: "var(--erp-color-text-muted)"}} axisLine={false} tickLine={false} />
-          <YAxis width={48} tickMargin={4} tick={{fontSize: 10, fill: "var(--erp-color-text-muted)"}} axisLine={false} tickLine={false} tickFormatter={(value: number) => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : String(value)} />
-          <ChartTooltip content={<ChartTooltipContent formatter={(value, _name, item) => [formatCurrency(Number(value || 0)), item.dataKey === "revenue" ? "销售额" : item.dataKey === "netProfit" ? "净利润" : "销售毛利"]} />} />
-          <ReferenceLine y={0} stroke="var(--erp-color-border-strong)" strokeDasharray="3 3" />
-          <Area type="monotone" dataKey="revenue" name="revenue" stroke="var(--color-revenue)" fill="url(#finance-profit-revenue-fill)" strokeWidth={2.5} dot={{r: 3, fill: "var(--erp-color-surface)", strokeWidth: 2}} activeDot={{r: 5}} />
-          {showProfit && <Line type="monotone" dataKey="profit" name="profit" stroke="var(--color-profit)" strokeDasharray="6 3" strokeWidth={2} dot={{r: 2, fill: "var(--erp-color-surface)", strokeWidth: 2}} activeDot={{r: 4}} connectNulls />}
-          {showNetProfit && <Line type="monotone" dataKey="netProfit" name="netProfit" stroke="var(--color-netProfit)" strokeDasharray="3 3" strokeWidth={2} dot={{r: 2, fill: "var(--erp-color-surface)", strokeWidth: 2}} activeDot={{r: 4}} connectNulls />}
-        </AreaChart>
-      </ChartContainer>
+      <AreaTrendChart
+        data={rows}
+        xKey="label"
+        ariaLabel="毛利趋势图"
+        config={financeProfitChartConfig}
+        series={[
+          {dataKey: "revenue", label: "销售额", color: "var(--erp-chart-primary)", type: "area"},
+          {dataKey: "profit", label: "销售毛利", color: "var(--erp-chart-positive)", strokeDasharray: "6 3", type: "line", hidden: !showProfit},
+          {dataKey: "netProfit", label: "净利润", color: "var(--erp-chart-muted)", strokeDasharray: "3 3", type: "line", hidden: !showNetProfit},
+        ]}
+        yTickFormatter={(value) => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : String(value)}
+        tooltipFormatter={(value, _name, item) => [formatCurrency(Number(value || 0)), item.dataKey === "revenue" ? "销售额" : item.dataKey === "netProfit" ? "净利润" : "销售毛利"]}
+      />
     </div>
     <ChartMeta summary={showProfit ? `近 ${rows.length} 期销售额 ${formatCurrency(revenue)} · 销售毛利 ${formatCurrency(profit)}${showNetProfit ? ` · 净利润 ${formatCurrency(netProfit)}` : ""}` : `近 ${rows.length} 期销售额 ${formatCurrency(revenue)} · 毛利按权限隐藏`} updatedAt={updatedAt} />
   </div>;

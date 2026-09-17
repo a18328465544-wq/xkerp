@@ -1,5 +1,5 @@
 import {apiRequest} from "../client";
-import {adaptFinanceIncomeCollection, adaptFinanceIncomeMutation, adaptFinanceIncomeSnapshot, toFinanceIncomeRequest} from "../adapters/finance-income.adapter";
+import {adaptFinanceIncomeCollection, adaptFinanceIncomeMutation, toFinanceIncomeRequest} from "../adapters/finance-income.adapter";
 import type {FinanceIncomeListResponseDto, FinanceIncomeMutationResponseDto} from "../dto/finance-income.dto";
 import type {FinanceIncomeFilters, FinanceIncomeFormValues} from "@/src/types/finance-income";
 

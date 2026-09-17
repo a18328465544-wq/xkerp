@@ -1,9 +1,12 @@
 import type {ProductTemplate, Vendor} from "../src/types.ts";
+import {inventoryStockStatusValues} from "../src/types/inventory.ts";
 import {withDatabaseTransaction} from "./db.ts";
 
 type PageScope = {tenantId?: string; storeId?: string; page?: number; pageSize?: number; keyword?: string; sortKey?: string; sortDirection?: string};
 export type VendorPageFilters = PageScope & {type?: string; level?: string; balance?: string};
 export type ProductPageFilters = PageScope & {category?: string; brand?: string};
+
+const inventoryStockStatusSql = inventoryStockStatusValues.map((status) => `'${status}'`).join(", ");
 
 function positiveInteger(value: number | undefined, fallback: number) {
   const parsed = Number(value);
@@ -81,7 +84,7 @@ export async function listProductPage(filters: ProductPageFilters = {}, options:
     if (filters.brand && filters.brand !== "all") scope.clauses.push(`COALESCE(p.data->>'brand', '') = ${scope.bind(filters.brand)}`);
     const where = scope.clauses.length ? `WHERE ${scope.clauses.join(" AND ")}` : "";
     const page = pageQuery(filters, {name: `COALESCE(data->>'name', '')`, refBuyPrice: numericJson("refBuyPrice"), refSellPrice: numericJson("refSellPrice"), currentStock: `current_stock`, lastDealTime: `COALESCE(data->>'lastDealTime', '')`}, `COALESCE(data->>'category', ''), COALESCE(data->>'brand', ''), COALESCE(data->>'model', '')`);
-    const inventoryScope = [`i.tenant_id = p.tenant_id`, `i.store_id = p.store_id`, `i.data->>'productId' = p.id`, `COALESCE(i.data->>'status','') IN ('已入库','已上架','待检测','检测中')`].join(" AND ");
+    const inventoryScope = [`i.tenant_id = p.tenant_id`, `i.store_id = p.store_id`, `i.data->>'productId' = p.id`, `COALESCE(i.data->>'status','') IN (${inventoryStockStatusSql})`].join(" AND ");
     const base = `SELECT p.id, p.data, (SELECT COUNT(*) FROM gpu_inventory i WHERE ${inventoryScope})::int AS current_stock FROM gpu_products p ${where}`;
     const facetScope = scopeBuilder(filters);
     const facetWhere = facetScope.clauses.length ? `WHERE ${facetScope.clauses.join(" AND ")}` : "";

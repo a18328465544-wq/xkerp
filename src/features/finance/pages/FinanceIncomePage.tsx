@@ -12,29 +12,21 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldCheck,
 } from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
-import { toast } from "sonner";
+import {notify} from "@/src/utils/notification";
 import { Button, Card, Input, Select } from "@/src/components/ui";
 import {
-  DashboardSection,
-  ErpFinancePageFrame,
   ErpDateRangePicker,
-  ErpDetailDrawer,
   ErpFilterBar,
   ErpLoadingState,
-  ErpMetricCard,
-  ErpPageContent,
   ErpPageError,
-  ErpPageHeader,
-  ErpPageToolbar,
   ErpStatusBadge,
   MetricsRegion,
   type QuickStatusItemData,
@@ -64,8 +56,8 @@ import {
   parseFinanceIncomeFilters,
 } from "../finance-income.filters";
 import { FinanceIncomeDialog } from "../components/FinanceIncomeDialog";
-import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
-import { FinanceTableRegion } from "../components/FinanceTableRegion";
+import {FinanceEntryPageLayout} from "../components/FinanceEntryPageLayout";
+import {FinanceEntryDeleteDrawer, FinanceEntryDetailDrawer, FinanceEntryMetric} from "../components/FinanceEntryDetailDrawers";
 
 function useIncomeUrlState() {
   return useUrlSearchState({
@@ -147,7 +139,7 @@ function FinanceIncomeContent({
   const invalidate = () => invalidateErpDomains(queryClient, ["finance"]);
   const mutationError = (caught: Error) => {
     if (caught instanceof ApiError && caught.isUnauthorized) { onAuthExpired(); return; }
-    toast.error(caught.message);
+    notify.error(caught.message);
   };
   const saveMutation = useMutation({
     mutationFn: ({
@@ -161,7 +153,7 @@ function FinanceIncomeContent({
         ? financeIncomeApi.update(item.id, values, item.handler)
         : financeIncomeApi.create(values, session.user.displayName),
     onSuccess: async (item, variables) => {
-      toast.success(`${item.businessType}已保存`);
+      notify.success(`${item.businessType}已保存`);
       setDialogOpen(false);
       setEditing(null);
       setDetail(item);
@@ -172,7 +164,7 @@ function FinanceIncomeContent({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => financeIncomeApi.remove(id),
     onSuccess: async () => {
-      toast.success("收入记录已删除并由服务端回滚账户流水");
+      notify.success("收入记录已删除并由服务端回滚账户流水");
       setDeleting(null);
       setDetail(null);
       await invalidate();
@@ -263,12 +255,12 @@ function FinanceIncomeContent({
     URL.revokeObjectURL(url);
   };
   return (
-    <ErpFinancePageFrame>
-      <ErpPageHeader
-        title="其他收支"
-        subtitle="仅登记非销售、非采购退货流程产生的非经营收入；采购退款请在退货或账户流水中查看。"
-        quickStatus={quickStatus}
-        actions={
+    <FinanceEntryPageLayout
+      header={{
+        title: "其他收支",
+        subtitle: "仅登记非销售、非采购退货流程产生的非经营收入；采购退款请在退货或账户流水中查看。",
+        quickStatus: quickStatus,
+        actions: (
           <>
             <Button
               size="sm"
@@ -301,32 +293,24 @@ function FinanceIncomeContent({
               登记收入
             </Button>
           </>
-        }
-      />
-      <FinanceSectionTabs
-        label="其他收支分类"
-        items={[
-          {
-            label: "收入登记",
-            path: "/finance/income",
-            visible: createCapabilities(session).menu("payment_in"),
-          },
-          {
-            label: "支出登记",
-            path: "/finance/expense",
-            visible: createCapabilities(session).menu("payment_out"),
-          },
-        ]}
-      />
-      <MetricsRegion mobileCollapseAfter={4}>
-        <Metric
+        ),
+      }}
+      tabs={{
+        label: "其他收支分类",
+        items: [
+          {label: "收入登记", path: "/finance/income", visible: createCapabilities(session).menu("payment_in")},
+          {label: "支出登记", path: "/finance/expense", visible: createCapabilities(session).menu("payment_out")},
+        ],
+      }}
+      metrics={<MetricsRegion mobileCollapseAfter={4}>
+        <FinanceEntryMetric
           label="筛选收入"
           value={formatCurrency(collection.totalAmount)}
           detail={`${collection.total} 笔匹配记录`}
           icon={<CircleDollarSign className="h-4 w-4" />}
           tone="success"
         />
-        <Metric
+        <FinanceEntryMetric
           label="当前页本月收入"
           value={formatCurrency(
             monthItems.reduce((sum, item) => sum + item.amount, 0),
@@ -335,23 +319,22 @@ function FinanceIncomeContent({
           icon={<CalendarRange className="h-4 w-4" />}
           tone="success"
         />
-        <Metric
+        <FinanceEntryMetric
           label="主要来源类型"
           value={topCategory?.[0] || "暂无"}
           detail={topCategory ? formatCurrency(topCategory[1]) : "本月暂无登记"}
           icon={<Landmark className="h-4 w-4" />}
           tone="neutral"
         />
-        <Metric
+        <FinanceEntryMetric
           label="业务流水隔离"
           value="已启用"
           detail="采购退款不计入其他收入"
           icon={<ShieldCheck className="h-4 w-4" />}
           tone="warning"
         />
-      </MetricsRegion>
-      <ErpPageToolbar>
-      <ErpFilterBar
+      </MetricsRegion>}
+      filters={<ErpFilterBar
         compact
         actions={
           <Button
@@ -364,15 +347,11 @@ function FinanceIncomeContent({
           </Button>
         }
       >
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
-          <Input
-            className="pl-9"
+        <ErpSearchInput className="min-w-56 flex-1"
             value={filters.keyword}
             onChange={(event) => update({ keyword: event.target.value })}
             placeholder="搜索来源、编号、参考号或备注"
-          />
-        </div>
+            aria-label="搜索收入登记" />
         <Select
           className="w-36"
           value={filters.businessType}
@@ -425,14 +404,12 @@ function FinanceIncomeContent({
           endAriaLabel="结束日期"
           ariaLabel="收入日期范围"
         />
-      </ErpFilterBar>
-      </ErpPageToolbar>
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      <FinanceTableRegion
-        title="收入明细"
-        description="点击行查看凭证与登记详情；采购退款属于采购退货结算，不计入其他收入。"
-        actions={<ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />}
-        table={{
+      </ErpFilterBar>}
+      table={{
+        title: "收入明细",
+        description: "点击行查看凭证与登记详情；采购退款属于采购退货结算，不计入其他收入。",
+        actions: <ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />,
+        table: {
           columns,
           data: collection.items,
           getRowId: (row) => row.id,
@@ -452,10 +429,13 @@ function FinanceIncomeContent({
           enableColumnResizing: true,
           stickyHeader: true,
           virtualized: collection.items.length >= 50,
-        }}
-      />
-      <IncomeDetail
+        },
+      }}
+    >
+      <FinanceEntryDetailDrawer
         item={detail}
+        kind="income"
+        subject={detail?.source || ""}
         canEdit={canEdit}
         canDelete={session.permissions.canDelete}
         onClose={() => setDetail(null)}
@@ -484,189 +464,20 @@ function FinanceIncomeContent({
           await saveMutation.mutateAsync({ values, item: editing });
         }}
       />
-      <ConfirmDelete
+      <FinanceEntryDeleteDrawer
         item={deleting}
+        kind="income"
+        subject={deleting?.source}
         pending={deleteMutation.isPending}
         onClose={() => setDeleting(null)}
         onConfirm={() => {
           if (deleting) deleteMutation.mutate(deleting.id);
         }}
       />
-      </ErpPageContent>
-    </ErpFinancePageFrame>
+    </FinanceEntryPageLayout>
   );
 }
 
-function IncomeDetail({
-  item,
-  canEdit,
-  canDelete,
-  onClose,
-  onEdit,
-  onDelete,
-}: {
-  item: FinanceIncomeItem | null;
-  canEdit: boolean;
-  canDelete: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <ErpDetailDrawer
-      open={Boolean(item)}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title={item?.businessType || "收入详情"}
-      description={item ? `${item.id} · ${item.time}` : undefined}
-      footer={
-        item && (
-          <div className="flex justify-end gap-2">
-            {canDelete && item.deletable && (
-              <Button size="sm" variant="danger" onClick={onDelete}>
-                删除
-              </Button>
-            )}
-            {canEdit && item.editable && (
-              <Button size="sm" variant="primary" onClick={onEdit}>
-                编辑
-              </Button>
-            )}
-          </div>
-        )
-      }
-    >
-      <div className="space-y-5">
-        {item && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <Fact
-                label="金额"
-                value={formatCurrency(item.amount)}
-                tone="success"
-              />
-              <Fact label="结算账户" value={item.accountName} />
-            </div>
-            <DashboardSection title="登记信息">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <Row label="收入来源" value={item.source} />
-                <Row label="入账方式" value={item.paymentMethod} />
-                <Row label="经办人" value={item.handler} />
-                <Row label="外部参考号" value={item.referenceNo || "未填写"} />
-              </div>
-            </DashboardSection>
-            {item.images.length > 0 && (
-              <DashboardSection title="收入凭证">
-                <div className="grid grid-cols-2 gap-3">
-                  {item.images.map((url, index) => (
-                    <a key={url} href={url} target="_blank" rel="noreferrer">
-                      <img
-                        src={url}
-                        alt={`收入凭证 ${index + 1}`}
-                        className="h-36 w-full rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              </DashboardSection>
-            )}
-            {item.remarks && (
-              <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm">
-                {item.remarks}
-              </p>
-            )}
-            {item.restrictionReason && (
-              <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">
-                {item.restrictionReason}
-              </p>
-            )}
-          </>
-        )}
-      </div>
-    </ErpDetailDrawer>
-  );
-}
-function ConfirmDelete({
-  item,
-  pending,
-  onClose,
-  onConfirm,
-}: {
-  item: FinanceIncomeItem | null;
-  pending: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <ErpDetailDrawer
-      open={Boolean(item)}
-      onOpenChange={(open) => {
-        if (!open && !pending) onClose();
-      }}
-      title="删除收入记录"
-      description="服务端将同时回滚账户余额和关联流水"
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
-            取消
-          </Button>
-          <Button variant="danger" onClick={onConfirm} disabled={pending}>
-            {pending ? "删除中…" : "确认删除"}
-          </Button>
-        </div>
-      }
-    >
-      <p className="text-sm leading-6 text-[var(--erp-color-text-secondary)]">
-        确认删除 {item?.businessType}「{item?.source}」的{" "}
-        {formatCurrency(item?.amount || 0)} 收入？该操作最终仍由服务端校验。
-      </p>
-    </ErpDetailDrawer>
-  );
-}
-function Metric({
-  label,
-  value,
-  detail,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: ReactNode;
-  tone: "neutral" | "info" | "success" | "warning";
-}) {
-  return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} valueTone={tone} />;
-}
-function Fact({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "success";
-}) {
-  return (
-    <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3">
-      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p
-        className={`mt-1 font-mono text-base font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : ""}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p className="mt-1 font-medium">{value}</p>
-    </div>
-  );
-}
 function csvCell(value: string | number) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;

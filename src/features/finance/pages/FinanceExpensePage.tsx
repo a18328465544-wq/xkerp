@@ -12,29 +12,21 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldCheck,
 } from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
-import { toast } from "sonner";
+import {notify} from "@/src/utils/notification";
 import { Button, Card, Input, Select } from "@/src/components/ui";
 import {
-  DashboardSection,
-  ErpFinancePageFrame,
   ErpDateRangePicker,
-  ErpDetailDrawer,
   ErpFilterBar,
   ErpLoadingState,
-  ErpMetricCard,
-  ErpPageContent,
   ErpPageError,
-  ErpPageHeader,
-  ErpPageToolbar,
   ErpStatusBadge,
   MetricsRegion,
   type QuickStatusItemData,
@@ -65,8 +57,8 @@ import {
   parseFinanceExpenseFilters,
 } from "../finance-expense.filters";
 import { FinanceExpenseDialog } from "../components/FinanceExpenseDialog";
-import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
-import { FinanceTableRegion } from "../components/FinanceTableRegion";
+import {FinanceEntryPageLayout} from "../components/FinanceEntryPageLayout";
+import {FinanceEntryDeleteDrawer, FinanceEntryDetailDrawer, FinanceEntryMetric} from "../components/FinanceEntryDetailDrawers";
 function useExpenseUrlState() {
   return useUrlSearchState({
     defaultValue: defaultFinanceExpenseFilters,
@@ -147,7 +139,7 @@ function FinanceExpenseContent({
   const invalidate = () => invalidateErpDomains(queryClient, ["finance"]);
   const mutationError = (caught: Error) => {
     if (caught instanceof ApiError && caught.isUnauthorized) { onAuthExpired(); return; }
-    toast.error(caught.message);
+    notify.error(caught.message);
   };
   const saveMutation = useMutation({
     mutationFn: ({
@@ -161,7 +153,7 @@ function FinanceExpenseContent({
         ? financeExpenseApi.update(item.id, values, item.handler)
         : financeExpenseApi.create(values, session.user.displayName),
     onSuccess: async (item, variables) => {
-      toast.success(`${item.businessType}已保存`);
+      notify.success(`${item.businessType}已保存`);
       setDialogOpen(false);
       setEditing(null);
       setDetail(item);
@@ -172,7 +164,7 @@ function FinanceExpenseContent({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => financeExpenseApi.remove(id),
     onSuccess: async () => {
-      toast.success("支出记录已删除并由服务端回滚账户流水");
+      notify.success("支出记录已删除并由服务端回滚账户流水");
       setDeleting(null);
       setDetail(null);
       await invalidate();
@@ -263,12 +255,12 @@ function FinanceExpenseContent({
     URL.revokeObjectURL(url);
   };
   return (
-    <ErpFinancePageFrame>
-      <ErpPageHeader
-        title="其他收支"
-        subtitle="集中登记销售、采购流程之外的临时收入与支出。"
-        quickStatus={quickStatus}
-        actions={
+    <FinanceEntryPageLayout
+      header={{
+        title: "其他收支",
+        subtitle: "集中登记销售、采购流程之外的临时收入与支出。",
+        quickStatus: quickStatus,
+        actions: (
           <>
             <Button
               size="sm"
@@ -301,32 +293,24 @@ function FinanceExpenseContent({
               登记支出
             </Button>
           </>
-        }
-      />
-      <FinanceSectionTabs
-        label="其他收支分类"
-        items={[
-          {
-            label: "收入登记",
-            path: "/finance/income",
-            visible: createCapabilities(session).menu("payment_in"),
-          },
-          {
-            label: "支出登记",
-            path: "/finance/expense",
-            visible: createCapabilities(session).menu("payment_out"),
-          },
-        ]}
-      />
-      <MetricsRegion mobileCollapseAfter={4}>
-        <Metric
+        ),
+      }}
+      tabs={{
+        label: "其他收支分类",
+        items: [
+          {label: "收入登记", path: "/finance/income", visible: createCapabilities(session).menu("payment_in")},
+          {label: "支出登记", path: "/finance/expense", visible: createCapabilities(session).menu("payment_out")},
+        ],
+      }}
+      metrics={<MetricsRegion mobileCollapseAfter={4}>
+        <FinanceEntryMetric
           label="筛选支出"
           value={formatCurrency(collection.totalAmount)}
           detail={`${collection.total} 笔匹配记录`}
           icon={<CircleDollarSign className="h-4 w-4" />}
           tone="danger"
         />
-        <Metric
+        <FinanceEntryMetric
           label="当前页本月支出"
           value={formatCurrency(
             monthItems.reduce((sum, item) => sum + item.amount, 0),
@@ -335,23 +319,22 @@ function FinanceExpenseContent({
           icon={<CalendarRange className="h-4 w-4" />}
           tone="danger"
         />
-        <Metric
+        <FinanceEntryMetric
           label="主要支出类型"
           value={topCategory?.[0] || "暂无"}
           detail={topCategory ? formatCurrency(topCategory[1]) : "本月暂无登记"}
           icon={<Landmark className="h-4 w-4" />}
           tone="neutral"
         />
-        <Metric
+        <FinanceEntryMetric
           label="受限历史记录"
           value={`${collection.items.filter((item) => !item.editable).length} 笔`}
           detail="必须从原业务流程调整"
           icon={<ShieldCheck className="h-4 w-4" />}
           tone="warning"
         />
-      </MetricsRegion>
-      <ErpPageToolbar>
-      <ErpFilterBar
+      </MetricsRegion>}
+      filters={<ErpFilterBar
         compact
         actions={
           <Button
@@ -364,15 +347,11 @@ function FinanceExpenseContent({
           </Button>
         }
       >
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
-          <Input
-            className="pl-9"
+        <ErpSearchInput className="min-w-56 flex-1"
             value={filters.keyword}
             onChange={(event) => update({ keyword: event.target.value })}
             placeholder="搜索对象、编号、参考号或备注"
-          />
-        </div>
+            aria-label="搜索支出登记" />
         <Select
           className="w-36"
           value={filters.businessType}
@@ -429,14 +408,12 @@ function FinanceExpenseContent({
           endAriaLabel="结束日期"
           ariaLabel="支出日期范围"
         />
-      </ErpFilterBar>
-      </ErpPageToolbar>
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      <FinanceTableRegion
-        title="支出明细"
-        description="点击行查看凭证；客户退款、提成等自动支出只能从原业务流程调整。"
-        actions={<ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />}
-        table={{
+      </ErpFilterBar>}
+      table={{
+        title: "支出明细",
+        description: "点击行查看凭证；客户退款、提成等自动支出只能从原业务流程调整。",
+        actions: <ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />,
+        table: {
           columns,
           data: collection.items,
           getRowId: (row) => row.id,
@@ -456,10 +433,13 @@ function FinanceExpenseContent({
           enableColumnResizing: true,
           stickyHeader: true,
           virtualized: collection.items.length >= 50,
-        }}
-      />
-      <ExpenseDetail
+        },
+      }}
+    >
+      <FinanceEntryDetailDrawer
         item={detail}
+        kind="expense"
+        subject={detail?.party || ""}
         canEdit={canEdit}
         canDelete={session.permissions.canDelete}
         onClose={() => setDetail(null)}
@@ -488,186 +468,17 @@ function FinanceExpenseContent({
           await saveMutation.mutateAsync({ values, item: editing });
         }}
       />
-      <ConfirmDelete
+      <FinanceEntryDeleteDrawer
         item={deleting}
+        kind="expense"
+        subject={deleting?.party}
         pending={deleteMutation.isPending}
         onClose={() => setDeleting(null)}
         onConfirm={() => {
           if (deleting) deleteMutation.mutate(deleting.id);
         }}
       />
-      </ErpPageContent>
-    </ErpFinancePageFrame>
-  );
-}
-function ExpenseDetail({
-  item,
-  canEdit,
-  canDelete,
-  onClose,
-  onEdit,
-  onDelete,
-}: {
-  item: FinanceExpenseItem | null;
-  canEdit: boolean;
-  canDelete: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <ErpDetailDrawer
-      open={Boolean(item)}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title={item?.businessType || "支出详情"}
-      description={item ? `${item.id} · ${item.time}` : undefined}
-      footer={
-        item && (
-          <div className="flex justify-end gap-2">
-            {canDelete && item.deletable && (
-              <Button size="sm" variant="danger" onClick={onDelete}>
-                删除
-              </Button>
-            )}
-            {canEdit && item.editable && (
-              <Button size="sm" variant="primary" onClick={onEdit}>
-                编辑
-              </Button>
-            )}
-          </div>
-        )
-      }
-    >
-      <div className="space-y-5">
-        {item && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <Fact
-                label="金额"
-                value={formatCurrency(item.amount)}
-                tone="danger"
-              />
-              <Fact label="结算账户" value={item.accountName} />
-            </div>
-            <DashboardSection title="登记信息">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <Row label="支出对象" value={item.party} />
-                <Row label="支付方式" value={item.paymentMethod} />
-                <Row label="经办人" value={item.handler} />
-                <Row label="外部参考号" value={item.referenceNo || "未填写"} />
-              </div>
-            </DashboardSection>
-            {item.images.length > 0 && (
-              <DashboardSection title="支出凭证">
-                <div className="grid grid-cols-2 gap-3">
-                  {item.images.map((url, index) => (
-                    <a key={url} href={url} target="_blank" rel="noreferrer">
-                      <img
-                        src={url}
-                        alt={`支出凭证 ${index + 1}`}
-                        className="h-36 w-full rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              </DashboardSection>
-            )}
-            {item.remarks && (
-              <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm">
-                {item.remarks}
-              </p>
-            )}
-            {item.restrictionReason && (
-              <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">
-                {item.restrictionReason}
-              </p>
-            )}
-          </>
-        )}
-      </div>
-    </ErpDetailDrawer>
-  );
-}
-function ConfirmDelete({
-  item,
-  pending,
-  onClose,
-  onConfirm,
-}: {
-  item: FinanceExpenseItem | null;
-  pending: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <ErpDetailDrawer
-      open={Boolean(item)}
-      onOpenChange={(open) => {
-        if (!open && !pending) onClose();
-      }}
-      title="删除支出记录"
-      description="服务端将同时回滚账户余额和关联流水"
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
-            取消
-          </Button>
-          <Button variant="danger" onClick={onConfirm} disabled={pending}>
-            {pending ? "删除中…" : "确认删除"}
-          </Button>
-        </div>
-      }
-    >
-      <p className="text-sm leading-6 text-[var(--erp-color-text-secondary)]">
-        确认删除 {item?.businessType}「{item?.party}」的{" "}
-        {formatCurrency(item?.amount || 0)} 支出？该操作最终仍由服务端校验。
-      </p>
-    </ErpDetailDrawer>
-  );
-}
-function Metric({
-  label,
-  value,
-  detail,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: ReactNode;
-  tone: "neutral" | "warning" | "danger";
-}) {
-  return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} valueTone={tone === "danger" ? "danger" : tone} />;
-}
-function Fact({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "danger";
-}) {
-  return (
-    <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3">
-      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p
-        className={`mt-1 font-mono text-base font-bold ${tone === "danger" ? "text-[var(--erp-color-danger)]" : ""}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p className="mt-1 font-medium">{value}</p>
-    </div>
+    </FinanceEntryPageLayout>
   );
 }
 function csvCell(value: string | number) {

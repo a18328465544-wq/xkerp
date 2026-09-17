@@ -1,5 +1,6 @@
 import type { Express, Request, RequestHandler, Response } from "express";
 import type { PublicStateMode } from "../publicState.ts";
+import {parseHttpDto, stateModeQueryDto} from "../httpDto.ts";
 
 type StateRequest = Request & {
   authToken?: string;
@@ -24,7 +25,8 @@ export function registerStateRevisionRoute(app: Express, dependencies: StateDepe
 export function registerStateRoutes(app: Express, dependencies: StateDependencies) {
   app.get("/api/state", (req: Request, res: Response) => {
     const stateRequest = req as StateRequest;
-    const mode: PublicStateMode = req.query.mode === "initial" ? "initial" : "full";
+    const query = parseHttpDto(stateModeQueryDto, req.query);
+    const mode: PublicStateMode = query.mode;
     res.json({ data: dependencies.getPublicState(stateRequest, mode), meta: { stateMode: mode, stateRevision: dependencies.getRevision() } });
   });
 

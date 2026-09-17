@@ -1,9 +1,10 @@
 import type {PermissionModel} from "../endpoints/auth";
 import type {AssemblyCreateRequestDto, AssemblyPartRequestDto, AssemblyResponseDto} from "../dto/assembly.dto";
+import {productCategoryValues} from "@/src/types/core";
 import type {ProductCategory} from "@/src/types/core";
 import type {AssemblyFormValues, AssemblyInventoryOption, AssemblyOperation, AssemblyOperationList, AssemblyPart, AssemblyProductOption, AssemblyReferenceData} from "@/src/types/assembly";
 
-const categories: readonly ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
+const categories = productCategoryValues;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};

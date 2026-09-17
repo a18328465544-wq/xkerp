@@ -1,44 +1,49 @@
-import {lazy, type ReactNode} from "react";
+import {type ReactNode} from "react";
+import {pageComponents} from "../pageComponents";
 
-const DashboardPage = lazy(() => import("@/src/features/dashboard/pages/DashboardPage").then((module) => ({default: module.DashboardPage})));
-const InventoryListPage = lazy(() => import("@/src/features/inventory/pages/InventoryListPage").then((module) => ({default: module.InventoryListPage})));
-const SalesListPage = lazy(() => import("@/src/features/sales/pages/SalesListPage").then((module) => ({default: module.SalesListPage})));
-const NewSalesOrderPage = lazy(() => import("@/src/features/sales/pages/NewSalesOrderPage").then((module) => ({default: module.NewSalesOrderPage})));
-const SalesOutboundPage = lazy(() => import("@/src/features/sales/pages/SalesOutboundPage").then((module) => ({default: module.SalesOutboundPage})));
-const AiInsightsPage = lazy(() => import("@/src/features/ai/pages/AiInsightsPage").then((module) => ({default: module.AiInsightsPage})));
-const MarketQuotesPage = lazy(() => import("@/src/features/quotes/pages/MarketQuotesPage").then((module) => ({default: module.MarketQuotesPage})));
-const ProductLibraryPage = lazy(() => import("@/src/features/products/pages/ProductLibraryPage").then((module) => ({default: module.ProductLibraryPage})));
-const AssemblyWorkspacePage = lazy(() => import("@/src/features/assembly/pages/AssemblyWorkspacePage").then((module) => ({default: module.AssemblyWorkspacePage})));
-const PurchaseListPage = lazy(() => import("@/src/features/purchase/pages/PurchaseListPage").then((module) => ({default: module.PurchaseListPage})));
-const NewPurchaseOrderPage = lazy(() => import("@/src/features/purchase/pages/NewPurchaseOrderPage").then((module) => ({default: module.NewPurchaseOrderPage})));
-const PurchaseDetailPage = lazy(() => import("@/src/features/purchase/pages/PurchaseDetailPage").then((module) => ({default: module.PurchaseDetailPage})));
-const PurchaseEditPage = lazy(() => import("@/src/features/purchase/pages/PurchaseEditPage").then((module) => ({default: module.PurchaseEditPage})));
-const InspectionWorkspacePage = lazy(() => import("@/src/features/inspections/pages/InspectionWorkspacePage").then((module) => ({default: module.InspectionWorkspacePage})));
-const PurchaseReturnListPage = lazy(() => import("@/src/features/returns/pages/PurchaseReturnListPage").then((module) => ({default: module.PurchaseReturnListPage})));
-const NewPurchaseReturnPage = lazy(() => import("@/src/features/returns/pages/NewPurchaseReturnPage").then((module) => ({default: module.NewPurchaseReturnPage})));
-const SalesReturnListPage = lazy(() => import("@/src/features/returns/pages/SalesReturnListPage").then((module) => ({default: module.SalesReturnListPage})));
-const NewSalesReturnPage = lazy(() => import("@/src/features/returns/pages/NewSalesReturnPage").then((module) => ({default: module.NewSalesReturnPage})));
-const CrmWorkspacePage = lazy(() => import("@/src/features/crm/pages/CrmWorkspacePage").then((module) => ({default: module.CrmWorkspacePage})));
-const NewCustomerLeadPage = lazy(() => import("@/src/features/crm/pages/NewCustomerLeadPage").then((module) => ({default: module.NewCustomerLeadPage})));
-const CustomerDirectoryPage = lazy(() => import("@/src/features/customers/pages/CustomerDirectoryPage").then((module) => ({default: module.CustomerDirectoryPage})));
-const VendorDirectoryPage = lazy(() => import("@/src/features/vendors/pages/VendorDirectoryPage").then((module) => ({default: module.VendorDirectoryPage})));
-const OrderPoolPage = lazy(() => import("@/src/features/order-pool/pages/OrderPoolPage").then((module) => ({default: module.OrderPoolPage})));
-const AftersalesWorkspacePage = lazy(() => import("@/src/features/aftersales/pages/AftersalesWorkspacePage").then((module) => ({default: module.AftersalesWorkspacePage})));
-const FinanceDashboardPage = lazy(() => import("@/src/features/finance/pages/FinanceDashboardPage").then((module) => ({default: module.FinanceDashboardPage})));
-const FinanceAccountsPage = lazy(() => import("@/src/features/finance/pages/FinanceAccountsPage").then((module) => ({default: module.FinanceAccountsPage})));
-const FinanceLedgerPage = lazy(() => import("@/src/features/finance/pages/FinanceLedgerPage").then((module) => ({default: module.FinanceLedgerPage})));
-const FinanceIncomePage = lazy(() => import("@/src/features/finance/pages/FinanceIncomePage").then((module) => ({default: module.FinanceIncomePage})));
-const FinanceExpensePage = lazy(() => import("@/src/features/finance/pages/FinanceExpensePage").then((module) => ({default: module.FinanceExpensePage})));
-const FinanceTransfersPage = lazy(() => import("@/src/features/finance/pages/FinanceTransfersPage").then((module) => ({default: module.FinanceTransfersPage})));
-const FinanceProfitPage = lazy(() => import("@/src/features/finance/pages/FinanceProfitPage").then((module) => ({default: module.FinanceProfitPage})));
-const FinanceClosingPage = lazy(() => import("@/src/features/finance/pages/FinanceClosingPage").then((module) => ({default: module.FinanceClosingPage})));
-const FinanceReturnReconcilePage = lazy(() => import("@/src/features/finance/pages/FinanceReturnReconcilePage").then((module) => ({default: module.FinanceReturnReconcilePage})));
-const FinanceCommissionPage = lazy(() => import("@/src/features/finance/pages/FinanceCommissionPage").then((module) => ({default: module.FinanceCommissionPage})));
-const FinanceCustomerFundsPage = lazy(() => import("@/src/features/finance/pages/FinanceCustomerFundsPage").then((module) => ({default: module.FinanceCustomerFundsPage})));
-const SettingsUsersPage = lazy(() => import("@/src/features/settings/pages/SettingsUsersPage").then((module) => ({default: module.SettingsUsersPage})));
-const SettingsLogsPage = lazy(() => import("@/src/features/settings/pages/SettingsLogsPage").then((module) => ({default: module.SettingsLogsPage})));
-const BackupPage = lazy(() => import("@/src/features/settings/pages/BackupPage").then((module) => ({default: module.BackupPage})));
-const DesignSystemPage = lazy(() => import("@/src/features/design-system/pages/DesignSystemPage").then((module) => ({default: module.DesignSystemPage})));
+const {
+  dashboard: DashboardPage,
+  inventory: InventoryListPage,
+  salesList: SalesListPage,
+  salesNew: NewSalesOrderPage,
+  salesDetail: SalesDetailPage,
+  salesEdit: SalesEditPage,
+  salesOutbound: SalesOutboundPage,
+  aiInsights: AiInsightsPage,
+  quotes: MarketQuotesPage,
+  products: ProductLibraryPage,
+  assembly: AssemblyWorkspacePage,
+  purchaseList: PurchaseListPage,
+  purchaseNew: NewPurchaseOrderPage,
+  purchaseDetail: PurchaseDetailPage,
+  purchaseEdit: PurchaseEditPage,
+  inspections: InspectionWorkspacePage,
+  purchaseReturns: PurchaseReturnListPage,
+  purchaseReturnsNew: NewPurchaseReturnPage,
+  salesReturns: SalesReturnListPage,
+  salesReturnsNew: NewSalesReturnPage,
+  crm: CrmWorkspacePage,
+  crmCustomerNew: NewCustomerLeadPage,
+  customers: CustomerDirectoryPage,
+  vendors: VendorDirectoryPage,
+  orderPool: OrderPoolPage,
+  aftersales: AftersalesWorkspacePage,
+  financeDashboard: FinanceDashboardPage,
+  financeAccounts: FinanceAccountsPage,
+  financeLedger: FinanceLedgerPage,
+  financeIncome: FinanceIncomePage,
+  financeExpense: FinanceExpensePage,
+  financeTransfers: FinanceTransfersPage,
+  financeProfit: FinanceProfitPage,
+  financeClosing: FinanceClosingPage,
+  financeReturnReconcile: FinanceReturnReconcilePage,
+  financeCommission: FinanceCommissionPage,
+  financeCustomerFunds: FinanceCustomerFundsPage,
+  settingsUsers: SettingsUsersPage,
+  settingsLogs: SettingsLogsPage,
+  backup: BackupPage,
+  designSystem: DesignSystemPage,
+} = pageComponents;
 
 export type WorkspaceTabPageDescriptor = {
   pageKey: string;
@@ -108,6 +113,16 @@ export function resolveWorkspaceTabPage(pathname: string): WorkspaceTabPageDescr
   if (purchaseEdit) {
     const purchaseId = decodePathPart(purchaseEdit[1] || "");
     return staticPage(`purchase-edit:${purchaseId}`, () => <PurchaseEditPage purchaseId={purchaseId} />);
+  }
+  const salesEdit = pathname.match(/^\/sales\/([^/]+)\/edit$/);
+  if (salesEdit) {
+    const salesId = decodePathPart(salesEdit[1] || "");
+    return staticPage(`sales-edit:${salesId}`, () => <SalesEditPage salesId={salesId} />);
+  }
+  const salesDetail = pathname.match(/^\/sales\/([^/]+)$/);
+  if (salesDetail) {
+    const salesId = decodePathPart(salesDetail[1] || "");
+    return staticPage(`sales-detail:${salesId}`, () => <SalesDetailPage salesId={salesId} />);
   }
   const purchaseDetail = pathname.match(/^\/purchase\/([^/]+)$/);
   if (purchaseDetail) {

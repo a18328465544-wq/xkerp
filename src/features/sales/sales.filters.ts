@@ -1,3 +1,4 @@
+import {salesChannelValues, salesOutboundStatusValues, salesPaymentStatusValues} from "@/src/types/sales";
 import type {SalesChannel, SalesListFilters, SalesListItem, SalesListSelection, SalesListSortKey, SalesOutboundStatus, SalesPaymentStatus} from "@/src/types/sales";
 import {readDateRange} from "@/src/lib/dateRangePickerUtils";
 
@@ -14,9 +15,9 @@ export const defaultSalesListFilters: SalesListFilters = {
   sortDirection: "desc",
 };
 
-const channels: readonly SalesChannel[] = ["到店", "闲鱼", "抖音", "小红书", "B站", "微信私域", "同行网店"];
-const paymentStatuses: readonly SalesPaymentStatus[] = ["未收款", "部分收款", "已收款", "已退款"];
-const outboundStatuses: readonly SalesOutboundStatus[] = ["待出库", "已出库"];
+const channels = salesChannelValues;
+const paymentStatuses = salesPaymentStatusValues;
+const outboundStatuses = salesOutboundStatusValues;
 const sortKeys: readonly SalesListSortKey[] = ["date", "invoiceNo", "customerName", "totalCount", "totalAmount", "totalProfit", "paymentStatus", "outboundStatus", "handleBy"];
 
 function text(params: URLSearchParams, key: string) {

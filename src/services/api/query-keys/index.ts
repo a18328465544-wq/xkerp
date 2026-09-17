@@ -29,6 +29,9 @@ export const queryKeys = {
     all: () => ["state"] as const,
     initial: () => ["state", "initial"] as const,
   },
+  globalSearch: {
+    search: (query: string) => ["global-search", query] as const,
+  },
   ai: {
     all: () => ["ai"] as const,
     insights: () => ["ai", "insights"] as const,

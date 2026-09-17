@@ -3,6 +3,7 @@ import type {AuthenticatedRequest} from "../httpAuth.ts";
 import {queryLogsPage} from "../db.ts";
 import type {createStoreActions} from "../store.ts";
 import type {SystemUserAccount} from "../../src/types.ts";
+import {logsCreateDto, logsListQueryDto, parseHttpDto} from "../httpDto.ts";
 
 type LogRequest = AuthenticatedRequest<SystemUserAccount>;
 
@@ -22,12 +23,13 @@ export function registerLogRoutes(app: Express, dependencies: LogRouteDependenci
     dependencies.requireMenu("logs"),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as LogRequest;
+      const query = parseHttpDto(logsListQueryDto, req.query);
       const page = await queryLogsPage({
         tenantId: authRequest.tenantId,
         storeId: authRequest.storeId,
-        page: Number(req.query.page || 1),
-        pageSize: Number(req.query.pageSize || req.query.per_page || 100),
-        keyword: String(req.query.keyword || ""),
+        page: query.page,
+        pageSize: query.pageSize ?? query.per_page ?? 100,
+        keyword: query.keyword,
       });
       res.json({data: {logs: page.data, meta: page.meta, logsLoaded: true}});
     }),
@@ -37,11 +39,11 @@ export function registerLogRoutes(app: Express, dependencies: LogRouteDependenci
     "/api/logs",
     dependencies.requireMenu("logs"),
     dependencies.asyncRoute(async (req, res) => {
-      const {user, module, type, target, beforeVal, afterVal} = req.body;
+      const command = parseHttpDto(logsCreateDto, req.body);
       const authRequest = req as LogRequest;
       res.status(201).json(dependencies.ok(await dependencies.persistRequest(
         authRequest,
-        dependencies.actions(authRequest).addLog(user, module, type, target, beforeVal, afterVal),
+        dependencies.actions(authRequest).addLog(command.user, command.module, command.type, command.target, command.beforeVal, command.afterVal),
       )));
     }),
   );

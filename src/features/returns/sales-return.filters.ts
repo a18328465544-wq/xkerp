@@ -1,3 +1,4 @@
+import {returnOrderStatusValues} from "@/src/types/returns";
 import type {SalesReturnListFilters, SalesReturnStatus} from "@/src/types/returns";
 
 export const defaultSalesReturnListFilters: SalesReturnListFilters = {
@@ -7,7 +8,7 @@ export const defaultSalesReturnListFilters: SalesReturnListFilters = {
   pageSize: 20,
 };
 
-const statuses: readonly SalesReturnStatus[] = ["待处理", "已完成", "已作废"];
+const statuses = returnOrderStatusValues;
 
 function positiveInt(value: string | null, fallback: number) {
   const parsed = Number(value);

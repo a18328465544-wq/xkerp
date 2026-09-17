@@ -5,6 +5,7 @@ export type {InventoryPermissions} from "./inventory";
 export {salesApi, toSalesCustomerQueryParams, toSalesInventoryQueryParams} from "./sales";
 export type {SalesApiPermissions} from "./sales";
 export {stateApi} from "./state";
+export {globalSearchApi} from "./global-search";
 export {aiApi} from "./ai";
 export type {AiDailySalesSummaryResult, AiInsightItem, AiInsightsResult, CopilotRequest, CopilotStreamEvent, CopilotContext, CopilotMessage, CopilotCardAction, CopilotToolResult} from "./ai";
 export {purchaseApi} from "./purchase";

@@ -1,4 +1,16 @@
-export type CrmBusinessStatus = "线索" | "跟进中" | "已成交" | "沉睡" | "流失" | string;
+export const crmBusinessStatusValues = ["线索", "跟进中", "已成交", "沉睡", "流失"] as const;
+export const crmCustomerStageValues = ["新线索", "需求确认", "报价中", "已成交", "售后维护"] as const;
+export const crmLeadStageValues = ["新线索", "需求确认", "报价中", "已成交", "已关闭"] as const;
+export const crmRequirementStageValues = ["需求确认", "报价中", "已成交", "已关闭"] as const;
+export const crmQuoteStatusValues = ["草稿", "已发送", "客户已确认", "已拒绝", "已过期"] as const;
+
+export type CrmBusinessStatusValue = (typeof crmBusinessStatusValues)[number];
+/** Preserve custom legacy status values while giving new code a closed list. */
+export type CrmBusinessStatus = CrmBusinessStatusValue | string;
+export type CrmCustomerStage = (typeof crmCustomerStageValues)[number];
+export type CrmLeadStage = (typeof crmLeadStageValues)[number];
+export type CrmRequirementStage = (typeof crmRequirementStageValues)[number];
+export type CrmQuoteStatus = (typeof crmQuoteStatusValues)[number];
 export type CrmIntent = "低" | "中" | "高" | string;
 
 export interface CrmAccount {
@@ -83,8 +95,12 @@ export interface CrmSummary {
   owners: CrmOwnerSummary[];
 }
 
-export type CrmFollowUpResult = "继续跟进" | "已报价" | "已成交" | "暂缓" | "无效线索" | "售后维护";
-export type CrmContactMethod = "电话" | "微信" | "闲鱼" | "淘宝" | "到店" | "其他";
+export const crmFollowUpResultValues = ["继续跟进", "已报价", "已成交", "暂缓", "无效线索", "售后维护"] as const;
+export const crmContactMethodValues = ["电话", "微信", "闲鱼", "淘宝", "到店", "其他"] as const;
+export const crmIntentValues = ["低", "中", "高"] as const;
+
+export type CrmFollowUpResult = (typeof crmFollowUpResultValues)[number];
+export type CrmContactMethod = (typeof crmContactMethodValues)[number];
 
 export interface CrmFollowUpFormValues {
   customerId: string;
@@ -99,11 +115,16 @@ export interface CrmFollowUpFormValues {
 }
 
 export type QuickCaptureSourceType = "manual" | "chat" | "voice";
-export type CrmLeadStage = "新线索" | "需求确认" | "报价中" | "已成交" | "已关闭";
-export type CrmLeadPriority = "低" | "中" | "高";
-export type QuickCaptureIntentType = "求购" | "出售" | "回收" | "置换" | "其他";
-export type QuickCaptureTransactionType = "销售" | "回收" | "采购" | "置换" | "其他";
-export type QuickCaptureDeliveryMethod = "到店" | "快递" | "同城配送" | "未知";
+export const quickCaptureSourceTypeValues = ["manual", "chat", "voice"] as const;
+export const crmLeadPriorityValues = crmIntentValues;
+export const quickCaptureIntentValues = ["求购", "出售", "回收", "置换", "其他"] as const;
+export const quickCaptureTransactionValues = ["销售", "回收", "采购", "置换", "其他"] as const;
+export const quickCaptureDeliveryMethodValues = ["到店", "快递", "同城配送", "未知"] as const;
+
+export type CrmLeadPriority = (typeof crmLeadPriorityValues)[number];
+export type QuickCaptureIntentType = (typeof quickCaptureIntentValues)[number];
+export type QuickCaptureTransactionType = (typeof quickCaptureTransactionValues)[number];
+export type QuickCaptureDeliveryMethod = (typeof quickCaptureDeliveryMethodValues)[number];
 
 export interface QuickCaptureConflict {
   field: string;

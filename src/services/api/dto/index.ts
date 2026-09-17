@@ -1,5 +1,5 @@
 export type * from "./inventory.dto";
-export type {SalesCreateItemDto, SalesCreateRequestDto, SalesCreateResponseDto, SalesCustomerDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesSettlementAccountDto, SalesSettlementAccountsResponseDto} from "./sales.dto";
+export type {SalesCreateItemDto, SalesCreateRequestDto, SalesCreateResponseDto, SalesCustomerDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesSettlementAccountDto, SalesSettlementAccountsResponseDto, SalesUpdateRequestDto} from "./sales.dto";
 export type {PublicStateResponseDto} from "./state.dto";
 export type {PurchaseCreateRequestDto, PurchaseCreateResponseDto, PurchaseInvoiceResponseDto, PurchaseLineRequestDto, PurchaseReferenceStateResponseDto, PurchaseUpdateRequestDto} from "./purchase.dto";
 export type {CustomerCreateRequestDto, EntityCreateResponseDto, ProductTemplateCreateRequestDto, VendorCreateRequestDto} from "./entity-create.dto";
@@ -16,3 +16,4 @@ export type {FinanceDailyClosingResponseDto} from "./finance-closing.dto";
 export type {FinanceAccountCreateRequestDto, FinanceAccountLedgerResponseDto, FinanceAccountListResponseDto, FinanceAccountMutationResponseDto, FinanceAccountReconcileRequestDto} from "./finance-account.dto";
 export type {FinanceTransferListResponseDto, FinanceTransferMutationResponseDto, FinanceTransferRequestDto} from "./finance-transfer.dto";
 export type {OrderPoolCollaboratorsResponseDto, OrderPoolCollectionResponseDto, OrderPoolMutationResponseDto} from "./order-pool.dto";
+export type {GlobalSearchResponseDto} from "./global-search.dto";

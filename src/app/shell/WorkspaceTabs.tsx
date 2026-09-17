@@ -1,8 +1,7 @@
 import {useState} from "react";
-import {Popover as BasePopover} from "@base-ui/react/popover";
 import {Link} from "@tanstack/react-router";
 import {ChevronDown, Pin, X} from "lucide-react";
-import {Button} from "@/src/components/ui";
+import {Button, Popover} from "@/src/components/ui";
 import {ErpUnsavedChangesDialog} from "@/src/components/common";
 import {cn} from "@/src/lib/cn";
 import {WORKSPACE_HOME_ID} from "./workspaceTabState";
@@ -28,10 +27,10 @@ export function WorkspaceTabs() {
   return (
     <>
       <div className="min-w-0 flex-1 lg:hidden">
-        <BasePopover.Root open={mobileTabOpen} onOpenChange={setMobileTabOpen}>
-          <BasePopover.Trigger
+        <Popover.Root open={mobileTabOpen} onOpenChange={setMobileTabOpen}>
+          <Popover.Trigger
             type="button"
-            className="erp-focus-ring flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-2.5 text-left text-xs font-semibold text-[var(--erp-color-primary)]"
+            className="erp-focus-ring flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-2.5 text-left text-xs font-medium text-[var(--erp-color-primary)]"
             aria-label={`切换页面，当前为${activeTab?.label || "首页"}`}
           >
             <span className="flex min-w-0 items-center gap-1.5">
@@ -39,10 +38,10 @@ export function WorkspaceTabs() {
               <span className="truncate">{activeTab?.label || "首页"}</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-          </BasePopover.Trigger>
-          <BasePopover.Portal>
-            <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="start">
-              <BasePopover.Popup className="erp-popover-surface w-full max-w-none overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none">
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner className="outline-none" sideOffset={6} align="start">
+              <Popover.Popup className="w-full max-w-none overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none">
                 <div className="flex items-center justify-between gap-3 border-b border-[var(--erp-color-border)] px-2 pb-2">
                   <p className="text-sm font-semibold text-[var(--erp-color-text)]">切换页面</p>
                   <Button type="button" size="icon" variant="ghost" aria-label="关闭页面切换" onClick={() => setMobileTabOpen(false)}><X className="h-4 w-4" /></Button>
@@ -57,7 +56,7 @@ export function WorkspaceTabs() {
                         to={item.path}
                         aria-current={active ? "page" : undefined}
                         onClick={(event) => { navigateToTab(item, event); setMobileTabOpen(false); }}
-                        className={cn("erp-focus-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[var(--erp-radius-md)] px-3 text-sm font-semibold", active ? "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]" : "text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)]")}
+                        className={cn("erp-focus-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[var(--erp-radius-md)] px-3 text-sm font-medium", active ? "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]" : "text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)]")}
                       >
                         {pinnedTab && <Pin className="h-4 w-4 shrink-0" aria-hidden="true" />}
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -67,10 +66,10 @@ export function WorkspaceTabs() {
                     </div>;
                   })}
                 </div>
-              </BasePopover.Popup>
-            </BasePopover.Positioner>
-          </BasePopover.Portal>
-        </BasePopover.Root>
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
       </div>
       <nav className="erp-workspace-tabs erp-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden lg:flex" aria-label="已打开页面">
         {tabs.map((item) => {
@@ -84,7 +83,7 @@ export function WorkspaceTabs() {
                 aria-current={active ? "page" : undefined}
                 onClick={(event) => navigateToTab(item, event)}
                 className={cn(
-                  "erp-focus-ring flex h-9 min-w-0 flex-1 items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 pr-6 text-xs font-semibold transition-colors lg:gap-1.5 lg:px-2.5 lg:pr-8",
+                  "erp-focus-ring flex h-9 min-w-0 flex-1 items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 pr-6 text-xs font-medium transition-colors lg:gap-1.5 lg:px-2.5 lg:pr-8",
                   active
                     ? "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"
                     : "text-[var(--erp-color-text-muted)] hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",

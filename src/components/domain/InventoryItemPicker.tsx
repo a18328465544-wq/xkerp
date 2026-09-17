@@ -65,7 +65,6 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
       {!loading && !error && !options.length && <div className="px-3 py-5 text-center text-xs text-[var(--erp-color-text-muted)]"><Search className="mx-auto mb-2 h-4 w-4" />没有找到可销售商品候选</div>}
       {!loading && !error && options.map((option, index) => {
         const availabilityLabel = option.saleable ? `可售 ${option.availableQuantity} 张` : `不可选 · 可售 ${option.availableQuantity} 张`;
-        const locationLabel = option.warehouse ? `库位 ${option.warehouse}` : "未分配库位";
         return <button
           type="button"
           role="option"
@@ -87,7 +86,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-[var(--erp-color-text)]">
               <span className="min-w-0 flex-1 break-words leading-5" title={option.productName}>{option.productName}</span>
-              <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", option.saleable ? "bg-[var(--erp-color-success-soft)] text-[var(--erp-color-success)]" : "bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]")}>
+              <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-xs", option.saleable ? "bg-[var(--erp-color-success-soft)] text-[var(--erp-color-success)]" : "bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]")}>
                 {availabilityLabel}
               </span>
             </span>
@@ -98,7 +97,7 @@ export function InventoryItemPicker({value, keyword, options, loading, error, di
               {option.estimatedSellPrice === undefined ? "暂无参考售价" : `参考售价 ${formatCurrency(option.estimatedSellPrice)}`}{option.costPrice === undefined ? "" : ` · 成本 ${formatCurrency(option.costPrice)}`}{option.inventoryDays > 0 ? ` · 最近入库 ${option.inventoryDays} 天` : ""}
             </span>
           </span>
-          {option.saleable ? <Check className="mt-1 h-4 w-4 shrink-0 text-[var(--erp-color-success)]" aria-hidden="true" /> : <span className="mt-1 shrink-0 text-[10px] text-[var(--erp-color-warning)]">不可选</span>}
+          {option.saleable ? <Check className="mt-1 h-4 w-4 shrink-0 text-[var(--erp-color-success)]" aria-hidden="true" /> : <span className="mt-1 shrink-0 text-xs text-[var(--erp-color-warning)]">不可选</span>}
         </button>;
       })}
     </div> : null;

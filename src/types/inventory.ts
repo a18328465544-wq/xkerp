@@ -1,21 +1,32 @@
-export const inventoryStatuses = [
-  "待检测",
-  "检测中",
-  "已入库",
-  "已上架",
-  "已锁定",
-  "已售出",
-  "已拆卸",
-  "已组装",
-  "退货中",
-  "已退货",
-  "售后中",
-  "维修中",
-  "已报废",
-] as const;
+import {cardStatusValues} from "./core";
+import type {CardStatus} from "./core";
 
-export type InventoryStatusValue = (typeof inventoryStatuses)[number];
-export type InventoryCondition = "全新" | "99新" | "95新" | "90新" | "85新" | "轻微瑕疵" | "损坏";
+/** Compatibility alias for inventory-owned consumers; values come from core. */
+export const inventoryStatuses = cardStatusValues;
+export type InventoryStatusValue = CardStatus;
+export {inventoryConditionValues} from "./core";
+export type {InventoryCondition} from "./core";
+/** Status groups used by cross-feature inventory queries and calculations. */
+export const inventorySellableStatusValues = ["已入库", "已上架"] as const;
+export const inventoryStockStatusValues = ["已入库", "已上架", "待检测", "检测中"] as const;
+export const inventoryInspectionPendingStatusValues = ["待检测", "检测中"] as const;
+export const inventoryQuoteStatusValues = ["已入库", "已上架", "已锁定"] as const;
+export const inventoryReturnBlockedStatusValues = ["已售出", "已退货", "已报废", "已拆卸", "已组装"] as const;
+export const inventoryAftersalesCandidateStatusValues = ["已售出", "售后中"] as const;
+export const inventoryRepairStatusValues = ["退货中", "售后中", "维修中"] as const;
+export const inventoryJourneyFinancialMenuValues = [
+  "all",
+  "finance",
+  "finance_reports",
+  "finance_closing",
+  "settlement_accounts",
+  "settlement_ledger",
+  "payment_in",
+  "payment_out",
+  "account_transfer",
+  "customer_funds",
+  "return_reconcile",
+] as const;
 export type InventoryRisk = "mined" | "upturned" | "high";
 export type InventoryView = "cards" | "models";
 export type InventorySortKey = "id" | "product" | "cost" | "profit" | "days" | "status" | "warehouseLocation" | "entryTime";

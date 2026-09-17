@@ -1,6 +1,5 @@
 import type {ReturnOrder} from "../src/types.ts";
 import {NotFoundError} from "./errors.ts";
-import {hasUniqueLegacyName} from "./storePartnerIdentity.ts";
 import {createReturnFinancialHelpers} from "./storeReturnFinancials.ts";
 import {createReturnCreationHelpers} from "./storeReturnCreation.ts";
 import {createReturnCompletionHelpers} from "./storeReturnCompletion.ts";
@@ -69,7 +68,6 @@ export function createReturnOperationHelpers(dependencies: ReturnOperationsDepen
     addLog,
     findReturnInventory,
     findPurchaseReturnLine,
-    returnRefundPayments,
   });
 
   const updateReturnOrder = (id: string, patch: Partial<Pick<ReturnOrder, "handler" | "reason" | "remarks" | "responsibility">>) => {

@@ -1,10 +1,19 @@
-import {useState, type HTMLAttributes, type ReactNode} from "react";
+import {Children, Fragment, isValidElement, useState, type HTMLAttributes, type ReactNode} from "react";
 import {ChevronDown, ChevronUp} from "lucide-react";
 import {cn} from "@/src/lib/cn";
 import {ErpFilterBar} from "../ErpFilterBar";
-import {ErpPageFrame} from "../ErpPageFrame";
+import {ErpAnalyticsPageFrame} from "../ErpPageFrames";
 
 type RegionProps = HTMLAttributes<HTMLElement> & {children: ReactNode};
+
+function countRenderableChildren(node: ReactNode): number {
+  return Children.toArray(node).reduce<number>((count, child) => {
+    if (isValidElement<{children?: ReactNode}>(child) && child.type === Fragment) {
+      return count + countRenderableChildren(child.props.children);
+    }
+    return count + 1;
+  }, 0);
+}
 
 export type AnalyticsMainVariant = "3-1" | "3-2" | "full";
 export type AnalyticsVisualizationSize = "compact" | "standard" | "expanded";
@@ -14,16 +23,18 @@ export type AnalyticsVisualizationSize = "compact" | "standard" | "expanded";
  * business features provide content through the regions below.
  */
 export function AnalyticsFrame({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
-  return <ErpPageFrame {...props} data-page-frame="analytics" data-analytics-layout="reference-v2" className={className}>{children}</ErpPageFrame>;
+  return <ErpAnalyticsPageFrame {...props} className={className}>{children}</ErpAnalyticsPageFrame>;
 }
 
 export function AnalyticsKpiRegion({primary, secondary, className, ...props}: Omit<RegionProps, "children"> & {primary: ReactNode; secondary?: ReactNode}) {
   const [supportingExpanded, setSupportingExpanded] = useState(false);
-  return <section {...props} data-erp-region="analytics-kpis" className={cn("min-w-0 space-y-3", className)}>
-    <div data-erp-region-level="primary" data-analytics-tier="core" data-analytics-density="primary" className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-3">{primary}</div>
+  const primaryCount = countRenderableChildren(primary);
+  const secondaryCount = secondary ? countRenderableChildren(secondary) : 0;
+  return <section {...props} data-erp-region="analytics-kpis" className={cn("analytics-kpi-region min-w-0 space-y-3", className)}>
+    <div data-erp-region-level="primary" data-analytics-tier="core" data-analytics-density="primary" data-analytics-count={primaryCount} data-analytics-parity={primaryCount % 2 === 1 ? "odd" : "even"} className="analytics-kpi-grid analytics-kpi-grid--primary grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-3">{primary}</div>
     {secondary ? <>
-      <div data-erp-region-level="secondary" data-analytics-tier="supporting" data-analytics-density="secondary" data-mobile-collapsed={!supportingExpanded ? "true" : undefined} className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,190px),1fr))] gap-2">{secondary}</div>
-      <button type="button" data-erp-region="analytics-kpi-toggle" className="erp-focus-ring mx-auto inline-flex min-h-[var(--erp-control-height-filter)] items-center gap-1 rounded-[var(--erp-radius-pill)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-primary)] shadow-sm md:hidden" aria-expanded={supportingExpanded} onClick={() => setSupportingExpanded((current) => !current)}>{supportingExpanded ? <><ChevronUp className="h-3.5 w-3.5" />收起更多指标</> : <><ChevronDown className="h-3.5 w-3.5" />展开更多指标</>}</button>
+      <div data-erp-region-level="secondary" data-analytics-tier="supporting" data-analytics-density="secondary" data-analytics-count={secondaryCount} data-analytics-parity={secondaryCount % 2 === 1 ? "odd" : "even"} data-mobile-collapsed={!supportingExpanded ? "true" : undefined} className="analytics-kpi-grid analytics-kpi-grid--supporting grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,190px),1fr))] gap-2">{secondary}</div>
+      <button type="button" data-erp-region="analytics-kpi-toggle" className="erp-focus-ring mx-auto inline-flex min-h-[var(--erp-control-height-filter)] items-center gap-1 rounded-[var(--erp-radius-pill)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-medium text-[var(--erp-color-primary)] shadow-sm lg:hidden" aria-expanded={supportingExpanded} onClick={() => setSupportingExpanded((current) => !current)}>{supportingExpanded ? <><ChevronUp className="h-3.5 w-3.5" />收起更多指标</> : <><ChevronDown className="h-3.5 w-3.5" />展开更多指标</>}</button>
     </> : null}
   </section>;
 }
@@ -35,7 +46,10 @@ export function AnalyticsToolbar({children, actions, className, ...props}: Omit<
 }
 
 export function AnalyticsMainRegion({variant = "3-1", className, children, ...props}: RegionProps & {variant?: AnalyticsMainVariant}) {
-  const grid = variant === "full" ? "grid-cols-1" : variant === "3-2" ? "lg:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]" : "lg:grid-cols-[minmax(0,3fr)_minmax(280px,1fr)]";
+  // Analytics side insights need enough room to remain legible beside charts.
+  // At tablet widths the app shell/sidebar leaves too little space for the
+  // desktop split, so stack until the xl canvas is available.
+  const grid = variant === "full" ? "grid-cols-1" : variant === "3-2" ? "xl:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]" : "xl:grid-cols-[minmax(0,3fr)_minmax(280px,1fr)]";
   return <section {...props} data-erp-region="analytics-main" data-analytics-variant={variant} className={cn("grid min-w-0 grid-cols-1 items-stretch gap-4", grid, className)}>{children}</section>;
 }
 

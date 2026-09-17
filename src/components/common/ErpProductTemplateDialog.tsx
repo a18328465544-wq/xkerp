@@ -1,9 +1,12 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Controller, useForm} from "react-hook-form";
-import {ImageIcon, Sparkles} from "lucide-react";
-import {Button, Dialog, Input, Textarea} from "@/src/components/ui";
+import {Sparkles} from "lucide-react";
+import {Button, Input, Textarea} from "@/src/components/ui";
 import {ErpAmountInput} from "./ErpAmountInput";
+import {ErpDialogShell} from "./ErpDialogShell";
+import {ErpField} from "./ErpField";
+import {ErpImagePreviewDialog} from "./ErpImagePreviewDialog";
 import {ErpUploader} from "./ErpUploader";
 import type {ProductCategory} from "@/src/types/core";
 import type {ProductLibraryItem, ProductTemplateFormValues} from "@/src/types/product";
@@ -70,60 +73,53 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
     });
   };
 
+  const formId = "product-template-form";
   return <>
-    <Dialog.Root open={open} onOpenChange={(next) => {if (!pending) onOpenChange(next);}}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)] backdrop-blur-sm" />
-        <Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-3 sm:p-5">
-          <Dialog.Popup className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] sm:max-h-[calc(100dvh-2.5rem)]">
-            <header className="flex flex-none items-start justify-between gap-4 border-b border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-5 py-4">
-              <div className="min-w-0"><Dialog.Title className="flex items-center gap-2 text-base font-bold"><Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />{product ? "编辑商品规格模板" : "新建商品规格模板"}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">用于采购、销售、检测和库存共用；标准名称由核心字段自动生成。</Dialog.Description></div>
-              <Dialog.Close render={<Button type="button" size="icon" variant="ghost" aria-label="关闭" disabled={pending}>×</Button>} />
-            </header>
+    <ErpDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      pending={pending}
+      size="xl"
+      title={<span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />{product ? "编辑商品规格模板" : "新建商品规格模板"}</span>}
+      description="用于采购、销售、检测和库存共用；标准名称由核心字段自动生成。"
+      footer={<><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button form={formId} type="submit" variant="primary" disabled={pending || media.blocking}>{pending ? "保存中…" : media.blocking ? "等待图片处理" : product ? "保存修改" : "保存模板"}</Button></>}
+    >
+      <form id={formId} onSubmit={(event) => {void handleSubmit(onSubmit)(event);}} className="space-y-4">
+        <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]/45 p-3 sm:p-4" aria-labelledby="product-category-title">
+          <div className="mb-2 flex items-center justify-between gap-3"><h2 id="product-category-title" className="text-sm font-semibold text-[var(--erp-color-text)]">商品分类</h2><span className="text-xs text-[var(--erp-color-text-muted)]">当前：{values.category}</span></div>
+          <Controller control={control} name="category" render={({field}) => <div className="flex flex-wrap gap-2">{productCategoryValues.map((category) => <Button key={category} type="button" size="sm" variant={field.value === category ? "primary" : "secondary"} className={field.value === category ? "shadow-sm" : "bg-[var(--erp-color-surface)]"} onClick={() => handleCategoryChange(category, field.onChange)} disabled={pending} aria-pressed={field.value === category}>{category}</Button>)}</div>} />
+        </section>
 
-            <form onSubmit={(event) => {void handleSubmit(onSubmit)(event);}} className="flex min-h-0 flex-1 flex-col">
-              <div className="erp-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
-                <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]/45 p-3 sm:p-4" aria-labelledby="product-category-title">
-                  <div className="mb-2 flex items-center justify-between gap-3"><h2 id="product-category-title" className="text-sm font-bold text-[var(--erp-color-text)]">商品分类</h2><span className="text-xs text-[var(--erp-color-text-muted)]">当前：{values.category}</span></div>
-                  <Controller control={control} name="category" render={({field}) => <div className="flex flex-wrap gap-2">{productCategoryValues.map((category) => <Button key={category} type="button" size="sm" variant={field.value === category ? "primary" : "secondary"} className={field.value === category ? "shadow-sm" : "bg-[var(--erp-color-surface)]"} onClick={() => handleCategoryChange(category, field.onChange)} disabled={pending} aria-pressed={field.value === category}>{category}</Button>)}</div>} />
-                </section>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-basic-title">
+            <div className="mb-4"><h2 id="product-basic-title" className="text-sm font-semibold text-[var(--erp-color-text)]">基本信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">填写可识别商品身份的核心字段。</p></div>
+            <div className="grid gap-3 sm:grid-cols-2">{fieldDefinitions.map((definition, index) => <Field key={definition.key} label={definition.label} required={definition.required} error={message(definition.key)}><Input {...register(definition.key)} placeholder={definition.placeholder} disabled={pending} autoFocus={index === 0} /></Field>)}</div>
+            <div className="mt-4 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3 py-3" aria-live="polite"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">标准商品名称</p><span className="text-xs text-[var(--erp-color-text-muted)]">系统生成预览</span></div><p className={`mt-1 truncate text-sm font-semibold ${previewName.startsWith("填写") ? "text-[var(--erp-color-text-muted)]" : "text-[var(--erp-color-text)]"}`} title={previewName}>{previewName}</p></div>
+          </section>
 
-                <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-                  <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-basic-title">
-                    <div className="mb-4"><h2 id="product-basic-title" className="text-sm font-bold text-[var(--erp-color-text)]">基本信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">填写可识别商品身份的核心字段。</p></div>
-                    <div className="grid gap-3 sm:grid-cols-2">{fieldDefinitions.map((definition, index) => <Field key={definition.key} label={definition.label} required={definition.required} error={message(definition.key)}><Input {...register(definition.key)} placeholder={definition.placeholder} disabled={pending} autoFocus={index === 0} /></Field>)}</div>
-                    <div className="mt-4 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3 py-3" aria-live="polite"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">标准商品名称</p><span className="text-[11px] text-[var(--erp-color-text-muted)]">系统生成预览</span></div><p className={`mt-1 truncate text-sm font-semibold ${previewName.startsWith("填写") ? "text-[var(--erp-color-text-muted)]" : "text-[var(--erp-color-text)]"}`} title={previewName}>{previewName}</p></div>
-                  </section>
+          <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-supplement-title">
+            <div className="mb-4"><h2 id="product-supplement-title" className="text-sm font-semibold text-[var(--erp-color-text)]">补充信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">价格和备注为可选信息。</p></div>
+            <div className="space-y-3">
+              {showCost ? <Field label="建议回收买入价" error={message("refBuyPrice")}><Controller control={control} name="refBuyPrice" render={({field}) => <ErpAmountInput value={field.value} onBlur={field.onBlur} onValueChange={(detail) => field.onChange(detail.floatValue || 0)} disabled={pending} aria-label="建议回收买入价" />} /></Field> : <PermissionNotice>当前账号无参考成本查看权限，该字段按 0 提交。</PermissionNotice>}
+              {showProfit ? <Field label="建议销售卖出价" error={message("refSellPrice")}><Controller control={control} name="refSellPrice" render={({field}) => <ErpAmountInput value={field.value} onBlur={field.onBlur} onValueChange={(detail) => field.onChange(detail.floatValue || 0)} disabled={pending} aria-label="建议销售卖出价" />} /></Field> : <PermissionNotice>当前账号无参考利润查看权限，该字段按 0 提交。</PermissionNotice>}
+              <Field label="备注"><Textarea {...register("remarks")} className="min-h-24" maxLength={300} placeholder="补充回收、质检或包装提示" disabled={pending} /></Field>
+            </div>
+          </section>
+        </div>
 
-                  <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-supplement-title">
-                    <div className="mb-4"><h2 id="product-supplement-title" className="text-sm font-bold text-[var(--erp-color-text)]">补充信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">价格和备注为可选信息。</p></div>
-                    <div className="space-y-3">
-                      {showCost ? <Field label="建议回收买入价" error={message("refBuyPrice")}><Controller control={control} name="refBuyPrice" render={({field}) => <ErpAmountInput value={field.value} onBlur={field.onBlur} onValueChange={(detail) => field.onChange(detail.floatValue || 0)} disabled={pending} aria-label="建议回收买入价" />} /></Field> : <PermissionNotice>当前账号无参考成本查看权限，该字段按 0 提交。</PermissionNotice>}
-                      {showProfit ? <Field label="建议销售卖出价" error={message("refSellPrice")}><Controller control={control} name="refSellPrice" render={({field}) => <ErpAmountInput value={field.value} onBlur={field.onBlur} onValueChange={(detail) => field.onChange(detail.floatValue || 0)} disabled={pending} aria-label="建议销售卖出价" />} /></Field> : <PermissionNotice>当前账号无参考利润查看权限，该字段按 0 提交。</PermissionNotice>}
-                      <Field label="备注"><Textarea {...register("remarks")} className="min-h-24" maxLength={300} placeholder="补充回收、质检或包装提示" disabled={pending} /></Field>
-                    </div>
-                  </section>
-                </div>
-
-                <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-images-title">
-                  <div className="mb-3"><h2 id="product-images-title" className="text-sm font-bold text-[var(--erp-color-text)]">商品图片</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">可选，最多 6 张；支持 JPG、PNG、WEBP。</p></div>
-                  <ErpUploader items={media.items} maxCount={6} accept={media.accept} disabled={pending} showHeading={false} compact description="外观、包装和规格图片" uploadedDescription="图片已上传，等待随商品模板保存" footerDescription={`已选择 ${media.items.length} / 6 张；图片会在上传前压缩到约 100KB。`} error={media.error} onFilesSelected={media.addFiles} onRetry={media.retry} onRemove={media.remove} onPreview={(item) => setPreviewUrl(item.previewUrl)} />
-                </section>
-                {error && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p>}
-              </div>
-
-              <footer className="erp-form-actions flex flex-none flex-wrap justify-end gap-2 border-t border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-4 py-3 sm:flex-nowrap sm:px-5"><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button type="submit" variant="primary" disabled={pending || media.blocking}>{pending ? "保存中…" : media.blocking ? "等待图片处理" : product ? "保存修改" : "保存模板"}</Button></footer>
-            </form>
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
-    <Dialog.Root open={Boolean(previewUrl)} onOpenChange={(next) => {if (!next) setPreviewUrl(undefined);}}><Dialog.Portal><Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)]" /><Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-4"><Dialog.Popup className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-[var(--erp-radius-xl)] bg-[var(--erp-color-surface)] p-3 shadow-[var(--erp-shadow-popover)]">{previewUrl ? <img src={previewUrl} alt="商品图片预览" className="max-h-[82vh] max-w-[84vw] object-contain" /> : <ImageIcon className="h-8 w-8" />}</Dialog.Popup></Dialog.Viewport></Dialog.Portal></Dialog.Root>
+        <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-images-title">
+          <div className="mb-3"><h2 id="product-images-title" className="text-sm font-semibold text-[var(--erp-color-text)]">商品图片</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">可选，最多 6 张；支持 JPG、PNG、WEBP。</p></div>
+          <ErpUploader items={media.items} maxCount={6} accept={media.accept} disabled={pending} showHeading={false} compact description="外观、包装和规格图片" uploadedDescription="图片已上传，等待随商品模板保存" footerDescription={`已选择 ${media.items.length} / 6 张；图片会在上传前压缩到约 100KB。`} error={media.error} onFilesSelected={media.addFiles} onRetry={media.retry} onRemove={media.remove} onPreview={(item) => setPreviewUrl(item.previewUrl)} />
+        </section>
+        {error && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p>}
+      </form>
+    </ErpDialogShell>
+    <ErpImagePreviewDialog open={Boolean(previewUrl)} src={previewUrl} alt="商品图片预览" title="商品图片预览" onOpenChange={(next) => {if (!next) setPreviewUrl(undefined);}} />
   </>;
 }
 
-function Field({label, required = false, children}: {label: string; required?: boolean; error?: string; children: ReactNode}) {
-  return <label className="block text-sm font-semibold text-[var(--erp-color-text)]">{label}{required && <span className="ml-1 text-[var(--erp-color-danger)]">*</span>}<div className="mt-1.5">{children}</div></label>;
+function Field({label, required = false, error, children}: {label: string; required?: boolean; error?: string; children: ReactNode}) {
+  return <ErpField label={label} required={required} error={error}>{children}</ErpField>;
 }
 
 function PermissionNotice({children}: {children: ReactNode}) {

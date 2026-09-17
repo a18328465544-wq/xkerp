@@ -1,9 +1,11 @@
 import {z} from "zod";
 import type {SalesFormValues} from "@/src/types/sales";
+import {salesChannelValues, salesPaymentMethodValues} from "@/src/types/sales";
+import {customerPartnerTypes} from "@/src/types/customer";
 import {isSalesLineFilled} from "./sales.calculations";
 
-const channelValues = ["到店", "闲鱼", "抖音", "小红书", "B站", "微信私域", "同行网店"] as const;
-const paymentValues = ["微信", "支付宝", "现金", "银行卡", "账期欠款"] as const;
+const channelValues = salesChannelValues;
+const paymentValues = salesPaymentMethodValues;
 
 export const salesLineSchema = z.object({
   inventoryId: z.string(),
@@ -29,7 +31,7 @@ const salesLineDraftSchema = salesLineSchema.extend({
 export const salesOrderSchema = z.object({
   date: z.string().trim().min(1, "请选择开单日期"),
   customerId: z.string().trim().min(1, "请选择客户档案"),
-  customerPartnerType: z.enum(["customer", "vendor"]),
+  customerPartnerType: z.enum(customerPartnerTypes),
   customerName: z.string().trim().min(1, "客户名称不能为空"),
   contact: z.string().trim(),
   channel: z.enum(channelValues),

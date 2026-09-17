@@ -11,7 +11,7 @@ export function FinanceDetailRow({
 }) {
   return (
     <div>
-      <p className="text-[11px] text-[var(--erp-color-text-muted)]">{label}</p>
+      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
       <p
         className={`${small ? "text-sm" : ""} mt-0.5 truncate font-medium`}
       >
@@ -34,7 +34,7 @@ export function FinanceDetailMetric({
     <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3">
       <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
       <p
-        className={`mt-1 font-mono text-base font-bold ${warning ? "text-[var(--erp-color-warning)]" : "text-[var(--erp-color-text)]"}`}
+        className={`mt-1 erp-data-number text-base font-semibold ${warning ? "text-[var(--erp-color-warning)]" : "text-[var(--erp-color-text)]"}`}
       >
         {value}
       </p>

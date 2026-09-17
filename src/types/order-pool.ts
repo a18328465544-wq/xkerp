@@ -7,11 +7,17 @@
 export const orderPoolOrderTypes = ["销售", "回收", "置换"] as const;
 export type OrderPoolOrderType = typeof orderPoolOrderTypes[number];
 
+export const orderPoolPartyTypeValues = ["customer", "vendor", "mixed"] as const;
+export type OrderPoolPartyType = typeof orderPoolPartyTypeValues[number];
+export const orderPoolPriorityValues = ["low", "normal", "high", "urgent"] as const;
+export type OrderPoolPriority = typeof orderPoolPriorityValues[number];
+
 export const orderPoolMainStages = ["待接单", "跟进中", "待客户", "待执行", "已完成"] as const;
 export type OrderPoolMainStage = typeof orderPoolMainStages[number];
 
 export const orderPoolExceptionStages = ["暂停", "丢单", "取消", "售后中"] as const;
 export type OrderPoolExceptionStage = typeof orderPoolExceptionStages[number];
+export const orderPoolInactiveStageValues = ["已完成", "丢单", "取消"] as const;
 export type OrderPoolStage = OrderPoolMainStage | OrderPoolExceptionStage;
 
 export const orderPoolBlockers = [
@@ -41,11 +47,10 @@ export const orderPoolDocumentTypes = [
 ] as const;
 export type OrderPoolDocumentType = typeof orderPoolDocumentTypes[number];
 
-export type OrderPoolPartyType = "customer" | "vendor" | "mixed";
-export type OrderPoolPriority = "low" | "normal" | "high" | "urgent";
 export type OrderPoolEventType = "created" | "note" | "stage_changed" | "assigned" | "link_added";
 /** Shared work queues are views over the same order aggregate, not new states. */
-export type OrderPoolQueue = "mine" | "all" | "unassigned" | "waiting_customer" | "due_today" | "overdue" | "exceptions";
+export const orderPoolQueueValues = ["mine", "all", "unassigned", "waiting_customer", "due_today", "overdue", "exceptions"] as const;
+export type OrderPoolQueue = typeof orderPoolQueueValues[number];
 
 export interface OrderPoolCollaborator {
   userId?: string;

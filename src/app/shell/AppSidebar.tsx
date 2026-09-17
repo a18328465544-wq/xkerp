@@ -1,4 +1,4 @@
-import {ChevronDown, ChevronLeft, ChevronRight, Sparkles, Store, X} from "lucide-react";
+import {ChevronLeft, ChevronRight, Sparkles, Store, X} from "lucide-react";
 import {Link, useRouterState} from "@tanstack/react-router";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {isNavigationItemActive, navigationModules} from "@/src/config/navigation";
@@ -8,6 +8,7 @@ import {useUiStore} from "@/src/stores";
 import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
 import {AppSidebarDrawer} from "./AppSidebarDrawer";
+import {searchForNavigation} from "./navigationSearch";
 
 type DrawerPosition = {top: number; left: number};
 
@@ -18,6 +19,7 @@ export function AppSidebar() {
   const {session} = useAuth();
   const setAiDrawerOpen = useUiStore((state) => state.setAiDrawerOpen);
   const pathname = useRouterState({select: (state) => state.location.pathname});
+  const search = useRouterState({select: (state) => state.location.searchStr});
   const allowedMenus = session?.permissions.allowedMenus || [];
   const visibleModules = useMemo(
     () =>
@@ -138,8 +140,8 @@ export function AppSidebar() {
           </div>
           {showLabels && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold">GPU ERP</p>
-              <p className="truncate text-[11px] text-[var(--erp-color-text-muted)]">经营工作台</p>
+              <p className="truncate text-sm font-semibold">GPU ERP</p>
+              <p className="truncate text-xs text-[var(--erp-color-text-muted)]">经营工作台</p>
             </div>
           )}
           {mobileSidebarOpen && <Button type="button" className="ml-auto lg:hidden" aria-label="关闭菜单" title="关闭菜单" size="icon" variant="ghost" onClick={() => setMobileSidebarOpen(false)}><X className="h-4 w-4" /></Button>}
@@ -156,11 +158,15 @@ export function AppSidebar() {
                   ref={(element) => { triggerRefs.current[module.id] = element; }}
                   type="button"
                   title={!showLabels ? module.label : undefined}
-                  aria-haspopup="menu"
+                  aria-haspopup="true"
                   aria-controls={"sidebar-flyout-" + module.id}
                   aria-expanded={mobileSidebarOpen ? mobileExpanded : flyoutOpen}
                   onMouseEnter={(event) => { if (!mobileSidebarOpen) openDrawer(module.id, event.currentTarget); }}
-                  onFocus={(event) => { if (mobileSidebarOpen) setMobileOpenModuleId(module.id); else openDrawer(module.id, event.currentTarget); }}
+                  // Pointer activation focuses the button before click. Keep
+                  // mobile expansion in the click handler so that focus and
+                  // click cannot toggle the same module twice; desktop keeps
+                  // focus-to-open for keyboard flyout navigation.
+                  onFocus={(event) => { if (!mobileSidebarOpen) openDrawer(module.id, event.currentTarget); }}
                   onClick={(event) => {
                     if (mobileSidebarOpen) {
                       setMobileOpenModuleId((value) => value === module.id ? undefined : module.id);
@@ -169,7 +175,7 @@ export function AppSidebar() {
                     }
                   }}
                   className={cn(
-                    "erp-focus-ring flex h-10 w-full items-center gap-3 rounded-[var(--erp-radius-md)] px-3 text-left text-sm font-semibold transition-colors",
+                    "erp-focus-ring flex h-10 w-full items-center gap-3 rounded-[var(--erp-radius-md)] px-3 text-left text-sm font-medium transition-colors",
                     active
                       ? "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"
                       : "text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",
@@ -192,8 +198,9 @@ export function AppSidebar() {
                         <Link
                           key={item.id}
                           to={item.path}
+                          search={searchForNavigation(search)}
                           className={cn(
-                            "erp-focus-ring flex min-h-11 items-center gap-2 rounded-[var(--erp-radius-sm)] px-3 text-sm font-semibold transition-colors",
+                            "erp-focus-ring flex min-h-11 items-center gap-2 rounded-[var(--erp-radius-sm)] px-3 text-sm font-medium transition-colors",
                             itemActive
                               ? "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"
                               : "text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",
@@ -201,7 +208,7 @@ export function AppSidebar() {
                           onClick={() => setMobileSidebarOpen(false)}
                         >
                           <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                          {item.badge && <span className="rounded-full bg-[var(--erp-color-surface-muted)] px-1.5 py-0.5 text-[10px] text-[var(--erp-color-text-muted)]">{item.badge}</span>}
+                          {item.badge && <span className="rounded-full bg-[var(--erp-color-surface-muted)] px-1.5 py-0.5 text-xs text-[var(--erp-color-text-muted)]">{item.badge}</span>}
                         </Link>
                       );
                     })}
@@ -215,7 +222,7 @@ export function AppSidebar() {
             onClick={() => setAiDrawerOpen(true)}
             title={!showLabels ? "AI 助手" : undefined}
             className={cn(
-              "erp-focus-ring flex h-10 w-full items-center gap-3 rounded-[var(--erp-radius-md)] px-3 text-left text-sm font-semibold text-[var(--erp-color-text-secondary)] transition-colors hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",
+              "erp-focus-ring flex h-10 w-full items-center gap-3 rounded-[var(--erp-radius-md)] px-3 text-left text-sm font-medium text-[var(--erp-color-text-secondary)] transition-colors hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",
               !showLabels && "justify-center px-0",
             )}
           >
@@ -232,11 +239,12 @@ export function AppSidebar() {
       <AppSidebarDrawer
         module={drawerModule}
         pathname={pathname}
+        search={search}
         position={drawerPosition}
         onMouseEnter={cancelCloseDrawer}
         onMouseLeave={scheduleCloseDrawer}
         onNavigate={() => closeDrawer(false)}
-        onClose={() => closeDrawer(false)}
+        onClose={(restoreFocus) => closeDrawer(Boolean(restoreFocus))}
       />
     </>
   );

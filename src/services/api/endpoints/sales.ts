@@ -1,8 +1,8 @@
 import {apiRequest} from "../client";
-import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesOutboundPreflight, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesProductCandidates, adaptSalesSettlementAccounts, toSalesOutboundRequestDto} from "../adapters/sales.adapter";
+import {adaptSalesCustomers, adaptSalesInventoryCandidates, adaptSalesInvoice, adaptSalesListState, adaptSalesMutationResponse, adaptSalesOutboundPreflight, adaptSalesOutboundResult, adaptSalesOutboundState, adaptSalesProductCandidates, adaptSalesSettlementAccounts, toCreateSalesRequest, toSalesOutboundRequestDto, toSalesUpdateRequestDto} from "../adapters/sales.adapter";
 import type {SalesCreateResponseDto, SalesCustomerListResponseDto, SalesInventoryListResponseDto, SalesListStateResponseDto, SalesOutboundPreflightResponseDto, SalesOutboundResponseDto, SalesProductCandidatesResponseDto, SalesSettlementAccountsResponseDto} from "../dto/sales.dto";
-import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesListItem, SalesOutboundDataset, SalesOutboundFilters, SalesOutboundPreflightResult, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
-import {toCreateSalesRequest} from "../adapters/sales.adapter";
+import type {SalesFormValues, SalesCustomerOption, SalesInventoryCandidate, SalesInvoiceResult, SalesListDataset, SalesListFilters, SalesListItem, SalesMutationResult, SalesOutboundDataset, SalesOutboundFilters, SalesOutboundPreflightResult, SalesOutboundRequest, SalesOutboundResult, SalesProductCandidate, SalesSettlementAccountOption} from "@/src/types/sales";
+import {ApiError} from "../errors";
 import type {SalesApiPermissions} from "../adapters/sales.adapter";
 
 export function toSalesCustomerQueryParams(keyword: string, page = 1, pageSize = 20) {
@@ -32,6 +32,17 @@ export const salesApi = {
     const response = await apiRequest<SalesListStateResponseDto>(`/api/sales-invoices?${params.toString()}`, {signal});
     const dataset = adaptSalesListState(response, permissions);
     return dataset.items.find((item) => item.id === keyword || item.invoiceNo === keyword || item.lines.some((line) => line.id === keyword || line.sn === keyword)) || null;
+  },
+
+  /**
+   * Sales currently has no dedicated detail route. Resolve by the exact id or
+   * invoice number through the paged read model, then keep the adapter as the
+   * single permission boundary for detail/edit consumers.
+   */
+  async detail(id: string, permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesListItem> {
+    const item = await this.findByReference(id, permissions, signal);
+    if (!item) throw new ApiError(404, "销售单不存在，或当前账号无权查看该单据");
+    return item;
   },
 
   async listAllForReport(permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesListDataset> {
@@ -96,6 +107,12 @@ export const salesApi = {
     const request = toCreateSalesRequest(values, account);
     const response = await apiRequest<SalesCreateResponseDto>("/api/sales-invoices", {method: "POST", body: JSON.stringify(request), signal, headers: idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined});
     return adaptSalesInvoice(response.data);
+  },
+
+  async update(id: string, values: SalesFormValues, account: SalesSettlementAccountOption | undefined, mode: "full" | "metadata", permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesMutationResult> {
+    const request = toSalesUpdateRequestDto(values, account, mode);
+    const response = await apiRequest<SalesCreateResponseDto>(`/api/sales-invoices/${encodeURIComponent(id)}`, {method: "PUT", body: JSON.stringify(request), signal});
+    return adaptSalesMutationResponse(response, permissions);
   },
 
   async remove(id: string, signal?: AbortSignal): Promise<SalesInvoiceResult> {

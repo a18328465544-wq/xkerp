@@ -12,6 +12,12 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_TENANT_NAME,
   DEFAULT_TENANT_SLUG,
+  commercialMembershipStatusValues,
+  commercialPlanCodeValues,
+  commercialExportFormatValues,
+  commercialStoreStatusValues,
+  commercialSubscriptionStatusValues,
+  commercialUsageMetricValues,
   type CommercialPlanCode,
   type MembershipStatus,
   type SubscriptionStatus,
@@ -114,14 +120,13 @@ export function assertOwnerAccountEligible(owner: { id: string; data?: unknown }
   return owner;
 }
 
-const PLAN_CODES = new Set<CommercialPlanCode>(["pilot", "standard", "pro", "enterprise"]);
-const TENANT_STATUSES = new Set<TenantStatus>(["active", "suspended", "archived"]);
-const MEMBERSHIP_STATUSES = new Set<MembershipStatus>(["active", "invited", "deactivated"]);
-const SUBSCRIPTION_STATUSES = new Set<SubscriptionStatus>(["trialing", "active", "past_due", "canceled"]);
+const PLAN_CODES = new Set<CommercialPlanCode>(commercialPlanCodeValues);
+const MEMBERSHIP_STATUSES = new Set<MembershipStatus>(commercialMembershipStatusValues);
+const SUBSCRIPTION_STATUSES = new Set<SubscriptionStatus>(commercialSubscriptionStatusValues);
 const USAGE_METRICS = new Map<string, "media_bytes_limit" | "ai_tokens_limit" | null>([
-  ["media_bytes", "media_bytes_limit"],
-  ["ai_tokens", "ai_tokens_limit"],
-  ["active_seats", null],
+  [commercialUsageMetricValues[0], "media_bytes_limit"],
+  [commercialUsageMetricValues[1], "ai_tokens_limit"],
+  [commercialUsageMetricValues[2], null],
 ]);
 
 export type IdempotencyRequest = {
@@ -609,7 +614,7 @@ export async function updateCommercialStore(tenantId: string, storeId: string, i
   if (name && name.length > 120) throw new CommercialValidationError("INVALID_STORE_NAME", "门店名称不能超过 120 个字符");
   if (timezone && (!/^[A-Za-z_]+\/[A-Za-z0-9_+.-]+$/.test(timezone) || timezone.length > 64)) throw new CommercialValidationError("INVALID_STORE_TIMEZONE", "门店时区格式无效");
   if (currency && !/^[A-Z]{3}$/.test(currency)) throw new CommercialValidationError("INVALID_STORE_CURRENCY", "门店币种必须是 3 位大写代码");
-  if (input.status && !["active", "archived"].includes(input.status)) throw new CommercialValidationError("INVALID_STORE_STATUS", "门店状态无效");
+  if (input.status && !commercialStoreStatusValues.includes(input.status)) throw new CommercialValidationError("INVALID_STORE_STATUS", "门店状态无效");
   return withDatabaseTransaction(async (client) => {
     const tenant = await client.query<{ status: TenantStatus }>("SELECT status FROM gpu_tenants WHERE id = $1 FOR SHARE", [tenantId]);
     const tenantStatus = tenant.rows[0]?.status;
@@ -860,7 +865,7 @@ export async function createCommercialExport(input: { tenantId?: string; request
   const tenantId = text(input.tenantId, DEFAULT_TENANT_ID);
   const requestedBy = text(input.requestedBy);
   const format = input.format || "json";
-  if (!requestedBy || !["json", "csv"].includes(format)) throw new CommercialValidationError("INVALID_EXPORT", "导出请求无效");
+  if (!requestedBy || !commercialExportFormatValues.includes(format)) throw new CommercialValidationError("INVALID_EXPORT", "导出请求无效");
   return withDatabaseTransaction(async (client) => {
     const id = `EXP-${randomUUID()}`;
     const result = await client.query<Record<string, unknown>>(

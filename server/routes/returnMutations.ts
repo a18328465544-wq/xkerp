@@ -5,6 +5,8 @@ import {completeIdempotencyKeyInTransaction, releaseInventoryReservationsInTrans
 import {compactStateMerge, stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {ReturnOrder, SystemUserAccount} from "../../src/types.ts";
+import {returnMenuValues} from "../../src/types/returns.ts";
+import {parseHttpDto, returnCreateDto, returnUpdateDto} from "../httpDto.ts";
 
 type ReturnRequest = AuthenticatedRequest<SystemUserAccount>;
 
@@ -32,7 +34,7 @@ type ReturnMutationDependencies = {
   releaseInventoryReservations: typeof releaseInventoryReservationsInTransaction;
 };
 
-const returnMenuIds = ["return_sales", "return_purchase", "return_orders"] as const;
+const returnMenuIds = returnMenuValues;
 
 function okMerge(data: unknown, stateMerge: StateMergePatch, stateDelete: StateDeletePatch = {}) {
   return statePatchResponse(data, stateMerge, stateDelete);
@@ -107,7 +109,8 @@ export function registerReturnMutationRoutes(app: Express, dependencies: ReturnM
     dependencies.requireAnyMenu([...returnMenuIds]),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as ReturnRequest;
-      if (!canAccessReturnType(dependencies, authRequest, req.body?.type)) {
+      const command = parseHttpDto(returnCreateDto, req.body);
+      if (!canAccessReturnType(dependencies, authRequest, command.type)) {
         dependencies.sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该退货类型的操作权限", true);
         return;
       }
@@ -117,7 +120,7 @@ export function registerReturnMutationRoutes(app: Express, dependencies: ReturnM
         return;
       }
       try {
-        const created = dependencies.actions(authRequest).createReturnOrder(req.body);
+        const created = dependencies.actions(authRequest).createReturnOrder(command);
         const stateMerge = returnOrderMerge(dependencies.getState(), created);
         await saveStateRecords(
           stateMergeRecords(stateMerge),
@@ -170,7 +173,8 @@ export function registerReturnMutationRoutes(app: Express, dependencies: ReturnM
     dependencies.requireAnyMenu([...returnMenuIds]),
     returnTypeGuard(dependencies),
     dependencies.asyncRoute(async (req, res) => {
-      const updated = dependencies.actions(req).updateReturnOrder(req.params.id!, req.body);
+      const command = parseHttpDto(returnUpdateDto, req.body);
+      const updated = dependencies.actions(req).updateReturnOrder(req.params.id!, command);
       const stateMerge = returnOrderMerge(dependencies.getState(), updated);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.json(okMerge(updated, stateMerge));

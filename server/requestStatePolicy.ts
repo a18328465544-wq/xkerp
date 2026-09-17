@@ -107,7 +107,7 @@ function startsWithAny(path: string, prefixes: string[]) {
   return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
-export function shouldReloadStateFromDatabase(method: string, path: string) {
+export function shouldReloadStateFromDatabase(method: string, _path: string) {
   const normalizedMethod = method.toUpperCase();
   return normalizedMethod !== "HEAD" && normalizedMethod !== "OPTIONS";
 }

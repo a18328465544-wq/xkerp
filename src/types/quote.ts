@@ -1,4 +1,7 @@
 /** Market quote record shared by the dashboard initial snapshot and quote domain adapter. */
+export const quoteTrendValues = ["up", "down", "stable"] as const;
+export type QuoteTrend = typeof quoteTrendValues[number];
+
 export interface MarketQuote {
   id: string;
   date: string;
@@ -15,15 +18,13 @@ export interface MarketQuote {
   changeAmount: number;
   changeRatio: number;
   remarks?: string;
-  trend?: "up" | "down" | "stable";
+  trend?: QuoteTrend;
   fluctuation?: string;
   updateTime?: string;
   refBuyPrice?: number;
   refSellPrice?: number;
   history?: Array<{date: string; buyPrice: number; sellPrice: number}>;
 }
-
-export type QuoteTrend = "up" | "down" | "stable";
 
 export interface QuoteHistoryPoint {
   date: string;

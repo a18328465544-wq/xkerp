@@ -2,6 +2,7 @@ import type {Express, Request, RequestHandler} from "express";
 import type {AppState} from "../store.ts";
 import {buildDailySalesSummary, getDailySalesAiNarrative} from "../dailySalesSummary.ts";
 import {ValidationError} from "../errors.ts";
+import {aiDailySalesQueryDto, parseHttpDto} from "../httpDto.ts";
 
 type AuthenticatedRequest = Request & {tenantId?: string; storeId?: string};
 type Dependencies = {
@@ -38,8 +39,9 @@ function isCutoff(value: unknown): value is string {
 export function registerAiDailySalesRoutes(app: Express, dependencies: Dependencies) {
   app.get("/api/ai/daily-sales-summary", dependencies.requireAnyMenu(["dashboard", "ai_insights"]), async (req: AuthenticatedRequest, res, next) => {
     try {
-      const date = req.query.date === undefined ? dependencies.getStoreDate() : String(req.query.date || "").trim();
-      const cutoff = req.query.cutoff === undefined ? dependencies.getCutoff() : String(req.query.cutoff || "").trim();
+      const query = parseHttpDto(aiDailySalesQueryDto, req.query);
+      const date = req.query.date === undefined ? dependencies.getStoreDate() : query.date;
+      const cutoff = req.query.cutoff === undefined ? dependencies.getCutoff() : query.cutoff;
       if (!isDateKey(date)) {
         throw new ValidationError("日报日期必须是 YYYY-MM-DD");
       }

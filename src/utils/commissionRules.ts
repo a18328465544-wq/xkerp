@@ -4,6 +4,7 @@ import type {
   CommissionRuleTier,
   CommissionRules,
 } from "../types";
+import {commissionPayoutCycleValues, commissionPayoutMethodValues, commissionRuleBaseValues, commissionRuleCalculationValues} from "../types/legacy-commission";
 
 const DEFAULT_EFFECTIVE_DATE = "2025-01-01";
 
@@ -64,13 +65,13 @@ function normalizeTier(tier: CommissionRuleTier): CommissionRuleTier {
   return { minAmount, ...(maxValue === undefined ? {} : { maxAmount: maxValue }), ...(rate === undefined ? {} : { rate }), ...(amount === undefined ? {} : { amount }) };
 }
 
-export function normalizeCommissionRule(input: Partial<CommissionRule> | undefined, fallback?: CommissionRule): CommissionRule {
+export function normalizeCommissionRule(input: CommissionRulePatch | undefined, fallback?: CommissionRule): CommissionRule {
   const base = createDefaultCommissionRule(fallback || {});
   const next = input || {};
-  const allowedCalculation = new Set(["fixed", "tiered", "amount_range"]);
-  const allowedBases = new Set(["purchase_amount_incl_tax", "purchase_amount_excl_tax", "sales_amount_incl_tax", "sales_amount_excl_tax", "profit"]);
-  const allowedPayoutMethods = new Set(["instant", "single"]);
-  const allowedPayoutCycles = new Set(["monthly", "per_order"]);
+  const allowedCalculation = new Set<string>(commissionRuleCalculationValues);
+  const allowedBases = new Set<string>(commissionRuleBaseValues);
+  const allowedPayoutMethods = new Set<string>(commissionPayoutMethodValues);
+  const allowedPayoutCycles = new Set<string>(commissionPayoutCycleValues);
   return {
     ...base,
     ...next,
@@ -96,9 +97,13 @@ export function normalizeCommissionRule(input: Partial<CommissionRule> | undefin
   };
 }
 
+export type CommissionRulePatch = Partial<Omit<CommissionRule, "targets">> & {
+  targets?: Partial<CommissionRule["targets"]>;
+};
+
 export type CommissionRulesPatch = Partial<Omit<CommissionRules, "purchase" | "sales">> & {
-  purchase?: Partial<CommissionRule>;
-  sales?: Partial<CommissionRule>;
+  purchase?: CommissionRulePatch;
+  sales?: CommissionRulePatch;
 };
 
 export function normalizeCommissionRules(input: CommissionRulesPatch | undefined): CommissionRules {

@@ -1,5 +1,6 @@
 import type {AftersalesCreateRequestDto, AftersalesMutationResponseDto, AftersalesStateResponseDto, AftersalesUpdateRequestDto} from "../dto/aftersales.dto";
-import {aftersalesTypes, type AftersalesCandidate, type AftersalesCreateFormValues, type AftersalesListItem, type AftersalesResolutionFormValues, type AftersalesStatus, type AftersalesType, type AftersalesWorkspaceSnapshot} from "@/src/types/aftersales";
+import {aftersalesActiveStatusValues, aftersalesStatuses, aftersalesTypes, type AftersalesCandidate, type AftersalesCreateFormValues, type AftersalesListItem, type AftersalesResolutionFormValues, type AftersalesStatus, type AftersalesType, type AftersalesWorkspaceSnapshot} from "@/src/types/aftersales";
+import {inventoryAftersalesCandidateStatusValues} from "@/src/types/inventory";
 
 function record(value: unknown): Record<string, unknown> {return value && typeof value === "object" ? value as Record<string, unknown> : {};}
 function text(value: unknown, fallback = "") {return typeof value === "string" ? value : value === null || value === undefined ? fallback : String(value);}
@@ -12,7 +13,7 @@ export function normalizeAftersalesStatus(value: unknown): AftersalesStatus {
   if (status === "待审核") return "待处理";
   if (status === "处理中") return "检测中";
   if (["已解决", "已维修", "已退款"].includes(status)) return "已完成";
-  if (["待处理", "检测中", "已完成", "已拒绝"].includes(status)) return status as AftersalesStatus;
+  if (aftersalesStatuses.includes(status as AftersalesStatus)) return status as AftersalesStatus;
   return "待处理";
 }
 
@@ -36,12 +37,12 @@ export function adaptAftersalesWorkspace(response: AftersalesStateResponseDto): 
   const state = record(response.data);
   const items = collection(state.aftersales).map(adaptAftersalesItem).filter((item) => Boolean(item.id));
   const invoices = collection(state.salesInvoices).map(record);
-  const candidates: AftersalesCandidate[] = collection(state.inventory).map(record).filter((card) => ["已售出", "售后中"].includes(text(card.status))).flatMap((card) => {
+  const candidates: AftersalesCandidate[] = collection(state.inventory).map(record).filter((card) => inventoryAftersalesCandidateStatusValues.includes(text(card.status) as (typeof inventoryAftersalesCandidateStatusValues)[number])).flatMap((card) => {
     const saleId = text(card.salesInvoiceId);
     const invoice = invoices.find((row) => text(row.invoiceNo) === saleId || text(row.id) === saleId);
     if (!invoice) return [];
     const serialNumber = text(card.sn);
-    const active = items.find((item) => item.serialNumber === serialNumber && ["待处理", "检测中"].includes(item.status));
+    const active = items.find((item) => item.serialNumber === serialNumber && aftersalesActiveStatusValues.includes(item.status as (typeof aftersalesActiveStatusValues)[number]));
     return [{inventoryId: text(card.id), productName: text(card.productName, text(card.model, "未记录商品")), serialNumber, saleInvoiceNo: text(invoice.invoiceNo, text(invoice.id)), customerId: optionalText(invoice.customerId), customerName: text(invoice.customerName, "未记录客户"), contact: text(invoice.contact), model: optionalText(card.model), saleDate: optionalText(invoice.date), activeClaimId: active?.id}];
   }).filter((item) => Boolean(item.inventoryId && item.saleInvoiceNo && item.serialNumber));
   return {items, candidates, source: text(record(response.meta).source) === "database-workspace" ? "database-workspace" : "state-snapshot"};

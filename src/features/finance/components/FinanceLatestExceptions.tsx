@@ -35,7 +35,7 @@ export function FinanceLatestExceptions({item}: {item: FinanceDailyClosing}) {
             <AlertTriangle className={`h-4 w-4 ${entry.tone === "danger" ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-warning)]"}`} />
             <span className="text-sm font-medium">{entry.label}</span>
           </div>
-          <span className={`font-mono text-sm font-bold ${entry.tone === "danger" ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-warning)]"}`}>{entry.value}</span>
+          <span className={`erp-data-number text-sm font-semibold ${entry.tone === "danger" ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-warning)]"}`}>{entry.value}</span>
         </div>
       ))}
     </div>

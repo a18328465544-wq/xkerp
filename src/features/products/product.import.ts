@@ -1,3 +1,4 @@
+import {productCategoryValues} from "@/src/types/core";
 import type {ProductCategory} from "@/src/types/core";
 
 export interface ProductImportRow {
@@ -14,7 +15,7 @@ export interface ProductImportRow {
 }
 
 export const productImportHeaders = ["配件ID", "分类", "商品名称", "核心型号", "品牌", "版本/系列", "规格参数", "参考回收价", "参考销售价", "备注"] as const;
-const categories: readonly ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
+const categories = productCategoryValues;
 
 function parseCsvLine(line: string) {
   const values: string[] = [];

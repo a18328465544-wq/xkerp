@@ -1,6 +1,7 @@
 import type { Express, RequestHandler } from "express";
 import type { AuthenticatedRequest } from "../httpAuth.ts";
 import { listSalesCustomers } from "../salesCustomerRepository.ts";
+import { parseHttpDto, salesCustomerListQueryDto } from "../httpDto.ts";
 
 type SalesCustomerRouteDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -43,11 +44,12 @@ export function registerSalesCustomerRoutes(app: Express, dependencies: SalesCus
   app.get("/api/sales/customers", dependencies.requireMenu("sales_add"), async (req, res, next) => {
     try {
       const authRequest = req as AuthenticatedRequest<unknown>;
+      const query = parseHttpDto(salesCustomerListQueryDto, req.query);
       const result = await listSalesCustomers({
         tenantId: authRequest.tenantId,
-        page: Number(req.query.page || 1),
-        pageSize: Number(req.query.pageSize || 30),
-        keyword: String(req.query.keyword || req.query.search || ""),
+        page: query.page,
+        pageSize: query.pageSize,
+        keyword: query.keyword || query.search,
       });
       res.json({ data: { items: result.data.map(customerPickerItem), meta: result.meta } });
     } catch (error) {

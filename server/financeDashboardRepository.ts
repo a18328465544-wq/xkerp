@@ -1,4 +1,5 @@
 import {withDatabaseTransaction} from "./db.ts";
+import {inventoryReturnBlockedStatusValues} from "../src/types/inventory.ts";
 
 type Scope = {tenantId?: string; storeId?: string};
 type Access = {showCost: boolean; showProfit: boolean; canViewAccounts: boolean; canViewSettlementLedger: boolean; canViewReturns: boolean};
@@ -30,6 +31,8 @@ function boundedInteger(value: number | undefined, fallback: number, maximum: nu
   return Number.isFinite(parsed) ? Math.min(maximum, Math.max(1, Math.floor(parsed || fallback))) : fallback;
 }
 
+const inventoryBlockedSql = inventoryReturnBlockedStatusValues.map((status) => `'${status}'`).join(", ");
+
 export async function getFinanceDashboard(scope: Scope, range: {startDate: string; endDate: string}, access: Access) {
   return withDatabaseTransaction(async (client) => {
     const days = rangeDays(range.startDate, range.endDate);
@@ -52,7 +55,7 @@ export async function getFinanceDashboard(scope: Scope, range: {startDate: strin
     const returnRows = access.canViewReturns
       ? await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_return_orders ${whereWith(query, `(LEFT(COALESCE(data->>'date',''),10) BETWEEN ${startBind} AND ${endBind} OR data->>'status' = '待处理')`)} ORDER BY COALESCE(data->>'date','') DESC, id DESC LIMIT 10000`, rangeValues)
       : {rows: [] as Array<{id: string; data: Record<string, unknown>}>};
-    const inventoryRows = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_inventory ${whereWith(query, `(COALESCE(data->>'status','') NOT IN ('已售出','已退货','已报废') OR LEFT(COALESCE(data->>'entryTime',''),10) BETWEEN ${startBind} AND ${endBind} OR LEFT(COALESCE(data->>'salesTime',''),10) BETWEEN ${startBind} AND ${endBind})`)} ORDER BY id LIMIT 50000`, rangeValues);
+    const inventoryRows = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_inventory ${whereWith(query, `(COALESCE(data->>'status','') NOT IN (${inventoryBlockedSql}) OR LEFT(COALESCE(data->>'entryTime',''),10) BETWEEN ${startBind} AND ${endBind} OR LEFT(COALESCE(data->>'salesTime',''),10) BETWEEN ${startBind} AND ${endBind})`)} ORDER BY id LIMIT 50000`, rangeValues);
 
     const salesInvoices = salesRows.rows.map((row) => ({id: row.id, date: row.data.date, outboundTime: row.data.outboundTime, outboundStatus: row.data.outboundStatus, paymentStatus: row.data.paymentStatus, unpaidAmount: row.data.unpaidAmount, ...(access.showCost ? {totalCost: row.data.totalCost} : {}), ...(access.showProfit ? {totalProfit: row.data.totalProfit} : {})}));
     const purchaseInvoices = purchaseRows.rows.map((row) => ({id: row.id, date: row.data.date, unpaidAmount: row.data.unpaidAmount, ...(access.showCost ? {totalCost: row.data.totalCost} : {})}));

@@ -35,6 +35,7 @@ import {Link} from "@tanstack/react-router";
 import {useEffect, useRef} from "react";
 import {isNavigationItemActive, type NavigationItem} from "@/src/config/navigation";
 import {cn} from "@/src/lib/cn";
+import {searchForNavigation} from "./navigationSearch";
 
 const itemIcons: Record<string, LucideIcon> = {
   dashboard: Home,
@@ -84,18 +85,20 @@ export interface AppSidebarDrawerModule {
 export interface AppSidebarDrawerProps {
   module: AppSidebarDrawerModule | null;
   pathname: string;
+  search: string;
   position: {top: number; left: number} | null;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onNavigate: () => void;
-  onClose: () => void;
+  /** Escape closes the flyout and asks the parent to restore focus to its trigger. */
+  onClose: (restoreFocus?: boolean) => void;
 }
 
 /**
  * Desktop-only secondary navigation. The primary module list stays in the
  * sidebar; this panel floats beside the selected module like the V1 shell.
  */
-export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMouseLeave, onNavigate, onClose}: AppSidebarDrawerProps) {
+export function AppSidebarDrawer({module, pathname, search, position, onMouseEnter, onMouseLeave, onNavigate, onClose}: AppSidebarDrawerProps) {
   const drawerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -103,11 +106,11 @@ export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMo
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onClose(true);
       }
     };
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) onClose();
+      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) onClose(false);
     };
     document.addEventListener("keydown", closeOnEscape);
     document.addEventListener("pointerdown", closeOnOutsidePointer);
@@ -122,7 +125,6 @@ export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMo
   return (
     <section
       ref={drawerRef}
-      id={"sidebar-flyout-" + module.id}
       data-sidebar-flyout
       aria-label={`${module.label}二级菜单`}
       onMouseEnter={onMouseEnter}
@@ -130,7 +132,7 @@ export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMo
       style={{top: position.top, left: position.left, maxHeight: `calc(100dvh - ${position.top + 16}px)`}}
       className="erp-drawer-layer fixed hidden w-[224px] overflow-hidden rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] lg:block"
     >
-      <nav className="erp-scrollbar max-h-[calc(100dvh-72px)] space-y-1 overflow-y-auto p-2" aria-label={`${module.label}功能`}>
+      <nav id={"sidebar-flyout-" + module.id} className="erp-scrollbar max-h-[calc(100dvh-72px)] space-y-1 overflow-y-auto p-2" aria-label={`${module.label}功能`}>
         {module.items.map((item) => {
           const Icon = itemIcons[item.id] || FileText;
           const active = isNavigationItemActive(item, pathname);
@@ -138,9 +140,11 @@ export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMo
             <Link
               key={item.id}
               to={item.path}
+              search={searchForNavigation(search)}
               onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "erp-focus-ring group flex min-h-10 w-full items-center gap-2 rounded-[var(--erp-radius-md)] border-l-2 px-2.5 text-left text-sm font-semibold transition-colors",
+                "erp-focus-ring group flex min-h-10 w-full items-center gap-2 rounded-[var(--erp-radius-md)] border-l-2 px-2.5 text-left text-sm font-medium transition-colors",
                 active
                   ? "border-[var(--erp-color-primary)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"
                   : "border-transparent text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)] hover:text-[var(--erp-color-text)]",
@@ -148,7 +152,7 @@ export function AppSidebarDrawer({module, pathname, position, onMouseEnter, onMo
             >
               <Icon className={cn("h-4 w-4 shrink-0", active ? "text-[var(--erp-color-primary)]" : "text-[var(--erp-color-text-muted)] group-hover:text-[var(--erp-color-text-secondary)]")} />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.badge && <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold", active ? "bg-[var(--erp-color-primary)] text-white" : "bg-[var(--erp-color-surface-muted)] text-[var(--erp-color-text-muted)]")}>{item.badge}</span>}
+              {item.badge && <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-xs font-semibold", active ? "bg-[var(--erp-color-primary)] text-white" : "bg-[var(--erp-color-surface-muted)] text-[var(--erp-color-text-muted)]")}>{item.badge}</span>}
             </Link>
           );
         })}

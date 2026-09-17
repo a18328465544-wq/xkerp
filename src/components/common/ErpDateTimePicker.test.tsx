@@ -19,6 +19,11 @@ test("ErpDateTimePicker supports the shared compact height token", () => {
   assert.match(markup, /data-density="compact"/);
 });
 
+test("ErpDateTimePicker preserves aria-invalid from a shared field wrapper", () => {
+  const markup = renderToStaticMarkup(<ErpDateTimePicker value="" onChange={() => undefined} aria-invalid="true" />);
+  assert.match(markup, /aria-invalid="true"/);
+});
+
 test("ErpDateTimePicker respects time-level bounds on the same date", () => {
   assert.equal(isDateTimeWithinBounds("2026-08-19T10:00", "2026-08-19T10:00", "2026-08-19T18:00"), true);
   assert.equal(isDateTimeWithinBounds("2026-08-19T09:59", "2026-08-19T10:00", "2026-08-19T18:00"), false);

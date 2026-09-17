@@ -10,6 +10,10 @@ import {cn} from "@/src/lib/cn";
 export type ErpTableDensity = "comfortable" | "compact";
 const pageSizeOptions = [20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}));
 
+export function resolveTableProjection({mobileMode, compactViewport}: {mobileMode: "cards" | "table"; compactViewport: boolean}): "cards" | "table" {
+  return mobileMode === "cards" && compactViewport ? "cards" : "table";
+}
+
 export interface ErpDataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -42,10 +46,12 @@ export interface ErpDataTableProps<TData> {
   surface?: "card" | "plain";
   /** Accessible name for the table; each feature should provide a business-specific label. */
   ariaLabel?: string;
-  /** Ordinary lists use compact cards below the sm breakpoint; dense entry grids can opt back into horizontal tables. */
+  /** Ordinary lists use compact cards below the 1440px desktop baseline; dense entry grids can opt back into horizontal tables. */
   mobileMode?: "cards" | "table";
   /** Number of non-title fields shown before the mobile card offers the rest. */
   mobileFields?: number;
+  /** Hide the generic mobile detail action when a row already exposes a domain-specific action. */
+  mobileShowDetailAction?: boolean;
   /** Opt-in windowing for large client-side pages. Server pagination remains the primary guard. */
   virtualized?: boolean;
   virtualRowHeight?: number;
@@ -88,6 +94,7 @@ export function ErpDataTable<TData>({
   ariaLabel = "数据列表",
   mobileMode = "cards",
   mobileFields = 4,
+  mobileShowDetailAction = true,
   virtualized = false,
   virtualRowHeight = 56,
 }: ErpDataTableProps<TData>) {
@@ -101,14 +108,23 @@ export function ErpDataTable<TData>({
   const setColumnVisibility = onColumnVisibilityChange || setInternalVisibility;
   const setRowSelection = onRowSelectionChange || setInternalSelection;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Keep the server and first client render identical; the media listener
+  // applies the compact presentation immediately after hydration.
   const [compactViewport, setCompactViewport] = useState(false);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
+    // Keep the 1440px desktop baseline on the table view (the table may scroll
+    // horizontally inside its own region); compact desktop and below use the
+    // complete card projection so the sidebar never squeezes fields away.
+    const media = window.matchMedia("(max-width: 1439px)");
     const update = () => setCompactViewport(media.matches);
     update();
-    media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
+    if (media.addEventListener) {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
   }, []);
 
   const table = useReactTable({
@@ -143,16 +159,20 @@ export function ErpDataTable<TData>({
     ? <div data-erp-component="data-table" data-surface="plain" className={cn("min-w-0", className)}>{content}</div>
     : <Card data-erp-component="data-table" className={className}>{content}</Card>;
 
+  const resolvedAriaLabel = ariaLabel === "数据列表" && typeof emptyTitle === "string" && emptyTitle.trim()
+    ? `${emptyTitle.replace(/^暂无(?:匹配)?/, "").trim() || "数据"}列表`
+    : ariaLabel;
+
   if (loading && data.length === 0) return wrapSurface(<ErpLoadingState />);
   if (error && data.length === 0) {
-    return wrapSurface(<ErpEmptyState title={errorTitle} description={error.message} action={onRetry ? <Button size="sm" onClick={onRetry}>重试</Button> : undefined} />);
+    return wrapSurface(<ErpEmptyState density={density === "compact" ? "compact" : "default"} title={errorTitle} description={error.message} action={onRetry ? <Button size="sm" onClick={onRetry}>重试</Button> : undefined} />);
   }
-  if (!data.length) return wrapSurface(<ErpEmptyState title={emptyTitle} description={emptyDescription} />);
+  if (!data.length) return wrapSurface(<ErpEmptyState density={density === "compact" ? "compact" : "default"} title={emptyTitle} description={emptyDescription} />);
 
   const totalPages = total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize));
   const rowPadding = density === "compact" ? "px-3 py-2" : "px-4 py-3";
   const tableRows = table.getRowModel().rows;
-  const showMobileCards = mobileMode === "cards" && (!virtualized || compactViewport);
+  const showMobileCards = resolveTableProjection({mobileMode, compactViewport}) === "cards";
   const visibleRows = shouldVirtualize
     ? rowVirtualizer.getVirtualItems().flatMap((virtualRow) => {
       const row = tableRows[virtualRow.index];
@@ -167,7 +187,7 @@ export function ErpDataTable<TData>({
   };
   return wrapSurface(<>
     {fetching && <div className="erp-refresh-indicator-layer absolute inset-x-0 top-0 h-0.5 animate-pulse bg-[var(--erp-color-primary)]" role="status" aria-live="polite" aria-label="刷新中" />}
-    {showMobileCards && <div data-erp-region="mobile-table-cards" className="space-y-2 p-2 md:hidden">
+    {showMobileCards && <div data-erp-region="mobile-table-cards" className="erp-table-cards-view space-y-2 p-2">
       {tableRows.map((row) => {
         const cells = row.getVisibleCells();
         const selectionCell = cells.find((cell) => cell.column.id === "select");
@@ -183,31 +203,31 @@ export function ErpDataTable<TData>({
         >
           {selectionCell && <div className="absolute right-3 top-3" onClick={(event) => event.stopPropagation()}>{flexRender(selectionCell.column.columnDef.cell, selectionCell.getContext())}</div>}
           <div className={cn("flex min-w-0 items-start gap-2", actionCell || selectionCell ? "pr-8" : "")}>
-            <div className="min-w-0 flex-1 text-sm font-semibold text-[var(--erp-color-text)]">
+            <div className="min-w-0 flex-1 text-erp-sm font-medium text-[var(--erp-color-text)]">
               {titleCell ? flexRender(titleCell.column.columnDef.cell, titleCell.getContext()) : "—"}
             </div>
             {actionCell && <div className="shrink-0" onClick={(event) => event.stopPropagation()}>{flexRender(actionCell.column.columnDef.cell, actionCell.getContext())}</div>}
           </div>
           {detailCells.length > 0 && <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[var(--erp-color-border)] pt-3">
             {detailCells.map((cell) => <div key={cell.id} className="min-w-0">
-              <dt className="truncate text-[11px] text-[var(--erp-color-text-muted)]">{cellLabel(cell)}</dt>
-              <dd className="mt-0.5 min-w-0 break-words text-xs text-[var(--erp-color-text-secondary)]">{flexRender(cell.column.columnDef.cell, cell.getContext())}</dd>
+              <dt className="truncate text-xs text-[var(--erp-color-text-muted)]">{cellLabel(cell)}</dt>
+              <dd className="mt-0.5 min-w-0 break-words text-erp-sm text-[var(--erp-color-text-secondary)]">{flexRender(cell.column.columnDef.cell, cell.getContext())}</dd>
             </div>)}
           </dl>}
-          {(remaining > 0 || onRowClick) && <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--erp-color-border)] pt-3">
+          {(remaining > 0 || (onRowClick && mobileShowDetailAction)) && <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--erp-color-border)] pt-3">
             {remaining > 0 && <Button type="button" size="sm" variant="ghost" className="flex-1" onClick={() => setExpandedMobileRows((current) => ({...current, [row.id]: !expanded}))}>
               {expanded ? "收起详情" : `查看其余 ${remaining} 项`}
             </Button>}
-            {onRowClick && <Button type="button" size="sm" variant="secondary" className="flex-1" onClick={() => onRowClick(row.original)}>查看详情</Button>}
+            {onRowClick && mobileShowDetailAction && <Button type="button" size="sm" variant="secondary" className="flex-1" onClick={() => onRowClick(row.original)}>查看详情</Button>}
           </div>}
         </article>;
       })}
     </div>}
-    <div ref={scrollRef} className={cn("erp-scrollbar erp-horizontal-scroll overflow-x-auto", showMobileCards && "hidden md:block", shouldVirtualize && "max-h-[min(48rem,68vh)] overflow-y-auto")}>
-      <table className="w-full min-w-[1180px] border-collapse text-left text-sm" aria-label={ariaLabel} aria-busy={loading || fetching} aria-rowcount={total ?? undefined}>
-        <thead className={cn("bg-[var(--erp-color-surface-muted)] text-xs text-[var(--erp-color-text-secondary)]", stickyHeader && "sticky top-0 erp-content-sticky-layer")}>
+    {!showMobileCards && <div ref={scrollRef} className={cn("erp-table-desktop-view erp-scrollbar erp-horizontal-scroll overflow-x-auto", shouldVirtualize && "max-h-[min(48rem,68vh)] overflow-y-auto")}>
+      <table className="w-full min-w-[1180px] border-collapse text-left text-sm" aria-label={resolvedAriaLabel} aria-busy={loading || fetching} aria-rowcount={total ?? undefined}>
+        <thead className={cn("bg-[var(--erp-color-surface-muted)] text-xs font-medium text-[var(--erp-color-text-secondary)]", stickyHeader && "sticky top-0 erp-content-sticky-layer")}>
           {table.getHeaderGroups().map((headerGroup) => <tr key={headerGroup.id}>
-            {headerGroup.headers.map((header) => <th key={header.id} data-erp-sticky-action={isUtilityColumn(header.column.id) && header.column.id !== "select" ? "true" : undefined} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-semibold" style={{width: header.getSize()}}>
+            {headerGroup.headers.map((header) => <th key={header.id} data-erp-sticky-action={isUtilityColumn(header.column.id) && header.column.id !== "select" ? "true" : undefined} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-medium" style={{width: header.getSize()}}>
               {header.isPlaceholder ? null : <div className="flex items-center gap-1">
                 {header.column.getCanSort() ? <button type="button" className="erp-focus-ring inline-flex items-center gap-1 rounded px-1" onClick={header.column.getToggleSortingHandler()}>{flexRender(header.column.columnDef.header, header.getContext())}{header.column.getIsSorted() === "asc" ? <ArrowUp className="h-3 w-3" /> : header.column.getIsSorted() === "desc" ? <ArrowDown className="h-3 w-3" /> : <ChevronsUpDown className="h-3 w-3 opacity-40" />}</button> : flexRender(header.column.columnDef.header, header.getContext())}
                 {header.column.getCanResize() && <button type="button" aria-label="调整列宽" className="absolute right-0 top-0 h-full w-3 cursor-col-resize text-transparent hover:text-[var(--erp-color-primary)]" onMouseDown={header.getResizeHandler()} onTouchStart={header.getResizeHandler()}><GripVertical className="mx-auto h-4 w-4" /></button>}
@@ -221,11 +241,11 @@ export function ErpDataTable<TData>({
           </tr>)}
         </tbody>
       </table>
-    </div>
-    {(footer || totalPages !== undefined) && <div className={cn("flex flex-col items-stretch justify-between border-t border-[var(--erp-color-border)] text-xs text-[var(--erp-color-text-secondary)] md:flex-row md:items-center", density === "compact" ? "gap-2 px-3 py-2" : "gap-3 px-4 py-2.5")}>
+    </div>}
+    {(footer || totalPages !== undefined) && <div className={cn("flex flex-col items-stretch justify-between border-t border-[var(--erp-color-border)] text-xs text-[var(--erp-color-text-secondary)] lg:flex-row lg:items-center", density === "compact" ? "gap-2 px-3 py-2" : "gap-3 px-4 py-2.5")}>
       {footer || <span>共 {total || 0} 条</span>}
       {totalPages !== undefined && (
-        <div className={cn("flex w-full items-center justify-between whitespace-nowrap md:w-auto", density === "compact" ? "gap-1" : "gap-2")}>
+        <div className={cn("flex w-full items-center justify-between whitespace-nowrap lg:w-auto", density === "compact" ? "gap-1" : "gap-2")}>
           <Button className="shrink-0" size="icon" variant="ghost" aria-label="上一页" disabled={page <= 1} onClick={() => onPageChange?.(page - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -233,7 +253,7 @@ export function ErpDataTable<TData>({
           <Button className="shrink-0" size="icon" variant="ghost" aria-label="下一页" disabled={page >= totalPages} onClick={() => onPageChange?.(page + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Select size="sm" className="min-w-[6.5rem] shrink-0" aria-label="每页条数" value={String(pageSize)} options={pageSizeOptions} onValueChange={(value) => onPageSizeChange?.(Number(value))} />
+          <Select size="sm" className="w-28 min-w-[6.5rem] shrink-0" aria-label="每页条数" value={String(pageSize)} options={pageSizeOptions} onValueChange={(value) => onPageSizeChange?.(Number(value))} />
         </div>
       )}
     </div>}

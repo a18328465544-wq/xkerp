@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { SalesInvoice } from "../src/types.ts";
 import { currentCrmTenantId, scopedCrmSourceId } from "./crmTenant.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
 type CrmEntitySourceType = "customer" | "vendor";
 
@@ -106,7 +107,7 @@ export async function syncCrmPurchaseInvoiceLink(
   actorId?: string,
 ) {
   if (!invoice.sourcePartnerId) return null;
-  const isCustomerSource = invoice.sourcePartnerType === "customer" || ["个人回收", "客户置换"].includes(invoice.sourceType);
+  const isCustomerSource = invoice.sourcePartnerType === "customer" || isPersonalPurchaseSource(invoice.sourceType);
   const sourceType: CrmEntitySourceType = isCustomerSource ? "customer" : "vendor";
   return syncCrmEntityLink(client, {
     sourceType,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {salesApi, toSalesCustomerQueryParams, toSalesInventoryQueryParams} from "./sales";
+import type {SalesFormValues} from "@/src/types/sales";
 
 test("sales customer query uses server paging and keyword contract", () => {
   const params = toSalesCustomerQueryParams(" 张三 ", 2, 20);
@@ -116,4 +117,57 @@ test("sales delete endpoint encodes the invoice id and adapts the deleted docume
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test("sales edit sends model quantities expanded once and keeps physical binding for outbound", async () => {
+  const previousFetch = globalThis.fetch;
+  const values: SalesFormValues = {
+    date: "2026-09-12",
+    customerId: "C-1",
+    customerPartnerType: "customer",
+    customerName: "客户",
+    contact: "13800000000",
+    channel: "微信私域",
+    paymentMethod: "微信",
+    settlementAccountId: "",
+    paidAmount: 0,
+    needInvoice: false,
+    freeShipping: true,
+    expressCompany: "",
+    expressNo: "SF-1",
+    aftersalesTerms: "店保三个月",
+    handleBy: "销售",
+    paymentHandler: "销售",
+    remarks: "编辑备注",
+    items: [{inventoryId: "", productId: "P-1", productName: "RTX 4090", brand: "华硕", model: "4090", vram: "24G", condition: "出库核验", quantity: 2, sellPrice: 1500, costPrice: 1200, remarks: "", aftersalesTerms: "店保三个月"}],
+  };
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, "/api/sales-invoices/S-1");
+    assert.equal(init?.method, "PUT");
+    const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    const items = body.items as Array<Record<string, unknown>>;
+    assert.equal(items.length, 2);
+    assert.equal(items.every((item) => item.inventoryId === "" && item.quantity === undefined && item.sn === ""), true);
+    assert.equal("purchaseDraftId" in body, false);
+    return new Response(JSON.stringify({data: {id: "S-1", invoiceNo: "XS-1", date: values.date, customerId: "C-1", customerName: values.customerName, contact: values.contact, channel: values.channel, paymentMethod: values.paymentMethod, paidAmount: 0, unpaidAmount: 3000, paymentStatus: "未收款", outboundStatus: "待出库", items}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await salesApi.update("S-1", values, undefined, "full", {showCost: true, showProfit: true});
+    assert.equal(result.invoice.id, "S-1");
+    assert.equal(result.invoice.items.length, 2);
+  } finally { globalThis.fetch = previousFetch; }
+});
+
+test("sales limited edit only sends editable metadata", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, "/api/sales-invoices/S-1");
+    assert.equal(init?.method, "PUT");
+    assert.deepEqual(JSON.parse(String(init?.body || "{}")), {expressNo: "SF-2", remarks: "补充说明"});
+    return new Response(JSON.stringify({data: {id: "S-1", invoiceNo: "XS-1", items: [], paidAmount: 0, unpaidAmount: 0, paymentStatus: "未收款", outboundStatus: "已出库"}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await salesApi.update("S-1", {...({} as SalesFormValues), expressNo: " SF-2 ", remarks: " 补充说明 "}, undefined, "metadata", {showCost: false, showProfit: false});
+    assert.equal(result.invoice.invoiceNo, "XS-1");
+  } finally { globalThis.fetch = previousFetch; }
 });

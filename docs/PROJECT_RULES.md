@@ -64,15 +64,17 @@ UI 的颜色、字号、间距、组件、响应式和验收细则见 docs/UI_DE
 
 ### 4.2 UI 规范
 
-- 优先使用 PageShell、Card、Button、Badge、Modal、DataTable 和现有筛选/分页组件。
+- 优先使用 `ErpPageFrame`、`Card`、`Button`、`Badge`、`ErpDialogShell`、`ErpDataTable` 和现有筛选/分页组件；基础控件从 `src/components/ui` 导入，ERP 语义组件从 `src/components/common` 导入。
+- 普通列表/工具栏文本搜索统一使用 `src/components/common/ErpSearchInput`；实体选择器（客户、库存、商品）保留各自的领域选择组件，不在页面内复制搜索图标、清空或浮层定位。
 - 颜色语义固定：蓝色=主操作/链接和净额/中性汇总，绿色=收入/收款/到账/成功/健康，橙色=提醒/待处理/逾期/异常/待处理风险，红色=支出/付款/成本/手续费/损失/失败/破坏性操作，灰色=辅助信息。业务金额优先使用 `--erp-color-income`、`--erp-color-expense`、`--erp-color-net`、`--erp-color-risk` 及对应浅色 Token；风险色不得替代支出色，颜色必须配合文字或正负号表达。
 - 页面需要在 1440px 桌面宽度下完整呈现主要信息；不因过度留白隐藏关键字段。大表格允许横向滚动，但工具栏和核心操作必须可见。
 - 设计稿“1:1”意味着结构、层级、间距、信息密度和交互一致，不等于复制静态假数据。
-- 弹窗必须依附当前页面、使用统一遮罩和右上角关闭，不因切换其他工作区标签而意外销毁；真正需要跨页面保留的状态放入页面/工作区状态。
+- 弹窗必须依附当前页面、使用统一遮罩和右上角关闭，不因切换其他工作区标签而意外销毁；真正需要跨页面保留的状态放入页面/工作区状态。列表浏览型详情抽屉可通过 `ErpDetailDrawer modal={false}` 保持底层列表可操作并在同一面板切换记录；创建、编辑、粘贴和删除流程必须继续使用模态模式。
 - Workspace Tabs 是应用内最高层级；日期、选项和其他浮层统一使用低于 `--erp-layer-tab-navigation`、高于模态弹窗和抽屉的 `--erp-layer-popover`；普通模态弹窗使用 `--erp-layer-modal`；侧边抽屉及其遮罩必须从 Workspace Bar 底部开始，并使用 `--erp-layer-drawer` / `--erp-layer-drawer-backdrop`，不得覆盖 Tab 栏。
 - 空状态、加载态、错误态和权限不足态必须明确；不能只显示空白区域。
 - 所有按钮必须有 type=button 或明确表单行为、可见反馈和必要的 aria-label。图标按钮要有 title 或无障碍名称。
 - 不使用原生 alert/confirm；使用 notification.ts、ConfirmDialog 或统一弹窗。
+- 业务通知统一调用 `src/utils/notification.ts` 的 `notify`；Sonner 只能由 `src/components/common/NotificationToaster.tsx` 挂载并由 `src/utils/notification.ts` 适配，业务页面不得直接导入 `sonner`。
 - 表格操作列保持稳定顺序：查看/编辑 → 更多/删除；危险动作必须二次确认。
 
 ### 4.3 组件与状态

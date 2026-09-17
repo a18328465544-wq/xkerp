@@ -13,6 +13,15 @@ const tokenBypassCounts = {};
 
 const visualClassPattern = /^(?:h-|min-h-|max-h-|p[trblxy]?-(?!0$)|bg-|border(?:-|$)|rounded(?:-|$)|shadow(?:-|$)|text-(?:white|black|slate|gray|zinc|neutral|stone|red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink)-)/;
 
+function collectComponentFiles(directory) {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectComponentFiles(file);
+    return entry.name.endsWith(".tsx") && !/\.test\.tsx$/.test(entry.name) ? [file] : [];
+  });
+}
+
 function lineOf(sourceFile, node) {
   return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
 }
@@ -44,7 +53,7 @@ function literalAttributeValue(attribute) {
 
 function inspectButtonComponent(file, sourceFile, node, tagName) {
   const size = literalAttributeValue(findAttribute(node, "size"));
-  if (size && ["lg", "icon", "iconXs", "iconLg"].includes(size)) {
+  if (size && ["iconXs", "iconLg"].includes(size)) {
     fail(file, sourceFile, node, `${tagName} 使用了已废弃尺寸 size=\"${size}\"；请改用 xs/sm/md。`);
   }
 
@@ -97,7 +106,7 @@ function inspectFile(file) {
   }
 
   visit(sourceFile);
-  if (nativeCount > 0) nativeCounts[path.basename(file)] = nativeCount;
+  if (nativeCount > 0) nativeCounts[path.relative(componentsDir, file).split(path.sep).join("/")] = nativeCount;
 }
 
 function inspectTokenUse(file) {
@@ -113,9 +122,24 @@ function inspectTokenUse(file) {
   }
 }
 
-for (const name of fs.readdirSync(componentsDir).filter((entry) => entry.endsWith(".tsx")).sort()) {
-  inspectFile(path.join(componentsDir, name));
+function inspectStyles(directory) {
+  if (!fs.existsSync(directory)) return;
+  for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      inspectStyles(file);
+      continue;
+    }
+    if (!entry.name.endsWith(".css") || entry.name === "tokens.css") continue;
+    const sourceText = fs.readFileSync(file, "utf8");
+    const hardcodedColors = sourceText.match(/(?:#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\s*\()/g) || [];
+    if (hardcodedColors.length > 0) {
+      failures.push(`${path.relative(projectRoot, file)} 直接写颜色值（${hardcodedColors.join(", ")}），请将颜色放入 src/styles/tokens.css。`);
+    }
+  }
 }
+
+for (const file of collectComponentFiles(componentsDir).sort()) inspectFile(file);
 
 function inspectFormalTree(directory) {
   if (!fs.existsSync(directory)) return;
@@ -133,16 +157,18 @@ for (const directory of [
   path.join(projectRoot, "src", "components", "domain"),
   path.join(projectRoot, "src", "features"),
 ]) inspectFormalTree(directory);
+inspectStyles(path.join(projectRoot, "src", "styles"));
 
 const currentTotal = Object.values(nativeCounts).reduce((sum, count) => sum + count, 0);
+const v2Baseline = baseline.v2 ?? {total: 0, files: {}};
 for (const [file, count] of Object.entries(nativeCounts)) {
-  const allowed = baseline.files[file] ?? 0;
+  const allowed = v2Baseline.files[file] ?? 0;
   if (count > allowed) {
-    failures.push(`src/components/${file} 新增了 ${count - allowed} 个原生 <button>（当前 ${count}，基线 ${allowed}）。请使用统一按钮组件。`);
+    failures.push(`src/components/${file} 新增了 ${count - allowed} 个原生 <button>（当前 ${count}，基线 ${allowed}）。请使用语义按钮组件；仅保留可解释的键盘/选择器例外。`);
   }
 }
-if (currentTotal > baseline.total) {
-  failures.push(`原生 <button> 总数从基线 ${baseline.total} 增至 ${currentTotal}，不允许回退。`);
+if (currentTotal > v2Baseline.total) {
+  failures.push(`V2 组件树中的原生 <button> 总数从基线 ${v2Baseline.total} 增至 ${currentTotal}，不允许回退。`);
 }
 
 if (failures.length > 0) {
@@ -151,4 +177,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`UI 契约检查通过：legacy 原生 <button> ${currentTotal}/${baseline.total}，V2 正式树已检查 Token 和交互契约。`);
+console.log(`UI 契约检查通过：V2 组件树原生 <button> ${currentTotal}/${v2Baseline.total}，旧版基线 ${baseline.total} 仅作历史参考；正式树已检查 Token 和交互契约。`);

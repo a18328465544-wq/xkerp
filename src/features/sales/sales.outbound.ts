@@ -1,5 +1,26 @@
 import type {SalesOutboundInventoryItem, SalesOutboundInvoice, SalesOutboundVerification} from "@/src/types/sales";
 
+/**
+ * Resolve the invoice selected by the URL without silently substituting a
+ * different invoice. A stale `invoice` query parameter can survive a refresh
+ * or a page/filter change; falling back to the first row in that case makes
+ * the verification panel appear to contain the wrong (or empty) data.
+ */
+export function resolveOutboundInvoice(
+  invoices: readonly SalesOutboundInvoice[],
+  invoiceId: string | null,
+) {
+  if (invoiceId) return invoices.find((invoice) => invoice.id === invoiceId || invoice.invoiceNo === invoiceId) || null;
+  return invoices[0] || null;
+}
+
+/** Keep a server-paginated page inside the range after the pending pool changes. */
+export function clampOutboundPage(page: number, totalPages: number) {
+  const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
+  const safeTotalPages = Number.isFinite(totalPages) ? Math.max(1, Math.floor(totalPages)) : 1;
+  return Math.min(safePage, safeTotalPages);
+}
+
 export function parseOutboundCodes(value: string) {
   const values = value.split(/[\n,，\s]+/).map((item) => item.trim()).filter(Boolean);
   const seen = new Set<string>();

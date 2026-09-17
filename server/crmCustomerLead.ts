@@ -1,8 +1,10 @@
 import type { CrmFollowUpRecord, CustomerCard, CustomerLevel } from "../src/types.ts";
+import {customerLevels} from "../src/types/customer.ts";
+import {crmContactMethodValues, crmIntentValues} from "../src/types/crm.ts";
 import { customerSuggestedLevel, normalizeCustomerLevel } from "./store.ts";
 import { QuickCaptureValidationError } from "./crmQuickCapture.ts";
 
-export const CUSTOMER_LEAD_LEVELS = ["S级", "A级", "B级", "C级", "D级", "R级"] as const;
+export const CUSTOMER_LEAD_LEVELS = customerLevels;
 export const CUSTOMER_LEAD_SOURCES = ["微信私域", "闲鱼", "抖音", "电话", "到店", "同行介绍", "淘宝", "其他"] as const;
 export const CUSTOMER_LEAD_ACTIONS = ["电话沟通", "微信联系", "到店拜访", "发送报价", "发送方案", "其他"] as const;
 
@@ -109,7 +111,7 @@ export function normalizeCustomerLeadInput(value: unknown): CustomerLeadInput {
   if (level === "R级" && !riskReason) {
     throw new QuickCaptureValidationError("R级客户必须填写风险原因", "CRM_CUSTOMER_LEAD_RISK_REASON_REQUIRED");
   }
-  const intent = ["低", "中", "高"].includes(String(source.intent))
+  const intent = crmIntentValues.includes(String(source.intent) as (typeof crmIntentValues)[number])
     ? String(source.intent) as CustomerLeadInput["intent"]
     : "中";
   const budget = numberValue(source.budget);
@@ -117,7 +119,7 @@ export function normalizeCustomerLeadInput(value: unknown): CustomerLeadInput {
   const dealProbability = numberValue(source.dealProbability, 30, 100);
   const nextFollowTime = normalizeDateTime(source.nextFollowTime ?? source.nextFollowUpAt);
   const nextAction = cleanText(source.nextAction, 80) || undefined;
-  const contactMethod = ["电话", "微信", "闲鱼", "淘宝", "到店", "其他"].includes(String(source.contactMethod))
+  const contactMethod = crmContactMethodValues.includes(String(source.contactMethod) as (typeof crmContactMethodValues)[number])
     ? String(source.contactMethod) as CrmFollowUpRecord["contactMethod"]
     : undefined;
   return {
@@ -152,7 +154,7 @@ function previewDraft(value: unknown) {
   const source = isRecord(value) ? value : {};
   const level = normalizeCustomerLevel(cleanText(source.level, 12)) as CustomerLeadLevel;
   const riskReason = cleanText(source.riskReason, 160) || undefined;
-  const intent = ["低", "中", "高"].includes(String(source.intent)) ? String(source.intent) as CustomerCard["intent"] : "中";
+  const intent = crmIntentValues.includes(String(source.intent) as (typeof crmIntentValues)[number]) ? String(source.intent) as CustomerCard["intent"] : "中";
   const budget = numberValue(source.budget);
   const estimatedAmount = numberValue(source.estimatedAmount, budget);
   const dealProbability = numberValue(source.dealProbability, 30, 100);

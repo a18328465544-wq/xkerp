@@ -1,5 +1,8 @@
 import type {CardInventory, ProductTemplate, SalesInvoice} from "../src/types.ts";
+import {inventorySellableStatusValues} from "../src/types/inventory.ts";
 import {withDatabaseTransaction} from "./db.ts";
+
+const inventorySellableStatusSql = inventorySellableStatusValues.map((status) => `'${status}'`).join(", ");
 
 export type SalesOutboundPageFilters = {
   tenantId?: string;
@@ -135,7 +138,7 @@ export async function listSalesOutboundPage(filters: SalesOutboundPageFilters = 
     let inventory: CardInventory[] = [];
     let products: ProductTemplate[] = [];
     if (identityClauses.length) {
-      const inventoryWhere = [...scopeClauses, `COALESCE(data->>'status', '') IN ('已入库', '已上架')`, `(${identityClauses.join(" OR ")})`];
+      const inventoryWhere = [...scopeClauses, `COALESCE(data->>'status', '') IN (${inventorySellableStatusSql})`, `(${identityClauses.join(" OR ")})`];
       const inventoryRows = await client.query<{id: string; data: CardInventory}>(
         `SELECT id, data
            FROM gpu_inventory

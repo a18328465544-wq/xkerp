@@ -1,7 +1,26 @@
 # OneERP UI Audit 实施追踪
 
+> 历史追踪文件：早期条目中的旧组件名和旧目录仅用于还原演进过程，不作为当前实现指引。新增或修改代码请以 `docs/COMPONENT_CATALOG.md`、`docs/UI_DESIGN_RULES.md` 和 `docs/ERP_UI_FOUNDATION.md` 为准。
+
 > 建立日期：2026-08-03  
 > 原则：不改业务含义，不制造填充型卡片，不以“大重构”替代渐进治理；每批必须通过 lint、相关测试和构建门禁。
+
+## P0–P3 全局组件收口（2026-09-07）
+
+- P0：普通搜索、通知、Popover、确认/删除弹窗、字段错误、事实块和状态反馈均有单一公共出口；业务页面不再直接接触 Sonner 或 Base UI Popover。
+- P1：扫码弹窗复用 `ErpBarcodeScannerDialog`，图片预览复用 `ErpImagePreviewDialog`，财务收入/支出复用 `FinanceEntryPageLayout`；路由和工作区标签通过 `pageLoaders.ts` + `pageComponents.ts` 共享懒加载注册。
+- P2：原生表格、选择控件和旧模块保留清晰例外登记；业务表单中的复选框/单选框统一为 `ErpCheckboxField` / `ErpRadioField`，删除无引用的旧配置和组件。
+- P3：公共组件都有渲染/契约测试，`scripts/check-ui-contracts.mjs`、边界检查和浏览器烟测脚本覆盖桌面、平板、手机入口；销售/采购默认四行约束继续由测试锁定。
+
+历史批次验证（2026-09-07）：`npm run lint`、`npm test`（745 通过，14 个需 PostgreSQL 的集成项按环境跳过）、`npm run build` 和 `git diff --check` 均通过。未执行生产部署；真实浏览器烟测在后续 P1–P3 批次补齐。
+
+## P1–P3 全量落地（2026-09-08）
+
+- P1：图表通过 `lazyChartPrimitives` / `recharts` 单一边界按需加载，入口 HTML 不再预加载图表 chunk；指标区使用最小宽度 Token 防止孤立卡片，图表空态统一为紧凑密度，采购与销售交易页去除多余的 Header 卡片。
+- P2：补齐信息色、浅色品牌色、紧凑圆角、指标宽度和内容吸顶层级 Token；DataTable 自动生成或接收业务级 `aria-label`，财务表格统一注入列表名称；筛选栏、日期范围控件、移动端副标题共享宽度与换行规则；设计系统门禁会拦截未定义 Token 和 Feature 裸圆角。
+- P3：新增浏览器视觉回归 manifest（`scripts/visual-baseline.json`）与 `npm run check:visual`，浏览器烟测覆盖桌面、平板、手机的导航、录单、抽屉、日期自然语言、确认弹窗和扫码错误态；设计系统文档同步了基线更新规则。
+
+本批次验证：`npm run lint`、`npm test`（753 通过、14 个需 PostgreSQL 的集成项按环境跳过）、`npm run build`、`npm run check:performance`、`npm run smoke:browser`、`npm run check:visual`、前后端及测试类型检查和 `git diff --check` 均通过。未执行生产部署；部署仍需按发布清单在目标服务器执行。
 
 ## 紧凑布局收敛（2026-08-16）
 
@@ -99,10 +118,7 @@ npm run build:web
 
 | 文件 | 场景 | 保留原因 | 窄屏策略 |
 | --- | --- | --- | --- |
-| `PurchaseItemsTable.tsx` | 采购录单编辑网格 | 连续键盘录入、列宽调整与行内校验 | 显式横向滚动，固定首尾列 |
-| `SalesManager.tsx` | 销售录单编辑网格 | 库存绑定、价格与数量联动 | 显式横向滚动，固定关键列 |
-| `AssemblyManager.tsx` | 组装/拆卸配件网格 | 多字段行内编辑与商品检索 | 显式横向滚动 |
-| `FinanceTransferDraftTable.tsx` | 批量调拨草稿 | 多账户、多金额批量录入 | 显式横向滚动 |
-| `InventoryScanModal.tsx` | 连续扫码结果 | 扫码枪高频操作与即时校验 | 显式横向滚动 |
-| `OneERPCopilot.tsx` | AI Markdown 表格 | 展示服务端返回的文档内容 | 容器横向滚动 |
-| `CrmManager.tsx` | 报价单打印预览 | 版式输出，不是管理列表 | 预览容器自适应，打印样式独立 |
+| `src/features/purchase/components/PurchaseLineItemsTable.tsx` | 采购录单编辑网格 | 连续键盘录入、列宽调整与行内校验 | 显式横向滚动，固定首尾列 |
+| `src/features/sales/components/SalesLineItemsTable.tsx` | 销售录单编辑网格 | 库存绑定、价格与数量联动 | 显式横向滚动，固定关键列 |
+| `src/features/assembly/components/AssemblyPartEditor.tsx` | 组装/拆卸配件网格 | 多字段行内编辑与商品检索 | 显式横向滚动 |
+| `src/components/common/ErpAiDrawer.tsx` | AI Markdown 表格 | 展示服务端返回的文档内容 | 容器横向滚动 |

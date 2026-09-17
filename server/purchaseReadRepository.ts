@@ -1,9 +1,11 @@
 import type {CardInventory, CustomerCard, InspectionRecord, PaymentOutRecord, ProductTemplate, PurchaseInvoice, ReturnOrder, SettlementAccount, Vendor} from "../src/types.ts";
+import {inventoryStockStatusValues} from "../src/types/inventory.ts";
 import {withDatabaseTransaction} from "./db.ts";
 
 type Scope = {tenantId?: string; storeId?: string};
 type PurchaseReadPermissions = {showCost: boolean; showProfit: boolean; canReadCustomers: boolean; canReadVendors: boolean; canReadProducts: boolean; canReadSettlementAccounts: boolean};
 type PurchaseDetailPermissions = {showCost: boolean; showProfit: boolean; canReadPayments: boolean; canReadPurchaseReturns: boolean};
+const inventoryStockStatusSql = inventoryStockStatusValues.map((status) => `'${status}'`).join(", ");
 
 function scoped(scope: Scope, alias = "") {
   const prefix = alias ? `${alias}.` : "";
@@ -35,7 +37,7 @@ export async function searchPurchaseProducts(scope: Scope, keyword: string, perm
     const query = scoped(scope, "p");
     if (keyword.trim()) {query.values.push(`%${keyword.trim()}%`); query.clauses.push(`CONCAT_WS(' ', p.id, p.data->>'name', p.data->>'brand', p.data->>'model', p.data->>'version', p.data->>'vram') ILIKE $${query.values.length}`);}
     query.values.push(Math.min(100, Math.max(1, limit)));
-    const rows = await client.query<{id: string; data: ProductTemplate; current_stock: number}>(`SELECT p.id, p.data, (SELECT COUNT(*) FROM gpu_inventory i WHERE i.tenant_id = p.tenant_id AND i.store_id = p.store_id AND i.data->>'productId' = p.id AND COALESCE(i.data->>'status','') IN ('已入库','已上架','待检测','检测中'))::int current_stock FROM gpu_products p ${query.clauses.length ? `WHERE ${query.clauses.join(" AND ")}` : ""} ORDER BY COALESCE(p.data->>'lastDealTime','') DESC, p.id ASC LIMIT $${query.values.length}`, query.values);
+    const rows = await client.query<{id: string; data: ProductTemplate; current_stock: number}>(`SELECT p.id, p.data, (SELECT COUNT(*) FROM gpu_inventory i WHERE i.tenant_id = p.tenant_id AND i.store_id = p.store_id AND i.data->>'productId' = p.id AND COALESCE(i.data->>'status','') IN (${inventoryStockStatusSql}))::int current_stock FROM gpu_products p ${query.clauses.length ? `WHERE ${query.clauses.join(" AND ")}` : ""} ORDER BY COALESCE(p.data->>'lastDealTime','') DESC, p.id ASC LIMIT $${query.values.length}`, query.values);
     return rows.rows.map((row) => minimalProduct({...row.data, id: row.id}, row.current_stock, permissions));
   });
 }

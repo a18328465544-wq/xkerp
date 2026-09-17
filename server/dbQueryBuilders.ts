@@ -1,21 +1,24 @@
 import type {
-  CollectionPage,
   CommissionPageFilters,
   FinanceProfitFlowFilters,
-  FinanceProfitFlowRow,
   FinanceRecordPageFilters,
-  FinanceRecordPage,
   InventoryPageFilters,
   InvoicePageFilters,
   InvoicePageKind,
-  InvoicePage,
   LogPageFilters,
 } from "./db.ts";
 import type {CommissionMode} from "../src/types.ts";
+import {cardStatusValues} from "../src/types/core.ts";
+import {inventoryReturnBlockedStatusValues} from "../src/types/inventory.ts";
+import {financeExpenseCategories, legacyFinanceExpenseCategories} from "../src/types/finance-expense.ts";
+import {financeIncomeCategories} from "../src/types/finance-income.ts";
 import {storeDateAfterDays} from "../src/utils/storeTime.ts";
 
 export type FinanceRecordKind = "settlement" | "income" | "expense";
 export type FinanceProfitFlowKind = "income" | "expense";
+
+const inventoryBlockedStatusSql = inventoryReturnBlockedStatusValues.map((status) => `'${status}'`).join(", ");
+const inventoryBlockedStatusWithoutSoldSql = inventoryReturnBlockedStatusValues.filter((status) => status !== "已售出").map((status) => `'${status}'`).join(", ");
 
 function normalizedPage(value: number | undefined, fallback: number) {
   const parsed = Number(value);
@@ -43,17 +46,25 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
   const selectedSoldStatus = selectedStatus === "已售出";
   if (!selectedStatus && filters.activeOnly) {
     if (filters.includeSold) {
-      clauses.push(`COALESCE(op_status, '') NOT IN ('已退货', '已报废', '已拆卸', '已组装')`);
+      clauses.push(`COALESCE(op_status, '') NOT IN (${inventoryBlockedStatusWithoutSoldSql})`);
     } else {
-      clauses.push(`COALESCE(op_status, '') NOT IN ('已售出', '已退货', '已报废', '已拆卸', '已组装')`);
+      clauses.push(`COALESCE(op_status, '') NOT IN (${inventoryBlockedStatusSql})`);
     }
   } else if (!selectedSoldStatus && !filters.includeSold) {
     clauses.push(`COALESCE(op_status, '') <> '已售出'`);
   }
-  if (filters.status) clauses.push(`op_status = ${bind(filters.status)}`);
+  const status = filters.status?.trim();
+  if (status) {
+    if (cardStatusValues.includes(status as (typeof cardStatusValues)[number])) clauses.push(`op_status = ${bind(status)}`);
+    else clauses.push("FALSE");
+  }
   if (filters.category && filters.category !== "all") clauses.push(`op_category = ${bind(filters.category)}`);
   if (filters.brand && filters.brand !== "all") clauses.push(`op_brand = ${bind(filters.brand)}`);
+  if (filters.model && filters.model !== "all") clauses.push(`data->>'model' = ${bind(filters.model)}`);
+  if (filters.condition && filters.condition !== "all") clauses.push(`data->>'condition' = ${bind(filters.condition)}`);
   if (filters.warehouseLocation) clauses.push(`op_warehouse = ${bind(filters.warehouseLocation)}`);
+  if (filters.entryStart) clauses.push(`LEFT(COALESCE(op_entry_time, ''), 10) >= ${bind(filters.entryStart)}`);
+  if (filters.entryEnd) clauses.push(`LEFT(COALESCE(op_entry_time, ''), 10) <= ${bind(filters.entryEnd)}`);
   if (filters.risk === "mined") clauses.push(`COALESCE((data->>'gpuRisk')::boolean, false)`);
   if (filters.risk === "upturned") {
     clauses.push(`COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'marketPrice', '')::numeric, 0) < COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0)`);
@@ -209,9 +220,9 @@ const financeRecordTables: Record<FinanceRecordKind, string> = {
   expense: "gpu_payment_out_records",
 };
 
-const PROFIT_OTHER_INCOME_TYPES = ["赔偿收入", "返点收入", "配件销售", "利息收入", "其他收入"] as const;
-const PROFIT_OTHER_EXPENSE_TYPES = ["员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待", "其他支出", "员工提成", "运费", "维修费", "平台手续费"] as const;
-const PROFIT_EXPLICIT_EXPENSE_TYPES = ["员工费用", "运费支出", "办公费用", "罚款支出", "差旅招待", "其他支出"] as const;
+const PROFIT_OTHER_INCOME_TYPES = financeIncomeCategories;
+const PROFIT_OTHER_EXPENSE_TYPES = [...new Set([...financeExpenseCategories, ...legacyFinanceExpenseCategories])] as const;
+const PROFIT_EXPLICIT_EXPENSE_TYPES = financeExpenseCategories;
 
 /**
  * Builds the indexed query used by the profit report's non-operating aggregate.

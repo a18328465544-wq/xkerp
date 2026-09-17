@@ -1,5 +1,7 @@
 import type { CustomerCard, PaymentInRecord, PaymentOutRecord, PurchaseInvoice, SalesInvoice, Vendor } from "../src/types.ts";
 import {addDateDays, daysBetweenInclusive} from "../src/lib/dateRangePickerUtils.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
+import {financePurchasePaymentBusinessTypeValues} from "../src/types/finance-ledger.ts";
 
 export type FundsPartnerKind = "customer" | "supplier";
 export type FundsBalanceFilter = "all" | "payable" | "receivable" | "balanced";
@@ -71,7 +73,7 @@ export interface CustomerFundsSnapshot {
 }
 
 const EPSILON = 0.009;
-const PURCHASE_PAYMENT_TYPES = new Set(["采购付款", "回收付款"]);
+const PURCHASE_PAYMENT_TYPES = new Set<string>(financePurchasePaymentBusinessTypeValues);
 
 const amount = (value: unknown) => {
   const numeric = Number(value);
@@ -91,7 +93,7 @@ export function getPartnerPaymentTermDays(partner?: Pick<CustomerCard | Vendor, 
 }
 
 function isCustomerPurchase(invoice: PurchaseInvoice) {
-  return invoice.sourcePartnerType === "customer" || ["个人回收", "客户置换"].includes(invoice.sourceType);
+  return invoice.sourcePartnerType === "customer" || isPersonalPurchaseSource(invoice.sourceType);
 }
 
 function partnerKindForPurchase(invoice: PurchaseInvoice): FundsPartnerKind {

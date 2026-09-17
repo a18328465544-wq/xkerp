@@ -80,12 +80,12 @@ export function InventoryJourneyPanel({item, journey, showCost, showProfit, load
 
   return <div className="space-y-6" data-erp-component="inventory-journey">
     {showSaleSummary && <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-success)]/25 bg-[var(--erp-color-success-soft)] p-4" data-testid="sold-summary">
-      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4 text-[var(--erp-color-success)]" /><h3 className="text-sm font-bold text-[var(--erp-color-text)]">成交结果</h3></div><ErpStatusBadge label={statusLabel} tone={item.inventoryStatus === "已售出" ? "success" : "neutral"} /></div>
+      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4 text-[var(--erp-color-success)]" /><h3 className="text-sm font-semibold text-[var(--erp-color-text)]">成交结果</h3></div><ErpStatusBadge label={statusLabel} tone={item.inventoryStatus === "已售出" ? "success" : "neutral"} /></div>
       <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
         <JourneyValue label="买方 / 客户" value={sale?.customerName || item.buyerName || "未记录买方"} />
         <JourneyValue label="成交价" value={money(sale?.sellPrice ?? item.salesPrice)} emphasis="positive" />
         {showCost && <JourneyValue label="成本价" value={money(sale?.costPrice ?? item.costPrice)} />}
-        {showProfit && showCost && <div><p className="text-[11px] text-[var(--erp-color-text-muted)]">成交毛利</p><p className="mt-1 text-base"><ProfitDisplay value={sale?.grossProfit ?? item.actualProfit} /></p></div>}
+        {showProfit && showCost && <div><p className="text-xs text-[var(--erp-color-text-muted)]">成交毛利</p><p className="mt-1 text-base"><ProfitDisplay value={sale?.grossProfit ?? item.actualProfit} /></p></div>}
         {showProfit && showCost && <JourneyValue label="毛利率" value={margin(sale?.grossMargin)} />}
         <JourneyValue label="销售时间" value={sale?.outboundTime || sale?.date || item.salesTime || "—"} />
         <JourneyValue label="销售单号" value={sale?.documentNo || item.salesInvoiceId || "—"} mono />
@@ -96,13 +96,13 @@ export function InventoryJourneyPanel({item, journey, showCost, showProfit, load
     </section>}
 
     <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" data-testid="journey-timeline">
-      <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-bold text-[var(--erp-color-text)]">商品全链路</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">从采购 / 回收到销售、收款和售后，按实际单据还原。</p></div>{journey?.generatedAt && <span className="shrink-0 text-[11px] text-[var(--erp-color-text-muted)]">更新于 {journey.generatedAt}</span>}</div>
+      <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--erp-color-text)]">商品全链路</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">从采购 / 回收到销售、收款和售后，按实际单据还原。</p></div>{journey?.generatedAt && <span className="shrink-0 text-xs text-[var(--erp-color-text-muted)]">更新于 {journey.generatedAt}</span>}</div>
       {loading ? <ErpLoadingState title="正在读取商品全链路" description="正在关联采购、检测、销售和售后记录。" /> : error ? <ErpEmptyState title="全链路加载失败" description={error.message} density="compact" action={<Button type="button" size="sm" variant="secondary" onClick={onRetry}>重试</Button>} /> : events.length === 0 ? <ErpEmptyState title="暂未找到链路记录" description="该库存可能是历史导入数据，或关联单据尚未同步。" density="compact" /> : <ol className="relative mt-5 space-y-4 before:absolute before:bottom-2 before:left-[11px] before:top-2 before:w-px before:bg-[var(--erp-color-border)]">
         {events.map((event) => <li key={event.id} className="relative flex gap-3" data-testid={`journey-event-${event.type}`}>
           <span className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${eventIconClass[event.type]}`}>{eventIcons[event.type]}</span>
           <div className="min-w-0 flex-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3 py-2.5">
-            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1"><div className="flex min-w-0 flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[var(--erp-color-text)]">{event.title}</p>{event.status && <ErpStatusBadge label={event.status} tone={eventTone[event.type]} />}</div><time className="shrink-0 text-[11px] text-[var(--erp-color-text-muted)]">{event.occurredAt || "时间待补充"}</time></div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--erp-color-text-secondary)]">{event.partyName && <span>{event.type === "sale" ? "卖给" : event.type === "purchase" ? "来源" : "对象"}：{event.partyName}</span>}{event.operator && <span>经办：{event.operator}</span>}{event.amount !== undefined && <span className={event.direction === "out" ? "font-mono text-[var(--erp-color-expense)]" : event.direction === "in" ? "font-mono text-[var(--erp-color-income)]" : "font-mono text-[var(--erp-color-text-secondary)]"}>{money(event.amount)}</span>}{event.documentNo && onOpenDocument && event.type !== "inventory" ? <button type="button" className="erp-focus-ring inline-flex items-center gap-1 font-mono text-[var(--erp-color-primary)] hover:underline" onClick={() => onOpenDocument(event)}>{event.documentNo}<FileText className="h-3 w-3" /></button> : event.documentNo && <span className="font-mono">{event.documentNo}</span>}</div>
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1"><div className="flex min-w-0 flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[var(--erp-color-text)]">{event.title}</p>{event.status && <ErpStatusBadge label={event.status} tone={eventTone[event.type]} />}</div><time className="shrink-0 text-xs text-[var(--erp-color-text-muted)]">{event.occurredAt || "时间待补充"}</time></div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--erp-color-text-secondary)]">{event.partyName && <span>{event.type === "sale" ? "卖给" : event.type === "purchase" ? "来源" : "对象"}：{event.partyName}</span>}{event.operator && <span>经办：{event.operator}</span>}{event.amount !== undefined && <span className={event.direction === "out" ? "erp-data-number text-[var(--erp-color-expense)]" : event.direction === "in" ? "erp-data-number text-[var(--erp-color-income)]" : "erp-data-number text-[var(--erp-color-text-secondary)]"}>{money(event.amount)}</span>}{event.documentNo && onOpenDocument && event.type !== "inventory" ? <Button type="button" size="xs" variant="ghost" className="h-auto gap-1 rounded-none px-0 erp-data-number text-xs text-[var(--erp-color-primary)] hover:underline" onClick={() => onOpenDocument(event)}>{event.documentNo}<FileText className="h-3 w-3" /></Button> : event.documentNo && <span className="erp-data-number">{event.documentNo}</span>}</div>
             {event.description && <p className="mt-1 break-words text-xs leading-5 text-[var(--erp-color-text-muted)]">{event.description}</p>}
           </div>
         </li>)}
@@ -111,7 +111,7 @@ export function InventoryJourneyPanel({item, journey, showCost, showProfit, load
     </section>
 
     {journey && (journey.payments.length > 0 || journey.aftersales.length > 0 || journey.returns.length > 0) && <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" data-testid="journey-related-records">
-      <h3 className="text-sm font-bold text-[var(--erp-color-text)]">关联记录</h3>
+      <h3 className="text-sm font-semibold text-[var(--erp-color-text)]">关联记录</h3>
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <RelatedCount label="收付款" value={journey.payments.length} tone="success" />
         <RelatedCount label="售后" value={journey.aftersales.length} tone="warning" />
@@ -127,7 +127,7 @@ function showFinanceAmount(sale: InventoryJourneySale | undefined) {
 
 function JourneyValue({label, value, emphasis, mono}: {label: string; value: string; emphasis?: "positive" | "warning"; mono?: boolean}) {
   const valueClass = emphasis === "positive" ? "text-[var(--erp-color-success)]" : emphasis === "warning" ? "text-[var(--erp-color-warning)]" : "text-[var(--erp-color-text)]";
-  return <div className="min-w-0"><p className="text-[11px] text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 break-words text-sm font-semibold ${mono ? "font-mono" : ""} ${valueClass}`}>{value}</p></div>;
+  return <div className="min-w-0"><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 break-words text-sm font-semibold ${mono ? "erp-data-number" : ""} ${valueClass}`}>{value}</p></div>;
 }
 
 function RelatedCount({label, value, tone}: {label: string; value: number; tone: "success" | "warning" | "danger"}) {

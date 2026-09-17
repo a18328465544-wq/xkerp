@@ -11,23 +11,14 @@ import type {
   CustomerCard,
   FinanceLedger,
   InspectionRecord,
-  InventoryScanMode,
-  InventoryScanResult,
-  InventoryImportRow,
-  InventorySummaryRow,
   MarketQuote,
   PaymentInRecord,
   PaymentOutRecord,
   PermissionSettings,
   PurchaseCommissionRecord,
-  PurchaseItem,
   ProductTemplate,
   PurchaseInvoice,
-  ReturnOrderBatchItemInput,
-  ReturnOrderItem,
-  ReturnRefundAllocation,
   ReturnOrder,
-  SalesItem,
   SalesInvoice,
   SettlementAccount,
   SettlementLedger,
@@ -39,29 +30,15 @@ import type {
 import { defaultPermissions, initialSystemUsers } from "../src/data/systemDefaults.ts";
 import { normalizeAllowedMenus } from "../src/utils/menu.ts";
 import { storeDate, storeDateKey, storeDateTime } from "../src/utils/storeTime.ts";
-import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from "./errors.ts";
-import { generateEntityId, nextDailyDocumentSequence, nextProductTemplateId } from "./storeIdentifiers.ts";
+import { generateEntityId, nextProductTemplateId } from "./storeIdentifiers.ts";
 import { normalizeCommissionRules } from "../src/utils/commissionRules.ts";
-import { findExistingReturnFinancialArtifacts, inspectReturnFinancialOrder, RETURN_CUSTOMER_REFUND_TYPE, RETURN_PURCHASE_REFUND_TYPE } from "./returnFinanceInvariants.ts";
-import { getCurrentTenantContext } from "./requestTenantContext.ts";
-import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
 import { normalizeStateConditions, PRODUCT_STOCK_EXCLUDED_STATUSES, syncProductCurrentStock } from "./storeStateNormalization.ts";
 import {
-  customerSuggestedLevel,
   isInvoiceLinkedToVendor,
   matchesPerson,
   nextPartnerArchiveId,
   normalizeCustomerLevel,
 } from "./storePartnerIdentity.ts";
-import {
-  findPurchaseReturnLine as findPurchaseReturnLineByInvoice,
-  findSalesReturnLine,
-  insertAtOriginalIndex,
-  makePurchaseReturnLineId,
-  makeSalesReturnLineId,
-  removeReturnRemark,
-  type ReturnLineMatch,
-} from "./storeReturnPlanning.ts";
 import {createInitialState} from "./storeBootstrap.ts";
 import {createAssemblyOperationHelpers} from "./storeAssemblyOperations.ts";
 import {createAccountTransferHelpers} from "./storeAccountTransfers.ts";
@@ -82,7 +59,7 @@ import {createSettlementLedgerHelpers} from "./storeSettlementLedger.ts";
 import {createSettlementAccountHelpers} from "./storeSettlementAccounts.ts";
 import {createFinanceReadModelHelpers} from "./storeFinanceReadModels.ts";
 import {createPartnerOperationHelpers} from "./storePartnerOperations.ts";
-import {createRuntimeHelpers, MAX_LOG_ENTRIES} from "./storeRuntimeHelpers.ts";
+import {createRuntimeHelpers} from "./storeRuntimeHelpers.ts";
 import {createUserAccessHelpers} from "./storeUserAccess.ts";
 import {createVendorOperationHelpers} from "./storeVendorOperations.ts";
 
@@ -220,7 +197,6 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     positiveAmount,
     nonNegativeAmount,
     getActiveUserId,
-    getActiveUser,
     getActiveRole,
     getActiveActor,
     systemActor,
@@ -254,8 +230,6 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     paymentOutMatchesVendor,
     applyPurchasePartnerImpact,
     applySalesPartnerImpact,
-    getCustomerContact,
-    getVendorContact,
     resolvePurchaseSourceArchive,
     resolveSalesCustomerArchive,
   } = createPartnerOperationHelpers({state});
@@ -392,8 +366,6 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   });
 
   const {
-    applyProductTemplateUpdates,
-    applyProductTemplateUpdate,
     addProductTemplate,
     addProductTemplates,
     updateProductTemplate,
@@ -443,7 +415,6 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     createSalesInvoice,
     updateSalesInvoice,
     deleteSalesInvoice,
-    prepareSalesOutbound,
     previewSalesOutbound,
     confirmSalesOutbound,
   } = createSalesOperationHelpers({
@@ -464,10 +435,6 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
   });
 
   const {
-    findAftersalesInvoice,
-    findAftersalesSalesItem,
-    findAftersalesRefundAccountId,
-    applyAftersalesReturnSettlement,
     addAftersalesClaim,
     updateAftersalesStatus,
   } = createAftersalesOperationHelpers({

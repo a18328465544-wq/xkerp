@@ -8,6 +8,7 @@ import {
   normalizeCustomerLevel,
   vendorSuggestedLevel,
 } from "./storePartnerIdentity.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
 export type PartnerOperationsState = {
   customers: CustomerCard[];
@@ -15,11 +16,6 @@ export type PartnerOperationsState = {
   salesInvoices: SalesInvoice[];
   purchaseInvoices: PurchaseInvoice[];
 };
-
-type PurchaseSourceInput = Pick<PurchaseInvoice, "sourceType" | "sourcePartnerId" | "supplierName" | "contact" | "date">;
-type SalesCustomerInput = Pick<SalesInvoice, "customerId" | "customerPartnerType" | "customerName" | "contact" | "channel" | "date">;
-type ResolvedPurchaseSource = Pick<PurchaseInvoice, "sourcePartnerId" | "sourcePartnerType" | "supplierName" | "contact">;
-type ResolvedSalesCustomer = Pick<SalesInvoice, "customerId" | "customerPartnerType" | "customerName" | "contact">;
 
 export type PartnerOperationsDependencies = {
   state: PartnerOperationsState;
@@ -118,7 +114,7 @@ export function createPartnerOperationHelpers(dependencies: PartnerOperationsDep
   );
 
   const purchaseInvoiceVendorId = (invoice?: PurchaseInvoice) => {
-    if (!invoice || ["个人回收", "客户置换"].includes(invoice.sourceType)) return undefined;
+    if (!invoice || isPersonalPurchaseSource(invoice.sourceType)) return undefined;
     return (invoice.sourcePartnerType || "vendor") === "vendor" ? invoice.sourcePartnerId : undefined;
   };
 
@@ -161,7 +157,7 @@ export function createPartnerOperationHelpers(dependencies: PartnerOperationsDep
   };
 
   const applyPurchasePartnerImpact = (invoice: PurchaseInvoice, multiplier: 1 | -1) => {
-    const isPersonalSource = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    const isPersonalSource = isPersonalPurchaseSource(invoice.sourceType);
     if (isPersonalSource) {
       const matches = (customer: CustomerCard) => invoice.sourcePartnerId
         ? customer.id === invoice.sourcePartnerId
@@ -228,7 +224,7 @@ export function createPartnerOperationHelpers(dependencies: PartnerOperationsDep
     const sourceName = invoice.supplierName.trim();
     const sourceContact = invoice.contact.trim();
     if (!sourceName) throw new ValidationError("请选择来源档案");
-    const isPersonalSource = ["个人回收", "客户置换"].includes(invoice.sourceType);
+    const isPersonalSource = isPersonalPurchaseSource(invoice.sourceType);
     if (isPersonalSource) {
       const candidates = state.customers.filter((customer) =>
         customer.name.trim() === sourceName &&

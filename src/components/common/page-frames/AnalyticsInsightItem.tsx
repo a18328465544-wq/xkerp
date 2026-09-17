@@ -30,7 +30,7 @@ export function AnalyticsInsightItem({label, title, value, metadata, tone = "neu
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <p data-erp-region="insight-label" className="truncate text-xs font-semibold text-[var(--erp-color-text-secondary)]">{label}</p>
-        <strong data-erp-region="insight-value" className={cn("shrink-0 font-mono text-sm", valueToneClasses[tone])}>{value}</strong>
+        <strong data-erp-region="insight-value" className={cn("shrink-0 erp-data-number text-sm", valueToneClasses[tone])}>{value}</strong>
       </div>
       <p data-erp-region="insight-title" className="mt-1 truncate text-sm font-semibold text-[var(--erp-color-text)]">{title}</p>
       {metadata ? <p data-erp-region="insight-metadata" className="mt-0.5 truncate text-xs text-[var(--erp-color-text-muted)]">{metadata}</p> : null}

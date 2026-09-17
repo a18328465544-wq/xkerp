@@ -47,12 +47,26 @@
 
 本阶段的停止条件已经满足：新数据库逻辑可以按职责定位，`store.ts`/`db.ts` 不再承载大段无边界实现，跨集合动作仍通过统一事务边界执行。后续不再为了“拆得更细”而制造只有几十行的空壳文件；只有出现新的稳定职责、复用需求或明确测试边界时才新增模块。
 
-## 第四阶段：前端一致性和密度
+## 第四阶段：前端一致性和密度（已完成）
 
-1. 继续抽取表格工具栏、空/错/加载态和详情抽屉的公共壳体；业务列定义留在 Feature 内。
-2. 所有写入成功后的刷新调用 `invalidateErpDomains`，需要详情级精确更新时再补充专用 Query Key。
-3. 清理超长 JSX 和重复的表单字段，优先处理审计中相似度最高、变更频率最高的页面。
-4. 每个页面保持 `ErpPageFrame → ErpPageHeader → ErpPageToolbar → ErpPageContent`，1440px 与窄屏都检查首屏、空态、错态和编辑态。
+1. 已抽取表格工具栏、空/错/加载态、详情事实、弹窗、图片预览和表单字段公共壳体；业务列定义仍留在 Feature 内。
+2. 所有写入成功后的刷新调用 `invalidateErpDomains`，详情级精确更新继续使用专用 Query Key。
+3. 已清理审计中相似度最高的财务页面、扫码/图片/确认弹窗和复选框/单选框重复实现；超大兼容文件仅保留跨领域历史契约。
+4. 主要页面保持 `ErpPageFrame → ErpPageHeader → ErpPageToolbar → ErpPageContent`，并由 1440px、1024px、390px 浏览器烟测覆盖首屏、空态、错态和编辑态。
+
+### 本轮收口（2026-09）
+
+- 扫码弹窗统一为 `ErpBarcodeScannerDialog`，检测质检与销售出库只保留业务标题、格式和回调配置。
+- 页面懒加载统一由 `src/app/pageLoaders.ts` 提供，命名组件由 `src/app/pageComponents.ts` 单点注册；路由树和工作区标签不再各自维护动态 import/`React.lazy` 包装。
+- 弹窗、图片预览、字段、事实块、复选框/单选框均有公共壳体；保留的原生控件仅限表格/批量选择、日期网格和隐藏文件输入等已登记语义例外。
+- 财务收入/支出页面共用 `FinanceEntryPageLayout` 的稳定页面壳、指标区、筛选工具栏和表格区域，收入/支出字段、列和详情仍由各 Feature 自己负责。
+- 移除确认无引用的配置/组件/工具模块，并从直接依赖中移除未使用的拖拽、扫码、动画和命令面板包；传递依赖仍由包管理器维护。
+- 增加 `npm run smoke:browser`：使用 Playwright CLI 在 1440px 与 390px 覆盖导航浮层、移动菜单、详情抽屉、销售/采购四行默认表单、日期自然语言解析和扫码错误态。接口在浏览器边界 mock，避免把本地数据库凭据混入烟测。
+- 图表运行时已从 Feature 的静态 `recharts` 依赖中移出：`lazyChartPrimitives` 负责按需请求唯一 chart vendor chunk，`ChartContainer` 提供统一 Suspense 加载态；列表、表单和移动端首屏不再为未显示的图表提前下载该依赖。
+- 演示数据已按商品、库存、单据、CRM、伙伴和审计领域拆到 `src/data/demo/`，`src/data/demoData.ts` 仅保留兼容导出；`legacy.ts` 已先拆出提成、装配和认证契约，后续继续按稳定边界渐进迁移。
+- 财务总览现金流、财务核对列/详情以及收入/支出详情、删除和指标原语已提取到 Feature 组件；页面保留查询、权限和业务字段，避免一次性重构。
+
+`server/store.test.ts` 与 `src/types/legacy.ts` 仍是兼容层的大文件。它们承载跨领域历史契约；当前已优先拆出稳定且低风险的提成、装配和认证边界，后续只在能保持导出兼容和测试隔离时继续按领域拆分。
 
 ## 持续门禁
 
@@ -65,6 +79,7 @@
   npm run typecheck
   npm run typecheck:server
   npm run typecheck:server-tests
+  npm run check:unused
   npm run lint
   npm test
   npm run build

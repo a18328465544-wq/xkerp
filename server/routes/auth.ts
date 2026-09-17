@@ -2,6 +2,7 @@ import type {Express, Request, RequestHandler, Response} from "express";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
 import {toDomainError} from "../errors.ts";
 import {clearSessionCookie, setSessionCookie} from "../authCookies.ts";
+import {authLoginDto, parseHttpDto} from "../httpDto.ts";
 import type {StateCollectionKey, StateRecordSave} from "../db.ts";
 import type {PublicStateMode} from "../publicState.ts";
 import type {AppState, createStoreActions} from "../store.ts";
@@ -47,7 +48,8 @@ export function registerLoginRoute(app: Express, dependencies: AuthRouteDependen
       // Login only needs the account collection. Keeping the lazy collections out
       // of this path makes sign-in independent from audit/ledger table size.
       await dependencies.reloadStateCollections(["systemUsers"]);
-      const user = dependencies.actions(req).login(req.body);
+      const credentials = parseHttpDto(authLoginDto, req.body);
+      const user = dependencies.actions(req).login(credentials);
       const token = await dependencies.sessions.create(user.id, {
         tenantId: user.tenantId || dependencies.defaultTenantId,
         storeId: user.storeId || dependencies.defaultStoreId,

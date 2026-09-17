@@ -11,5 +11,5 @@ test("inspection workspace uses the canonical page frame without changing its tw
   assert.ok(frame >= 0, "inspection workspace must use ErpPageFrame");
   assert.ok(header > frame, "page header must be inside the page frame");
   assert.ok(content > header, "page content must follow the canonical header");
-  assert.match(source, /lg:grid-cols-\[minmax\(300px,360px\)_minmax\(0,1fr\)\]/);
+  assert.match(source, /xl:grid-cols-\[minmax\(300px,360px\)_minmax\(0,1fr\)\]/);
 });

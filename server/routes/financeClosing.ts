@@ -3,6 +3,7 @@ import { getDailyClosing, listDailyClosings, loadState, saveDailyClosing } from 
 import { buildDailyBusinessReport } from "../dailyReport.ts";
 import { storeDate, storeDateTime } from "../../src/utils/storeTime.ts";
 import type { DailyClosing, SystemUserAccount } from "../../src/types.ts";
+import { financeDailyClosingCreateDto, financeDailyClosingQueryDto, parseHttpDto } from "../httpDto.ts";
 
 type FinanceRequest = Request & { authUser?: SystemUserAccount; tenantId?: string; storeId?: string };
 
@@ -17,16 +18,19 @@ export function registerFinanceClosingRoutes(app: Express, dependencies: Finance
   const financeMenu = dependencies.requireMenu("finance");
 
   app.get("/api/finance/daily-closing", financeMenu, dependencies.asyncRoute(async (req: FinanceRequest, res) => {
-    const date = String(req.query.date || storeDate());
+    const query = parseHttpDto(financeDailyClosingQueryDto, req.query);
+    const date = query.date || storeDate();
     res.json({ data: await getDailyClosing(date, req.tenantId, req.storeId) });
   }));
 
   app.get("/api/finance/daily-closings", financeMenu, dependencies.asyncRoute(async (req: FinanceRequest, res) => {
-    res.json({ data: await listDailyClosings(Number(req.query.limit || 14), req.tenantId, req.storeId) });
+    const query = parseHttpDto(financeDailyClosingQueryDto, req.query);
+    res.json({ data: await listDailyClosings(query.limit, req.tenantId, req.storeId) });
   }));
 
   app.post("/api/finance/daily-closing", financeMenu, dependencies.asyncRoute(async (req: FinanceRequest, res) => {
-    const date = String(req.body?.date || storeDate());
+    const command = parseHttpDto(financeDailyClosingCreateDto, req.body);
+    const date = command.date || storeDate();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       dependencies.sendValidationError(req, res, "日结日期必须是 YYYY-MM-DD");
       return;
@@ -38,7 +42,7 @@ export function registerFinanceClosingRoutes(app: Express, dependencies: Finance
       date,
       closedAt: storeDateTime(),
       closedBy: req.authUser?.displayName || req.authUser?.username || "系统",
-      remarks: String(req.body?.remarks || "").trim() || undefined,
+      remarks: command.remarks || undefined,
       snapshot: {
         income: report.cashIncome,
         expense: report.cashExpense,

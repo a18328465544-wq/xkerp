@@ -12,10 +12,21 @@ export const DEFAULT_STORE_NAME = "主门店";
 export const DEFAULT_STORE_TIMEZONE = "Asia/Shanghai";
 export const DEFAULT_CURRENCY = "CNY";
 
-export type TenantStatus = "active" | "suspended" | "archived";
-export type MembershipStatus = "active" | "invited" | "deactivated";
-export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled";
-export type CommercialPlanCode = "pilot" | "standard" | "pro" | "enterprise";
+export const commercialTenantStatusValues = ["active", "suspended", "archived"] as const;
+export const commercialMembershipStatusValues = ["active", "invited", "deactivated"] as const;
+export const commercialSubscriptionStatusValues = ["trialing", "active", "past_due", "canceled"] as const;
+export const commercialPlanCodeValues = ["pilot", "standard", "pro", "enterprise"] as const;
+export const commercialStoreStatusValues = ["active", "archived"] as const;
+export const commercialExportFormatValues = ["json", "csv"] as const;
+export const commercialUsageMetricValues = ["media_bytes", "ai_tokens", "active_seats"] as const;
+
+export type TenantStatus = (typeof commercialTenantStatusValues)[number];
+export type MembershipStatus = (typeof commercialMembershipStatusValues)[number];
+export type SubscriptionStatus = (typeof commercialSubscriptionStatusValues)[number];
+export type CommercialPlanCode = (typeof commercialPlanCodeValues)[number];
+export type CommercialStoreStatus = (typeof commercialStoreStatusValues)[number];
+export type CommercialExportFormat = (typeof commercialExportFormatValues)[number];
+export type CommercialUsageMetric = (typeof commercialUsageMetricValues)[number];
 
 export const COMMERCIAL_PLAN_DEFAULTS: Record<CommercialPlanCode, {
   seatLimit: number;

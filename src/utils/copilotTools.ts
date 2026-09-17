@@ -1,6 +1,5 @@
 import type {
   CardInventory,
-  CardStatus,
   CustomerCard,
   ProductTemplate,
   PurchaseInvoice,
@@ -10,6 +9,7 @@ import type {
   Vendor,
 } from "../types";
 import { storeDate, storeDateAfterDays, storeDateDiffDays, storeMonth } from "./storeTime";
+import {inventoryInactiveStatuses, isInventorySellableStatus} from "./inventoryFilters";
 import { matchesKeyword } from "./search";
 
 export type CopilotToolName =
@@ -89,8 +89,6 @@ export interface CopilotToolState {
   settlementLedger: SettlementLedger[];
 }
 
-const inactiveStatuses = new Set<CardStatus>(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
-
 const money = (value: unknown) => `¥${Math.round(Number(value || 0)).toLocaleString("zh-CN")}`;
 const numberValue = (value: unknown, fallback = 0) => {
   const next = Number(value);
@@ -108,7 +106,7 @@ function emptyResult(toolName: CopilotToolName, title: string, summary: string):
 }
 
 function activeInventory(state: CopilotToolState) {
-  return state.inventory.filter(card => !inactiveStatuses.has(card.status));
+  return state.inventory.filter(card => !inventoryInactiveStatuses.has(card.status));
 }
 
 function searchInventory(state: CopilotToolState, args: Record<string, unknown>): CopilotToolResult {
@@ -120,7 +118,7 @@ function searchInventory(state: CopilotToolState, args: Record<string, unknown>)
   const rows = activeInventory(state)
     .filter(card => !keyword || matchesKeyword([card.id, card.sn, card.productName, card.model, card.brand, card.version, card.supplierName, card.warehouseLocation], keyword))
     .filter(card => !minStorageDays || ageDays(card) >= minStorageDays)
-    .filter(card => !status || card.status === status || (status === "可售" && ["已入库", "已上架"].includes(card.status)))
+    .filter(card => !status || card.status === status || (status === "可售" && isInventorySellableStatus(card.status)))
     .sort((left, right) => ageDays(right) - ageDays(left))
     .slice(0, safeLimit(args.limit))
     .map(card => {

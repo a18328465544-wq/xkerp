@@ -57,8 +57,9 @@ test("formal dashboard pages use the canonical dashboard frame", () => {
 test("typical list pages keep filters in the toolbar and content in PageContent", () => {
   const inventorySource = readFileSync(new URL("../../features/inventory/pages/InventoryListPage.tsx", import.meta.url), "utf8");
   const financeSource = readFileSync(new URL("../../features/finance/pages/FinanceIncomePage.tsx", import.meta.url), "utf8");
+  const financeLayoutSource = readFileSync(new URL("../../features/finance/components/FinanceEntryPageLayout.tsx", import.meta.url), "utf8");
 
-  for (const source of [inventorySource, financeSource]) {
+  for (const source of [inventorySource]) {
     const toolbarStart = source.indexOf("<ErpPageToolbar");
     const filterStart = source.indexOf("<ErpFilterBar");
     const contentStart = source.indexOf("<ErpPageContent");
@@ -66,6 +67,10 @@ test("typical list pages keep filters in the toolbar and content in PageContent"
     assert.ok(filterStart > toolbarStart, "ErpFilterBar 必须出现在 ErpPageToolbar 之后");
     assert.ok(contentStart > toolbarStart, "业务主体必须出现在 ErpPageContent 之后");
   }
+  assert.match(financeSource, /FinanceEntryPageLayout/);
+  assert.match(financeSource, /<ErpFilterBar/);
+  assert.match(financeLayoutSource, /<ErpPageToolbar>/);
+  assert.match(financeLayoutSource, /<ErpPageContent/);
 });
 
 test("architecture guard protects structural regions and registered browser boundaries", () => {

@@ -13,14 +13,16 @@ import type {
   QuickCaptureSourceType,
   QuickCaptureTransactionType,
 } from "../src/types.ts";
+import {productCategoryValues} from "../src/types/core.ts";
+import {crmLeadPriorityValues, crmLeadStageValues, quickCaptureDeliveryMethodValues, quickCaptureIntentValues, quickCaptureTransactionValues} from "../src/types/crm.ts";
 import { storeDate, storeDateAfterDays, storeDateTime } from "../src/utils/storeTime.ts";
 import { QUICK_CAPTURE_AI_JSON_SCHEMA, validateQuickCaptureModelPayload } from "./quickCaptureSchema.ts";
 
 export const QUICK_CAPTURE_MAX_TEXT_LENGTH = 12000;
-const PRODUCT_CATEGORIES: ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
-const INTENTS: QuickCaptureIntentType[] = ["求购", "出售", "回收", "置换", "其他"];
-const TRANSACTIONS: QuickCaptureTransactionType[] = ["销售", "回收", "采购", "置换", "其他"];
-const PRIORITIES: CrmLeadPriority[] = ["低", "中", "高"];
+const PRODUCT_CATEGORIES: readonly ProductCategory[] = productCategoryValues;
+const INTENTS: readonly QuickCaptureIntentType[] = quickCaptureIntentValues;
+const TRANSACTIONS: readonly QuickCaptureTransactionType[] = quickCaptureTransactionValues;
+const PRIORITIES: readonly CrmLeadPriority[] = crmLeadPriorityValues;
 
 export class QuickCaptureValidationError extends Error {
   constructor(
@@ -105,10 +107,10 @@ export function normalizeQuickCaptureFields(value: unknown): QuickCaptureFields 
     expectedPrice: optionalNumber(source.expectedPrice ?? source.budget),
     quotedPrice: optionalNumber(source.quotedPrice ?? source.quotePrice),
     transactionType: optionalEnum(source.transactionType, TRANSACTIONS),
-    deliveryMethod: optionalEnum(source.deliveryMethod, ["到店", "快递", "同城配送", "未知"] as const),
+    deliveryMethod: optionalEnum(source.deliveryMethod, quickCaptureDeliveryMethodValues),
     followUpTime: normalizeDateTime(source.followUpTime ?? source.nextFollowTime),
     priority: optionalEnum(source.priority, PRIORITIES) || "中",
-    stage: optionalEnum(source.stage, ["新线索", "需求确认", "报价中", "已成交", "已关闭"] as const) || "新线索",
+    stage: optionalEnum(source.stage, crmLeadStageValues) || "新线索",
     tags,
     note: cleanText(source.note ?? source.remarks, 500) || undefined,
   };

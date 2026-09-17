@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {AnalyticsDetailRegion, AnalyticsFrame, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar} from "./AnalyticsFrame";
@@ -15,8 +16,12 @@ test("AnalyticsFrame exposes stable semantic regions", () => {
   assert.match(markup, /data-erp-region="analytics-kpis"/);
   assert.match(markup, /data-erp-region-level="primary"/);
   assert.match(markup, /data-analytics-density="primary"/);
+  assert.match(markup, /data-analytics-count="1"/);
+  assert.match(markup, /analytics-kpi-grid--primary/);
   assert.match(markup, /data-erp-region-level="secondary"/);
   assert.match(markup, /data-analytics-density="secondary"/);
+  assert.match(markup, /data-analytics-count="1"/);
+  assert.match(markup, /analytics-kpi-grid--supporting/);
   assert.match(markup, /data-erp-region="analytics-toolbar"/);
   assert.match(markup, /data-analytics-toolbar="single-row"/);
   assert.match(markup, /data-surface="card"/);
@@ -41,4 +46,11 @@ test("AnalyticsFrame omits an empty secondary KPI region", () => {
   const markup = renderToStaticMarkup(<AnalyticsKpiRegion primary={<span>primary</span>} />);
   assert.match(markup, /data-erp-region-level="primary"/);
   assert.doesNotMatch(markup, /data-erp-region-level="secondary"/);
+});
+
+test("AnalyticsFrame delegates the outer frame to the canonical analytics frame", () => {
+  const source = readFileSync(new URL("./AnalyticsFrame.tsx", import.meta.url), "utf8");
+  assert.match(source, /import \{ErpAnalyticsPageFrame\} from "\.\.\/ErpPageFrames"/);
+  assert.match(source, /<ErpAnalyticsPageFrame/);
+  assert.doesNotMatch(source, /<ErpPageFrame/);
 });

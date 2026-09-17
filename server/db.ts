@@ -68,6 +68,10 @@ export type InventoryPageFilters = {
   status?: string;
   category?: string;
   brand?: string;
+  model?: string;
+  condition?: string;
+  entryStart?: string;
+  entryEnd?: string;
   risk?: "mined" | "upturned" | "high";
   minStorageDays?: number;
   maxStorageDays?: number;

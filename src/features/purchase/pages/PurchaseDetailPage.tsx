@@ -2,7 +2,7 @@ import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import type {ColumnDef} from "@tanstack/react-table";
 import {ArrowLeft, Boxes, CircleDollarSign, ExternalLink, FileImage, LockKeyhole, Pencil, RefreshCw, ShieldAlert, ShieldCheck, Trash2, Truck, UserRound} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
-import {toast} from "sonner";
+import {notify} from "@/src/utils/notification";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, CardHeader} from "@/src/components/ui";
 import {ErpDataTable, ErpDetailPageFrame, ErpDocumentDeleteDialog, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
@@ -88,19 +88,19 @@ function PurchaseLineTable({invoice, showCost, showProfit}: {invoice: PurchaseIn
       {accessorKey: "condition", header: "成色", size: 100, cell: ({getValue}) => <ErpStatusBadge label={String(getValue() || "—")} tone="neutral" />},
       {accessorKey: "warehouseLocation", header: "采购录入库位", size: 140, cell: ({getValue}) => String(getValue() || "—")},
     ];
-    if (showCost) base.push({accessorKey: "buyPrice", header: "采购价", size: 120, cell: ({getValue}) => <span className="font-mono font-semibold">{formatCurrency(Number(getValue() || 0))}</span>});
-    if (showProfit) base.push({accessorKey: "estSellPrice", header: "预计售价", size: 120, cell: ({getValue}) => <span className="font-mono font-semibold">{formatCurrency(Number(getValue() || 0))}</span>});
+    if (showCost) base.push({accessorKey: "buyPrice", header: "采购价", size: 120, cell: ({getValue}) => <span className="erp-data-number font-semibold">{formatCurrency(Number(getValue() || 0))}</span>});
+    if (showProfit) base.push({accessorKey: "estSellPrice", header: "预计售价", size: 120, cell: ({getValue}) => <span className="erp-data-number font-semibold">{formatCurrency(Number(getValue() || 0))}</span>});
     base.push({accessorKey: "remarks", header: "行备注", size: 200, cell: ({getValue}) => String(getValue() || "—")});
     return base;
   }, [showCost, showProfit]);
-  return <ErpDataTable columns={columns} data={invoice.items} getRowId={(row) => row.tempId} density="compact" stickyHeader emptyTitle="该采购单没有商品明细" />;
+  return <ErpDataTable ariaLabel="采购单商品明细" columns={columns} data={invoice.items} getRowId={(row) => row.tempId} density="compact" stickyHeader emptyTitle="该采购单没有商品明细" />;
 }
 
 function InventoryFacts({items}: {items: readonly PurchaseDetailInventoryItem[]}) {
   if (!items.length) return <ErpEmptyState title="暂无关联库存" description="当前状态快照未找到与该采购单关联的实物库存。" />;
   return <div className="divide-y divide-[var(--erp-color-border)]">
     {items.map((item) => <div key={item.id} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1.5fr)_140px_120px] sm:items-center">
-      <div className="min-w-0"><p className="truncate text-sm font-semibold">{item.productName}</p><p className="mt-1 font-mono text-xs text-[var(--erp-color-text-muted)]">{item.id}{item.sn ? ` · SN ${item.sn}` : " · SN 待绑定"}</p></div>
+      <div className="min-w-0"><p className="truncate text-sm font-semibold">{item.productName}</p><p className="mt-1 erp-data-number text-xs text-[var(--erp-color-text-muted)]">{item.id}{item.sn ? ` · SN ${item.sn}` : " · SN 待绑定"}</p></div>
       <div><ErpStatusBadge label={item.hasInspection ? `${item.status} · 已检测` : item.status} tone={statusTone(item.status)} /></div>
       <p className="text-xs text-[var(--erp-color-text-secondary)]">{item.warehouseLocation || "库位未定"}</p>
     </div>)}
@@ -140,13 +140,13 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete
 
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-5">
-        <Card><CardHeader><div><h2 className="text-sm font-bold">商品明细</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">展示后端已存储的实物行；不在详情页反向猜测原始数量分组。</p></div></CardHeader><CardContent className="p-0"><PurchaseLineTable invoice={invoice} showCost={showCost} showProfit={showProfit} /></CardContent></Card>
-        <Card><CardHeader><div><h2 className="text-sm font-bold">关联库存</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">库存和检测状态只做事实展示，不由采购详情页修改。</p></div></CardHeader><CardContent><InventoryFacts items={detail.inventory} /></CardContent></Card>
-        <Card><CardHeader><div><h2 className="text-sm font-bold">采购图片</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">通过带鉴权的媒体请求打开，不重新上传已绑定的正式图片。</p></div></CardHeader><CardContent><PurchaseImages images={invoice.images || []} /></CardContent></Card>
+        <Card><CardHeader><div><h2 className="text-sm font-semibold">商品明细</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">展示后端已存储的实物行；不在详情页反向猜测原始数量分组。</p></div></CardHeader><CardContent className="p-0"><PurchaseLineTable invoice={invoice} showCost={showCost} showProfit={showProfit} /></CardContent></Card>
+        <Card><CardHeader><div><h2 className="text-sm font-semibold">关联库存</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">库存和检测状态只做事实展示，不由采购详情页修改。</p></div></CardHeader><CardContent><InventoryFacts items={detail.inventory} /></CardContent></Card>
+        <Card><CardHeader><div><h2 className="text-sm font-semibold">采购图片</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">通过带鉴权的媒体请求打开，不重新上传已绑定的正式图片。</p></div></CardHeader><CardContent><PurchaseImages images={invoice.images || []} /></CardContent></Card>
       </div>
 
       <aside className="space-y-5">
-        <Card><CardHeader><h2 className="text-sm font-bold">单据信息</h2></CardHeader><CardContent className="space-y-3">
+        <Card><CardHeader><h2 className="text-sm font-semibold">单据信息</h2></CardHeader><CardContent className="space-y-3">
           <InfoRow label="来源类型" value={invoice.sourceType} />
           <InfoRow label="来源对象" value={invoice.supplierName || "—"} />
           <InfoRow label="联系方式" value={invoice.contact || "—"} />
@@ -155,9 +155,9 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete
           <InfoRow label="备注" value={invoice.remarks || "—"} />
         </CardContent></Card>
 
-        <Card className={`border-[var(--erp-color-border-strong)] ${policy.mode === "full" ? "bg-[var(--erp-color-success-soft)]/35" : "bg-[var(--erp-color-warning-soft)]/35"}`}><CardHeader><div className="flex items-center gap-2">{policy.mode === "full" ? <ShieldCheck className="h-4 w-4 text-[var(--erp-color-success)]" /> : <ShieldAlert className="h-4 w-4 text-[var(--erp-color-warning)]" />}<h2 className="text-sm font-bold">编辑安全评估</h2></div></CardHeader><CardContent className="space-y-3"><p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">{policy.summary}</p>{policy.reasons.length > 0 && <div className="space-y-2">{policy.reasons.map((reason) => <p key={reason} className="rounded-[var(--erp-radius-md)] bg-white/70 px-3 py-2 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{reason}</p>)}</div>}<div className="grid gap-2">{policy.fields.green.length > 0 && <RiskRow tone="success" label="低风险" values={policy.fields.green} />}{policy.fields.yellow.length > 0 && <RiskRow tone="warning" label="需条件" values={policy.fields.yellow} />}{policy.fields.red.length > 0 && <RiskRow tone="danger" label="暂禁止" values={policy.fields.red} />}</div></CardContent></Card>
+        <Card className={`border-[var(--erp-color-border-strong)] ${policy.mode === "full" ? "bg-[var(--erp-color-success-soft)]/35" : "bg-[var(--erp-color-warning-soft)]/35"}`}><CardHeader><div className="flex items-center gap-2">{policy.mode === "full" ? <ShieldCheck className="h-4 w-4 text-[var(--erp-color-success)]" /> : <ShieldAlert className="h-4 w-4 text-[var(--erp-color-warning)]" />}<h2 className="text-sm font-semibold">编辑安全评估</h2></div></CardHeader><CardContent className="space-y-3"><p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">{policy.summary}</p>{policy.reasons.length > 0 && <div className="space-y-2">{policy.reasons.map((reason) => <p key={reason} className="rounded-[var(--erp-radius-md)] bg-white/70 px-3 py-2 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{reason}</p>)}</div>}<div className="grid gap-2">{policy.fields.green.length > 0 && <RiskRow tone="success" label="低风险" values={policy.fields.green} />}{policy.fields.yellow.length > 0 && <RiskRow tone="warning" label="需条件" values={policy.fields.yellow} />}{policy.fields.red.length > 0 && <RiskRow tone="danger" label="暂禁止" values={policy.fields.red} />}</div></CardContent></Card>
 
-        <Card><CardHeader><div className="flex items-center gap-2"><Truck className="h-4 w-4 text-[var(--erp-color-primary)]" /><h2 className="text-sm font-bold">付款与抵扣</h2></div></CardHeader><CardContent>{canReadPayments ? <div className="space-y-3"><InfoRow label="付款方式" value={invoice.paymentMethod || "—"} /><InfoRow label="结算账户" value={invoice.settlementAccountName || "—"} /><InfoRow label="现金已付" value={formatCurrency(invoice.paidAmount)} /><InfoRow label="供应商抵扣" value={formatCurrency(invoice.vendorCreditAppliedAmount || 0)} /><InfoRow label="未付" value={formatCurrency(invoice.unpaidAmount)} /><InfoRow label="关联付款流水" value={`${detail.paymentCount ?? 0} 笔`} /></div> : <p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">当前账号没有支出流水权限，不展示金额、账户和历史流水。</p>}</CardContent></Card>
+        <Card><CardHeader><div className="flex items-center gap-2"><Truck className="h-4 w-4 text-[var(--erp-color-primary)]" /><h2 className="text-sm font-semibold">付款与抵扣</h2></div></CardHeader><CardContent>{canReadPayments ? <div className="space-y-3"><InfoRow label="付款方式" value={invoice.paymentMethod || "—"} /><InfoRow label="结算账户" value={invoice.settlementAccountName || "—"} /><InfoRow label="现金已付" value={formatCurrency(invoice.paidAmount)} /><InfoRow label="供应商抵扣" value={formatCurrency(invoice.vendorCreditAppliedAmount || 0)} /><InfoRow label="未付" value={formatCurrency(invoice.unpaidAmount)} /><InfoRow label="关联付款流水" value={`${detail.paymentCount ?? 0} 笔`} /></div> : <p className="text-xs leading-5 text-[var(--erp-color-text-secondary)]">当前账号没有支出流水权限，不展示金额、账户和历史流水。</p>}</CardContent></Card>
       </aside>
     </div>
     </ErpPageContent>
@@ -185,7 +185,7 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
     canReadPurchaseReturns: hasMenu(session, "return_purchase") || hasMenu(session, "return_orders"),
   }), [session]);
   const detailQuery = useQuery({queryKey: queryKeys.purchase.detail(purchaseId), queryFn: ({signal}) => purchaseApi.detail(purchaseId, detailPermissions, signal), enabled: Boolean(session && allowed), retry: false});
-  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleteOpen(false); toast.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await Promise.all([
+  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleteOpen(false); notify.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await Promise.all([
     queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
     queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
     queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),

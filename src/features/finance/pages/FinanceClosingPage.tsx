@@ -3,7 +3,7 @@ import {
   useQuery,
   type UseQueryResult,
 } from "@tanstack/react-query";
-import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import type { VisibilityState } from "@tanstack/react-table";
 import {
   AlertTriangle,
   CalendarCheck2,
@@ -12,22 +12,21 @@ import {
   ReceiptText,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldAlert,
   WalletCards,
 } from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import {
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Button, Card, Input } from "@/src/components/ui";
+import { Button, Card } from "@/src/components/ui";
 import {
   DashboardSection,
   ErpFinancePageFrame,
   ErpDateRangePicker,
-  ErpDetailDrawer,
   ErpEmptyState,
   ErpFilterBar,
   ErpLoadingState,
@@ -68,10 +67,11 @@ import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
 import {FinanceTableControls} from "../components/FinanceTableControls";
 import {FinanceLatestExceptions} from "../components/FinanceLatestExceptions";
 import {FinanceTableRegion} from "../components/FinanceTableRegion";
+import {createFinanceClosingColumns, FinanceClosingDetailDrawer} from "../components/FinanceClosingSections";
 import {
-  FinanceDetailRow,
   FinanceMetricCard,
 } from "../components/FinanceMetricCard";
+import {financeNetTone} from "../finance-chart.utils";
 
 function useFinanceClosingUrlState() {
   const state = useUrlSearchState<FinanceClosingFilters>({
@@ -312,7 +312,7 @@ function FinanceClosingContent({
           value={formatCurrency(report.summary.netCash)}
           detail="收入减支出，不代表当前余额"
           icon={<Landmark className="h-4 w-4" />}
-          tone={report.summary.netCash < 0 ? "warning" : "info"}
+          tone={financeNetTone(report.summary.netCash)}
         />
         <FinanceMetricCard
           label="待复核"
@@ -346,16 +346,11 @@ function FinanceClosingContent({
           </Button>
         }
       >
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
-          <Input
-            className="pl-9"
+        <ErpSearchInput className="min-w-56 flex-1"
             value={filters.keyword}
             onChange={(event) => update({ keyword: event.target.value })}
             placeholder="搜索日结编号、关闭人或备注"
-            aria-label="搜索日结记录"
-          />
-        </div>
+            aria-label="搜索日结记录" />
         <ErpDateRangePicker
           value={{startDate: filters.dateStart, endDate: filters.dateEnd}}
           onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})}
@@ -441,235 +436,11 @@ function FinanceClosingContent({
           </DashboardSection>
         </MainRegion.Secondary>
       </MainRegion>
-      <ClosingDetail item={detail} onClose={() => setDetail(null)} />
+      <FinanceClosingDetailDrawer item={detail} onClose={() => setDetail(null)} />
       </ErpPageContent>
     </ErpFinancePageFrame>
   );
 }
-
-function createFinanceClosingColumns(
-  onDetail: (item: FinanceDailyClosing) => void,
-): ColumnDef<FinanceDailyClosing, unknown>[] {
-  return [
-    {
-      accessorKey: "date",
-      header: "日结日期",
-      size: 120,
-      cell: ({ row }) => (
-        <span className="font-mono font-semibold">{row.original.date}</span>
-      ),
-    },
-    {
-      accessorKey: "closedBy",
-      header: "关闭人",
-      size: 110,
-      cell: ({ row }) => row.original.closedBy,
-    },
-    {
-      id: "income",
-      header: "收入",
-      size: 125,
-      cell: ({ row }) => (
-        <span className="font-mono text-[var(--erp-color-success)]">
-          {formatCurrency(row.original.snapshot.income)}
-        </span>
-      ),
-    },
-    {
-      id: "expense",
-      header: "支出",
-      size: 125,
-      cell: ({ row }) => (
-        <span className="font-mono text-[var(--erp-color-danger)]">
-          {formatCurrency(row.original.snapshot.expense)}
-        </span>
-      ),
-    },
-    {
-      id: "netCash",
-      header: "净现金",
-      size: 125,
-      cell: ({ row }) => (
-        <span
-          className={`font-mono font-semibold ${row.original.snapshot.netCash < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-text)]"}`}
-        >
-          {formatCurrency(row.original.snapshot.netCash)}
-        </span>
-      ),
-    },
-    {
-      id: "business",
-      header: "业务量",
-      size: 140,
-      cell: ({ row }) => (
-        <span>
-          {row.original.snapshot.salesCount} 销售 ·{" "}
-          {row.original.snapshot.purchaseCount} 采购
-        </span>
-      ),
-    },
-    {
-      id: "review",
-      header: "异常",
-      size: 100,
-      cell: ({ row }) => (
-        <span className="text-xs">
-          复核 {row.original.snapshot.unreviewed} · 对账{" "}
-          {row.original.snapshot.accountReconciliationDifferences}
-        </span>
-      ),
-    },
-    {
-      id: "status",
-      header: "状态",
-      size: 100,
-      cell: ({ row }) => (
-        <ErpStatusBadge
-          label={financeClosingStatusLabel(row.original)}
-          tone={financeClosingStatus(row.original)}
-        />
-      ),
-    },
-    {
-      id: "actions",
-      header: "操作",
-      size: 85,
-      cell: ({ row }) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={(event) => {
-            event.stopPropagation();
-            onDetail(row.original);
-          }}
-        >
-          详情
-        </Button>
-      ),
-    },
-  ];
-}
-
-function ClosingDetail({
-  item,
-  onClose,
-}: {
-  item: FinanceDailyClosing | null;
-  onClose: () => void;
-}) {
-  return (
-    <ErpDetailDrawer
-      open={Boolean(item)}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title="日结快照详情"
-      description={item ? `${item.id} · ${item.date}` : undefined}
-    >
-      <div className="space-y-5">
-        {item && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <Fact
-                label="收入"
-                value={formatCurrency(item.snapshot.income)}
-                tone="success"
-              />
-              <Fact
-                label="支出"
-                value={formatCurrency(item.snapshot.expense)}
-                tone="danger"
-              />
-              <Fact
-                label="净现金变动"
-                value={formatCurrency(item.snapshot.netCash)}
-              />
-              <Fact
-                label="状态"
-                value={financeClosingStatusLabel(item)}
-                tone={financeClosingStatus(item)}
-              />
-            </div>
-            <DashboardSection title="日结信息">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <FinanceDetailRow label="日结编号" value={item.id} />
-                <FinanceDetailRow label="日结日期" value={item.date} />
-                <FinanceDetailRow label="关闭时间" value={item.closedAt} />
-                <FinanceDetailRow label="关闭人" value={item.closedBy} />
-                <FinanceDetailRow
-                  label="销售单数"
-                  value={`${item.snapshot.salesCount} 单`}
-                />
-                <FinanceDetailRow
-                  label="采购单数"
-                  value={`${item.snapshot.purchaseCount} 单`}
-                />
-              </div>
-            </DashboardSection>
-            <DashboardSection title="待处理快照">
-              <div className="grid grid-cols-2 gap-3">
-                <Fact
-                  label="客户应收"
-                  value={formatCurrency(item.snapshot.receivable)}
-                  tone={item.snapshot.receivable ? "danger" : "neutral"}
-                />
-                <Fact
-                  label="供应商应付"
-                  value={formatCurrency(item.snapshot.payable)}
-                  tone={item.snapshot.payable ? "warning" : "neutral"}
-                />
-                <Fact
-                  label="待复核"
-                  value={`${item.snapshot.unreviewed} 项`}
-                  tone={item.snapshot.unreviewed ? "danger" : "neutral"}
-                />
-                <Fact
-                  label="对账差异"
-                  value={`${item.snapshot.accountReconciliationDifferences} 项`}
-                  tone={
-                    item.snapshot.accountReconciliationDifferences
-                      ? "warning"
-                      : "neutral"
-                  }
-                />
-              </div>
-            </DashboardSection>
-            {item.remarks && (
-              <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">
-                备注：{item.remarks}
-              </p>
-            )}
-            <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] p-3 text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">
-              这是日结时点的不可变快照，当前页面不会据此修改原始订单或流水。
-            </p>
-          </>
-        )}
-      </div>
-    </ErpDetailDrawer>
-  );
-}
-
-function Fact({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}) {
-  return (
-    <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-3">
-      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p
-        className={`mt-1 font-mono text-base font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : tone === "warning" ? "text-[var(--erp-color-warning)]" : tone === "danger" ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-text)]"}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
 
 function csvCell(value: string | number) {
   const text = String(value ?? "");

@@ -41,10 +41,22 @@ for (const item of stats.sort((a, b) => b.raw - a.raw).slice(0, 8)) {
   console.log(`  ${item.name}: ${kb(item.raw)} raw / ${kb(item.gzip)} gzip`);
 }
 
-for (const family of ["vendor-charts", "vendor-date", "vendor-base-ui"]) {
-  if (!stats.some((item) => item.name.startsWith(`${family}-`))) {
-    throw new Error(`缺少可独立缓存的拆包 chunk：${family}`);
+const cacheableChunkFamilies = [
+  {label: "charts", prefixes: ["vendor-charts-", "recharts-"]},
+  {label: "vendor-date", prefixes: ["vendor-date-"]},
+  {label: "vendor-base-ui", prefixes: ["vendor-base-ui-"]},
+];
+for (const family of cacheableChunkFamilies) {
+  if (!stats.some((item) => family.prefixes.some((prefix) => item.name.startsWith(prefix)))) {
+    throw new Error(`缺少可独立缓存的拆包 chunk：${family.label}`);
   }
+}
+
+const indexHtml = await fs.readFile(path.join(root, "dist", "index.html"), "utf8");
+const chartChunk = stats.find((item) => ["vendor-charts-", "recharts-"].some((prefix) => item.name.startsWith(prefix)));
+const modulepreloadLines = indexHtml.split("\n").filter((line) => line.includes("modulepreload"));
+if (chartChunk && modulepreloadLines.some((line) => line.includes(chartChunk.name))) {
+  throw new Error(`图表 chunk 不应进入入口 modulepreload：${chartChunk.name}`);
 }
 
 const pasteParser = await fs.readFile(path.join(root, "src/features/purchase/utils/parse-purchase-paste.ts"), "utf8");

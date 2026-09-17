@@ -1,11 +1,14 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Filter, RefreshCw, Search, Undo2 } from "lucide-react";
+import { Filter, RefreshCw, Undo2 } from "lucide-react";
+import {ErpSearchInput} from "@/src/components/common";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Button, Card, Input, Select } from "@/src/components/ui";
+import { Button, Card, Select } from "@/src/components/ui";
 import {
   ErpFinancePageFrame,
+  ErpDetailFact,
+  ErpDetailFactGrid,
   ErpDetailDrawer,
   ErpFilterBar,
   ErpMetricCard,
@@ -183,6 +186,9 @@ function FinanceReturnReconcileContent({
     filters.page * filters.pageSize,
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / filters.pageSize));
+  useEffect(() => {
+    if (filters.page > totalPages) setFilters({...filters, page: totalPages});
+  }, [filters, setFilters, totalPages]);
   const columns = useMemo<ColumnDef<FinanceReturnReconcileItem, unknown>[]>(
     () => [
       {
@@ -190,7 +196,7 @@ function FinanceReturnReconcileContent({
         header: "退货单号",
         size: 150,
         cell: ({ row }) => (
-          <span className="font-mono font-semibold text-[var(--erp-color-primary)]">
+          <span className="erp-data-number font-semibold text-[var(--erp-color-primary)]">
             {row.original.returnNo}
           </span>
         ),
@@ -216,7 +222,7 @@ function FinanceReturnReconcileContent({
         header: "金额",
         size: 120,
         cell: ({ row }) => (
-          <span className="font-mono font-semibold">
+          <span className="erp-data-number font-semibold">
             {formatCurrency(row.original.amount)}
           </span>
         ),
@@ -360,16 +366,11 @@ function FinanceReturnReconcileContent({
           </Button>
         }
       >
-        <div className="relative min-w-64 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
-          <Input
-            className="pl-9"
+        <ErpSearchInput className="min-w-64 flex-1"
             value={filters.keyword}
             onChange={(event) => update({ keyword: event.target.value })}
             placeholder="退货单、关联单据、往来方、商品或 SN"
-            aria-label="搜索退货对账"
-          />
-        </div>
+            aria-label="搜索退货对账" />
         <Select
           className="w-36"
           value={filters.type}
@@ -423,6 +424,12 @@ function FinanceReturnReconcileContent({
       />
       <ErpDetailDrawer
         open={Boolean(detail)}
+        modal={false}
+        resizable
+        drawerKey="finance-return-reconcile-detail"
+        defaultWidth={680}
+        minWidth={520}
+        maxWidth={820}
         onOpenChange={(open) => {
           if (!open) setDetail(null);
         }}
@@ -433,7 +440,7 @@ function FinanceReturnReconcileContent({
       >
         {detail && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <ErpDetailFactGrid>
               <Fact label="金额" value={formatCurrency(detail.amount)} />
               <Fact label="结算方式" value={detail.settlementMode || "—"} />
               <Fact label="往来方" value={detail.partyName || "—"} />
@@ -442,7 +449,7 @@ function FinanceReturnReconcileContent({
               <Fact label="SN" value={detail.sn || "—"} />
               <Fact label="库存动作" value={detail.inventoryAction || "—"} />
               <Fact label="完成时间" value={detail.completedAt || "尚未完成"} />
-            </div>
+            </ErpDetailFactGrid>
             <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] p-3 text-xs text-[var(--erp-color-text-secondary)]">
               需要执行退款、冲销或库存动作时，请进入对应的退货工作台；本页只负责跨类型核对。
             </p>
@@ -480,11 +487,4 @@ function Metric({
 }) {
   return <ErpMetricCard label={label} value={value} detail={detail} tone={tone} valueTone={tone} />;
 }
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3">
-      <p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold">{value}</p>
-    </div>
-  );
-}
+const Fact = ErpDetailFact;

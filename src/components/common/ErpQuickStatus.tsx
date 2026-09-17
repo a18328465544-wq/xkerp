@@ -1,7 +1,7 @@
-import {Popover as BasePopover} from "@base-ui/react/popover";
 import {ArrowRight, MoreHorizontal} from "lucide-react";
 import {useState, type ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
+import {Popover} from "@/src/components/ui";
 
 export type QuickStatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 export type QuickStatusVariant = "compact" | "workflow";
@@ -43,14 +43,14 @@ export function QuickStatusItem({item, variant = "compact"}: {item: QuickStatusI
   const compact = variant === "compact";
   const content = compact ? <>
     <span className={cn("flex h-[var(--erp-quick-status-icon-size)] w-[var(--erp-quick-status-icon-size)] shrink-0 items-center justify-center rounded-full", tone.icon)} aria-hidden="true">{item.icon}</span>
-    <span className={cn("min-w-0 truncate font-mono text-sm font-bold tabular-nums", tone.value)}>{item.value}</span>
-    <span className="min-w-0 truncate text-xs font-semibold text-[var(--erp-color-text-secondary)]">{item.label}</span>
+    <span className={cn("erp-data-number min-w-0 truncate text-sm font-semibold", tone.value)}>{item.value}</span>
+    <span className="min-w-0 truncate text-xs font-medium text-[var(--erp-color-text-secondary)]">{item.label}</span>
   </> : <>
     <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tone.icon)} aria-hidden="true">{item.icon}</span>
     <span className="min-w-0 flex-1">
-      <span className="block truncate text-xs font-semibold text-[var(--erp-color-text-secondary)]">{item.label}</span>
-      <span className={cn("mt-0.5 block truncate font-mono text-sm font-bold", tone.value)}>{item.value}</span>
-      <span className="erp-annotation-slot mt-0.5 text-[11px] text-[var(--erp-color-text-muted)]" data-empty={!item.description || undefined} aria-hidden={!item.description || undefined}>{item.description || "\u00a0"}</span>
+      <span className="block truncate text-xs font-medium text-[var(--erp-color-text-secondary)]">{item.label}</span>
+      <span className={cn("erp-data-number mt-0.5 block truncate text-sm font-semibold", tone.value)}>{item.value}</span>
+      {item.description ? <span className="erp-annotation-slot mt-0.5 text-xs text-[var(--erp-color-text-muted)]">{item.description}</span> : null}
     </span>
     {action ? <ArrowRight className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" /> : null}
   </>;
@@ -65,14 +65,14 @@ export function QuickStatusItem({item, variant = "compact"}: {item: QuickStatusI
 
 function QuickStatusOverflow({items, variant, expanded, onOpenChange}: {items: ReadonlyArray<QuickStatusItemData>; variant: QuickStatusVariant; expanded: boolean; onOpenChange: (open: boolean) => void}) {
   if (!items.length) return null;
-  return <BasePopover.Root open={expanded} onOpenChange={onOpenChange}>
-    <BasePopover.Trigger className="erp-focus-ring inline-flex min-h-[var(--erp-quick-status-height)] items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 text-xs font-semibold text-[var(--erp-color-primary)] hover:bg-[var(--erp-color-surface-muted)]">更多 {items.length}<MoreHorizontal className="h-3.5 w-3.5" /></BasePopover.Trigger>
-    <BasePopover.Portal>
-      <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="end">
-        <BasePopover.Popup className="erp-popover-surface w-72 max-w-[calc(100vw-1.5rem)] rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none">{items.map((item, index) => <QuickStatusItem key={index} item={item} variant={variant} />)}</BasePopover.Popup>
-      </BasePopover.Positioner>
-    </BasePopover.Portal>
-  </BasePopover.Root>;
+  return <Popover.Root open={expanded} onOpenChange={onOpenChange}>
+    <Popover.Trigger className="erp-focus-ring inline-flex min-h-[var(--erp-quick-status-height)] items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 text-xs font-medium text-[var(--erp-color-primary)] hover:bg-[var(--erp-color-surface-muted)]">更多 {items.length}<MoreHorizontal className="h-3.5 w-3.5" /></Popover.Trigger>
+    <Popover.Portal>
+      <Popover.Positioner className="outline-none" sideOffset={6} align="end">
+        <Popover.Popup className="w-72 max-w-[calc(100vw-1.5rem)] rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none">{items.map((item, index) => <QuickStatusItem key={index} item={item} variant={variant} />)}</Popover.Popup>
+      </Popover.Positioner>
+    </Popover.Portal>
+  </Popover.Root>;
 }
 
 export interface QuickStatusGroupProps {
@@ -98,10 +98,10 @@ export function QuickStatusGroup({items, maxVisible = 4, className, variant = "c
       </div>
       <div className="flex min-w-0 items-center gap-2 sm:hidden">
         <div className="min-w-0 flex-1"><QuickStatusItem item={first} variant="workflow" /></div>
-        {items.length > 1 ? <BasePopover.Root open={mobileExpanded} onOpenChange={setMobileExpanded}>
-          <BasePopover.Trigger className="erp-focus-ring inline-flex h-9 shrink-0 items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-2.5 text-xs font-semibold text-[var(--erp-color-text-secondary)]"><MoreHorizontal className="h-4 w-4" />{items.length - 1} 项</BasePopover.Trigger>
-          <BasePopover.Portal><BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={6} align="end"><BasePopover.Popup className="erp-popover-surface w-full min-w-0 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none sm:min-w-[260px]">{items.slice(1).map((item, index) => <QuickStatusItem key={index} item={item} variant="workflow" />)}</BasePopover.Popup></BasePopover.Positioner></BasePopover.Portal>
-        </BasePopover.Root> : null}
+        {items.length > 1 ? <Popover.Root open={mobileExpanded} onOpenChange={setMobileExpanded}>
+          <Popover.Trigger className="erp-focus-ring inline-flex h-9 shrink-0 items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-2.5 text-xs font-medium text-[var(--erp-color-text-secondary)]"><MoreHorizontal className="h-4 w-4" />{items.length - 1} 项</Popover.Trigger>
+          <Popover.Portal><Popover.Positioner className="outline-none" sideOffset={6} align="end"><Popover.Popup className="w-full min-w-0 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none sm:min-w-[260px]">{items.slice(1).map((item, index) => <QuickStatusItem key={index} item={item} variant="workflow" />)}</Popover.Popup></Popover.Positioner></Popover.Portal>
+        </Popover.Root> : null}
       </div>
       <div className="hidden shrink-0 items-center justify-end sm:flex"><QuickStatusOverflow items={overflow} variant="workflow" expanded={expanded} onOpenChange={setExpanded} /></div>
     </div>;

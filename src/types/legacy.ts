@@ -3,19 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type ProductCategory =
-  | "显卡"
-  | "CPU"
-  | "主板"
-  | "内存"
-  | "硬盘"
-  | "电源"
-  | "散热"
-  | "机箱"
-  | "整机"
-  | "显示器"
-  | "组装拆卸"
-  | "其他配件";
+import type {CardStatus as CoreCardStatus, InventoryCondition as CoreInventoryCondition, ProductCategory as CoreProductCategory, SourceType as CoreSourceType} from "./core";
+
+export type ProductCategory = CoreProductCategory;
 
 export interface ProductTemplate {
   id: string;
@@ -38,28 +28,10 @@ export interface ProductTemplate {
   imageUrls?: string[];
 }
 
-export type CardStatus =
-  | "待检测"
-  | "检测中"
-  | "已入库"
-  | "已上架"
-  | "已锁定"
-  | "已售出"
-  | "已拆卸"
-  | "已组装"
-  | "退货中"
-  | "已退货"
-  | "售后中"
-  | "维修中"
-  | "已报废";
+/** Compatibility alias; the canonical status union lives in core.ts. */
+export type CardStatus = CoreCardStatus;
 
-export type SourceType =
-  | "个人回收"
-  | "同行拿货"
-  | "批量采购"
-  | "客户置换"
-  | "门店自采"
-  | "门市自采";
+export type SourceType = CoreSourceType;
 
 export interface CardInventory {
   id: string; // format: KC-yyyyMMdd-XXXX
@@ -82,7 +54,7 @@ export interface CardInventory {
   priceSource?: string;
   priceUpdatedAt?: string;
   status: CardStatus;
-  condition: "全新" | "99新" | "95新" | "90新" | "85新" | "轻微瑕疵" | "损坏";
+  condition: CoreInventoryCondition;
   inWarranty: boolean;
   warrantyDate?: string;
   repaired: boolean;
@@ -100,93 +72,7 @@ export interface CardInventory {
   buyerName?: string;
 }
 
-import type { CommissionAdjustment, CommissionSettlementStatus } from "./commission";
-export type { CommissionAdjustment, CommissionMode, CommissionSettlementStatus } from "./commission";
-
-export type PurchaseCommissionStatus = CommissionSettlementStatus;
-
-export type CommissionRuleCalculation = "fixed" | "tiered" | "amount_range";
-export type CommissionRuleBase = "purchase_amount_incl_tax" | "purchase_amount_excl_tax" | "sales_amount_incl_tax" | "sales_amount_excl_tax" | "profit";
-export type CommissionPayoutMethod = "instant" | "single";
-export type CommissionPayoutCycle = "monthly" | "per_order";
-
-export interface CommissionRuleTier {
-  minAmount: number;
-  maxAmount?: number;
-  rate?: number;
-  amount?: number;
-}
-
-export interface CommissionRule {
-  calculation: CommissionRuleCalculation;
-  fixedRate: number;
-  tiers: CommissionRuleTier[];
-  base: CommissionRuleBase;
-  targets: {
-    purchaseHandler: boolean;
-    salesHandler: boolean;
-    warehouseManager: boolean;
-    customMemberIds: string[];
-  };
-  onlyCompleted: boolean;
-  adjustOnReturn: boolean;
-  linkSupplier: boolean;
-  capEnabled: boolean;
-  capRate: number;
-  payoutMethod: CommissionPayoutMethod;
-  payoutCycle: CommissionPayoutCycle;
-  effectiveDate: string;
-}
-
-export interface CommissionRules {
-  purchase: CommissionRule;
-  sales: CommissionRule;
-  updatedAt: string;
-}
-
-export interface CommissionCalculationResult {
-  amount: number;
-  rate: number;
-  baseAmount: number;
-  method: CommissionRuleCalculation;
-}
-
-export interface PurchaseCommissionRecord {
-  id: string;
-  inventoryId: string;
-  sn: string;
-  productId: string;
-  productName: string;
-  purchaseInvoiceNo?: string;
-  salesInvoiceNo: string;
-  purchaseHandler: string;
-  salesHandler?: string;
-  outboundHandler?: string;
-  costPrice: number;
-  salesPrice: number;
-  grossProfit: number;
-  rate: number;
-  commissionAmount: number;
-  purchaseRate?: number;
-  purchaseCommissionAmount?: number;
-  purchaseCalculationMethod?: CommissionRuleCalculation;
-  salesRate?: number;
-  salesCommissionAmount?: number;
-  salesCalculationMethod?: CommissionRuleCalculation;
-  status: PurchaseCommissionStatus;
-  purchaseStatus?: PurchaseCommissionStatus;
-  salesStatus?: PurchaseCommissionStatus;
-  createdAt: string;
-  settledAt?: string;
-  purchaseSettledAt?: string;
-  salesSettledAt?: string;
-  purchaseSettledBy?: string;
-  salesSettledBy?: string;
-  purchaseSettlementBatchId?: string;
-  salesSettlementBatchId?: string;
-  commissionAdjustments?: CommissionAdjustment[];
-  remarks?: string;
-}
+export type {CommissionAdjustment, CommissionCalculationResult, CommissionMode, CommissionRule, CommissionRuleBase, CommissionRuleCalculation, CommissionPayoutCycle, CommissionPayoutMethod, CommissionRuleTier, CommissionRules, CommissionSettlementStatus, PurchaseCommissionRecord, PurchaseCommissionStatus} from "./legacy-commission";
 
 export interface InventorySummaryRow {
   key: string;
@@ -318,7 +204,7 @@ export interface PurchaseItem {
   version: string;
   vram: string;
   sn: string;
-  condition: "全新" | "99新" | "95新" | "90新" | "85新" | "轻微瑕疵" | "损坏";
+  condition: CoreInventoryCondition;
   inWarranty: boolean;
   warrantyDate?: string;
   repaired: boolean;
@@ -1084,62 +970,6 @@ export interface AccountTransferRecord {
   remarks?: string;
 }
 
-export type AssemblyOperationType = "拆卸" | "组装";
+export type {AssemblyOperationRecord, AssemblyOperationType, AssemblyPartRecord} from "./legacy-assembly";
 
-export interface AssemblyPartRecord {
-  productId?: string;
-  partName: string;
-  category: ProductCategory;
-  sn: string;
-  costPrice?: number;
-  estSellPrice?: number;
-  marketPrice?: number;
-  remarks?: string;
-}
-
-export interface AssemblyOperationRecord {
-  id: string;
-  type: AssemblyOperationType;
-  handler: string;
-  time: string;
-  beforeSn?: string;
-  beforeProductName?: string;
-  beforeParts: AssemblyPartRecord[];
-  afterSn?: string;
-  afterProductName?: string;
-  afterCategory?: ProductCategory;
-  afterParts: AssemblyPartRecord[];
-  remarks?: string;
-}
-
-export type StoreRole = "老板" | "店员" | "检测员" | "财务";
-
-export interface PermissionSettings {
-  role: StoreRole;
-  showCost: boolean;
-  showProfit: boolean;
-  canDelete: boolean;
-  canEditHistory: boolean;
-  canManualOutbound: boolean;
-  allowedMenus: string[];
-}
-
-export type AccountPermissionOverrides = Partial<Omit<PermissionSettings, "role">>;
-
-export interface SystemUserAccount {
-  id: string;
-  username: string;
-  password?: string;
-  displayName: string;
-  role: StoreRole;
-  enabled: boolean;
-  /** Commercial control-plane scope. Optional for legacy imported accounts. */
-  tenantId?: string;
-  storeId?: string;
-  membershipStatus?: "active" | "invited" | "deactivated";
-  permissionOverrides?: AccountPermissionOverrides;
-  lastLoginTime?: string;
-  remarks?: string;
-}
-
-export type SafeSystemUserAccount = Omit<SystemUserAccount, "password">;
+export type {AccountPermissionOverrides, PermissionSettings, SafeSystemUserAccount, StoreRole, SystemUserAccount} from "./legacy-auth";

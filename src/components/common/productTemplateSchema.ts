@@ -1,13 +1,13 @@
 import {z} from "zod";
-import type {ProductCategory} from "@/src/types/core";
+import {productCategoryValues} from "@/src/types/core";
 
-export const productCategoryValues: readonly ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
+export {productCategoryValues};
 
 const requiredText = (label: string, max: number) => z.string().trim().min(1, `${label}不能为空`).max(max, `${label}最多 ${max} 字`);
 
 /** Canonical validation contract used by the Product Library template form everywhere. */
 export const productTemplateSchema = z.object({
-  category: z.enum(productCategoryValues as [typeof productCategoryValues[number], ...typeof productCategoryValues[number][]]),
+  category: z.enum(productCategoryValues as unknown as [typeof productCategoryValues[number], ...typeof productCategoryValues[number][]]),
   brand: requiredText("品牌", 80),
   model: requiredText("型号", 120),
   version: z.string().trim().max(120, "版本最多 120 字"),

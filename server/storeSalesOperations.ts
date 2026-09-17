@@ -1,4 +1,4 @@
-import type {CardInventory, CustomerCard, FinanceLedger, PaymentInRecord, ProductTemplate, SalesInvoice, SettlementAccount} from "../src/types.ts";
+import type {CardInventory, FinanceLedger, PaymentInRecord, ProductTemplate, SalesInvoice, SettlementAccount} from "../src/types.ts";
 import {ConflictError, NotFoundError, ValidationError} from "./errors.ts";
 import {
   buildInventoryById,

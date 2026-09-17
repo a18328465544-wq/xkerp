@@ -1,37 +1,18 @@
-export type SettlementDirection = "收入" | "支出" | "转入" | "转出" | "冲销";
-export type NonOperatingIncomeType =
-  | "赔偿收入"
-  | "返点收入"
-  | "配件销售"
-  | "利息收入"
-  | "其他收入";
-export type NonOperatingExpenseType =
-  | "员工费用"
-  | "运费支出"
-  | "办公费用"
-  | "罚款支出"
-  | "差旅招待"
-  | "其他支出";
-export type SettlementBusinessType =
-  | "销售收款"
-  | "采购付款"
-  | "回收付款"
-  | "客户退款"
-  | "采购退款"
-  | "其他收入"
-  | "其他支出"
-  | "账户调拨"
-  | "员工提成"
-  | "运费"
-  | "维修费"
-  | "平台手续费"
-  | NonOperatingIncomeType
-  | NonOperatingExpenseType;
+import type {FinanceExpenseCategory} from "./finance-expense";
+import type {FinanceIncomeCategory} from "./finance-income";
+import type {FinanceLedgerDirection} from "./finance-ledger";
+import type {CustomerPartnerType} from "./customer";
+import {financeLedgerBusinessTypes} from "./finance-ledger";
+
+export type SettlementDirection = FinanceLedgerDirection;
+export type NonOperatingIncomeType = FinanceIncomeCategory;
+export type NonOperatingExpenseType = FinanceExpenseCategory;
+export type SettlementBusinessType = (typeof financeLedgerBusinessTypes)[number];
 
 export interface PaymentInRecord {
   id: string;
   customerId?: string;
-  customerPartnerType?: "customer" | "vendor";
+  customerPartnerType?: CustomerPartnerType;
   customerName: string;
   supplierId?: string;
   supplierName?: string;

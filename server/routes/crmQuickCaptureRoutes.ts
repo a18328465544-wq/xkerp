@@ -20,6 +20,7 @@ import {
 } from "../crmQuickCapture.ts";
 import {compactStateMerge, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import {storeDateTime} from "../../src/utils/storeTime.ts";
+import {crmQuickCaptureConfirmDto, crmQuickCaptureParseDto, parseHttpDto} from "../httpDto.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {SystemUserAccount} from "../../src/types.ts";
 
@@ -58,8 +59,9 @@ export function registerCrmQuickCaptureRoutes(app: Express, dependencies: CrmQui
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as QuickCaptureRequest;
       const state = dependencies.getState();
+      const command = parseHttpDto(crmQuickCaptureParseDto, req.body);
       const result = await parseQuickCaptureText(
-        {rawText: req.body?.rawText, sourceType: req.body?.sourceType},
+        command,
         {products: state.products, customers: state.customers},
       );
       await saveQuickCaptureAudit({
@@ -80,7 +82,7 @@ export function registerCrmQuickCaptureRoutes(app: Express, dependencies: CrmQui
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as QuickCaptureRequest;
       const state = dependencies.getState();
-      const input = validateQuickCaptureConfirm(req.body);
+      const input = validateQuickCaptureConfirm(parseHttpDto(crmQuickCaptureConfirmDto, req.body));
       const audit = await findQuickCaptureAudit(input.parseId);
       if (!audit) throw new QuickCaptureValidationError("解析记录已过期，请重新解析后再确认", "CRM_QUICK_CAPTURE_PARSE_NOT_FOUND", 404);
       if (audit.rawText !== input.rawText) throw new QuickCaptureValidationError("解析原文已变化，请重新解析后再确认", "CRM_QUICK_CAPTURE_PARSE_MISMATCH", 409);

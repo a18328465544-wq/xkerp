@@ -1,6 +1,6 @@
 import type {Express, Request, RequestHandler} from "express";
+import {parseHttpDto, productImportDto, productTemplateCreateDto, productTemplateUpdateDto} from "../httpDto.ts";
 import {saveStateRecords} from "../db.ts";
-import {runStateCommand} from "../stateCommand.ts";
 import {stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import type {createStoreActions} from "../store.ts";
 import type {ProductTemplate, SystemUserAccount} from "../../src/types.ts";
@@ -34,7 +34,8 @@ export function registerProductMutationRoutes(app: Express, dependencies: Produc
     dependencies.requireMenu("products"),
     dependencies.asyncRoute(async (req, res) => {
       const productRequest = req as ProductRequest;
-      const created = await dependencies.persistProductImages(productRequest, dependencies.actions(req).addProductTemplate(req.body));
+      const command = parseHttpDto(productTemplateCreateDto, req.body);
+      const created = await dependencies.persistProductImages(productRequest, dependencies.actions(req).addProductTemplate(command));
       const stateMerge = dependencies.productTemplateMerge(productRequest, created);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(201).json(okMerge(created, stateMerge));
@@ -45,7 +46,7 @@ export function registerProductMutationRoutes(app: Express, dependencies: Produc
     "/api/products/import",
     dependencies.requireMenu("products"),
     dependencies.asyncRoute(async (req, res) => {
-      const products = Array.isArray(req.body) ? req.body : req.body?.products;
+      const {products} = parseHttpDto(productImportDto, {products: Array.isArray(req.body) ? req.body : req.body?.products});
       const imported = dependencies.actions(req).addProductTemplates(products);
       const stateMerge = dependencies.productTemplateMerge(req as ProductRequest, imported);
       await saveStateRecords(stateMergeRecords(stateMerge));
@@ -58,9 +59,10 @@ export function registerProductMutationRoutes(app: Express, dependencies: Produc
     dependencies.requireMenu("products"),
     dependencies.asyncRoute(async (req, res) => {
       const productRequest = req as ProductRequest;
+      const command = parseHttpDto(productTemplateUpdateDto, req.body);
       const updated = await dependencies.persistProductImages(
         productRequest,
-        dependencies.actions(req).updateProductTemplate({...req.body, id: req.params.id}),
+        dependencies.actions(req).updateProductTemplate({...command, id: req.params.id!}),
       );
       const stateMerge = dependencies.productTemplateMerge(productRequest, updated);
       await saveStateRecords(stateMergeRecords(stateMerge));

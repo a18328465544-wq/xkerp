@@ -4,6 +4,9 @@ import {ValidationError} from "./errors.ts";
 import {
   inspectionCreateDto,
   inspectionUpdateDto,
+  crmCustomerLeadDto,
+  crmQuickCaptureConfirmDto,
+  globalSearchQueryDto,
   parseHttpDto,
   paymentInCreateDto,
   paymentOutCreateDto,
@@ -50,4 +53,29 @@ test("inspection DTO enforces bounded metrics and domain enums", () => {
   assert.throws(() => parseHttpDto(inspectionCreateDto, {...base, resultStatus: "随便通过"}), ValidationError);
   assert.equal(parseHttpDto(inspectionUpdateDto, {resultStatus: "通过", expectedRecordVersion: 2}).expectedRecordVersion, 2);
   assert.throws(() => parseHttpDto(inspectionUpdateDto, {resultStatus: "通过"}), /检测记录版本号无效|Invalid input/);
+});
+
+test("global search DTO trims the query and keeps the result limit bounded", () => {
+  const parsed = parseHttpDto(globalSearchQueryDto, {q: "  RTX 4090  ", limit: "48"});
+  assert.deepEqual(parsed, {q: "RTX 4090", limit: 48});
+  assert.equal(parseHttpDto(globalSearchQueryDto, {q: "SN-1"}).limit, 40);
+  assert.throws(() => parseHttpDto(globalSearchQueryDto, {q: ""}), /搜索内容不能为空/);
+  assert.throws(() => parseHttpDto(globalSearchQueryDto, {q: "4090", limit: 61}), ValidationError);
+});
+
+test("CRM lead and quick-capture DTOs reject drifted shapes before domain commands", () => {
+  const lead = parseHttpDto(crmCustomerLeadDto, {customerName: " 王总 ", phone: "13800000000", budget: "15,000", intent: "高"});
+  assert.equal(lead.customerName, "王总");
+  assert.equal(lead.budget, 15000);
+  assert.throws(() => parseHttpDto(crmCustomerLeadDto, {customerName: "王总", unknownField: true}), ValidationError);
+
+  const confirmed = parseHttpDto(crmQuickCaptureConfirmDto, {
+    parseId: "QCAP-1", rawText: "王总要 4090", fields: {customerName: "王总", tags: []},
+    matchAction: "create_new", confidence: 86,
+  });
+  assert.equal(confirmed.fields.tags.length, 0);
+  assert.throws(() => parseHttpDto(crmQuickCaptureConfirmDto, {
+    parseId: "QCAP-1", rawText: "王总要 4090", fields: {customerName: "王总", tags: []},
+    matchAction: "link_existing",
+  }), /客户/);
 });

@@ -1,10 +1,11 @@
 import {useEffect, useMemo, useState} from "react";
-import {KeyRound, ShieldCheck, UserPlus, X} from "lucide-react";
+import {KeyRound, ShieldCheck, UserPlus} from "lucide-react";
 import {APP_MENU_MODULES, normalizeAllowedMenus} from "@/src/utils/menu";
 import {defaultPermissions} from "@/src/data/systemDefaults";
 import type {StoreRole} from "@/src/types/auth";
 import type {SettingsUserItem} from "@/src/types/finance-remaining";
-import {Button, Dialog, Input, Select, Textarea} from "@/src/components/ui";
+import {ErpDialogShell, ErpField} from "@/src/components/common";
+import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import type {PermissionOverridePatch} from "@/src/services/api";
 
 export type PermissionField = "showCost" | "showProfit" | "canDelete" | "canEditHistory" | "canManualOutbound";
@@ -104,46 +105,44 @@ export function UserPermissionDialog({open, mode, user, pending, error, onOpenCh
   const toggleMenu = (id: string) => setDraft((current) => ({...current, allowedMenus: current.allowedMenus.includes(id) ? current.allowedMenus.filter((item) => item !== id) : [...current.allowedMenus, id]}));
   const setFieldMode = (field: PermissionField, value: OverrideMode) => setDraft((current) => ({...current, fieldModes: {...current.fieldModes, [field]: value}}));
   const close = () => {if (!pending) onOpenChange(false);};
-  return <Dialog.Root open={open} onOpenChange={(next) => {if (!next) close();}}>
-    <Dialog.Portal>
-      <Dialog.Backdrop className="fixed inset-0 erp-modal-layer bg-[var(--erp-color-backdrop)] backdrop-blur-sm" />
-      <Dialog.Viewport className="fixed inset-0 erp-modal-layer flex items-center justify-center p-3 sm:p-5">
-        <Dialog.Popup className="erp-scrollbar max-h-[calc(100vh-1.5rem)] w-full max-w-4xl overflow-y-auto rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)] sm:max-h-[calc(100vh-2.5rem)]">
-          <div className="sticky top-0 erp-content-sticky-layer flex items-start justify-between gap-4 border-b border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-5 py-4">
-            <div className="min-w-0"><Dialog.Title className="flex items-center gap-2 text-base font-bold"><UserPlus className="h-4 w-4 text-[var(--erp-color-primary)]" />{mode === "create" ? "新增成员" : "编辑成员权限"}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">账号信息、角色默认权限与账号级覆盖统一在此管理；最终权限仍由服务端校验。</Dialog.Description></div>
-            <Dialog.Close render={<Button type="button" size="icon" variant="ghost" aria-label="关闭" disabled={pending}><X className="h-4 w-4" /></Button>} />
-          </div>
-          <div className="space-y-4 p-5">
-            <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
-              <h3 className="text-sm font-bold">账号信息</h3>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <label className="block text-sm font-semibold">登录账号<Input className="mt-2" value={draft.username} onChange={(event) => update("username", event.target.value)} disabled={pending} placeholder="用于登录系统" autoFocus /></label>
-                <label className="block text-sm font-semibold">成员姓名<Input className="mt-2" value={draft.displayName} onChange={(event) => update("displayName", event.target.value)} disabled={pending} placeholder="例如：销售小王" /></label>
-                <label className="block text-sm font-semibold">角色<Select className="mt-2" value={draft.role} options={roles} onValueChange={(value) => update("role", roleOf(value))} disabled={pending} aria-label="成员角色" /></label>
-                <label className="block text-sm font-semibold">{mode === "create" ? "初始密码" : "重置密码（可选）"}<Input className="mt-2" type="password" value={draft.password} onChange={(event) => update("password", event.target.value)} disabled={pending} placeholder={mode === "create" ? "请输入初始密码" : "留空表示不修改"} autoComplete="new-password" /></label>
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 py-2"><div><p className="text-sm font-semibold">账号状态</p><p className="text-xs text-[var(--erp-color-text-muted)]">停用后服务端会拒绝登录</p></div><Button type="button" size="sm" variant={draft.enabled ? "primary" : "secondary"} aria-pressed={draft.enabled} onClick={() => update("enabled", !draft.enabled)} disabled={pending}>{draft.enabled ? "启用" : "停用"}</Button></div>
-              <label className="mt-3 block text-sm font-semibold">备注<Textarea className="mt-2 min-h-20" value={draft.remarks} onChange={(event) => update("remarks", event.target.value)} disabled={pending} maxLength={300} placeholder="记录岗位、门店或账号用途" /></label>
-            </section>
+  const title = <span className="flex items-center gap-2"><UserPlus className="h-4 w-4 text-[var(--erp-color-primary)]" />{mode === "create" ? "新增成员" : "编辑成员权限"}</span>;
+  const footer = <><Button type="button" variant="secondary" onClick={close} disabled={pending}>取消</Button><Button type="button" variant="primary" onClick={() => onSubmit(draft)} disabled={pending || Boolean(validationError)}>{pending ? "保存中…" : mode === "create" ? "创建成员" : "保存权限"}</Button></>;
+  return <ErpDialogShell
+    open={open}
+    onOpenChange={(next) => {if (!next) close();}}
+    pending={pending}
+    size="xl"
+    title={title}
+    description="账号信息、角色默认权限与账号级覆盖统一在此管理；最终权限仍由服务端校验。"
+    footer={footer}
+  >
+    <div className="space-y-4">
+      <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
+        <h3 className="text-sm font-semibold">账号信息</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <ErpField label="登录账号" required><Input value={draft.username} onChange={(event) => update("username", event.target.value)} disabled={pending} placeholder="用于登录系统" autoFocus /></ErpField>
+          <ErpField label="成员姓名" required><Input value={draft.displayName} onChange={(event) => update("displayName", event.target.value)} disabled={pending} placeholder="例如：销售小王" /></ErpField>
+          <ErpField label="角色"><Select value={draft.role} options={roles} onValueChange={(value) => update("role", roleOf(value))} disabled={pending} aria-label="成员角色" /></ErpField>
+          <ErpField label={mode === "create" ? "初始密码" : "重置密码（可选）"} required={mode === "create"}><Input type="password" value={draft.password} onChange={(event) => update("password", event.target.value)} disabled={pending} placeholder={mode === "create" ? "请输入初始密码" : "留空表示不修改"} autoComplete="new-password" /></ErpField>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 py-2"><div><p className="text-sm font-semibold">账号状态</p><p className="text-xs text-[var(--erp-color-text-muted)]">停用后服务端会拒绝登录</p></div><Button type="button" size="sm" variant={draft.enabled ? "primary" : "secondary"} aria-pressed={draft.enabled} onClick={() => update("enabled", !draft.enabled)} disabled={pending}>{draft.enabled ? "启用" : "停用"}</Button></div>
+        <div className="mt-3"><ErpField label="备注"><Textarea className="min-h-20" value={draft.remarks} onChange={(event) => update("remarks", event.target.value)} disabled={pending} maxLength={300} placeholder="记录岗位、门店或账号用途" /></ErpField></div>
+      </section>
 
-            <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
-              <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-4 w-4 text-[var(--erp-color-primary)]" />模块访问权限</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">默认跟随“{draft.role}”角色；需要例外时再切换为账号自定义。</p></div><Select className="w-36" value={draft.menuMode} options={[{value: "default", label: "角色默认"}, {value: "custom", label: "账号自定义"}]} onValueChange={(value) => update("menuMode", value === "custom" ? "custom" : "default")} disabled={pending || draft.role === "老板"} aria-label="模块权限模式" /></div>
-              {draft.role === "老板" ? <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary-soft)] px-3 py-2 text-xs text-[var(--erp-color-primary)]">老板账号由服务端始终拥有全部模块权限，页面不允许用前端覆盖制造“部分老板权限”。</p> : null}
-              {draft.menuMode === "custom" && draft.role !== "老板" ? <div className="mt-4 grid gap-3 md:grid-cols-2">{APP_MENU_MODULES.map((module) => <div key={module.name} className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><p className="text-xs font-bold text-[var(--erp-color-text-secondary)]">{module.name}</p><div className="mt-2 flex flex-wrap gap-2">{module.items.map((item) => <Button key={item.id} type="button" size="sm" variant={draft.allowedMenus.includes(item.id) ? "primary" : "secondary"} className="h-8 px-2.5 text-xs" aria-pressed={draft.allowedMenus.includes(item.id)} onClick={() => toggleMenu(item.id)} disabled={pending}>{item.name}{item.badge ? <span className="opacity-70">·{item.badge}</span> : null}</Button>)}</div></div>)}</div> : <p className="mt-3 text-xs text-[var(--erp-color-text-muted)]">当前角色默认可访问 {roleDefault.allowedMenus.includes("all") ? "全部模块" : `${roleDefault.allowedMenus.length} 个模块`}。</p>}
-            </section>
+      <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
+        <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-[var(--erp-color-primary)]" />模块访问权限</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">默认跟随“{draft.role}”角色；需要例外时再切换为账号自定义。</p></div><Select className="w-36" value={draft.menuMode} options={[{value: "default", label: "角色默认"}, {value: "custom", label: "账号自定义"}]} onValueChange={(value) => update("menuMode", value === "custom" ? "custom" : "default")} disabled={pending || draft.role === "老板"} aria-label="模块权限模式" /></div>
+        {draft.role === "老板" ? <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary-soft)] px-3 py-2 text-xs text-[var(--erp-color-primary)]">老板账号由服务端始终拥有全部模块权限，页面不允许用前端覆盖制造“部分老板权限”。</p> : null}
+        {draft.menuMode === "custom" && draft.role !== "老板" ? <div className="mt-4 grid gap-3 md:grid-cols-2">{APP_MENU_MODULES.map((module) => <div key={module.name} className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{module.name}</p><div className="mt-2 flex flex-wrap gap-2">{module.items.map((item) => <Button key={item.id} type="button" size="sm" variant={draft.allowedMenus.includes(item.id) ? "primary" : "secondary"} className="h-8 px-2.5 text-xs" aria-pressed={draft.allowedMenus.includes(item.id)} onClick={() => toggleMenu(item.id)} disabled={pending}>{item.name}{item.badge ? <span className="opacity-70">·{item.badge}</span> : null}</Button>)}</div></div>)}</div> : <p className="mt-3 text-xs text-[var(--erp-color-text-muted)]">当前角色默认可访问 {roleDefault.allowedMenus.includes("all") ? "全部模块" : `${roleDefault.allowedMenus.length} 个模块`}。</p>}
+      </section>
 
-            <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
-              <div className="flex items-start gap-3"><KeyRound className="mt-0.5 h-4 w-4 text-[var(--erp-color-primary)]" /><div><h3 className="text-sm font-bold">敏感能力覆盖</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">“跟随角色默认”会清除该账号已有覆盖；允许/关闭会写入账号级规则。</p></div></div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">{permissionFields.map((field) => <div key={field.key} className="flex items-center justify-between gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><div className="min-w-0"><p className="text-sm font-semibold">{field.label}</p><p className="mt-0.5 text-xs text-[var(--erp-color-text-muted)]">{field.description}</p></div><Select className="w-32 shrink-0" value={draft.fieldModes[field.key]} options={[{value: "default", label: `默认（${roleDefault[field.key] ? "允许" : "关闭"}）`}, {value: "allow", label: "显式允许"}, {value: "deny", label: "显式关闭"}]} onValueChange={(value) => setFieldMode(field.key, value as OverrideMode)} disabled={pending} aria-label={`${field.label}权限模式`} /></div>)}</div>
-            </section>
-            {validationError ? <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{validationError}</p> : null}
-            {error ? <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p> : null}
-          </div>
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-5 py-4"><Button type="button" variant="secondary" onClick={close} disabled={pending}>取消</Button><Button type="button" variant="primary" onClick={() => onSubmit(draft)} disabled={pending || Boolean(validationError)}>{pending ? "保存中…" : mode === "create" ? "创建成员" : "保存权限"}</Button></div>
-        </Dialog.Popup>
-      </Dialog.Viewport>
-    </Dialog.Portal>
-  </Dialog.Root>;
+      <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
+        <div className="flex items-start gap-3"><KeyRound className="mt-0.5 h-4 w-4 text-[var(--erp-color-primary)]" /><div><h3 className="text-sm font-semibold">敏感能力覆盖</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">“跟随角色默认”会清除该账号已有覆盖；允许/关闭会写入账号级规则。</p></div></div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">{permissionFields.map((field) => <div key={field.key} className="flex items-center justify-between gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><div className="min-w-0"><p className="text-sm font-semibold">{field.label}</p><p className="mt-0.5 text-xs text-[var(--erp-color-text-muted)]">{field.description}</p></div><Select className="w-32 shrink-0" value={draft.fieldModes[field.key]} options={[{value: "default", label: `默认（${roleDefault[field.key] ? "允许" : "关闭"}）`}, {value: "allow", label: "显式允许"}, {value: "deny", label: "显式关闭"}]} onValueChange={(value) => setFieldMode(field.key, value as OverrideMode)} disabled={pending} aria-label={`${field.label}权限模式`} /></div>)}</div>
+      </section>
+      {validationError ? <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{validationError}</p> : null}
+      {error ? <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p> : null}
+    </div>
+  </ErpDialogShell>;
 }
 
 export function permissionOverrideDescription(user: SettingsUserItem) {

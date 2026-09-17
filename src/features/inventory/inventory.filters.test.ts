@@ -18,15 +18,15 @@ test("inventory URL filters round-trip without losing supported state", () => {
   assert.equal(parsed.sortDirection, "asc");
 });
 
-test("inventory API query only sends capabilities supported by FastAPI", () => {
+test("inventory API query sends the filters supported by the database page", () => {
   const params = toInventoryQueryParams({...defaultInventoryFilters, keyword: "RTX 4090", model: "RTX 4090", condition: "99新", entryStart: "2026-01-01", brand: "华硕", page: 2, pageSize: 50, sortKey: "entryTime", sortDirection: "desc"});
   assert.equal(params.get("keyword"), "RTX 4090");
   assert.equal(params.get("brand"), "华硕");
   assert.equal(params.get("page"), "2");
   assert.equal(params.get("pageSize"), "50");
-  assert.equal(params.get("model"), null);
-  assert.equal(params.get("condition"), null);
-  assert.equal(params.get("entryStart"), null);
+  assert.equal(params.get("model"), "RTX 4090");
+  assert.equal(params.get("condition"), "99新");
+  assert.equal(params.get("entryStart"), "2026-01-01");
 });
 
 test("inventory filters keep sold cards visible when explicitly requested", () => {

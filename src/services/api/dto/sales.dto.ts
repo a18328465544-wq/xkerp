@@ -47,6 +47,9 @@ export interface SalesCreateResponseDto {
   stateDelete?: unknown;
 }
 
+/** The sales update endpoint accepts a strict partial of the create contract. */
+export type SalesUpdateRequestDto = Partial<SalesCreateRequestDto>;
+
 /** Feature-scoped sales list/outbound snapshot. */
 export interface SalesListStateResponseDto {
   data?: unknown;

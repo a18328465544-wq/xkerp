@@ -1,5 +1,20 @@
 {
   "total": 243,
+  "v2": {
+    "total": 11,
+    "files": {
+      "common/DashboardShell.tsx": 1,
+      "common/ErpDataTable.tsx": 2,
+      "common/ErpDatePicker.tsx": 1,
+      "common/ErpDateRangePicker.tsx": 1,
+      "common/ErpDateTimePicker.tsx": 1,
+      "common/ErpProductLedgerDrawer.tsx": 1,
+      "common/ErpQuickStatus.tsx": 1,
+      "common/page-frames/AnalyticsFrame.tsx": 1,
+      "domain/CustomerPicker.tsx": 1,
+      "domain/InventoryItemPicker.tsx": 1
+    }
+  },
   "files": {
     "AdminSettings.tsx": 7,
     "AiInsightsCenter.tsx": 8,

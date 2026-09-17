@@ -2,9 +2,10 @@ import type {AftersalesRecord, CardInventory, CardStatus} from "../src/types.ts"
 import type {AppState} from "./store.ts";
 import {createProductIdentityIndex, resolveProductIdentity} from "../src/utils/productIdentity.ts";
 import {hashPassword, isPasswordHash} from "./security.ts";
+import {inventoryReturnBlockedStatusValues} from "../src/types/inventory.ts";
 
 /** Statuses that do not contribute to a product's sellable stock count. */
-export const PRODUCT_STOCK_EXCLUDED_STATUSES = new Set<CardStatus>(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
+export const PRODUCT_STOCK_EXCLUDED_STATUSES = new Set<CardStatus>(inventoryReturnBlockedStatusValues);
 
 const LEGACY_CONDITION_MAP: Record<string, CardInventory["condition"]> = {
   "全新官换": "全新",

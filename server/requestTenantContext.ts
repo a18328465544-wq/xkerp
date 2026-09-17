@@ -29,6 +29,18 @@ export function getCurrentTenantContext() {
   return storage.getStore();
 }
 
+/**
+ * Return the concrete state for the active request (or the process fallback).
+ *
+ * The exported state object is intentionally a proxy so legacy actions can keep
+ * their existing API. Code that snapshots or clones state must use the concrete
+ * object behind that proxy; Node's structuredClone rejects Proxy instances with
+ * a DataCloneError.
+ */
+export function getCurrentState<TState extends object>() {
+  return currentState() as TState | undefined;
+}
+
 export function getFallbackState<TState extends object>() {
   return fallbackState as TState | undefined;
 }

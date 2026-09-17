@@ -5,7 +5,9 @@ import type {
   PurchaseListSortKey,
   PurchasePaymentStatus,
 } from "@/src/types/purchase";
+import {sourceTypeValues} from "@/src/types/core";
 import type {SourceType} from "@/src/types/core";
+import {purchasePaymentStatusValues} from "@/src/types/purchase";
 import {readDateRange} from "@/src/lib/dateRangePickerUtils";
 
 export const defaultPurchaseListFilters: PurchaseListFilters = {
@@ -20,8 +22,8 @@ export const defaultPurchaseListFilters: PurchaseListFilters = {
   sortDirection: "desc",
 };
 
-const sourceTypes: readonly SourceType[] = ["个人回收", "同行拿货", "批量采购", "客户置换", "门店自采", "门市自采"];
-const paymentStatuses: readonly PurchasePaymentStatus[] = ["未付款", "部分付款", "已付款", "已退款"];
+const sourceTypes = sourceTypeValues;
+const paymentStatuses = purchasePaymentStatusValues;
 const sortKeys: readonly PurchaseListSortKey[] = ["date", "invoiceNo", "supplierName", "totalCount", "totalCost", "paymentStatus", "handleBy"];
 
 function text(params: URLSearchParams, key: string) {

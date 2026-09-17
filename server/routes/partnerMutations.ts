@@ -1,4 +1,5 @@
 import type {Express, Request, RequestHandler} from "express";
+import {customerCreateDto, parseHttpDto, vendorCreateDto, vendorUpdateDto} from "../httpDto.ts";
 import {saveStateRecords, type StateRecordTransactionHook} from "../db.ts";
 import {stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import type {createStoreActions} from "../store.ts";
@@ -29,7 +30,11 @@ export function registerPartnerMutationRoutes(app: Express, dependencies: Partne
     "/api/customers",
     dependencies.requireMenu("customers"),
     dependencies.asyncRoute(async (req, res) => {
-      const customer = dependencies.actions(req).createCustomer(req.body);
+      const command = parseHttpDto(customerCreateDto, req.body);
+      const customer = dependencies.actions(req).createCustomer({
+        ...command,
+        source: command.source || command.firstChannel,
+      });
       const stateMerge = dependencies.customerCreateMerge(customer);
       await saveStateRecords(
         stateMergeRecords(stateMerge),
@@ -57,7 +62,7 @@ export function registerPartnerMutationRoutes(app: Express, dependencies: Partne
     "/api/vendors",
     dependencies.requireMenu("vendors"),
     dependencies.asyncRoute(async (req, res) => {
-      const vendor = dependencies.actions(req).createVendor(req.body);
+      const vendor = dependencies.actions(req).createVendor(parseHttpDto(vendorCreateDto, req.body));
       const stateMerge = dependencies.vendorCreateMerge(vendor);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(201).json(okMerge(vendor, stateMerge));
@@ -68,7 +73,7 @@ export function registerPartnerMutationRoutes(app: Express, dependencies: Partne
     "/api/vendors/:id",
     dependencies.requireMenu("vendors"),
     dependencies.asyncRoute(async (req, res) => {
-      const updated = dependencies.actions(req).updateVendor(req.params.id!, req.body);
+      const updated = dependencies.actions(req).updateVendor(req.params.id!, parseHttpDto(vendorUpdateDto, req.body));
       const stateMerge = dependencies.vendorRecordMerge(updated);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));

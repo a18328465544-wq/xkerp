@@ -1,10 +1,11 @@
 import type {PermissionModel} from "../endpoints/auth";
 import type {ProductImportRequestDto, ProductLibraryResponseDto, ProductTemplateRequestDto} from "../dto/product.dto";
 import type {ProductLibraryItem, ProductLibrarySnapshot, ProductTemplateFormValues} from "@/src/types/product";
+import {productCategoryValues} from "@/src/types/core";
 import type {ProductCategory} from "@/src/types/core";
 import {buildProductTemplateName} from "@/src/lib/productName";
 
-const productCategories: readonly ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
+const productCategories = productCategoryValues;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};

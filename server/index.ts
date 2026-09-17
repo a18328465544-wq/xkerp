@@ -11,7 +11,7 @@ import { createStoreActions, type AppState, type StoreActionContext } from "./st
 import { notifyFeishuMarketQuotePriceChanged, notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
 import { createSessionManager } from "./security.ts";
 import { createRequireAuth, createRequireCsrf, createRequireOpenApiToken } from "./httpAuth.ts";
-import { AppError, NotFoundError, toDomainError, UnauthorizedError } from "./errors.ts";
+import { AppError, toDomainError, UnauthorizedError } from "./errors.ts";
 import {
   getPermissionsForUser as getScopedPermissions,
   publicCollectionForUser as getPublicCollection,
@@ -26,15 +26,8 @@ import {
   shouldAttachFreshStateToResponse,
   shouldReloadStateFromDatabase,
 } from "./requestStatePolicy.ts";
-import {
-  compactStateMerge,
-  stateDeleteRecords,
-  stateMergeRecords,
-  statePatchResponse,
-  type StateDeletePatch,
-  type StateMergePatch,
-} from "./statePatch.ts";
-import { runStateCommand, type StateCommandTransactionHook } from "./stateCommand.ts";
+import { statePatchResponse, type StateDeletePatch, type StateMergePatch } from "./statePatch.ts";
+import type {StateCommandTransactionHook} from "./stateCommand.ts";
 import { storeDate, storeDateDiffDays } from "../src/utils/storeTime.ts";
 import { addDateDays, startOfMonth } from "../src/lib/dateRangePickerUtils.ts";
 import { matchesKeyword } from "../src/utils/search.ts";
@@ -42,12 +35,12 @@ import { upsertCrmCustomerAccount } from "./crmAccountRepository.ts";
 import { createSerializedMutationRunner, isMutationAbortedError } from "./mutationQueue.ts";
 import { createAuthMutationRunner } from "./authMutation.ts";
 import { requiresStateSerialization } from "./mutationPolicy.ts";
-import { createRequestMetrics, redactRequestPath, safeErrorMessage } from "./observability.ts";
-import { syncCrmQuote, syncCrmRequirement } from "./crmCommandRepository.ts";
+import { createRequestMetrics, redactRequestPath, safeErrorMessage, safeErrorStack } from "./observability.ts";
 import { QuickCaptureValidationError } from "./crmQuickCapture.ts";
 import { registerMasterDataRoutes } from "./routes/masterData.ts";
 import { registerPurchaseReadRoutes } from "./routes/purchaseRead.ts";
 import { registerOperationalReadRoutes } from "./routes/operationalReads.ts";
+import { registerGlobalSearchRoutes } from "./routes/globalSearch.ts";
 import { registerFinanceClosingRoutes } from "./routes/financeClosing.ts";
 import {registerPagedRecordRoutes} from "./routes/pagedRecords.ts";
 import { registerSystemRoutes } from "./routes/system.ts";
@@ -106,7 +99,7 @@ import { registerOrderPoolRoutes } from "./routes/orderPool.ts";
 import { registerOpenApiRoutes } from "./routes/openApi.ts";
 import { registerLoginRoute, registerLogoutRoute, registerResetRoute } from "./routes/auth.ts";
 import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
-import { createStateProxy, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
+import { createStateProxy, getCurrentState, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
 import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
 import type {
   ProductTemplate,
@@ -295,6 +288,11 @@ function requestIdFor(req: express.Request) {
 }
 
 function logRequestError(req: express.Request, error: unknown, code: string) {
+  const cause = error && typeof error === "object" && "cause" in error
+    ? (error as {cause?: unknown}).cause
+    : undefined;
+  const stack = safeErrorStack(error);
+  const causeStack = safeErrorStack(cause);
   console.error(JSON.stringify({
     event: "api_error",
     requestId: requestIdFor(req),
@@ -306,6 +304,9 @@ function logRequestError(req: express.Request, error: unknown, code: string) {
     name: error instanceof Error ? error.name : "UnknownError",
     code,
     message: safeErrorMessage(error),
+    ...(stack ? {stack} : {}),
+    ...(cause instanceof Error ? {causeName: cause.name, causeMessage: safeErrorMessage(cause)} : {}),
+    ...(causeStack ? {causeStack} : {}),
   }));
 }
 
@@ -363,8 +364,12 @@ app.use(requireApiAuthentication);
 app.use(createRequireCsrf({onDenied: logSecurityDenial}));
 
 function actions(req?: AuthRequest, context?: StoreActionContext) {
+  // `state` is a request-aware Proxy kept for legacy action callers. Pass the
+  // concrete tenant snapshot into action factories so snapshot/clone operations
+  // (for example return completion rollback) never receive a Proxy.
+  const actionState = getCurrentState<AppState>() || state;
   const storeActions = createStoreActions(
-    state,
+    actionState,
     req?.authUser ? {
       userId: req.authUser.id,
       role: req.authUser.role,
@@ -578,19 +583,6 @@ function withoutImagePayload(body: unknown) {
   return clean;
 }
 
-function productLibraryStateData<T>(result: T) {
-  const statePatch = {
-    productsLoaded: true,
-    products: state.products,
-    inventory: state.inventory,
-    marketQuotes: state.marketQuotes,
-  };
-  if (result && typeof result === "object" && !Array.isArray(result)) {
-    return { ...result, ...statePatch };
-  }
-  return { result, ...statePatch };
-}
-
 function paginated<T>(items: T[], req: express.Request) {
   const page = Math.max(1, Number(req.query.page || 1));
   const pageSize = Math.max(1, Math.min(200, Number(req.query.pageSize || req.query.per_page || 20)));
@@ -622,15 +614,6 @@ function authMutationRoute(handler: express.RequestHandler): express.RequestHand
   return (req, res, next) => {
     const operation = withAuthMutation(req as AuthRequest, res, () => handler(req, res, next));
     operation.catch((error) => {
-      if (isMutationAbortedError(error) && (req.destroyed || res.destroyed || res.writableEnded)) return;
-      next(error);
-    });
-  };
-}
-
-function mutationRoute(handler: express.RequestHandler): express.RequestHandler {
-  return (req, res, next) => {
-    void withStateMutation(req as AuthRequest, res, () => handler(req, res, next)).catch((error) => {
       if (isMutationAbortedError(error) && (req.destroyed || res.destroyed || res.writableEnded)) return;
       next(error);
     });
@@ -741,6 +724,10 @@ registerPagedRecordRoutes(app, {requireMenu, requireAnyMenu, permissionsForReque
 registerMasterDataRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
 registerPurchaseReadRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser), getStoreDate: storeDate});
 registerOperationalReadRoutes(app, {requireMenu, requireAnyMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
+registerGlobalSearchRoutes(app, {
+  asyncRoute,
+  permissionsForRequest: (req) => getPermissionsForUser(req.authUser as SystemUserAccount),
+});
 
 registerSystemRoutes(app, {
   dataFilePath,
@@ -1077,6 +1064,7 @@ registerAssemblyMutationRoutes(app, {
 
 registerSalesMutationRoutes(app, {
   requireMenu,
+  requireHistoryEditPermission,
   requireDeletePermission,
   requireManualOutboundPermission,
   asyncRoute,

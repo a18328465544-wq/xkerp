@@ -1,4 +1,6 @@
 import type {PurchaseInvoice} from "@/src/types/purchase";
+import {inventoryConditionValues, productCategoryValues, sourceTypeValues} from "@/src/types/core";
+import {purchasePaymentStatusValues} from "@/src/types/purchase";
 import type {ProductCategory, SourceType} from "@/src/types/core";
 import type {
   PurchaseCreateRequestDto,
@@ -29,10 +31,10 @@ import {PURCHASE_PENDING_INSPECTION_DEFAULTS} from "@/src/features/purchase/purc
 import {storeDate} from "@/src/utils/storeTime";
 import {isInventoryLinkedToPurchase} from "@/src/utils/inventoryRelations";
 
-const productCategories: readonly ProductCategory[] = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
-const purchaseSourceTypes: readonly SourceType[] = ["个人回收", "同行拿货", "批量采购", "客户置换", "门店自采", "门市自采"];
-const purchaseConditions: readonly PurchaseCondition[] = ["全新", "99新", "95新", "90新", "85新", "轻微瑕疵", "损坏"];
-const purchasePaymentStatuses: readonly PurchasePaymentStatus[] = ["未付款", "部分付款", "已付款", "已退款"];
+const productCategories = productCategoryValues;
+const purchaseSourceTypes = sourceTypeValues;
+const purchaseConditions = inventoryConditionValues;
+const purchasePaymentStatuses = purchasePaymentStatusValues;
 
 export interface PurchaseReferencePermissions {
   showCost: boolean;

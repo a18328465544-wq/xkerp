@@ -1,7 +1,5 @@
 import type {
   CardInventory,
-  PaymentInRecord,
-  PaymentOutRecord,
   PurchaseInvoice,
   PurchaseItem,
   ReturnOrder,

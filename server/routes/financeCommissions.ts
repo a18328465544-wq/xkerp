@@ -5,7 +5,7 @@ import {AppError} from "../errors.ts";
 import {canAccessCommissionMode, sanitizeCommissionRecord} from "../commissionRecords.ts";
 import {runStateCommand} from "../stateCommand.ts";
 import {statePatchResponse, type StateMergePatch} from "../statePatch.ts";
-import {commissionSettlementDto, parseHttpDto} from "../httpDto.ts";
+import {commissionRulesUpdateDto, commissionSettlementDto, parseHttpDto} from "../httpDto.ts";
 import type {AppState} from "../store.ts";
 
 type CommissionSettlementResult = {
@@ -42,7 +42,8 @@ export function registerFinanceCommissionRoutes(app: Express, dependencies: Fina
   });
 
   app.put("/api/finance/commission-rules", dependencies.requireBoss, dependencies.requireAnyMenu(commissionMenuIds), dependencies.asyncRoute(async (req, res) => {
-    const updated = await dependencies.persist(req, dependencies.actions(req).updateCommissionRules(req.body || {}));
+    const command = parseHttpDto(commissionRulesUpdateDto, req.body);
+    const updated = await dependencies.persist(req, dependencies.actions(req).updateCommissionRules(command));
     res.json({data: updated, state: {commissionRules: updated}});
   }));
 

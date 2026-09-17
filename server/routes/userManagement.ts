@@ -1,10 +1,32 @@
 import type {Express, Request, RequestHandler} from "express";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
 import type {createStoreActions} from "../store.ts";
-import type {SystemUserAccount} from "../../src/types.ts";
+import type {AccountPermissionOverrides, SystemUserAccount} from "../../src/types.ts";
 import {DEFAULT_STORE_ID, DEFAULT_TENANT_ID} from "../commercialConstants.ts";
+import {parseHttpDto, userCreateDto, userResetPasswordDto, userUpdateDto} from "../httpDto.ts";
 
 type UserManagementRequest = AuthenticatedRequest<SystemUserAccount>;
+
+type RawPermissionOverrides = {
+  allowedMenus?: string[] | null;
+  showCost?: boolean | null;
+  showProfit?: boolean | null;
+  canDelete?: boolean | null;
+  canEditHistory?: boolean | null;
+  canManualOutbound?: boolean | null;
+};
+
+function normalizePermissionOverrides(value: RawPermissionOverrides | undefined): AccountPermissionOverrides | undefined {
+  if (!value) return undefined;
+  return {
+    allowedMenus: value.allowedMenus === null ? undefined : value.allowedMenus,
+    showCost: value.showCost === null ? undefined : value.showCost,
+    showProfit: value.showProfit === null ? undefined : value.showProfit,
+    canDelete: value.canDelete === null ? undefined : value.canDelete,
+    canEditHistory: value.canEditHistory === null ? undefined : value.canEditHistory,
+    canManualOutbound: value.canManualOutbound === null ? undefined : value.canManualOutbound,
+  };
+}
 
 type UserManagementDependencies = {
   requireBoss: RequestHandler;
@@ -36,7 +58,9 @@ export function registerUserManagementRoutes(app: Express, dependencies: UserMan
     ...permissionBoundary,
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as UserManagementRequest;
-      const created = dependencies.actions(authRequest).createUser(req.body);
+      const parsed = parseHttpDto(userCreateDto, req.body);
+      const command = {...parsed, permissionOverrides: normalizePermissionOverrides(parsed.permissionOverrides)};
+      const created = dependencies.actions(authRequest).createUser(command);
       if (created.enabled) await dependencies.assertSeatAvailable(created.tenantId || DEFAULT_TENANT_ID, created.id, created.storeId || DEFAULT_STORE_ID);
       const persisted = await dependencies.persistUserWithMembership(authRequest, created);
       res.status(201).json(dependencies.ok(persisted));
@@ -48,7 +72,9 @@ export function registerUserManagementRoutes(app: Express, dependencies: UserMan
     ...permissionBoundary,
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as UserManagementRequest;
-      const updated = dependencies.actions(authRequest).updateUser(req.params.id!, req.body);
+      const parsed = parseHttpDto(userUpdateDto, req.body);
+      const command = {...parsed, permissionOverrides: normalizePermissionOverrides(parsed.permissionOverrides)};
+      const updated = dependencies.actions(authRequest).updateUser(req.params.id!, command);
       if (updated.enabled) await dependencies.assertSeatAvailable(updated.tenantId || DEFAULT_TENANT_ID, updated.id, updated.storeId || DEFAULT_STORE_ID);
       const persisted = await dependencies.persistUserWithMembership(authRequest, updated);
       res.json(dependencies.ok(persisted));
@@ -88,12 +114,8 @@ export function registerUserManagementRoutes(app: Express, dependencies: UserMan
     ...permissionBoundary,
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as UserManagementRequest;
-      const password = typeof req.body?.password === "string" ? req.body.password.trim() : "";
-      if (password.length < 12 || password.length > 1024) {
-        dependencies.sendApiError(authRequest, res, 400, "INVALID_PASSWORD", "新密码至少 12 位且不能超过 1024 位");
-        return;
-      }
-      const updated = dependencies.actions(authRequest).updateUser(req.params.id!, {password});
+      const command = parseHttpDto(userResetPasswordDto, req.body);
+      const updated = dependencies.actions(authRequest).updateUser(req.params.id!, command);
       const persisted = await dependencies.persistUserWithMembership(authRequest, updated);
       await dependencies.revokeUserSessions?.(updated.id, updated.tenantId || DEFAULT_TENANT_ID);
       res.json(dependencies.ok(persisted));

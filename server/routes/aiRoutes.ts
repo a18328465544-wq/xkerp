@@ -6,6 +6,7 @@ import {runCopilotTurn, type CopilotMessage} from "../aiCopilot.ts";
 import type {CopilotContext} from "../../src/utils/copilotTools.ts";
 import type {AppState} from "../store.ts";
 import type {SystemUserAccount} from "../../src/types.ts";
+import {aiCopilotDto, aiInsightActionDto, parseHttpDto} from "../httpDto.ts";
 
 type AiRequest = AuthenticatedRequest<SystemUserAccount>;
 
@@ -61,17 +62,15 @@ export function registerAiRoutes(app: Express, dependencies: AiRouteDependencies
     dependencies.requireAnyMenu(copilotMenuIds),
     async (req, res) => {
       const authRequest = req as AiRequest;
-      const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
-      const messages: CopilotMessage[] = rawMessages.slice(-20).map((message: unknown) => {
-        const item = message && typeof message === "object" ? message as Record<string, unknown> : {};
-        const role = item.role === "assistant" || item.role === "tool" ? item.role : "user";
-        return {
-          role,
-          content: String(item.content || "").slice(0, 6000),
-          toolName: item.toolName ? String(item.toolName).slice(0, 80) : undefined,
-        };
-      }).filter((message: CopilotMessage) => message.content || message.role !== "user");
-      const rawContext = req.body?.context && typeof req.body.context === "object" ? req.body.context as Record<string, unknown> : {};
+      let command: ReturnType<typeof parseHttpDto<typeof aiCopilotDto>>;
+      try {
+        command = parseHttpDto(aiCopilotDto, req.body);
+      } catch (error) {
+        dependencies.sendApiError(req, res, 400, "VALIDATION_ERROR", error instanceof Error ? error.message : "Copilot 请求参数无效", true);
+        return;
+      }
+      const messages: CopilotMessage[] = command.messages.slice(-20).filter((message) => message.content || message.role !== "user");
+      const rawContext = command.context || {};
       const context: CopilotContext = {
         currentTab: String(rawContext.currentTab || "dashboard").slice(0, 80),
         currentTabLabel: String(rawContext.currentTabLabel || "").slice(0, 80) || undefined,
@@ -79,15 +78,15 @@ export function registerAiRoutes(app: Express, dependencies: AiRouteDependencies
         selectedInventoryId: String(rawContext.selectedInventoryId || "").slice(0, 120) || undefined,
         selectedCustomerId: String(rawContext.selectedCustomerId || "").slice(0, 120) || undefined,
         selectedDocumentNo: String(rawContext.selectedDocumentNo || "").slice(0, 120) || undefined,
-        filters: rawContext.filters && typeof rawContext.filters === "object"
+        filters: rawContext.filters
           ? Object.fromEntries(
-            Object.entries(rawContext.filters as Record<string, unknown>)
+            Object.entries(rawContext.filters)
               .slice(0, 20)
               .map(([key, value]) => [
                 String(key).slice(0, 40),
-                typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined,
+                value,
               ]),
-          )
+          ) as CopilotContext["filters"]
           : undefined,
       };
       const tenantId = authRequest.tenantId || authRequest.authUser?.tenantId || dependencies.defaultTenantId;
@@ -135,7 +134,7 @@ export function registerAiRoutes(app: Express, dependencies: AiRouteDependencies
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as AiRequest;
       const insightId = String(req.params.id || "").trim();
-      const status = req.body?.status;
+      const {status} = parseHttpDto(aiInsightActionDto, req.body);
       if (!insightId || insightId.length > 180) {
         dependencies.sendApiError(req, res, 400, "VALIDATION_ERROR", "经营建议标识不合法");
         return;
@@ -143,10 +142,6 @@ export function registerAiRoutes(app: Express, dependencies: AiRouteDependencies
       if (status === "pending") {
         await deleteAiInsightAction(insightId, authRequest.tenantId);
         res.json({data: {insightId, status: "pending"}});
-        return;
-      }
-      if (status !== "done" && status !== "ignored") {
-        dependencies.sendApiError(req, res, 400, "VALIDATION_ERROR", "经营建议状态不合法");
         return;
       }
       res.json({data: await saveAiInsightAction({insightId, status, updatedBy: dependencies.actorForRequest(authRequest)}, authRequest.tenantId)});

@@ -8,7 +8,7 @@ const globalsSource = readFileSync(new URL("../../styles/globals.css", import.me
 
 test("workspace tab links delegate switch intent before route navigation", () => {
   assert.match(tabsSource, /<Link[\s\S]*onClick=\{\(event\) => navigateToTab\(item, event\)\}/);
-  assert.match(workspaceSource, /event\.preventDefault\(\);[\s\S]*setNavigationIntent\(current \? null : "switch"\);[\s\S]*activate\(item\.id\);[\s\S]*const targetPath = routeByTabRef\.current\[item\.id\] \|\| item\.path;[\s\S]*void navigate\(\{to: targetPath(?:, search: searchWithoutDetail\(\))?\}\)/);
+  assert.match(workspaceSource, /event\.preventDefault\(\);[\s\S]*setNavigationIntent\(current \? null : "switch"\);[\s\S]*activate\(item\.id\);[\s\S]*const targetRoute = routeByTabRef\.current\[item\.id\] \|\| \{pathname: item\.path, search: \{\}\};[\s\S]*void navigate\(\{to: targetRoute\.pathname, search: targetRoute\.search\}\)/);
   assert.doesNotMatch(tabsSource, /onClick=\{\(\) => activate\(item\.id\)\}/);
 });
 

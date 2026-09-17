@@ -22,6 +22,7 @@ test("sales invoice and outbound routes preserve guard ordering", () => {
 
   registerSalesMutationRoutes(app, {
     requireMenu: () => (_req, _res, next) => next(),
+    requireHistoryEditPermission: (_req, _res, next) => next(),
     requireDeletePermission: (_req, _res, next) => next(),
     requireManualOutboundPermission: (_req, _res, next) => next(),
     asyncRoute: (handler) => handler,
@@ -39,7 +40,7 @@ test("sales invoice and outbound routes preserve guard ordering", () => {
 
   assert.deepEqual(registered, [
     {method: "POST", path: "/api/sales-invoices", middlewareCount: 2},
-    {method: "PUT", path: "/api/sales-invoices/:id", middlewareCount: 2},
+    {method: "PUT", path: "/api/sales-invoices/:id", middlewareCount: 3},
     {method: "DELETE", path: "/api/sales-invoices/:id", middlewareCount: 3},
     {method: "POST", path: "/api/sales-invoices/:id/outbound/preflight", middlewareCount: 3},
     {method: "POST", path: "/api/sales-invoices/:id/outbound", middlewareCount: 3},

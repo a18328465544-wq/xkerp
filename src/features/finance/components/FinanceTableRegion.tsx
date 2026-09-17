@@ -15,7 +15,7 @@ export function FinanceTableRegion<TData>({
 }) {
   return (
     <DashboardSection title={title} description={description} actions={actions}>
-      <ErpDataTable {...table} />
+      <ErpDataTable {...table} ariaLabel={table.ariaLabel || (typeof title === "string" ? `${title}列表` : "财务数据列表")} />
     </DashboardSection>
   );
 }

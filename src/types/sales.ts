@@ -19,7 +19,7 @@ export interface SalesInvoice {
   invoiceNo: string;
   date: string;
   customerId?: string;
-  customerPartnerType?: "customer" | "vendor";
+  customerPartnerType?: CustomerPartnerType;
   customerName: string;
   contact: string;
   channel: SalesChannel;
@@ -49,11 +49,16 @@ export interface SalesInvoice {
   totalProfit: number;
 }
 
-export type SalesChannel = "到店" | "闲鱼" | "抖音" | "小红书" | "B站" | "微信私域" | "同行网店";
-export type SalesPaymentMethod = "微信" | "支付宝" | "现金" | "银行卡" | "账期欠款";
+export const salesChannelValues = ["到店", "闲鱼", "抖音", "小红书", "B站", "微信私域", "同行网店"] as const;
+export const salesPaymentMethodValues = ["微信", "支付宝", "现金", "银行卡", "账期欠款"] as const;
+export const salesPaymentStatusValues = ["未收款", "部分收款", "已收款", "已退款"] as const;
+export const salesOutboundStatusValues = ["待出库", "已出库"] as const;
+
+export type SalesChannel = (typeof salesChannelValues)[number];
+export type SalesPaymentMethod = (typeof salesPaymentMethodValues)[number];
 export type SalesPartnerType = CustomerPartnerType;
-export type SalesPaymentStatus = "未收款" | "部分收款" | "已收款" | "已退款";
-export type SalesOutboundStatus = "待出库" | "已出库";
+export type SalesPaymentStatus = (typeof salesPaymentStatusValues)[number];
+export type SalesOutboundStatus = (typeof salesOutboundStatusValues)[number];
 export type SalesListSortKey = "date" | "invoiceNo" | "customerName" | "totalCount" | "totalAmount" | "totalProfit" | "paymentStatus" | "outboundStatus" | "handleBy";
 export type SalesListSortDirection = "asc" | "desc";
 
@@ -72,7 +77,14 @@ export interface SalesListFilters {
 
 export interface SalesListLine {
   id: string;
+  /** Model identity is kept so an editable sales draft can round-trip without guessing from the label. */
+  productId?: string;
   productName: string;
+  brand?: string;
+  model?: string;
+  version?: string;
+  vram?: string;
+  inventoryId?: string;
   sn: string;
   condition: string;
   quantity: number;
@@ -87,6 +99,8 @@ export interface SalesListItem {
   id: string;
   invoiceNo: string;
   date: string;
+  customerId?: string;
+  customerPartnerType?: SalesPartnerType;
   customerName: string;
   contact: string;
   channel: SalesChannel;
@@ -101,6 +115,9 @@ export interface SalesListItem {
   totalProfit?: number;
   paidAmount: number;
   unpaidAmount: number;
+  settlementAccountId?: string;
+  settlementAccountName?: string;
+  paymentHandler?: string;
   linkedInventoryCount: number;
   needInvoice: boolean;
   freeShipping: boolean;
@@ -285,6 +302,8 @@ export interface SalesProductCandidate {
   inventoryQuantity: number;
   reservedQuantity: number;
   availableQuantity: number;
+  /** False for a restored selection until current inventory availability is queried. */
+  availabilityKnown?: boolean;
   costPrice?: number;
   estimatedSellPrice?: number;
   entryTime: string;
@@ -352,6 +371,12 @@ export interface SalesInvoiceResult {
   unpaidAmount: number;
   paymentStatus: string;
   outboundStatus: string;
+}
+
+/** Full response used by the sales edit flow; all fields are still permission-redacted by the adapter. */
+export interface SalesMutationResult {
+  invoice: SalesInvoice;
+  summary: SalesInvoiceResult;
 }
 
 export interface SalesOrderAmounts {

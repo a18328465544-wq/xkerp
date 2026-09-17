@@ -11,7 +11,12 @@ import type {
 import {
   orderPoolBlockers,
   orderPoolDocumentTypes,
+  orderPoolExceptionStages,
+  orderPoolInactiveStageValues,
+  orderPoolMainStages,
   orderPoolOrderTypes,
+  orderPoolPartyTypeValues,
+  orderPoolPriorityValues,
 } from "../src/types.ts";
 import {NotFoundError, ValidationError} from "./errors.ts";
 
@@ -30,19 +35,9 @@ export type OrderPoolDependencies = {
   addLog: (user: string, module: string, type: string, target: string, beforeVal?: string, afterVal?: string) => unknown;
 };
 
-const orderPoolStages = new Set<OrderPoolStage>([
-  "待接单",
-  "跟进中",
-  "待客户",
-  "待执行",
-  "已完成",
-  "暂停",
-  "丢单",
-  "取消",
-  "售后中",
-]);
-const orderPoolPartyTypes = new Set(["customer", "vendor", "mixed"] as const);
-const orderPoolPriorities = new Set(["low", "normal", "high", "urgent"] as const);
+const orderPoolStages = new Set<OrderPoolStage>([...orderPoolMainStages, ...orderPoolExceptionStages]);
+const orderPoolPartyTypes = new Set(orderPoolPartyTypeValues);
+const orderPoolPriorities = new Set(orderPoolPriorityValues);
 
 /**
  * Customer order-pool commands own collaboration state only. Amounts, stock and
@@ -172,7 +167,7 @@ export function createOrderPoolHelpers(dependencies: OrderPoolDependencies) {
       customerName,
       contact: cleanOrderPoolText(input.contact, "联系方式", 160) || undefined,
       mainStage,
-      blocker: mainStage === "已完成" || ["丢单", "取消"].includes(mainStage) ? undefined : blocker,
+      blocker: orderPoolInactiveStageValues.includes(mainStage as (typeof orderPoolInactiveStageValues)[number]) ? undefined : blocker,
       priority: input.priority || "normal",
       ownerId: owner.userId,
       ownerName: owner.displayName,
@@ -210,7 +205,7 @@ export function createOrderPoolHelpers(dependencies: OrderPoolDependencies) {
         : resolveOrderPoolUser(patch.ownerId || undefined, patch.ownerName || undefined)
       : {userId: existing.ownerId, displayName: existing.ownerName};
     const nextStage = patch.mainStage || existing.mainStage;
-    const nextBlocker = patch.blocker === null || nextStage === "已完成" || ["丢单", "取消"].includes(nextStage)
+    const nextBlocker = patch.blocker === null || orderPoolInactiveStageValues.includes(nextStage as (typeof orderPoolInactiveStageValues)[number])
       ? undefined
       : patch.blocker === undefined
         ? existing.blocker

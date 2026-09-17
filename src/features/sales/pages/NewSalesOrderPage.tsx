@@ -3,7 +3,7 @@ import {ArrowLeft, RefreshCw} from "lucide-react";
 import {useEffect, useMemo, useRef, useState, type FormEvent} from "react";
 import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
-import {toast} from "sonner";
+import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
 import {CustomerPicker} from "@/src/components/domain";
 import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpPartnerQuickCreateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
@@ -130,7 +130,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     handleSelectCustomer(option);
     setCustomerCreate(null);
     setCustomerKeyword("");
-    toast.success("客户已新建并选中", {description: "销售单其他内容保持不变。"});
+    notify.success("客户已新建并选中", {description: "销售单其他内容保持不变。"});
     void queryClient.invalidateQueries({queryKey: queryKeys.sales.all()});
   };
   const openCustomerCreate = (initialName: string) => {
@@ -156,7 +156,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     const duplicate = values.items.some((item, itemIndex) => itemIndex !== index && item.productId && item.productId === option.productId);
     if (duplicate) {
       setError(`items.${index}.productId`, {type: "duplicate", message: "同一商品已添加，请直接修改已有行数量"});
-      toast.error("同一商品已添加，请直接修改已有行数量");
+      notify.error("同一商品已添加，请直接修改已有行数量");
       return;
     }
     setSelectedCandidates((current) => ({...current, [fieldId]: option}));
@@ -169,7 +169,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     setValue(`items.${index}.model`, option.model, {shouldDirty: true});
     setValue(`items.${index}.vram`, option.vram, {shouldDirty: true});
     setValue(`items.${index}.condition`, option.condition || "出库核验", {shouldDirty: true});
-    if (showCost && option.costPrice !== undefined) setValue(`items.${index}.costPrice`, option.costPrice, {shouldDirty: true});
+    setValue(`items.${index}.costPrice`, showCost ? option.costPrice : undefined, {shouldDirty: true});
     if (option.estimatedSellPrice && !getValues(`items.${index}.sellPrice`)) setValue(`items.${index}.sellPrice`, Math.round(option.estimatedSellPrice), {shouldDirty: true});
     clearErrors(`items.${index}.productId`);
   };
@@ -184,13 +184,14 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     setValue(`items.${index}.model`, "", {shouldDirty: true});
     setValue(`items.${index}.vram`, "", {shouldDirty: true});
     setValue(`items.${index}.condition`, "出库核验", {shouldDirty: true});
+    setValue(`items.${index}.costPrice`, undefined, {shouldDirty: true});
   };
   const removeLine = (index: number) => {
     const id = fields[index]?.id;
     if (id) setSelectedCandidates((current) => { const next = {...current}; delete next[id]; return next; });
     remove(index);
   };
-  const addLine = () => append({...createSalesLineDefaults(values.aftersalesTerms || ""), costPrice: showCost ? 0 : undefined});
+  const addLine = () => append(createSalesLineDefaults(values.aftersalesTerms || ""));
   const focusInventoryPicker = (fieldId: string) => setActiveInventoryFieldId(fieldId);
   const updateInventoryKeyword = (fieldId: string, keyword: string) => {
     setActiveInventoryFieldId(fieldId);
@@ -213,7 +214,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       const result = await createMutation.mutateAsync({values: submitted});
       createIdempotencyKeyRef.current = createIdempotencyKey("sales-create");
       setSuccessMessage(`销售单 ${result.invoiceNo || "已创建"} 已提交，当前状态：${result.outboundStatus || "待出库"}`);
-      toast.success("销售单已提交，等待出库绑定 SN");
+      notify.success("销售单已提交，等待出库绑定 SN");
       discardDraft();
       setRestoredDraftActive(false);
       reset(createSalesDefaults(operatorName));
@@ -239,7 +240,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     const message = salesFormValidationMessage(errors);
     setServerError(message);
     setConflictError(false);
-    toast.error(message);
+    notify.error(message);
   };
   const leave = () => { window.history.back(); };
   const customerError = !canReadCustomers ? "当前账号没有客户搜索权限" : customerQuery.error ? (customerQuery.error instanceof ApiError && customerQuery.error.isForbidden ? "当前账号没有客户搜索权限" : errorText(customerQuery.error)) : undefined;
@@ -265,12 +266,12 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     <form onSubmit={(event: FormEvent<HTMLFormElement>) => { void handleSubmit(submit, handleInvalid)(event); }}>
       <ErpTransactionColumns>
         <ErpTransactionPrimary>
-            <Card><CardContent className="p-4"><div className="grid items-start gap-3 md:grid-cols-12"><div className="min-w-0 md:col-span-2"><p className="text-sm font-semibold">单据编号</p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 truncate font-mono text-xs text-[var(--erp-color-text-secondary)]">提交后生成</span><span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--erp-color-primary)]">待出库</span></div></div><label className="block text-sm font-semibold md:col-span-7">客户档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isPending || customerQuery.isFetching} error={customerError} disabled={!canReadCustomers} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户" candidateLabel="客户候选" entityLabel="客户" quickCreateActions={canReadCustomers && canCreateCustomer ? [{label: "新建客户", onClick: openCustomerCreate}] : []} onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={handleSelectCustomer} onClear={clearCustomer} /></div></label><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 font-mono" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label><label className="block text-sm font-semibold md:col-span-12">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label></div></CardContent></Card>
+            <Card><CardContent className="p-4"><div className="grid items-start gap-3 md:grid-cols-12"><div className="min-w-0 md:col-span-2"><p className="text-sm font-semibold">单据编号</p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 truncate erp-data-number text-xs text-[var(--erp-color-text-secondary)]">提交后生成</span><span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--erp-color-primary)]">待出库</span></div></div><label className="block text-sm font-semibold md:col-span-7">客户档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isPending || customerQuery.isFetching} error={customerError} disabled={!canReadCustomers} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户" candidateLabel="客户候选" entityLabel="客户" quickCreateActions={canReadCustomers && canCreateCustomer ? [{label: "新建客户", onClick: openCustomerCreate}] : []} onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={handleSelectCustomer} onClear={clearCustomer} /></div></label><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label><label className="block text-sm font-semibold md:col-span-12">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label></div></CardContent></Card>
           <SalesLineItemsTable control={control} setValue={setValue} fields={fields} selectedCandidates={selectedCandidates} pickerKeyword={(fieldId) => inventoryKeywords[fieldId] || ""} pickerOptions={(fieldId) => activeInventoryFieldId === fieldId ? inventoryQuery.data || [] : []} pickerLoading={(fieldId) => activeInventoryFieldId === fieldId && (inventoryQuery.isPending || inventoryQuery.isFetching)} pickerError={(fieldId) => activeInventoryFieldId === fieldId ? inventoryError : undefined} pickerDisabled={!canReadInventory} onPickerFocus={focusInventoryPicker} onPickerKeywordChange={updateInventoryKeyword} onPickerRetry={() => void inventoryQuery.refetch()} onCandidateSelect={selectCandidate} onCandidateClear={clearCandidate} onAdd={addLine} onRemove={removeLine} />
           <ErpFormSection title="销售备注" description="记录交付、售后和客户特殊要求。"><Textarea {...register("remarks")} className="min-h-24" placeholder="销售单备注、交付说明或客户特殊要求" /></ErpFormSection>
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
-          <Card><CardContent className="space-y-4 p-4"><div><h2 className="text-sm font-bold">收款信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">选择账户并确认全款或挂账状态。</p></div><SalesPaymentSection embedded compact control={control} setValue={setValue} accounts={accountQuery.data || []} accountsLoading={accountQuery.isPending || accountQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void accountQuery.refetch()} paidAmount={values.paidAmount || 0} totalAmount={amounts.subtotal} salesperson={values.handleBy} /><div className="grid grid-cols-2 gap-2"><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("needInvoice")} />{values.needInvoice ? "普通发票" : "不开票"}</label><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("freeShipping")} />{values.freeShipping ? "顺丰包邮" : "到付自理"}</label></div><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">销售结算汇总</h2><span className="font-mono text-xs text-[var(--erp-color-text-secondary)]">{amounts.quantity} 件</span></div><SalesAmountSummary embedded amounts={amounts} showCost={showCost && permissions.showProfit} /></div><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason="请选择客户、商品和有效收款状态" submitting={createMutation.isPending} onCancel={leave} submitLabel="确认开单 · 待出库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
+          <Card><CardContent className="space-y-4 p-4"><div><h2 className="text-sm font-semibold">收款信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">选择账户并确认全款或挂账状态。</p></div><SalesPaymentSection embedded compact control={control} setValue={setValue} accounts={accountQuery.data || []} accountsLoading={accountQuery.isPending || accountQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void accountQuery.refetch()} paidAmount={values.paidAmount || 0} totalAmount={amounts.subtotal} salesperson={values.handleBy} /><div className="grid grid-cols-2 gap-2"><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("needInvoice")} />{values.needInvoice ? "普通发票" : "不开票"}</label><label className="flex h-10 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-semibold"><input type="checkbox" {...register("freeShipping")} />{values.freeShipping ? "顺丰包邮" : "到付自理"}</label></div><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">销售结算汇总</h2><span className="erp-data-number text-xs text-[var(--erp-color-text-secondary)]">{amounts.quantity} 件</span></div><SalesAmountSummary embedded amounts={amounts} showCost={showCost && permissions.showProfit} /></div><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason="请选择客户、商品和有效收款状态" submitting={createMutation.isPending} onCancel={leave} submitLabel="确认开单 · 待出库"><span>经办人：{operatorName}</span></ErpSubmitBar></CardContent></Card>
         </ErpTransactionSecondary>
       </ErpTransactionColumns>
     </form>

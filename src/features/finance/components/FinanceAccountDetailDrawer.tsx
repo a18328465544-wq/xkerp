@@ -41,6 +41,12 @@ export function FinanceAccountDetailDrawer({
   return (
     <ErpDetailDrawer
       open={Boolean(account)}
+      modal={false}
+      resizable
+      drawerKey="finance-account-detail"
+      defaultWidth={680}
+      minWidth={520}
+      maxWidth={820}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
@@ -193,13 +199,13 @@ export function FinanceAccountDetailDrawer({
                       <p className="truncate text-sm font-semibold">
                         {item.businessType}
                       </p>
-                      <p className="mt-0.5 truncate text-[11px] text-[var(--erp-color-text-muted)]">
+                      <p className="mt-0.5 truncate text-xs text-[var(--erp-color-text-muted)]">
                         {item.time} · {item.handler}
                         {item.relatedDocNo ? ` · ${item.relatedDocNo}` : ""}
                       </p>
                     </div>
                     <span
-                      className={`font-mono text-sm font-bold ${item.changeAmount >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}
+                      className={`erp-data-number text-sm font-semibold ${item.changeAmount >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}
                     >
                       {item.changeAmount >= 0 ? "+" : ""}
                       {formatCurrency(item.changeAmount)}

@@ -4,6 +4,7 @@ import {isInventoryLinkedToAssembly} from "../../src/utils/inventoryRelations.ts
 import {compactStateMerge, stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {AssemblyOperationRecord} from "../../src/types.ts";
+import {assemblyCreateDto, parseHttpDto} from "../httpDto.ts";
 
 type AssemblyMutationDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
@@ -49,7 +50,8 @@ export function registerAssemblyMutationRoutes(app: Express, dependencies: Assem
     "/api/assembly-operations",
     dependencies.requireMenu("assembly"),
     dependencies.asyncRoute(async (req, res) => {
-      const created = dependencies.actions(req).createAssemblyOperation(req.body);
+      const command = parseHttpDto(assemblyCreateDto, req.body);
+      const created = dependencies.actions(req).createAssemblyOperation(command);
       const stateMerge = assemblyOperationMerge(dependencies.getState(), created);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.status(201).json(okMerge(created, stateMerge));

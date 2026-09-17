@@ -16,7 +16,7 @@ import {
   initialVendors,
 } from "../src/data/demoData.ts";
 import {defaultPermissions, initialSystemUsers} from "../src/data/systemDefaults.ts";
-import {normalizeCommissionRules, DEFAULT_COMMISSION_RULES} from "../src/utils/commissionRules.ts";
+import {DEFAULT_COMMISSION_RULES} from "../src/utils/commissionRules.ts";
 import {hashPassword, isPasswordHash} from "./security.ts";
 import {normalizeStateConditions, syncProductCurrentStock} from "./storeStateNormalization.ts";
 import type {AppState} from "./store.ts";

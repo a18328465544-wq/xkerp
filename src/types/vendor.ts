@@ -1,4 +1,6 @@
-export const vendorLevels = ["S级", "A级", "B级", "C级", "D级", "R级"] as const;
+import {customerLevels} from "./customer";
+
+export const vendorLevels = customerLevels;
 export type VendorLevel = typeof vendorLevels[number];
 
 export const vendorTypes = ["上游供应商", "下游采购方", "核心采购方"] as const;

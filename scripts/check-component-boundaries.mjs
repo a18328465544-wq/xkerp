@@ -4,8 +4,6 @@ import path from "node:path";
 const root = process.cwd();
 const componentsRoot = path.join(root, "src", "components");
 const adapterRoots = [
-  path.join(componentsRoot, "shared"),
-  path.join(componentsRoot, "erp"),
   path.join(componentsRoot, "common"),
   // UI primitives may own thin third-party adapters such as chart.tsx;
   // feature pages still cannot import adapter-only packages directly.
@@ -23,17 +21,10 @@ const legacyAdapterFiles = new Set([
 // allowed only after a shared/ERP adapter owns their API and accessibility.
 const adapterOnlyPackages = [
   "@radix-ui/",
-  "@base-ui-components/",
-  "@hookform/resolvers",
-  "@tanstack/react-virtual",
-  "@dnd-kit/",
+  "@base-ui/react",
   "cmdk",
   "react-day-picker",
-  "react-hook-form",
-  "react-number-format",
-  "recharts",
   "sonner",
-  "zod",
 ];
 
 function collectFiles(dir) {
@@ -51,7 +42,12 @@ function isAdapterFile(file) {
 
 const violations = [];
 const legacyImportPattern = /from\s*["'](?:\.\.?\/)+(?:ui|DataTable|TanStackDataTable|DateRangePicker|ReportPageLayout)(?:\.tsx?)?["']/;
-for (const file of collectFiles(componentsRoot)) {
+const scanRoots = [
+  componentsRoot,
+  path.join(root, "src", "app"),
+  path.join(root, "src", "features"),
+];
+for (const file of scanRoots.flatMap(collectFiles)) {
   if (isAdapterFile(file)) continue;
   const source = fs.readFileSync(file, "utf8");
   for (const packageName of adapterOnlyPackages) {
@@ -61,12 +57,12 @@ for (const file of collectFiles(componentsRoot)) {
     }
   }
   if (legacyImportPattern.test(source)) {
-    violations.push(`${path.relative(root, file)} -> legacy component adapter (use ./shared or ./erp)`);
+    violations.push(`${path.relative(root, file)} -> legacy component adapter (use src/components/ui or src/components/common)`);
   }
 }
 
 if (violations.length) {
-  console.error("组件边界检查失败：业务页面必须通过 shared/erp 适配层使用交互包和基础组件。");
+  console.error("组件边界检查失败：业务页面必须通过 src/components/ui/common/domain 适配层使用交互包和基础组件。");
   violations.forEach(item => console.error(`- ${item}`));
   process.exit(1);
 }

@@ -5,6 +5,7 @@ import {runStateCommand} from "../stateCommand.ts";
 import {compactStateMerge, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {CardInventory, InventoryScanResult, SystemUserAccount} from "../../src/types.ts";
+import {inventoryBatchUpdateDto, inventoryImportDto, inventoryListQueryDto, inventoryScanFlowDto, parseHttpDto} from "../httpDto.ts";
 
 type InventoryRequest = AuthenticatedRequest<SystemUserAccount>;
 
@@ -67,8 +68,9 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
     "/api/inventory/batch",
     dependencies.requireMenu("inventory"),
     dependencies.asyncRoute(async (req, res) => {
+      const command = parseHttpDto(inventoryBatchUpdateDto, req.body);
       const {data: updated, stateMerge} = await runStateCommand(
-        () => dependencies.actions(req).batchUpdateInventory(req.body.ids || [], req.body.updates || {}),
+        () => dependencies.actions(req).batchUpdateInventory(command.ids, command.updates),
         (inventory) => inventoryRecordsMerge(dependencies.getState(), inventory),
       );
       res.json(okMerge(updated, stateMerge));
@@ -79,7 +81,24 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
     "/api/inventory/summary",
     dependencies.requireMenu("inventory"),
     (req, res) => {
-      res.json({data: dependencies.actions(req).getInventorySummary(req.query as Record<string, string>)});
+      const query = parseHttpDto(inventoryListQueryDto, req.query);
+      res.json({data: dependencies.actions(req).getInventorySummary({
+        keyword: query.keyword || query.search,
+        status: query.status || undefined,
+        category: query.category || undefined,
+        brand: query.brand || undefined,
+        model: query.model || undefined,
+        condition: query.condition || undefined,
+        warehouseLocation: query.warehouseLocation || undefined,
+        entryStart: query.entryStart || undefined,
+        entryEnd: query.entryEnd || undefined,
+        risk: query.risk || undefined,
+        minStorageDays: query.minStorageDays,
+        maxStorageDays: query.maxStorageDays,
+        minProfitMargin: query.minProfitMargin,
+        activeOnly: query.activeOnly,
+        includeSold: query.includeSold,
+      })});
     },
   );
 
@@ -88,24 +107,29 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
     dependencies.requireMenu("inventory"),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as InventoryRequest;
+      const query = parseHttpDto(inventoryListQueryDto, req.query);
       const page = await queryInventoryPage<CardInventory>({
         tenantId: authRequest.tenantId,
         storeId: authRequest.storeId,
-        page: Number(req.query.page || 1),
-        pageSize: Number(req.query.pageSize || 50),
-        keyword: String(req.query.keyword || req.query.search || ""),
-        status: String(req.query.status || ""),
-        category: String(req.query.category || ""),
-        brand: String(req.query.brand || ""),
-        risk: req.query.risk === "mined" || req.query.risk === "upturned" || req.query.risk === "high" ? req.query.risk : undefined,
-        minStorageDays: Number(req.query.minStorageDays || 0),
-        maxStorageDays: req.query.maxStorageDays === undefined ? undefined : Number(req.query.maxStorageDays),
-        minProfitMargin: Number(req.query.minProfitMargin || 0),
-        activeOnly: String(req.query.activeOnly || "") === "true",
-        warehouseLocation: String(req.query.warehouseLocation || ""),
-        includeSold: String(req.query.includeSold || "") === "true",
-        sortKey: String(req.query.sortKey || ""),
-        sortDirection: req.query.sortDirection === "asc" ? "asc" : "desc",
+        page: query.page,
+        pageSize: query.pageSize ?? query.per_page ?? 20,
+        keyword: query.keyword || query.search,
+        status: query.status || "",
+        category: query.category || "",
+        brand: query.brand,
+        model: query.model,
+        condition: query.condition || "",
+        entryStart: query.entryStart,
+        entryEnd: query.entryEnd,
+        risk: query.risk || undefined,
+        minStorageDays: query.minStorageDays,
+        maxStorageDays: query.maxStorageDays,
+        minProfitMargin: query.minProfitMargin,
+        activeOnly: query.activeOnly,
+        warehouseLocation: query.warehouseLocation,
+        includeSold: query.includeSold,
+        sortKey: query.sortKey,
+        sortDirection: query.sortDirection,
       });
       res.json({data: dependencies.sanitizeInventoryRows(page.data, authRequest.authUser), meta: page.meta});
     }),
@@ -115,8 +139,9 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
     "/api/inventory/import",
     dependencies.requireMenu("inventory"),
     dependencies.asyncRoute(async (req, res) => {
+      const command = parseHttpDto(inventoryImportDto, req.body);
       const {data: created, stateMerge} = await runStateCommand(
-        () => dependencies.actions(req).importInventoryRows(req.body.rows || [], req.body.handler),
+        () => dependencies.actions(req).importInventoryRows(command.rows, command.handler),
         (inventory) => inventoryRecordsMerge(dependencies.getState(), inventory),
       );
       res.status(201).json(okMerge(created, stateMerge));
@@ -127,8 +152,9 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
     "/api/inventory/scan-flow",
     dependencies.requireMenu("inventory"),
     dependencies.asyncRoute(async (req, res) => {
-      const result = dependencies.actions(req).scanInventoryFlow(req.body);
-      const stateMerge = scanFlowMerge(dependencies.getState(), result, req.body?.salesInvoiceId);
+      const command = parseHttpDto(inventoryScanFlowDto, req.body);
+      const result = dependencies.actions(req).scanInventoryFlow(command);
+      const stateMerge = scanFlowMerge(dependencies.getState(), result, command.salesInvoiceId);
       await saveStateRecords(stateMergeRecords(stateMerge));
       res.json(okMerge(result, stateMerge));
     }),

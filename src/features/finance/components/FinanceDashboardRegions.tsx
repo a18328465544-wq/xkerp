@@ -9,7 +9,7 @@ import type {financeApi} from "@/src/services/api";
 
 export function FinanceDashboardMetricRegion({view}: {view: FinanceDashboardView}) {
   return (
-    <MetricsRegion>
+    <MetricsRegion mobilePrimaryFullWidth>
       <FinanceMetricCard label="当前可用资金" value={amountOrPermission(view.availableCash)} detail={view.availableCash === undefined ? "缺少资金账户权限" : `账面余额 ${formatCurrency(view.bookBalance || 0)}`} icon={<WalletCards className="h-4 w-4" />} tone={view.availableCash !== undefined && view.availableCash <= 0 ? "warning" : "info"} valueTone={view.availableCash !== undefined && view.availableCash <= 0 ? "warning" : "neutral"} />
       <FinanceMetricCard label="今日收入" value={amountOrPermission(view.todayIncome)} detail={compareDetail(view.todayIncome, view.yesterdayIncome)} compare={compareValue(view.todayIncome, view.yesterdayIncome)} icon={<ArrowDownRight className="h-4 w-4" />} tone="success" valueTone="success" />
       <FinanceMetricCard label="今日支出" value={amountOrPermission(view.todayExpense)} detail={compareDetail(view.todayExpense, view.yesterdayExpense)} compare={compareValue(view.todayExpense, view.yesterdayExpense)} icon={<ArrowUpRight className="h-4 w-4" />} tone={view.todayExpense ? "danger" : "neutral"} valueTone={view.todayExpense ? "danger" : "neutral"} />

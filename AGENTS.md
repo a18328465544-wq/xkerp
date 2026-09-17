@@ -5,7 +5,7 @@
 
 UI 具体执行以 [`docs/UI_DESIGN_RULES.md`](docs/UI_DESIGN_RULES.md) 为准；新增组件、截图复刻和视觉改版必须同步遵守。
 
-报表页面额外遵循 [`docs/REPORT_UI_STANDARD.md`](docs/REPORT_UI_STANDARD.md)，统一复用 `src/components/ReportPageLayout.tsx`。
+报表页面额外遵循 [`docs/REPORT_UI_STANDARD.md`](docs/REPORT_UI_STANDARD.md)，统一复用 `ErpAnalyticsPageFrame`、`AnalyticsFrame` 和 `ErpDataTable`（当前实现位于 `src/components/common`）。
 
 ## 不可违反的规则
 
@@ -15,7 +15,7 @@ UI 具体执行以 [`docs/UI_DESIGN_RULES.md`](docs/UI_DESIGN_RULES.md) 为准�
 - 新增写接口必须同步维护鉴权、权限、输入校验、`server/requestStatePolicy.ts` 和增量持久化补丁。
 - 页面指标必须由真实状态计算；禁止用固定数字掩盖空数据、异常数据或接口失败。
 - 每一个可见按钮都必须有明确行为、禁用状态或说明；危险操作必须确认并记录日志。
-- UI 优先复用 `src/components/ui.tsx`、`DataTable`、现有筛选/分页/弹窗组件。设计稿复刻要同时满足桌面端信息密度、响应式和可访问性。
+- UI 优先复用 `src/components/ui`、`src/components/common` 的基础控件、`ErpDataTable` 和现有筛选/分页/弹窗组件。设计稿复刻要同时满足桌面端信息密度、响应式和可访问性。
 - 修改后至少运行 `npm run lint`；涉及业务逻辑运行对应测试，涉及构建或发布运行 `npm run build`。
 - 只有用户明确说“上线/部署”时才允许触发生产部署。部署必须先构建，再重启 PM2，最后检查 `/api/health` 和生产站点。
 

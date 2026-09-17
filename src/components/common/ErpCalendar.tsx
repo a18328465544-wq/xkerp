@@ -29,7 +29,10 @@ export interface ErpCalendarRangeProps extends ErpCalendarSharedProps {
 export type ErpCalendarProps = ErpCalendarSingleProps | ErpCalendarRangeProps;
 
 const calendarClassNames = {
-  months: "flex flex-col gap-4 md:flex-row md:gap-6",
+  // Two-month ranges are enabled on small tablets, so the month columns must
+  // switch to a row at the same breakpoint instead of stacking into a very
+  // tall sheet with the second month hidden below the fold.
+  months: "flex flex-col gap-4 sm:flex-row sm:gap-6",
   month: "space-y-3",
   month_caption: "flex h-8 items-center justify-center",
   caption_label: "text-sm font-semibold",
@@ -46,7 +49,7 @@ const calendarClassNames = {
   range_start: "rounded-l-full bg-[var(--erp-color-primary)] text-white hover:bg-[var(--erp-color-primary-hover)]",
   range_end: "rounded-r-full bg-[var(--erp-color-primary)] text-white hover:bg-[var(--erp-color-primary-hover)]",
   range_middle: "!bg-[var(--erp-color-info-soft)] !text-[var(--erp-color-primary)] rounded-none",
-  today: "font-bold text-[var(--erp-color-primary)]",
+  today: "font-semibold text-[var(--erp-color-primary)]",
   outside: "text-[var(--erp-color-text-muted)] opacity-50",
   disabled: "pointer-events-none opacity-30",
   hidden: "invisible",

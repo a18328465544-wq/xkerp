@@ -1,5 +1,6 @@
 export const aftersalesStatuses = ["待处理", "检测中", "已完成", "已拒绝"] as const;
 export type AftersalesStatus = typeof aftersalesStatuses[number];
+export const aftersalesActiveStatusValues = ["待处理", "检测中"] as const;
 
 export const aftersalesTypes = ["维修", "检测争议", "换货", "补差价", "退货"] as const;
 export type AftersalesType = typeof aftersalesTypes[number];

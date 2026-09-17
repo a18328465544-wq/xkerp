@@ -14,7 +14,9 @@ test("domain errors map validation, missing records and conflicts to stable HTTP
 });
 
 test("unknown exceptions remain server errors instead of becoming client validation errors", () => {
-  const unknown = toDomainError(new Error("ECONNRESET from database driver"));
+  const original = new Error("ECONNRESET from database driver");
+  const unknown = toDomainError(original);
   assert.deepEqual([unknown.status, unknown.code], [500, "SERVER_ERROR"]);
   assert.equal(unknown.message, "服务器处理失败，请稍后重试");
+  assert.equal((unknown as Error & {cause?: unknown}).cause, original);
 });

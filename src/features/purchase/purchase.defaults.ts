@@ -1,5 +1,6 @@
 import type {PurchaseCondition, PurchaseFormValues, PurchaseInvoice, PurchaseLineFormValue} from "@/src/types/purchase";
 import {storeDate} from "@/src/utils/storeTime";
+import {isPersonalPurchaseSource} from "@/src/utils/purchaseSources";
 
 // Keep four initial editors so purchasing staff can enter a multi-item order
 // without repeatedly adding rows. Untouched placeholder rows are ignored by
@@ -65,7 +66,7 @@ export function createPurchaseEditValues(invoice: PurchaseInvoice): PurchaseForm
     date: invoice.date,
     sourceType: invoice.sourceType,
     sourcePartnerId: invoice.sourcePartnerId || "",
-    sourcePartnerType: invoice.sourcePartnerType || (invoice.sourceType === "个人回收" ? "customer" : "vendor"),
+    sourcePartnerType: invoice.sourcePartnerType || (isPersonalPurchaseSource(invoice.sourceType) ? "customer" : "vendor"),
     supplierName: invoice.supplierName,
     contact: invoice.contact || "",
     expressNo: invoice.expressNo || "",

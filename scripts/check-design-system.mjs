@@ -8,6 +8,8 @@ const requiredTokens = [
   "--erp-color-canvas",
   "--erp-color-surface",
   "--erp-color-primary",
+  "--erp-color-primary-soft",
+  "--erp-color-info",
   "--erp-color-info-soft",
   "--erp-color-success",
   "--erp-color-success-soft",
@@ -23,6 +25,7 @@ const requiredTokens = [
   "--erp-color-risk",
   "--erp-color-risk-soft",
   "--erp-space-4",
+  "--erp-radius-xs",
   "--erp-radius-md",
   "--erp-shadow-card",
   "--erp-font-body",
@@ -33,10 +36,28 @@ const requiredTokens = [
   "--erp-workspace-bar-height",
   "--erp-layer-tab-navigation",
   "--erp-layer-drawer",
+  "--erp-layer-content-sticky",
+  "--erp-metric-min-width",
+  "--erp-chart-primary",
+  "--erp-chart-muted",
+  "--erp-chart-positive",
+  "--erp-chart-warning",
+  "--erp-chart-negative",
+  "--erp-chart-grid",
+  "--erp-chart-axis",
+  "--erp-chart-track",
+  "--erp-chart-tooltip-bg",
+  "--erp-chart-tooltip-border",
+  "--erp-chart-stroke-width",
+  "--erp-chart-bar-radius",
+  "--erp-chart-bar-gap",
+  "--erp-chart-area-opacity",
+  "--erp-chart-animation-duration",
 ];
 
 const tokenFile = path.join(root, "src/styles/tokens.css");
 const tokenSource = fs.readFileSync(tokenFile, "utf8");
+const definedTokens = new Set([...tokenSource.matchAll(/--erp-[a-z0-9-]+\s*:/g)].map((match) => match[0].split(/\s*:/, 1)[0]));
 for (const token of requiredTokens) {
   if (!tokenSource.includes(token)) failures.push(`缺少必需 Token：${token}`);
 }
@@ -126,10 +147,26 @@ for (const file of formalFiles) {
   const namedColors = [...new Set(source.match(namedColorPattern) || [])];
   if (namedColors.length > 0) warnings.push(`${relative} 仍有受控 Tailwind 语义色：${namedColors.join(", ")}`);
   if (/src\/components\/(?:erp|shared|ui\.tsx)/.test(source)) failures.push(`${relative} 引用了旧版 shared/erp/ui.tsx 路径。`);
+  const rawRadii = [...new Set(source.match(/\brounded-(?:sm|md|lg|xl)\b/g) || [])];
+  if (rawRadii.length && relative.startsWith("src/features/")) {
+    failures.push(`${relative} 使用了裸圆角类（${rawRadii.join(", ")}），请改用 rounded-[var(--erp-radius-md)] 等语义令牌。`);
+  }
   if (Number.isFinite(tabLayer)) {
     const numericLayers = [...source.matchAll(/\bz-(?:\[)?(\d+)/g)].map((match) => Number(match[1]));
     const invalidLayer = numericLayers.find((layer) => layer >= tabLayer);
     if (invalidLayer !== undefined) failures.push(`${relative} 使用了不低于 Tab 导航的层级 z-${invalidLayer}，所有应用层必须低于 ${tabLayer}。`);
+  }
+}
+
+/* Catch token drift at the source boundary. A missing custom property is
+   otherwise silently rendered as an invalid declaration and usually only
+   appears on one feature or browser. Definitions live exclusively in
+   tokens.css, so every --erp-* reference must resolve here. */
+for (const file of [...formalFiles, globalStylesFile]) {
+  const source = fs.readFileSync(file, "utf8");
+  for (const match of source.matchAll(/var\((--erp-[a-z0-9-]+)/g)) {
+    const token = match[1];
+    if (!definedTokens.has(token)) failures.push(`${path.relative(root, file)} 引用了未定义 Token：${token}。请先在 src/styles/tokens.css 建立语义令牌。`);
   }
 }
 

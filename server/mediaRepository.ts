@@ -3,14 +3,16 @@ import { withDatabaseTransaction } from "./db.ts";
 import type { PoolClient } from "pg";
 import { DEFAULT_TENANT_ID } from "./commercialConstants.ts";
 import { getCurrentTenantContext } from "./requestTenantContext.ts";
+import {imageMimeTypeValues} from "../src/types/media.ts";
 
 export const MEDIA_MAX_BYTES = 110_000;
 export const MEDIA_TARGET_BYTES = 100_000;
 export const MEDIA_MAX_INPUT_BYTES = 12 * 1024 * 1024;
 export const MEDIA_URL_PREFIX = "/api/media/assets/";
 
-const supportedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const supportedMimeTypes = new Set<string>(imageMimeTypeValues);
 const entityPartPattern = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
+const imageDataUrlPattern = new RegExp(`^data:(${imageMimeTypeValues.join("|")});base64,([a-z0-9+/=\\s]+)$`, "i");
 
 export type MediaAsset = {
   id: string;
@@ -58,7 +60,7 @@ function parseDataUrl(dataUrl: unknown): ParsedImage {
   if (typeof dataUrl !== "string" || !dataUrl.trim()) {
     throw new MediaValidationError("INVALID_IMAGE", "图片数据不能为空");
   }
-  const match = /^data:(image\/(?:jpeg|png|webp));base64,([a-z0-9+/=\s]+)$/i.exec(dataUrl.trim());
+  const match = imageDataUrlPattern.exec(dataUrl.trim());
   if (!match) {
     throw new MediaValidationError("UNSUPPORTED_IMAGE", "仅支持 JPG、PNG 或 WEBP 图片");
   }

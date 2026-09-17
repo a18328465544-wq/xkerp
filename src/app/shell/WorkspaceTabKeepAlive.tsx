@@ -21,7 +21,7 @@ export function WorkspaceTabKeepAlive({fallback, scrollContainerRef}: WorkspaceT
     return fallback?.id || state.activeId;
   }, [pathname, state.activeId, tabs]);
   const panels = useMemo(() => tabs.map((item) => {
-    const routePath = item.id === currentTabId ? pathname : routeByTab[item.id] || item.path;
+    const routePath = item.id === currentTabId ? pathname : routeByTab[item.id]?.pathname || item.path;
     const page = resolveWorkspaceTabPage(routePath);
     return page ? {item, routePath, page} : null;
   }).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)), [currentTabId, pathname, routeByTab, tabs]);

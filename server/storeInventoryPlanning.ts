@@ -1,10 +1,13 @@
 import type {CardInventory, CardStatus, PurchaseItem, SalesItem} from "../src/types.ts";
+import {inventorySellableStatuses} from "../src/utils/inventoryFilters.ts";
 import {createProductIdentityIndex, resolveProductIdentityKey, sameProductIdentity} from "../src/utils/productIdentity.ts";
 import {shouldReserveSalesInvoiceInventory} from "../src/utils/salesInventory.ts";
 import {ValidationError} from "./errors.ts";
 import type {AppState} from "./store.ts";
 
-export const SALES_SELLABLE_STATUSES = new Set<CardStatus>(["已入库", "已上架"]);
+// Keep the sales reservation rule aligned with the inventory filter and sales
+// candidate endpoint. A physical unit is sellable only after it is入库/上架.
+export const SALES_SELLABLE_STATUSES = new Set<CardStatus>(inventorySellableStatuses);
 
 export type ProductIdentityLike = {
   id?: string | null;
@@ -126,16 +129,4 @@ export function expandSalesItems(items: SalesItem[]) {
       sn: quantity > 1 ? "" : item.sn,
     }));
   });
-}
-
-export function countPendingSalesNeedForProduct(
-  state: Pick<AppState, "salesInvoices" | "inventory" | "products">,
-  key: string,
-  name: string,
-  excludeInvoiceId?: string,
-) {
-  const productIdentityIndex = createProductIdentityIndex(state.products);
-  const productKey = productIdentityKey({productId: key, productName: name}, productIdentityIndex);
-  if (!productKey) return 0;
-  return buildPendingSalesNeedByProduct(state, productIdentityIndex, excludeInvoiceId).get(productKey) || 0;
 }

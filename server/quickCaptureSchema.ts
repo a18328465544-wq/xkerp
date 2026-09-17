@@ -1,3 +1,6 @@
+import {crmLeadPriorityValues, crmLeadStageValues, quickCaptureDeliveryMethodValues, quickCaptureIntentValues, quickCaptureTransactionValues} from "../src/types/crm.ts";
+import {productCategoryValues} from "../src/types/core.ts";
+
 /**
  * Provider-neutral JSON contract for the extraction step.
  *
@@ -22,18 +25,18 @@ export const QUICK_CAPTURE_AI_JSON_SCHEMA = {
         city: { type: ["string", "null"] },
         company: { type: ["string", "null"] },
         source: { type: ["string", "null"] },
-        intentType: { enum: ["求购", "出售", "回收", "置换", "其他", null] },
-        productCategory: { type: ["string", "null"] },
+        intentType: { enum: [...quickCaptureIntentValues, null] },
+        productCategory: { enum: [...productCategoryValues, null] },
         productName: { type: ["string", "null"] },
         productModel: { type: ["string", "null"] },
         quantity: { type: ["number", "null"] },
         expectedPrice: { type: ["number", "null"] },
         quotedPrice: { type: ["number", "null"] },
-        transactionType: { enum: ["销售", "回收", "采购", "置换", "其他", null] },
-        deliveryMethod: { enum: ["到店", "快递", "同城配送", "未知", null] },
+        transactionType: { enum: [...quickCaptureTransactionValues, null] },
+        deliveryMethod: { enum: [...quickCaptureDeliveryMethodValues, null] },
         followUpTime: { type: ["string", "null"] },
-        priority: { enum: ["低", "中", "高", null] },
-        stage: { enum: ["新线索", "需求确认", "报价中", "已成交", "已关闭", null] },
+        priority: { enum: [...crmLeadPriorityValues, null] },
+        stage: { enum: [...crmLeadStageValues, null] },
         tags: { type: "array", items: { type: "string" }, maxItems: 12 },
         note: { type: ["string", "null"] },
       },

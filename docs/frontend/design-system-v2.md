@@ -18,16 +18,18 @@
 | --- | --- | --- |
 | 画布/表面 | `--erp-color-canvas` / `surface` / `surface-muted` | `#f6f8fb` / `#fff` / `#f1f5f9` |
 | 文本 | `--erp-color-text` / `text-secondary` / `text-muted` | `#172033` / `#506078` / `#8290a5` |
-| 品牌色 | `--erp-color-primary` / `primary-hover` | `#0a84ff` / `#006edc` |
+| 品牌色 | `--erp-color-primary` / `primary-hover` / `primary-soft` | `#0a84ff` / `#006edc` / 信息浅色别名 |
+| 信息语义 | `--erp-color-info` / `--erp-color-info-soft` | 信息色及其浅色背景；默认复用品牌蓝 |
 | 状态色 | `--erp-color-success` / `warning` / `danger` | `#12805c` / `#b45309` / `#c2410c` |
 | 状态底色 | `--erp-color-info-soft` / `success-soft` / `warning-soft` / `danger-soft` | 统一语义浅色背景 |
 | 业务语义色 | `--erp-color-income` / `expense` / `net` / `risk` 及对应 `*-soft` | 收入绿色、支出红色、净额蓝色、风险橙色；均为状态 Token 的别名 |
 | 间距 | `--erp-space-1` 至 `--erp-space-16` | `4, 8, 12, 16, 20, 24, 32, 40, 48, 64px` |
-| 圆角 | `--erp-radius-sm` / `md` / `lg` / `xl` / `pill` | `6 / 8 / 12 / 16 / 9999px` |
+| 圆角 | `--erp-radius-xs` / `sm` / `md` / `lg` / `xl` / `pill` | `4 / 6 / 8 / 12 / 16 / 9999px` |
 | 阴影 | `--erp-shadow-card` / `popover` | 卡片弱阴影 / 浮层阴影 |
 | 字体 | `page-title` / `section-title` / `body` / `caption` | `28 / 16 / 14 / 12px` |
 | 控件 | `--erp-control-height` / `control-height-compact` | `40 / 36px` |
 | Quick Status | `--erp-quick-status-height` / `icon-size` / `gap` | `32 / 24 / 12px` |
+| 布局与层级 | `--erp-metric-min-width` / `--erp-layer-content-sticky` | 指标最小宽度 / 内容内吸顶层级 |
 
 新增视觉值必须先补 Token，并说明跨页面复用场景。业务 TSX 禁止直接写 hex、rgb、hsl；状态底色应使用语义 Token 或 `Badge tone`。
 
@@ -53,7 +55,7 @@ Workspace Bar（Workspace Tabs）是应用内最高层级，使用 `--erp-layer-
 | 层级 | 目录 | 责任 |
 | --- | --- | --- |
 | UI | `src/components/ui` | 无业务含义的 Button、Card、Input、Select、Dialog、Badge 等基础原语 |
-| Common | `src/components/common` | ERP 页面通用能力：PageHeader、FilterBar、DataTable、Drawer、FormSection、StatusBadge、SubmitBar、Dashboard Skeleton |
+| Common | `src/components/common` | ERP 页面通用能力：PageHeader、FilterBar、DataTable、Drawer、FormSection、StatusBadge、SubmitBar、ErpSearchInput、NotificationToaster、Dashboard Skeleton |
 | Domain | `src/components/domain` | 跨模块稳定实体能力：客户、库存、账户、利润选择和展示 |
 | Feature | `src/features/*` | 单一业务流程的页面状态、API 编排和局部组件 |
 
@@ -72,6 +74,12 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 ```
 
 列表筛选必须进入 `ErpPageToolbar`；表格、看板、表单和详情主体必须进入 `ErpPageContent`。页面可以保留业务专属的上下文、页签和抽屉，但不得再创建平行的 Page Shell。
+
+普通列表搜索统一使用 `ErpSearchInput`（统一图标定位、控件高度、焦点态、清空按钮、搜索框无障碍语义和窄屏满宽）；客户、库存、商品等带候选浮层的实体选择继续使用对应 Domain Picker。业务通知统一通过 `src/utils/notification.ts` 的 `notify` 发出，Sonner 展示宿主只允许在 `src/app/providers.tsx` 挂载一次。
+
+指标区统一使用 `MetricsRegion`：在 1199px 及以下固定为两列；指标数量为奇数时最后一张卡占满整行；1200–1439px 的六项指标改为三列、七/八项改为四列，避免窄桌面出现孤岛卡片。只有业务上确实需要突出首项时，才通过 `mobilePrimaryFullWidth` 显式声明首项全宽，不能在 Feature 内重复写页面级媒体查询。
+
+分析页的 `AnalyticsKpiRegion` 同样必须暴露指标数量：768px 以上的三项核心指标固定使用三列，640–767px 的三项指标使用单列；768–1199px 的四项指标使用两列，1200–1279px 仍使用两列，避免紧凑桌面出现“3+1”孤岛。
 
 `MainRegion` 支持 `full`、`70-30`、`60-40`、`50-50`，只规定区域权重，不规定业务内容。`BottomRegion` 没有内容时不渲染空容器。交易页使用 `ErpTransactionColumns`、`ErpTransactionPrimary` 和 `ErpTransactionSecondary`，不再借用 Dashboard 的指标区语义。
 
@@ -119,6 +127,8 @@ npm run lint:ui
 npm test
 npm run build:web
 ```
+
+有界面、Token 或响应式行为变更时，还必须执行 `npm run smoke:browser` 生成 1440/1024/390 三档浏览器截图，并执行 `npm run check:visual` 校验 `scripts/visual-baseline.json` 中登记的关键流程。基线只登记稳定的关键路径，不把整套截图作为源码资产；视觉差异需要在评审中说明原因后再更新哈希。
 
 最低视觉验收：
 

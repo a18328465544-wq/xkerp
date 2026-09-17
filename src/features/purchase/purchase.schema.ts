@@ -1,11 +1,13 @@
 import {z} from "zod";
 import type {PurchaseFormValues} from "@/src/types/purchase";
+import {customerPartnerTypes} from "@/src/types/customer";
+import {inventoryConditionValues, productCategoryValues, sourceTypeValues} from "@/src/types/core";
 import {calculatePurchaseSettlement, calculatePurchaseSummary, isPurchaseLineFilled} from "@/src/lib/purchase";
 
-const sourceValues = ["个人回收", "同行拿货", "批量采购", "客户置换", "门店自采", "门市自采"] as const;
-const partnerValues = ["customer", "vendor"] as const;
-const conditionValues = ["全新", "99新", "95新", "90新", "85新", "轻微瑕疵", "损坏"] as const;
-const categoryValues = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"] as const;
+const sourceValues = sourceTypeValues;
+const partnerValues = customerPartnerTypes;
+const conditionValues = inventoryConditionValues;
+const categoryValues = productCategoryValues;
 
 /** Draft rows may be blank so a newly opened form can show one editor row. */
 export const purchaseLineDraftSchema = z.object({

@@ -1,4 +1,5 @@
-export type StoreRole = "老板" | "店员" | "检测员" | "财务";
+export const storeRoleValues = ["老板", "店员", "检测员", "财务"] as const;
+export type StoreRole = (typeof storeRoleValues)[number];
 
 export interface PermissionSettings {
   role: StoreRole;

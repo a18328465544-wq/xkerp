@@ -11,7 +11,7 @@ import {
 import {AppError} from "../errors.ts";
 import type {CommissionMode, PurchaseCommissionRecord, PurchaseInvoice, SalesInvoice} from "../../src/types.ts";
 import {canAccessCommissionMode, projectCommissionRecord} from "../commissionRecords.ts";
-import {commissionListQueryDto, parseHttpDto} from "../httpDto.ts";
+import {commissionListQueryDto, financeProfitFlowQueryDto, financeRecordListQueryDto, invoiceListQueryDto, parseHttpDto} from "../httpDto.ts";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
 
 type VisibilityPermissions = {showCost?: boolean; showProfit?: boolean; allowedMenus: string[]};
@@ -36,24 +36,27 @@ function assertDateRange(dateStart: string, dateEnd: string, label: string) {
 
 function invoicePageFilters(req: Request) {
   const authRequest = req as AuthenticatedRequest<unknown>;
+  const query = parseHttpDto(invoiceListQueryDto, req.query);
   return {
     tenantId: authRequest.tenantId,
     storeId: authRequest.storeId,
-    page: Number(req.query.page), pageSize: Number(req.query.pageSize), keyword: String(req.query.keyword || "").trim(),
-    sourceType: String(req.query.sourceType || ""), channel: String(req.query.channel || ""), paymentStatus: String(req.query.paymentStatus || ""),
-    outboundStatus: String(req.query.outboundStatus || ""), dateStart: String(req.query.dateStart || ""), dateEnd: String(req.query.dateEnd || ""),
-    sortKey: String(req.query.sortKey || "date"), sortDirection: req.query.sortDirection === "asc" ? "asc" as const : "desc" as const,
+    page: query.page, pageSize: query.pageSize, keyword: query.keyword,
+    sourceType: query.sourceType, channel: query.channel, paymentStatus: query.paymentStatus,
+    outboundStatus: query.outboundStatus, dateStart: query.dateStart, dateEnd: query.dateEnd,
+    sortKey: query.sortKey, sortDirection: query.sortDirection,
   };
 }
 
 function paymentPageFilters(req: Request) {
   const authRequest = req as AuthenticatedRequest<unknown>;
+  const query = parseHttpDto(financeRecordListQueryDto, req.query);
   return {
     tenantId: authRequest.tenantId,
     storeId: authRequest.storeId,
-    page: Number(req.query.page), pageSize: Number(req.query.pageSize), keyword: String(req.query.keyword || "").trim(),
-    accountId: String(req.query.accountId || ""), handler: String(req.query.handler || ""), businessType: String(req.query.businessType || ""),
-    dateStart: String(req.query.startDate || req.query.dateStart || ""), dateEnd: String(req.query.endDate || req.query.dateEnd || ""),
+    page: query.page, pageSize: query.pageSize, keyword: query.keyword,
+    accountId: query.accountId, handler: query.handler, businessType: query.businessType,
+    direction: query.direction, relatedDocNo: query.relatedDocNo, customerName: query.customerName, supplierName: query.supplierName,
+    dateStart: query.startDate || query.dateStart, dateEnd: query.endDate || query.dateEnd,
   };
 }
 
@@ -144,16 +147,17 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
 
   app.get("/api/gpu_erp/finance/settlement-ledger", dependencies.requireMenu("settlement_ledger"), async (req, res, next) => {
     try {
-      const dateStart = String(req.query.dateStart || "");
-      const dateEnd = String(req.query.dateEnd || "");
+      const query = parseHttpDto(financeRecordListQueryDto, req.query);
+      const dateStart = query.dateStart;
+      const dateEnd = query.dateEnd;
       assertDateRange(dateStart, dateEnd, "账户流水");
       res.json(await querySettlementLedgerPage({
         tenantId: (req as AuthenticatedRequest<unknown>).tenantId,
         storeId: (req as AuthenticatedRequest<unknown>).storeId,
-        page: Number(req.query.page), pageSize: Number(req.query.pageSize), keyword: String(req.query.keyword || "").trim().toLocaleLowerCase(),
-        accountId: String(req.query.accountId || ""), handler: String(req.query.handler || ""), businessType: String(req.query.businessType || ""),
-        direction: String(req.query.direction || ""), relatedDocNo: String(req.query.relatedDocNo || ""), customerName: String(req.query.customerName || ""),
-        supplierName: String(req.query.supplierName || ""), dateStart, dateEnd,
+        page: query.page, pageSize: query.pageSize, keyword: query.keyword.toLocaleLowerCase(),
+        accountId: query.accountId, handler: query.handler, businessType: query.businessType,
+        direction: query.direction, relatedDocNo: query.relatedDocNo, customerName: query.customerName,
+        supplierName: query.supplierName, dateStart, dateEnd,
       }));
     } catch (error) { next(error); }
   });
@@ -176,8 +180,9 @@ export function registerPagedRecordRoutes(app: Express, dependencies: PagedRecor
 
   app.get("/api/gpu_erp/finance/profit-flows", dependencies.requireMenu("finance_reports"), async (req, res, next) => {
     try {
-      const dateStart = String(req.query.dateStart || req.query.startDate || "");
-      const dateEnd = String(req.query.dateEnd || req.query.endDate || "");
+      const query = parseHttpDto(financeProfitFlowQueryDto, req.query);
+      const dateStart = query.dateStart || query.startDate;
+      const dateEnd = query.dateEnd || query.endDate;
       assertDateRange(dateStart, dateEnd, "利润");
       res.json(await queryFinanceProfitOtherFlows({tenantId: (req as AuthenticatedRequest<unknown>).tenantId, storeId: (req as AuthenticatedRequest<unknown>).storeId, dateStart, dateEnd}));
     } catch (error) { next(error); }

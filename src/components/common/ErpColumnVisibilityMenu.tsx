@@ -1,9 +1,8 @@
-import {Popover as BasePopover} from "@base-ui/react/popover";
 import {useEffect, useState} from "react";
 import {SlidersHorizontal} from "lucide-react";
 import type {ColumnDef, VisibilityState} from "@tanstack/react-table";
 import {useRouterState} from "@tanstack/react-router";
-import {Button} from "@/src/components/ui";
+import {Button, Popover} from "@/src/components/ui";
 
 export interface ErpColumnVisibilityMenuProps<TData> {
   columns: ColumnDef<TData, unknown>[];
@@ -55,31 +54,31 @@ export function ErpColumnVisibilityMenu<TData>({
   };
 
   return (
-    <BasePopover.Root open={open} onOpenChange={setOpen}>
-      <BasePopover.Trigger
-        className="erp-focus-ring inline-flex h-[var(--erp-control-height-compact)] cursor-pointer list-none items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-text-secondary)] transition-colors hover:border-[var(--erp-color-border-strong)] hover:bg-[var(--erp-color-surface-muted)]"
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger
+        className="erp-focus-ring inline-flex h-[var(--erp-control-height-compact)] cursor-pointer list-none items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-medium text-[var(--erp-color-text-secondary)] transition-colors hover:border-[var(--erp-color-border-strong)] hover:bg-[var(--erp-color-surface-muted)]"
         aria-label={label}
       >
         <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
         {label}
         {visibleCount < options.length && (
-          <span className="ml-0.5 rounded-full bg-[var(--erp-color-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--erp-color-primary)]">
+          <span className="ml-0.5 rounded-full bg-[var(--erp-color-info-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--erp-color-primary)]">
             {visibleCount}/{options.length}
           </span>
         )}
-      </BasePopover.Trigger>
-      <BasePopover.Portal>
-        <BasePopover.Positioner className="erp-popover-layer erp-popover-positioner outline-none" sideOffset={8} align="end">
-          <BasePopover.Popup className={`erp-popover-surface ${width} max-w-[calc(100vw-1rem)] rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none`}>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner className="outline-none" sideOffset={8} align="end">
+          <Popover.Popup className={`${width} max-w-[calc(100vw-1rem)] rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none`}>
             <div className="mb-1 flex items-center justify-between border-b border-[var(--erp-color-border)] px-1 pb-1.5">
-              <span className="text-[11px] font-medium text-[var(--erp-color-text-muted)]">
+              <span className="text-xs font-medium text-[var(--erp-color-text-muted)]">
                 已显示 {visibleCount}/{options.length} 列
               </span>
               <div className="flex items-center gap-1">
-                <Button type="button" size="xs" variant="ghost" className="px-1.5 text-[11px]" onClick={handleSelectAll}>
+                <Button type="button" size="xs" variant="ghost" className="text-xs" onClick={handleSelectAll}>
                   全选
                 </Button>
-                <Button type="button" size="xs" variant="ghost" className="px-1.5 text-[11px]" onClick={handleReset}>
+                <Button type="button" size="xs" variant="ghost" className="text-xs" onClick={handleReset}>
                   重置
                 </Button>
               </div>
@@ -102,9 +101,9 @@ export function ErpColumnVisibilityMenu<TData>({
                 </label>
               ))}
             </div>
-          </BasePopover.Popup>
-        </BasePopover.Positioner>
-      </BasePopover.Portal>
-    </BasePopover.Root>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

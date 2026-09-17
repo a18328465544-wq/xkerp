@@ -1,4 +1,5 @@
 import type {PurchaseDetail} from "@/src/types/purchase";
+import {inventoryInspectionPendingStatusValues} from "@/src/types/inventory";
 
 export type PurchaseEditRisk = "green" | "yellow" | "red";
 
@@ -26,7 +27,7 @@ export function derivePurchaseEditPolicy(
   access: {canEditHistory: boolean; hasFullRecordAccess: boolean} = {canEditHistory: false, hasFullRecordAccess: false},
 ): PurchaseEditPolicy {
   const statuses = new Set(detail.inventory.map((item) => item.status));
-  const hasCompletedInventory = [...statuses].some((status) => ["已入库", "已上架", "已锁定", "已售出", "已退货", "已报废"].includes(status));
+  const hasCompletedInventory = [...statuses].some((status) => !inventoryInspectionPendingStatusValues.includes(status as typeof inventoryInspectionPendingStatusValues[number]));
   const hasProcessingInventory = detail.inspectionCount > 0 || [...statuses].some((status) => status !== "待检测");
   const inventoryStage = detail.inventory.length === 0
     ? "not-created"

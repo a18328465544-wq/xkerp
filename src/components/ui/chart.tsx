@@ -1,12 +1,5 @@
 import * as React from "react";
-import {
-  Legend as RechartsLegend,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  type DefaultLegendContentProps,
-  type LegendPayload,
-  type TooltipContentProps,
-} from "recharts";
+import {Legend as RechartsLegend, ResponsiveContainer, Tooltip as RechartsTooltip, type DefaultLegendContentProps, type LegendPayload, type TooltipContentProps} from "./recharts";
 import {cn} from "@/src/lib/cn";
 
 /**
@@ -128,16 +121,15 @@ type ChartTooltipProps = React.ComponentProps<typeof RechartsTooltip>;
  * Shared tooltip defaults keep cursor, surface and spacing consistent while
  * leaving Recharts' full composition API available to each feature.
  */
-export function ChartTooltip({cursor = {stroke: "var(--erp-color-border-strong)", strokeDasharray: "4 4"}, ...props}: ChartTooltipProps) {
+export function ChartTooltip({cursor = {stroke: "var(--erp-chart-grid)", strokeDasharray: "4 4"}, ...props}: ChartTooltipProps) {
   return <RechartsTooltip cursor={cursor} {...props} />;
 }
 
 type ChartLegendProps = React.ComponentProps<typeof RechartsLegend>;
 
 /**
- * A persistent, compact legend is the default. Features can still override
- * content when a chart needs a domain-specific legend (for example a pie
- * chart with percentages).
+ * A compact legend is opt-in. Shared chart primitives only render it when a
+ * chart has multiple meaningful series; single-series charts stay quiet.
  */
 export function ChartLegend({content, verticalAlign = "top", align = "left", height = 24, wrapperStyle, ...props}: ChartLegendProps) {
   return <RechartsLegend content={content || <ChartLegendContent className="justify-start" />} verticalAlign={verticalAlign} align={align} height={height} wrapperStyle={{paddingBottom: 4, ...wrapperStyle}} {...props} />;
@@ -189,13 +181,13 @@ export function ChartTooltipContent({
   const labelConfig = configForKey(config, labelKey || label);
   const renderedLabel = labelFormatter ? labelFormatter(label, payload) : labelConfig?.label || label;
 
-  return <div className={cn("min-w-0 max-w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden break-words rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2.5 text-xs shadow-[var(--erp-shadow-popover)] sm:min-w-36", className)} {...props}>
+  return <div className={cn("min-w-0 max-w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden break-words rounded-[var(--erp-radius-md)] border border-[var(--erp-chart-tooltip-border)] bg-[var(--erp-chart-tooltip-bg)] px-3 py-2.5 text-xs shadow-[var(--erp-shadow-popover)] sm:min-w-36", className)} {...props}>
     {!hideLabel && renderedLabel !== undefined && renderedLabel !== null ? <div className="mb-2 font-semibold text-[var(--erp-color-text)]">{renderedLabel}</div> : null}
     <div className="space-y-1.5">
       {payload.map((item, index) => {
         const dataKey = item.dataKey ?? item.name;
         const itemConfig = configForKey(config, nameKey || dataKey);
-        const color = item.color || itemConfig?.color || "var(--erp-color-primary)";
+        const color = item.color || itemConfig?.color || "var(--erp-chart-primary)";
         const itemName = itemConfig?.label || item.name || dataKey || "值";
         const formatted = formatter ? formatter(item.value, String(itemName), item, index) : displayValue(item.value);
         const value = Array.isArray(formatted) ? formatted[0] : formatted;
@@ -214,7 +206,7 @@ export function ChartTooltipContent({
             /> : null}
             <span className="truncate">{name}</span>
           </span>
-          <span className="max-w-full shrink-0 break-words text-right font-mono font-semibold text-[var(--erp-color-text)]">{value}</span>
+          <span className="max-w-full shrink-0 break-words text-right erp-data-number font-semibold text-[var(--erp-color-text)]">{value}</span>
         </div>;
       })}
     </div>
@@ -235,7 +227,7 @@ export function ChartLegendContent({payload, nameKey, hideIcon = false, classNam
     {payload.map((item: LegendPayload, index) => {
       const key = nameKey || item.dataKey || item.value || index;
       const itemConfig = configForKey(config, key);
-      const color = item.color || itemConfig?.color || "var(--erp-color-primary)";
+      const color = item.color || itemConfig?.color || "var(--erp-chart-primary)";
       const Icon = itemConfig?.icon;
       const label = itemConfig?.label || item.value || String(key);
       const indicator = itemConfig?.indicator || "dot";
@@ -264,7 +256,7 @@ export interface ChartMetaProps extends React.ComponentProps<"div"> {
 /** Compact text fallback for users who do not hover a chart. */
 export function ChartMeta({summary, updatedAt, className, ...props}: ChartMetaProps) {
   if (summary === undefined && updatedAt === undefined) return null;
-  return <div data-erp-component="chart-meta" className={cn("flex flex-wrap items-center justify-between gap-2 border-t border-[var(--erp-color-border-soft)] pt-2 text-[11px] text-[var(--erp-color-text-muted)]", className)} {...props}>
+  return <div data-erp-component="chart-meta" className={cn("flex flex-wrap items-center justify-between gap-2 border-t border-[var(--erp-color-border-soft)] pt-2 text-xs text-[var(--erp-color-text-muted)]", className)} {...props}>
     {summary !== undefined ? <span className="min-w-0 max-w-full break-words">{summary}</span> : <span />}
     {updatedAt !== undefined ? <span className="max-w-full shrink-0 truncate">更新于 {updatedAt}</span> : null}
   </div>;

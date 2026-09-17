@@ -45,7 +45,7 @@ test("ErpDateRangePicker uses the same compact height token as single-date filte
     />,
   );
   assert.match(markup, /h-\[var\(--erp-control-height-compact\)\]/);
-  assert.match(markup, /font-mono/);
+  assert.match(markup, /erp-data-number/);
   assert.match(markup, /data-erp-component="date-range-picker"/);
   assert.match(markup, /data-density="compact"/);
 });

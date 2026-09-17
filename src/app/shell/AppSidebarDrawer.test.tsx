@@ -13,6 +13,8 @@ test("sidebar flyout renders the permitted secondary navigation contract", () =>
   assert.match(source, /onMouseEnter=\{onMouseEnter\}/);
   assert.match(source, /onMouseLeave=\{onMouseLeave\}/);
   assert.match(source, /onClick=\{onNavigate\}/);
+  assert.match(source, /aria-current=\{active \? "page"/);
+  assert.match(source, /<nav id=\{\"sidebar-flyout-\" \+ module\.id\}/);
 });
 
 test("sidebar flyout keeps the V2 layer and desktop-only presentation contract", () => {
@@ -20,6 +22,8 @@ test("sidebar flyout keeps the V2 layer and desktop-only presentation contract",
   assert.match(source, /shadow-\[var\(--erp-shadow-popover\)\]/);
   assert.match(source, /document\.addEventListener\("pointerdown"/);
   assert.match(source, /event\.key === "Escape"/);
+  assert.match(source, /onClose\(true\)/);
+  assert.match(source, /onClose\(false\)/);
 });
 
 test("sidebar flyout does not repeat the parent module header", () => {

@@ -1,6 +1,7 @@
 import {
   orderPoolBlockers,
   orderPoolExceptionStages,
+  orderPoolInactiveStageValues,
   orderPoolMainStages,
   orderPoolOrderTypes,
   type CustomerOrder,
@@ -9,7 +10,7 @@ import {
   type OrderPoolQueue,
   type OrderPoolStage,
 } from "@/src/types/order-pool";
-import {storeDate} from "@/src/utils/storeTime";
+import {formatStoreDateTime, isStoreDateTimeBeforeNow, storeDate} from "@/src/utils/storeTime";
 
 export const orderPoolMainStageOptions = orderPoolMainStages.map((value) => ({value, label: value}));
 export const orderPoolStageOptions = [...orderPoolMainStages, ...orderPoolExceptionStages].map((value) => ({value, label: value}));
@@ -56,14 +57,13 @@ export function isOrderPoolException(stage: OrderPoolStage) {
 }
 
 export function isOrderPoolOverdue(order: Pick<CustomerOrder, "mainStage" | "nextFollowUpAt">, now = new Date()) {
-  if (!order.nextFollowUpAt || ["已完成", "丢单", "取消"].includes(order.mainStage)) return false;
-  const parsed = new Date(order.nextFollowUpAt.replace(" ", "T"));
-  return Number.isFinite(parsed.getTime()) && parsed.getTime() < now.getTime();
+  if (!order.nextFollowUpAt || orderPoolInactiveStageValues.includes(order.mainStage as (typeof orderPoolInactiveStageValues)[number])) return false;
+  return isStoreDateTimeBeforeNow(order.nextFollowUpAt, now);
 }
 
 export function isOrderPoolDueToday(order: Pick<CustomerOrder, "mainStage" | "nextFollowUpAt">, today = new Date()) {
-  if (!order.nextFollowUpAt || ["已完成", "丢单", "取消"].includes(order.mainStage)) return false;
-  const value = order.nextFollowUpAt.replace("T", " ").slice(0, 10);
+  if (!order.nextFollowUpAt || orderPoolInactiveStageValues.includes(order.mainStage as (typeof orderPoolInactiveStageValues)[number])) return false;
+  const value = formatStoreDateTime(order.nextFollowUpAt).slice(0, 10);
   return value === storeDate(today);
 }
 
@@ -81,6 +81,6 @@ export function orderPoolOrderTypeDefaultBlocker(type: OrderPoolOrderType) {
 }
 
 export function validateOrderPoolStageBlocker(stage: OrderPoolStage, blocker?: OrderPoolBlocker) {
-  if (stage === "已完成" || ["丢单", "取消"].includes(stage)) return undefined;
+  if (orderPoolInactiveStageValues.includes(stage as (typeof orderPoolInactiveStageValues)[number])) return undefined;
   return blocker;
 }

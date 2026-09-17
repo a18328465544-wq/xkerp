@@ -72,7 +72,40 @@ const productionFiles = files.filter((file) => !/\.test\.(ts|tsx)$/.test(file));
 const failures = [];
 const warnings = [];
 
-const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame/;
+// Recharts is an interaction-heavy optional runtime. Keep its only runtime
+// import behind the shared synchronous adapter so feature pages cannot couple
+// themselves to the vendor package. The adapter is split into a cacheable
+// vendor chunk by Vite; React.lazy is intentionally not used for Recharts
+// forwardRef primitives. Type-only imports in the shared chart contract are
+// intentionally allowed.
+for (const file of productionFiles) {
+  const fileName = relative(file);
+  if (fileName === "src/components/ui/recharts.tsx") continue;
+  const source = fs.readFileSync(file, "utf8");
+  // Keep the statement boundary in the pattern. The previous broad replace
+  // could start at an unrelated `import type` and consume a later runtime
+  // Recharts import, allowing a feature to bypass the lazy-loading contract.
+  const runtimeRechartsImport = /import\s+(?!type\b)(?:(?!;)[\s\S])*?from\s+["']recharts["']/;
+  if (runtimeRechartsImport.test(source)) {
+    fail(file, "运行时代码不得直接导入 recharts，请通过 src/components/ui/recharts.tsx 使用共享图表适配器。");
+  }
+}
+
+// Keep Sonner behind the semantic notification facade. The toaster host is
+// the only UI integration point; business code should depend on notify() so
+// changing the notification provider does not require a page-by-page rewrite.
+const allowedSonnerFiles = new Set([
+  "src/utils/notification.ts",
+  "src/components/common/NotificationToaster.tsx",
+]);
+for (const file of collectFiles(path.join(root, "src")).filter((candidate) => !/\.test\.(ts|tsx)$/.test(candidate))) {
+  const source = fs.readFileSync(file, "utf8");
+  if (/from\s+["']sonner["']/.test(source) && !allowedSonnerFiles.has(relative(file))) {
+    fail(file, "业务代码不得直接依赖 sonner，请使用 src/utils/notification.ts 导出的 notify API。");
+  }
+}
+
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame|FinanceEntryPageLayout/;
 for (const file of productionFiles.filter((candidate) => /\/pages\/[^/]+\.tsx$/.test(relative(candidate)) && relative(candidate).startsWith("src/features/"))) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
@@ -142,9 +175,23 @@ if (fs.existsSync(routerFile)) {
   if (staticFeatureImports.length) fail(routerFile, "Router 不得静态导入业务页面，必须保持路由级分包");
 
   const dynamicFeaturePageImports = routerSource.split("\n").filter((line) => line.includes("import(\"@/src/features/") && line.includes("/pages/"));
-  if (!dynamicFeaturePageImports.length) fail(routerFile, "Router 缺少按路由动态加载的业务页面");
+  const sharedPageLoaderImport = routerSource.includes('import {pageLoaders} from "./pageLoaders"');
+  const sharedPageComponentImport = routerSource.includes('import {pageComponents} from "./pageComponents"');
+  if (!dynamicFeaturePageImports.length && !sharedPageLoaderImport && !sharedPageComponentImport) fail(routerFile, "Router 缺少按路由动态加载的业务页面");
   if (dynamicFeaturePageImports.some((line) => !line.includes("lazyRouteComponent("))) {
     fail(routerFile, "业务页面动态导入必须统一使用 lazyRouteComponent");
+  }
+  if (sharedPageLoaderImport) {
+    const pageLoaderFile = path.join(root, "src/app/pageLoaders.ts");
+    const pageLoaderSource = fs.existsSync(pageLoaderFile) ? fs.readFileSync(pageLoaderFile, "utf8") : "";
+    const dynamicLoaderImports = pageLoaderSource.split("\n").filter((line) => line.includes("import(\"@/src/features/") && line.includes("/pages/"));
+    if (!dynamicLoaderImports.length) fail(pageLoaderFile, "共享 pageLoaders 缺少按页面分包的动态 import");
+  }
+  if (sharedPageComponentImport) {
+    const pageComponentFile = path.join(root, "src/app/pageComponents.ts");
+    const pageComponentSource = fs.existsSync(pageComponentFile) ? fs.readFileSync(pageComponentFile, "utf8") : "";
+    if (!pageComponentSource.includes('import {pageLoaders} from "./pageLoaders"')) fail(pageComponentFile, "共享 pageComponents 必须复用 pageLoaders");
+    if (!pageComponentSource.includes("lazyRouteComponent(")) fail(pageComponentFile, "共享 pageComponents 必须使用 lazyRouteComponent");
   }
   if (!routerSource.includes("defaultPendingComponent: RouteLoadingState")) {
     fail(routerFile, "Router 必须保留统一的路由加载状态");

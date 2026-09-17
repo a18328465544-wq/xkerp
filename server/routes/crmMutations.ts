@@ -9,6 +9,7 @@ import {compactStateMerge, stateMergeRecords, statePatchResponse, type StateMerg
 import {storeDateTime} from "../../src/utils/storeTime.ts";
 import type {CrmFollowUpRecord, CrmQuote, CrmRequirement, CustomerCard} from "../../src/types.ts";
 import type {AppState, createStoreActions} from "../store.ts";
+import {crmCustomerLeadDto, crmCustomerUpdateDto, crmFollowUpCreateDto, crmQuoteCreateDto, crmRequirementCreateDto, parseHttpDto} from "../httpDto.ts";
 
 type CrmRequest = AuthenticatedRequest<{displayName?: string; username?: string; role?: string}>;
 
@@ -83,7 +84,8 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
     "/api/gpu_erp/crm/customer/lead-preview",
     dependencies.requireMenu("crm"),
     dependencies.asyncRoute(async (req, res) => {
-      res.json({data: buildCustomerLeadPreview(req.body)});
+      const command = parseHttpDto(crmCustomerLeadDto, req.body);
+      res.json({data: buildCustomerLeadPreview(command)});
     }),
   );
 
@@ -92,7 +94,7 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
     dependencies.requireMenu("crm"),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as CrmRequest;
-      const lead = normalizeCustomerLeadInput(req.body);
+      const lead = normalizeCustomerLeadInput(parseHttpDto(crmCustomerLeadDto, req.body));
       const actor = dependencies.actorForRequest(authRequest);
       const created = dependencies.actions(req).createCustomer({...lead, owner: actor});
       // A new lead is also the first timeline event. Keep the legacy CRM
@@ -138,7 +140,7 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
     dependencies.requireMenu("crm"),
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as CrmRequest;
-      const updates = {...req.body};
+      const updates = parseHttpDto(crmCustomerUpdateDto, req.body);
       // Customer ownership is a controlled assignment. Normal CRM users cannot
       // silently transfer a customer through the API.
       if (authRequest.authUser?.role !== "老板") delete updates.owner;
@@ -160,7 +162,8 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as CrmRequest;
       const actor = dependencies.actorForRequest(authRequest);
-      const created = dependencies.actions(req).createCrmFollowUp({...req.body, handler: actor});
+      const command = parseHttpDto(crmFollowUpCreateDto, req.body);
+      const created = dependencies.actions(req).createCrmFollowUp({...command, handler: actor});
       const state = dependencies.getState();
       const stateMerge = crmFollowUpMerge(state, created);
       const customer = state.customers.find((item) => item.id === created.customerId);
@@ -179,7 +182,8 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as CrmRequest;
       const actor = dependencies.actorForRequest(authRequest);
-      const created = dependencies.actions(req).createCrmRequirement({...req.body, handler: actor});
+      const command = parseHttpDto(crmRequirementCreateDto, req.body);
+      const created = dependencies.actions(req).createCrmRequirement({...command, handler: actor});
       const state = dependencies.getState();
       const stateMerge = crmRequirementMerge(state, created);
       const customer = state.customers.find((item) => item.id === created.customerId);
@@ -198,7 +202,23 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
     dependencies.asyncRoute(async (req, res) => {
       const authRequest = req as CrmRequest;
       const actor = dependencies.actorForRequest(authRequest);
-      const created = dependencies.actions(req).createCrmQuote({...req.body, owner: actor});
+      const command = parseHttpDto(crmQuoteCreateDto, req.body);
+      const created = dependencies.actions(req).createCrmQuote({
+        quoteNo: command.quoteNo || "",
+        customerId: command.customerId,
+        validUntil: command.validUntil,
+        status: command.status,
+        items: command.items.map((item) => ({
+          id: item.id || "",
+          productId: item.productId,
+          productName: item.productName,
+          quantity: String(item.quantity || "1"),
+          unitPrice: String(item.unitPrice || "0"),
+          remarks: item.remarks,
+        })),
+        notes: command.notes,
+        owner: actor,
+      });
       const state = dependencies.getState();
       const stateMerge = crmQuoteMerge(state, created);
       const customer = state.customers.find((item) => item.id === created.customerId);

@@ -1,9 +1,10 @@
 import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {AlertCircle, ArrowRight, ArrowUpRight, Boxes, CalendarDays, ClipboardList, LogIn, PackageCheck, RefreshCw, Sparkles, TrendingUp, Warehouse, XCircle} from "lucide-react";
 import {lazy, Suspense, useEffect, useMemo, useState, type ReactNode} from "react";
-import {toast} from "sonner";
+import {notify} from "@/src/utils/notification";
 import {Link, useNavigate} from "@tanstack/react-router";
-import {Button, Card, CardContent, ChartMeta} from "@/src/components/ui";
+import {Button, Card, CardContent} from "@/src/components/ui";
+import {ChartMeta} from "@/src/components/ui/chart";
 import {BottomRegion, DashboardSection, ErpDashboardPageFrame, ErpEmptyState, ErpMetricCard, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {aiApi, queryKeys, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -14,11 +15,12 @@ import type {ReturnOrder} from "@/src/types/returns";
 import type {SalesInvoice} from "@/src/types/sales";
 import {formatCurrency} from "@/src/lib/format";
 import {storeDate, storeDateAfterDays, storeDateDiffDays, storeHour} from "@/src/utils/storeTime";
+import {inventoryInactiveStatuses} from "@/src/utils/inventoryFilters";
+import {isPersonalPurchaseSource} from "@/src/utils/purchaseSources";
 import type {AiInsightItem} from "@/src/services/api/endpoints/ai";
 
 const DashboardTrendChart = lazy(() => import("../components/DashboardTrendChart"));
 
-const inactiveStatuses = new Set(["已售出", "已退货", "已报废", "已拆卸", "已组装"]);
 const dateKey = (value?: string) => String(value || "").slice(0, 10);
 const percent = (current: number, previous: number) => previous === 0 ? null : ((current - previous) / Math.abs(previous)) * 100;
 const toneForSeverity: Record<string, "danger" | "warning" | "success" | "info"> = {high: "danger", medium: "warning", low: "success"};
@@ -59,7 +61,7 @@ export function DashboardPage() {
   if (stateQuery.error) return <DashboardState title="经营数据加载失败" description={stateQuery.error.message} icon={<AlertCircle className="h-5 w-5" />} action={<Button onClick={() => void stateQuery.refetch()}><RefreshCw className="h-4 w-4" />重试</Button>} />;
   if (stateQuery.isPending || !stateQuery.data) return <DashboardState title="正在加载经营数据" icon={<RefreshCw className="h-5 w-5 animate-spin" />} />;
 
-  return <DashboardContent session={session} state={stateQuery.data} ai={aiQuery.data?.insights || []} aiLoading={aiEnabled && aiQuery.isPending} aiError={aiQuery.error as Error | null} onAiRetry={() => { setAiEnabled(true); void aiQuery.refetch(); }} onRefresh={() => { void stateQuery.refetch(); setAiEnabled(true); void aiQuery.refetch(); toast.success("经营数据已刷新"); }} />;
+  return <DashboardContent session={session} state={stateQuery.data} ai={aiQuery.data?.insights || []} aiLoading={aiEnabled && aiQuery.isPending} aiError={aiQuery.error as Error | null} onAiRetry={() => { setAiEnabled(true); void aiQuery.refetch(); }} onRefresh={() => { void stateQuery.refetch(); setAiEnabled(true); void aiQuery.refetch(); notify.success("经营数据已刷新"); }} />;
 }
 
 function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, onRefresh}: {session: AuthSession; state: Awaited<ReturnType<typeof stateApi.initial>>; ai: AiInsightItem[]; aiLoading: boolean; aiError: Error | null; onAiRetry: () => void; onRefresh: () => void}) {
@@ -81,7 +83,7 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
     const timer = window.setTimeout(() => setTrendChartReady(true), 300);
     return () => window.clearTimeout(timer);
   }, []);
-  const risks = useMemo(() => inventory.filter((item) => !inactiveStatuses.has(item.status) && (item.gpuRisk || storeDateDiffDays(item.entryTime, today) >= 30 || item.marketPrice > 0 && item.marketPrice < item.costPrice)).sort((left, right) => riskScore(right, today) - riskScore(left, today)).slice(0, 5), [inventory, today]);
+  const risks = useMemo(() => inventory.filter((item) => !inventoryInactiveStatuses.has(item.status) && (item.gpuRisk || storeDateDiffDays(item.entryTime, today) >= 30 || item.marketPrice > 0 && item.marketPrice < item.costPrice)).sort((left, right) => riskScore(right, today) - riskScore(left, today)).slice(0, 5), [inventory, today]);
   const marketRows = useMemo(() => [...marketQuotes].sort((left, right) => Math.abs(right.changeRatio) - Math.abs(left.changeRatio)).slice(0, 5), [marketQuotes]);
   const profitChange = percent(stats.todayProfit, stats.yesterdayProfit);
   const currentHour = storeHour();
@@ -115,7 +117,7 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
       </MainRegion.Primary>
       <MainRegion.Secondary className="space-y-5">
         <DashboardSection title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-[var(--erp-color-primary)]" />AI 今日经营建议</span>} actions={<Link to="/ai-insights" className="text-xs font-semibold text-[var(--erp-color-primary)]">全部建议 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
-          {aiLoading ? <div className="space-y-3"><div className="h-16 animate-pulse rounded-lg bg-[var(--erp-color-surface-muted)]" /><div className="h-16 animate-pulse rounded-lg bg-[var(--erp-color-surface-muted)]" /></div> : aiError ? <div className="space-y-3"><p className="text-xs text-[var(--erp-color-text-secondary)]">AI 建议暂时不可用，数据仍可正常查看。</p><Button size="sm" variant="secondary" onClick={onAiRetry}>重试</Button></div> : <div className="divide-y divide-[var(--erp-color-border)]">{ai.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"><Sparkles className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><ErpStatusBadge label={item.label} tone={toneForSeverity[item.severity]} /><span className="text-[10px] text-[var(--erp-color-text-muted)]">置信度 {item.confidence}%</span></div><p className="mt-1 text-sm font-semibold leading-5 text-[var(--erp-color-text)]">{item.title}</p><p className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{item.detail}</p></div></div>)}{!ai.length && <p className="text-sm text-[var(--erp-color-text-secondary)]">当前暂无建议，AI 入口已连接现有服务。</p>}</div>}
+          {aiLoading ? <div className="space-y-3"><div className="h-16 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /><div className="h-16 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /></div> : aiError ? <div className="space-y-3"><p className="text-xs text-[var(--erp-color-text-secondary)]">AI 建议暂时不可用，数据仍可正常查看。</p><Button size="sm" variant="secondary" onClick={onAiRetry}>重试</Button></div> : <div className="divide-y divide-[var(--erp-color-border)]">{ai.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"><Sparkles className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><ErpStatusBadge label={item.label} tone={toneForSeverity[item.severity]} /><span className="text-xs text-[var(--erp-color-text-muted)]">置信度 {item.confidence}%</span></div><p className="mt-1 text-sm font-semibold leading-5 text-[var(--erp-color-text)]">{item.title}</p><p className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{item.detail}</p></div></div>)}{!ai.length && <p className="text-sm text-[var(--erp-color-text-secondary)]">当前暂无建议，AI 入口已连接现有服务。</p>}</div>}
         </DashboardSection>
         <DashboardSection title="今日行情" actions={<Link to="/quotes" className="text-xs font-semibold text-[var(--erp-color-primary)]">更多行情 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
           <div className="space-y-3">{marketRows.map((quote) => { const sellPrice = canSeeProfit ? safeQuoteSellPrice(quote) : null; return <Link to="/quotes" key={quote.id} className="grid grid-cols-[minmax(0,1fr)_84px_56px] items-center gap-2"><span className="truncate text-sm font-semibold text-[var(--erp-color-text-secondary)]">{quote.model || quote.productName}</span><span className="text-right text-sm font-semibold text-[var(--erp-color-text)]">{sellPrice === null ? "无权查看" : formatCurrency(sellPrice)}</span><span className={`text-right text-xs font-semibold ${quote.changeRatio >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{quote.changeRatio >= 0 ? "↗" : "↘"} {Math.abs(quote.changeRatio).toFixed(1)}%</span></Link>; })}{!marketRows.length && <p className="py-4 text-center text-sm text-[var(--erp-color-text-muted)]">暂无行情数据</p>}</div>
@@ -139,9 +141,9 @@ function calculateDashboardStats(inventory: CardInventory[], invoices: SalesInvo
     if (item.status === "待检测" || item.status === "检测中") pendingInbound += 1;
     if (entryDate === today) {
       todayInboundCost += Number(item.costPrice || 0);
-      if (item.sourceType === "个人回收") todayRecycleCount += 1;
+      if (isPersonalPurchaseSource(item.sourceType)) todayRecycleCount += 1;
     }
-    if (!inactiveStatuses.has(item.status)) {
+    if (!inventoryInactiveStatuses.has(item.status)) {
       activeInventoryCount += 1;
       inventoryValue += Number(item.estSellPrice || item.marketPrice || item.costPrice || 0);
       estimatedProfit += Number(item.estSellPrice || item.marketPrice || 0) - Number(item.costPrice || 0);
@@ -204,7 +206,7 @@ function safeQuoteSellPrice(quote: MarketQuote) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function SummaryCell({label, value, tone}: {label: string; value: string; tone?: "success"}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 text-sm font-bold ${tone === "success" ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>; }
+function SummaryCell({label, value, tone}: {label: string; value: string; tone?: "success"}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 text-sm font-semibold ${tone === "success" ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>; }
 
 function TrendChartPlaceholder() {
   return <div className="flex h-full items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" role="status" aria-label="趋势图加载中"><span className="text-xs text-[var(--erp-color-text-muted)]">趋势图加载中…</span></div>;
@@ -212,4 +214,4 @@ function TrendChartPlaceholder() {
 
 function QuickAction({to, label, icon}: {to: string; label: string; icon: ReactNode}) { return <Link to={to} className="flex items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] px-4 py-3 text-sm font-semibold text-[var(--erp-color-text-secondary)] transition-colors hover:border-[var(--erp-color-primary)] hover:text-[var(--erp-color-primary)]">{icon}{label}<ArrowRight className="ml-auto h-3.5 w-3.5" /></Link>; }
 
-function DashboardState({title, description, icon, action}: {title: string; description?: string; icon: ReactNode; action?: ReactNode}) { return <div className="mx-auto flex min-h-[420px] max-w-[520px] items-center justify-center"><Card className="w-full"><CardContent className="flex flex-col items-center gap-3 p-8 text-center"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]">{icon}</span><h1 className="text-lg font-bold">{title}</h1>{description && <p className="text-sm text-[var(--erp-color-text-secondary)]">{description}</p>}{action}</CardContent></Card></div>; }
+function DashboardState({title, description, icon, action}: {title: string; description?: string; icon: ReactNode; action?: ReactNode}) { return <div className="mx-auto flex min-h-[420px] max-w-[520px] items-center justify-center"><Card className="w-full"><CardContent className="flex flex-col items-center gap-3 p-8 text-center"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]">{icon}</span><h1 className="text-lg font-semibold">{title}</h1>{description && <p className="text-sm text-[var(--erp-color-text-secondary)]">{description}</p>}{action}</CardContent></Card></div>; }

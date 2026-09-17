@@ -2,14 +2,20 @@ import type {PaymentOutRecord} from "./finance-records";
 import type {PurchaseItem} from "./purchase";
 import type {SalesItem} from "./sales";
 
-export type ReturnOrderType = "销售退货" | "进货退货";
-export type ReturnOrderStatus = "待处理" | "已完成" | "已作废";
-export type ReturnSettlementMode = "原路退款" | "抵扣账款" | "直接冲销";
-export type ReturnInventoryAction =
-  | "退回待检测"
-  | "退回入库"
-  | "退回供应商"
-  | "直接报废";
+export const returnMenuValues = ["return_sales", "return_purchase", "return_orders"] as const;
+export const returnOrderTypeValues = ["销售退货", "进货退货"] as const;
+export const returnOrderStatusValues = ["待处理", "已完成", "已作废"] as const;
+export const returnSettlementModeValues = ["原路退款", "抵扣账款", "直接冲销"] as const;
+export const returnInventoryActionValues = ["退回待检测", "退回入库", "退回供应商", "直接报废"] as const;
+export const salesReturnInventoryActionValues = ["退回待检测", "直接报废"] as const;
+export const purchaseReturnInventoryActionValues = ["退回供应商", "直接报废"] as const;
+export const returnResponsibilityValues = ["客户", "供应商", "平台", "本店", "其他"] as const;
+
+export type ReturnOrderType = (typeof returnOrderTypeValues)[number];
+export type ReturnOrderStatus = (typeof returnOrderStatusValues)[number];
+export type ReturnSettlementMode = (typeof returnSettlementModeValues)[number];
+export type ReturnInventoryAction = (typeof returnInventoryActionValues)[number];
+export type ReturnResponsibility = (typeof returnResponsibilityValues)[number];
 
 export interface ReturnRefundAllocation {
   sourcePaymentRecordId: string;
@@ -83,7 +89,7 @@ export interface ReturnOrder {
   cashReleasedAmount?: number;
   handler: string;
   reason: string;
-  responsibility?: "客户" | "供应商" | "平台" | "本店" | "其他";
+  responsibility?: ReturnResponsibility;
   inventoryAction: ReturnInventoryAction;
   completedAt?: string;
   remarks?: string;
@@ -115,7 +121,7 @@ export interface ReturnCreateResponse {
   state?: unknown;
 }
 
-export type SalesReturnStatus = "待处理" | "已完成" | "已作废";
+export type SalesReturnStatus = ReturnOrderStatus;
 
 export interface SalesReturnListFilters {
   keyword: string;

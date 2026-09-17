@@ -139,6 +139,12 @@ test("inventory page query lets explicit sold filters override active-only defau
   assert.deepEqual(soldStatus.values, ["已售出"]);
 });
 
+test("inventory page query rejects statuses outside the shared backend contract", () => {
+  const query = buildInventoryPageQuery({status: "已维修"});
+  assert.match(query.where, /FALSE/);
+  assert.deepEqual(query.values, []);
+});
+
 test("inventory page sorting uses an allowlist and never interpolates arbitrary SQL", () => {
   const sorted = buildInventoryPageQuery({ sortKey: "profit", sortDirection: "asc" });
   assert.match(sorted.orderBy, /estSellPrice/);

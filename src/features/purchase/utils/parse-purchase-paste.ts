@@ -395,7 +395,7 @@ function parseRow(rawText: string, lineNumber: number, tokens: readonly string[]
   return validateRow(seed, options);
 }
 
-function headerFor(tokens: readonly string[], delimiter: PurchasePasteDelimiter): HeaderMap | undefined {
+function headerFor(tokens: readonly string[]): HeaderMap | undefined {
   // An unknown delimiter can still be a conservative whitespace header.
   // The caller only upgrades it to `space` when this map is valid.
   return detectHeader(tokens);
@@ -414,7 +414,7 @@ export function parsePurchasePaste(rawText: string, options: PurchasePasteOption
   const hasComma = lines.some((line) => line.rawText.includes(","));
   let delimiter: PurchasePasteDelimiter = hasTab ? "tab" : hasComma ? "comma" : "unknown";
   let firstTokens = delimiter === "unknown" ? lines[0]!.rawText.trim().split(/\s+/) : splitTokens(lines[0]!.rawText, delimiter);
-  let header = headerFor(firstTokens, delimiter);
+  let header = headerFor(firstTokens);
   const errors: string[] = [];
   if (delimiter === "unknown" && header && !header.error) {
     delimiter = "space";
@@ -426,7 +426,7 @@ export function parsePurchasePaste(rawText: string, options: PurchasePasteOption
     }), "unknown", false, [], errors);
   }
   firstTokens = splitTokens(lines[0]!.rawText, delimiter);
-  header = headerFor(firstTokens, delimiter);
+  header = headerFor(firstTokens);
   if (header?.error) {
     errors.push(header.error);
     return refreshBuckets([], delimiter, true, header.fields, errors);

@@ -90,6 +90,7 @@ export interface ErpDateTimePickerProps {
   invalid?: boolean;
   "aria-label"?: string;
   "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
   title?: string;
   description?: string;
   className?: string;
@@ -108,6 +109,7 @@ export function ErpDateTimePicker({
   invalid,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
   title = "选择日期和时间",
   description = "日期和时间按门店时区保存",
   className,
@@ -116,6 +118,7 @@ export function ErpDateTimePicker({
   const [draft, setDraft] = useState<DateTimeParts>(() => parseDateTime(value));
   const [timeError, setTimeError] = useState<string | null>(null);
   const hasCustomWidth = hasBaseWidthUtilityClass(className);
+  const isInvalid = invalid || ariaInvalid === true || ariaInvalid === "true";
   const controlHeight = density === "compact" ? "h-[var(--erp-control-height-compact)]" : "h-[var(--erp-control-height)]";
   const selected = draft.dateKey ? parseDateKey(draft.dateKey) || undefined : undefined;
   const minDate = min ? parseDateKey(min.slice(0, 10)) || undefined : undefined;
@@ -168,17 +171,17 @@ export function ErpDateTimePicker({
       className={cn(
         "erp-focus-ring flex min-w-0 max-w-full items-center justify-between gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-left text-sm text-[var(--erp-color-text)] transition-colors hover:border-[var(--erp-color-border-strong)] data-popup-open:border-[var(--erp-color-primary)] disabled:cursor-not-allowed disabled:bg-[var(--erp-color-surface-muted)] disabled:text-[var(--erp-color-text-muted)]",
         controlHeight,
-        (invalid || timeError) && "border-[var(--erp-color-danger)]",
+        (isInvalid || timeError) && "border-[var(--erp-color-danger)]",
         hasCustomWidth ? undefined : "w-full",
         className,
       )}
       disabled={disabled}
       aria-label={ariaLabel}
       aria-required={required}
-      aria-invalid={invalid || Boolean(timeError) || undefined}
+      aria-invalid={isInvalid || Boolean(timeError) || undefined}
       aria-describedby={ariaDescribedBy}
     >
-      <span className={cn("truncate", displayValue && "font-mono", !displayValue && "text-[var(--erp-color-text-muted)]")}>
+      <span className={cn("erp-data-number truncate", !displayValue && "text-[var(--erp-color-text-muted)]")}>
         {displayValue || placeholder}
       </span>
       <CalendarClock className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" />
@@ -186,14 +189,14 @@ export function ErpDateTimePicker({
   );
 
   return <ErpDateOverlay open={open} onOpenChange={handleOpenChange} trigger={trigger} title={title} description={description} closeLabel="关闭日期时间" panelClassName="rounded-[var(--erp-radius-lg)]">
-    <div className="grid gap-3 p-3 md:grid-cols-[auto_9rem] md:items-start">
+    <div className="grid gap-3 p-3 lg:grid-cols-[auto_9rem] lg:items-start">
       <ErpCalendar selected={selected} onSelect={handleDateSelect} minDate={minDate} maxDate={maxDate} />
       <div className="space-y-3">
-        <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">
+        <label className="block text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">
           时间
           <Input
             density="compact"
-            className="mt-1 w-full font-mono text-xs"
+            className="erp-data-number mt-1 w-full text-xs"
             type="time"
             value={draft.time}
             onChange={(event) => handleTimeChange(event.target.value)}

@@ -1,5 +1,5 @@
 import type {Express, Request, RequestHandler} from "express";
-import {parseHttpDto, paymentInCreateDto, paymentInUpdateDto, paymentOutCreateDto, paymentOutUpdateDto} from "../httpDto.ts";
+import {accountTransferCreateDto, accountTransferUpdateDto, parseHttpDto, paymentInCreateDto, paymentInUpdateDto, paymentOutCreateDto, paymentOutUpdateDto} from "../httpDto.ts";
 import {saveStateRecords} from "../db.ts";
 import {runStateCommand, type StateCommandTransactionHook} from "../stateCommand.ts";
 import {compactStateMerge, stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
@@ -213,8 +213,9 @@ export function registerFinancePaymentRoutes(app: Express, dependencies: Finance
         return;
       }
       try {
+        const command = parseHttpDto(accountTransferCreateDto, req.body);
         const {data: created, stateMerge} = await runStateCommand(
-          () => dependencies.actions(authRequest).createAccountTransfer(req.body),
+          () => dependencies.actions(authRequest).createAccountTransfer(command),
           dependencies.accountTransferMerge,
           undefined,
           dependencies.transactionHookWithIdempotency(idempotency, 201),
@@ -231,8 +232,9 @@ export function registerFinancePaymentRoutes(app: Express, dependencies: Finance
     "/api/gpu_erp/finance/account-transfer/:id",
     dependencies.requireMenu("account_transfer"),
     dependencies.asyncRoute(async (req, res) => {
+      const command = parseHttpDto(accountTransferUpdateDto, req.body);
       const {data: updated, stateMerge} = await runStateCommand(
-        () => dependencies.actions(req).updateAccountTransfer(req.params.id!, req.body),
+        () => dependencies.actions(req).updateAccountTransfer(req.params.id!, command),
         dependencies.accountTransferMerge,
       );
       res.json(okMerge(updated, stateMerge));

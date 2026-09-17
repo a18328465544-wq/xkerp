@@ -1,6 +1,7 @@
 import type {CardInventory, InspectionRecord, PurchaseInvoice, ReturnOrder, SalesInvoice} from "../src/types.ts";
 import {isInventoryLinkedToAssembly, isInventoryLinkedToPurchase, isInventoryLinkedToSales} from "../src/utils/inventoryRelations.ts";
 import {storeDateDiffDays, storeDateTime} from "../src/utils/storeTime.ts";
+import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 import type {AppState} from "./store.ts";
 
 export interface InventoryJourneyPermissions {
@@ -17,11 +18,6 @@ function amount(value: unknown): number | undefined {
   if (value === null || value === undefined || value === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function matchesDocumentRef(value: unknown, document: {id: string; invoiceNo: string}) {
-  const normalized = text(value).trim();
-  return Boolean(normalized && (normalized === document.id || normalized === document.invoiceNo));
 }
 
 function sameSn(left: unknown, right: unknown) {
@@ -199,7 +195,7 @@ export function buildInventoryJourney(
   if (journeyPurchase) events.push(omitUndefined({
     id: `purchase-${purchase!.id}`,
     type: "purchase" as const,
-    title: purchase!.sourceType === "个人回收" ? "回收入库" : "采购入库",
+    title: isPersonalPurchaseSource(purchase!.sourceType) ? "回收入库" : "采购入库",
     occurredAt: purchase!.date,
     documentNo: journeyPurchase.documentNo,
     partyName: journeyPurchase.supplierName,
