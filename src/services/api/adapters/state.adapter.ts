@@ -47,10 +47,20 @@ export interface ErpStateSnapshot {
   accountTransfers: AccountTransferRecord[];
   assemblyOperations: AssemblyOperationRecord[];
   returnOrders: ReturnOrder[];
+  /** Minimal inventory reservations returned by reference endpoints. */
+  returnReservations: ReturnInventoryReservation[];
   systemUsers: SystemUserAccount[];
   logs: AuditLog[];
   currentRole: string;
   currentUserId?: string;
+}
+
+export interface ReturnInventoryReservation {
+  id: string;
+  type: string;
+  status: string;
+  relatedDocNo: string;
+  sourceInventoryIds: string[];
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -92,6 +102,7 @@ export function adaptPublicState(response: PublicStateResponseDto): ErpStateSnap
     accountTransfers: readCollection<AccountTransferRecord>(state, "accountTransfers"),
     assemblyOperations: readCollection<AssemblyOperationRecord>(state, "assemblyOperations"),
     returnOrders: readCollection<ReturnOrder>(state, "returnOrders"),
+    returnReservations: readCollection<ReturnInventoryReservation>(state, "returnReservations"),
     systemUsers: readCollection<SystemUserAccount>(state, "systemUsers"),
     logs: readCollection<AuditLog>(state, "logs"),
     currentRole: text(state.currentRole, "未知角色"),

@@ -28,6 +28,23 @@ function collection(state: Record<string, unknown>, key: string): Record<string,
   return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
 }
 
+function purchaseReturnInventoryIds(state: Record<string, unknown>) {
+  const ids = new Set<string>();
+  collection(state, "returnOrders")
+    .filter((order) => text(order.type) === "进货退货" && text(order.status) !== "已作废")
+    .forEach((order) => {
+      const sourceInventoryId = text(order.sourceInventoryId);
+      if (sourceInventoryId) ids.add(sourceInventoryId);
+      const items = Array.isArray(order.items) ? order.items : [];
+      items.forEach((item) => {
+        if (!item || typeof item !== "object") return;
+        const itemInventoryId = text((item as Record<string, unknown>).sourceInventoryId);
+        if (itemInventoryId) ids.add(itemInventoryId);
+      });
+    });
+  return ids;
+}
+
 function categoryValue(value: unknown): ProductCategory {
   return text(value, "显卡") as ProductCategory;
 }
@@ -141,8 +158,10 @@ export function adaptInspectionWorkspace(response: {data?: unknown; meta?: unkno
   const inventory = collection(state, "inventory");
   const inspections = collection(state, "inspections");
   const inspectedInventoryIds = new Set(inspections.map((item) => text(item.inventoryId)).filter(Boolean));
+  const purchaseReturnIds = purchaseReturnInventoryIds(state);
   const candidates = inventory
     .filter((item) => {
+      if (purchaseReturnIds.has(text(item.id))) return false;
       const category = categoryValue(item.category);
       const status = text(item.status);
       if (category === "显卡") return inventoryInspectionPendingStatusValues.includes(status as (typeof inventoryInspectionPendingStatusValues)[number]);

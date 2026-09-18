@@ -10,6 +10,35 @@ const inventoryInspectionPendingStatusSql = inventoryInspectionPendingStatusValu
 const inventoryInspectionBlockedStatusSql = inventoryReturnBlockedStatusValues.map((status) => `'${status}'`).join(", ");
 const inventoryAftersalesCandidateStatusSql = inventoryAftersalesCandidateStatusValues.map((status) => `'${status}'`).join(", ");
 
+/**
+ * A purchase return is a workflow reservation as soon as the return order is
+ * created. The inventory card can remain `待检测` until the return is
+ * completed, so status alone is not enough to decide whether it belongs in
+ * the inspection pool. Keep both scalar and whole-document item references
+ * covered, while allowing an explicitly voided return to release the card.
+ */
+export const inspectionPurchaseReturnGuardSql = `NOT EXISTS (
+  SELECT 1
+  FROM gpu_return_orders r
+  WHERE r.tenant_id = i.tenant_id
+    AND r.store_id = i.store_id
+    AND r.data->>'type' = '进货退货'
+    AND COALESCE(r.data->>'status', '') <> '已作废'
+    AND (
+      r.data->>'sourceInventoryId' = i.id
+      OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(
+          CASE
+            WHEN jsonb_typeof(r.data->'items') = 'array' THEN r.data->'items'
+            ELSE '[]'::jsonb
+          END
+        ) AS return_item
+        WHERE return_item->>'sourceInventoryId' = i.id
+      )
+    )
+)`;
+
 function scoped(scope: Scope, alias = "") {
   const prefix = alias ? `${alias}.` : "";
   const values: unknown[] = [];
@@ -56,7 +85,12 @@ function redactAssembly(operation: AssemblyOperation, visibility: FinancialVisib
 export async function getInspectionWorkspace(scope: Scope, visibility: FinancialVisibility) {
   return withDatabaseTransaction(async (client) => {
     const candidateScope = scoped(scope, "i");
-    const candidates = await client.query<{id: string; data: CardInventory}>(`SELECT i.id, i.data FROM gpu_inventory i WHERE ${candidateScope.clauses.length ? `${candidateScope.clauses.join(" AND ")} AND` : ""} ((COALESCE(i.data->>'category','显卡') = '显卡' AND COALESCE(i.data->>'status','') IN (${inventoryInspectionPendingStatusSql})) OR (COALESCE(i.data->>'category','显卡') <> '显卡' AND COALESCE(i.data->>'status','') NOT IN (${inventoryInspectionBlockedStatusSql}) AND NOT EXISTS (SELECT 1 FROM gpu_inspections x WHERE x.tenant_id = i.tenant_id AND x.store_id = i.store_id AND x.data->>'inventoryId' = i.id))) ORDER BY COALESCE(i.data->>'entryTime','') ASC, i.id ASC LIMIT 300`, candidateScope.values);
+    const candidateWhere = [
+      ...candidateScope.clauses,
+      inspectionPurchaseReturnGuardSql,
+      `((COALESCE(i.data->>'category','显卡') = '显卡' AND COALESCE(i.data->>'status','') IN (${inventoryInspectionPendingStatusSql})) OR (COALESCE(i.data->>'category','显卡') <> '显卡' AND COALESCE(i.data->>'status','') NOT IN (${inventoryInspectionBlockedStatusSql}) AND NOT EXISTS (SELECT 1 FROM gpu_inspections x WHERE x.tenant_id = i.tenant_id AND x.store_id = i.store_id AND x.data->>'inventoryId' = i.id)))`,
+    ].join(" AND ");
+    const candidates = await client.query<{id: string; data: CardInventory}>(`SELECT i.id, i.data FROM gpu_inventory i WHERE ${candidateWhere} ORDER BY COALESCE(i.data->>'entryTime','') ASC, i.id ASC LIMIT 300`, candidateScope.values);
 
     const historyScope = scoped(scope, "x");
     const history = await client.query<{id: string; data: InspectionRecord}>(`SELECT x.id, x.data FROM gpu_inspections x ${historyScope.clauses.length ? `WHERE ${historyScope.clauses.join(" AND ")}` : ""} ORDER BY COALESCE(x.data->>'inspectTime','') DESC, x.id DESC LIMIT 300`, historyScope.values);
@@ -174,6 +208,18 @@ export async function getReturnReference(scope: Scope, visibility: FinancialVisi
     if (documentIds.length) {paymentScope.values.push(documentIds); paymentScope.clauses.push(`data->>'relatedDocNo' = ANY($${paymentScope.values.length}::text[])`);}
     else paymentScope.clauses.push("FALSE");
     const payments = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_payment_out_records WHERE ${paymentScope.clauses.join(" AND ")} ORDER BY COALESCE(data->>'time','') DESC, id DESC LIMIT 1000`, paymentScope.values);
+    const returnScope = scoped(scope);
+    if (documentIds.length) {
+      if (filters.type) {
+        returnScope.values.push(filters.type === "sales" ? "销售退货" : "进货退货");
+        returnScope.clauses.push(`data->>'type' = $${returnScope.values.length}`);
+      }
+      returnScope.values.push(documentIds);
+      returnScope.clauses.push(`data->>'relatedDocNo' = ANY($${returnScope.values.length}::text[])`);
+    } else {
+      returnScope.clauses.push("FALSE");
+    }
+    const returns = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_return_orders WHERE ${returnScope.clauses.join(" AND ")} ORDER BY COALESCE(data->>'date','') DESC, id DESC LIMIT 1000`, returnScope.values);
     const accountScope = scoped(scope);
     const accounts = await client.query<{id: string; data: Record<string, unknown>}>(`SELECT id, data FROM gpu_settlement_accounts ${accountScope.clauses.length ? `WHERE ${accountScope.clauses.join(" AND ")}` : ""} ORDER BY id LIMIT 100`, accountScope.values);
     const redactInvoice = (row: {id: string; data: Record<string, unknown>}) => {
@@ -185,6 +231,22 @@ export async function getReturnReference(scope: Scope, visibility: FinancialVisi
       if (!visibility.showProfit) for (const key of ["estTotalSell", "estTotalProfit", "totalProfit"]) Reflect.deleteProperty(data, key);
       return {...data, id: row.id};
     };
-    return {data: {products: products.rows.map((row) => redactProduct({...row.data, id: row.id}, visibility)), purchaseInvoices: purchases.rows.map(redactInvoice), salesInvoices: sales.rows.map(redactInvoice), inventory: inventory.map((row) => redactInventory({...row.data, id: row.id}, visibility)), paymentOutRecords: visibility.showCost ? payments.rows.map((row) => ({...row.data, id: row.id})) : [], settlementAccounts: visibility.showCost ? accounts.rows.map((row) => ({...row.data, id: row.id})) : []}, meta: {source: "database-reference", purchaseLimit: 80, salesLimit: 80, inventoryLimit: 1200, filtered: Boolean(filters.keyword || filters.selectedDocNo)}};
+    const returnReservations = returns.rows.map((row) => {
+      const nestedInventoryIds = Array.isArray(row.data.items)
+        ? row.data.items.flatMap((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).sourceInventoryId === "string" ? [(item as Record<string, unknown>).sourceInventoryId as string] : [])
+        : [];
+      const inventoryIds = Array.from(new Set([
+        typeof row.data.sourceInventoryId === "string" ? row.data.sourceInventoryId : "",
+        ...nestedInventoryIds,
+      ].filter(Boolean)));
+      return {
+        id: row.id,
+        type: typeof row.data.type === "string" ? row.data.type : filters.type === "sales" ? "销售退货" : "进货退货",
+        status: typeof row.data.status === "string" ? row.data.status : "待处理",
+        relatedDocNo: typeof row.data.relatedDocNo === "string" ? row.data.relatedDocNo : "",
+        sourceInventoryIds: inventoryIds,
+      };
+    });
+    return {data: {products: products.rows.map((row) => redactProduct({...row.data, id: row.id}, visibility)), purchaseInvoices: purchases.rows.map(redactInvoice), salesInvoices: sales.rows.map(redactInvoice), inventory: inventory.map((row) => redactInventory({...row.data, id: row.id}, visibility)), paymentOutRecords: visibility.showCost ? payments.rows.map((row) => ({...row.data, id: row.id})) : [], settlementAccounts: visibility.showCost ? accounts.rows.map((row) => ({...row.data, id: row.id})) : [], returnReservations}, meta: {source: "database-reference", purchaseLimit: 80, salesLimit: 80, inventoryLimit: 1200, returnReservationLimit: 1000, filtered: Boolean(filters.keyword || filters.selectedDocNo)}};
   });
 }

@@ -29,6 +29,23 @@ test("inspection workspace keeps only valid pending candidates and enriches hist
   assert.equal(result.history[0]?.recordVersion, 4);
 });
 
+test("inspection workspace excludes inventory reserved by a non-voided purchase return", () => {
+  const result = adaptInspectionWorkspace({data: {
+    inventory: [
+      {id: "GPU-RETURNED", category: "显卡", productName: "RTX 4090", status: "待检测"},
+      {id: "CPU-RETURNED-BATCH", category: "CPU", productName: "i9", status: "待检测"},
+      {id: "GPU-AVAILABLE", category: "显卡", productName: "RTX 4080", status: "待检测"},
+    ],
+    inspections: [],
+    returnOrders: [
+      {id: "TH-1", type: "进货退货", status: "待处理", sourceInventoryId: "GPU-RETURNED"},
+      {id: "TH-2", type: "进货退货", status: "已完成", items: [{sourceInventoryId: "CPU-RETURNED-BATCH"}]},
+      {id: "TH-3", type: "进货退货", status: "已作废", sourceInventoryId: "GPU-AVAILABLE"},
+    ],
+  }});
+  assert.deepEqual(result.candidates.map((item) => item.id), ["GPU-AVAILABLE"]);
+});
+
 test("inspection adapter normalizes legacy condition labels before form validation", () => {
   const result = adaptInspectionWorkspace({data: {
     inventory: [
