@@ -157,29 +157,40 @@ npm run build
 1. 确认用户明确授权上线，并记录本次包含的文件/功能。
 2. 执行 npm run lint、npm test、npm run build。
 3. 确认生产数据库备份可用；涉及迁移先完成迁移演练，并确认 `/api/ready` 通过。
-4. 使用 rsync 时必须排除 .env、.git、node_modules、data/、dist/、server-dist/，并强制使用 `--no-perms --no-owner --no-group`；同步后断言 `/home/ubuntu/gpu-erp` 至少为 `755`，避免 Nginx 因父目录不可遍历而返回 500。
+4. 生产机不执行 `npm ci`、Vite 或 esbuild 构建；本地/CI 构建并验证 `dist/`、`server-dist/`，只同步构建产物到服务器临时 release 目录，再校验后切换。
 
 ### 9.2 当前生产流程
 
 ```
-rsync -az --no-perms --no-owner --no-group --delete-delay \
-  --exclude node_modules --exclude .git --exclude .env \
-  --exclude '/data/***' --exclude '/dist/***' --exclude '/server-dist/***' \
-  ./ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp/
+npm run build
+RELEASE_ID="$(git rev-parse --short HEAD)-$(date +%Y%m%d-%H%M%S)"
+ssh -o BatchMode=yes ubuntu@1.14.64.60 "mkdir -p /home/ubuntu/gpu-erp-releases/${RELEASE_ID}/dist /home/ubuntu/gpu-erp-releases/${RELEASE_ID}/server-dist"
+rsync -az --no-perms --no-owner --no-group --delete \
+  dist/ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp-releases/${RELEASE_ID}/dist/
+rsync -az --no-perms --no-owner --no-group --delete \
+  server-dist/ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp-releases/${RELEASE_ID}/server-dist/
 
-ssh -o BatchMode=yes ubuntu@1.14.64.60 '
-  set -euo pipefail
-  cd /home/ubuntu/gpu-erp
-  chmod 755 /home/ubuntu/gpu-erp
-  npm ci
-  npm run build
-  npm prune --omit=dev
-  pm2 startOrRestart ecosystem.config.cjs --only gpu-erp-api --update-env
-  pm2 save
-  sleep 3
-  curl -fsS http://127.0.0.1:3001/api/health
-  curl -fsS http://127.0.0.1:3001/api/ready
-'
+ssh -o BatchMode=yes ubuntu@1.14.64.60 "RELEASE_ID=${RELEASE_ID} bash -s" <<'REMOTE'
+set -euo pipefail
+cd /home/ubuntu/gpu-erp
+RELEASE_DIR="/home/ubuntu/gpu-erp-releases/${RELEASE_ID}"
+test -s "${RELEASE_DIR}/dist/index.html"
+test -s "${RELEASE_DIR}/server-dist/index.mjs"
+BACKUP_DIR="/home/ubuntu/gpu-erp-releases/live-before-${RELEASE_ID}"
+mkdir -p "${BACKUP_DIR}"
+[ ! -e dist ] || mv dist "${BACKUP_DIR}/dist"
+[ ! -e server-dist ] || mv server-dist "${BACKUP_DIR}/server-dist"
+mv "${RELEASE_DIR}/dist" dist
+mv "${RELEASE_DIR}/server-dist" server-dist
+chmod 755 /home/ubuntu/gpu-erp
+pm2 startOrRestart ecosystem.config.cjs --only gpu-erp-api --update-env
+pm2 save
+sleep 3
+curl -fsS http://127.0.0.1:3001/api/health
+curl -fsS http://127.0.0.1:3001/api/ready
+REMOTE
+
+ssh -o BatchMode=yes ubuntu@1.14.64.60 'sudo nginx -t && sudo systemctl reload nginx'
 
 curl -fsSI https://gpu-erp.cdgpu.cn/
 curl -fsS https://gpu-erp.cdgpu.cn/api/health
@@ -189,6 +200,7 @@ curl -fsS https://gpu-erp.cdgpu.cn/api/ready
 ### 9.3 上线后
 
 - 确认 PM2 gpu-erp-api 为 online，健康接口返回 ok: true。
+- 确认首页和当前发布入口返回 200，且 `/home/ubuntu/gpu-erp/dist/index.html` 存在。
 - 检查登录、当前修改的页面、至少一个真实读接口和一个受控写操作。
 - 若失败，先停止继续操作，保留日志和健康检查结果；回滚到上一个可用构建或按数据库恢复方案处理。
 - 用户未说“上线/部署”时，只修改本地，不连接生产服务器。

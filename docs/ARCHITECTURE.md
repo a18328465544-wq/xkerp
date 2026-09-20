@@ -576,28 +576,36 @@ npm test
 npm run build
 ```
 
-常用同步排除：
+构建产物同步（生产机不执行构建）：
 
 ```bash
-rsync -az --no-perms --no-owner --no-group --delete-delay \
-  --exclude node_modules \
-  --exclude .git \
-  --exclude .env \
-  --exclude '/data/***' \
-  --exclude '/dist/***' \
-  --exclude '/server-dist/***' \
-  ./ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp/
+npm run build
+RELEASE_ID="$(git rev-parse --short HEAD)-$(date +%Y%m%d-%H%M%S)"
+ssh ubuntu@1.14.64.60 "mkdir -p /home/ubuntu/gpu-erp-releases/${RELEASE_ID}/dist /home/ubuntu/gpu-erp-releases/${RELEASE_ID}/server-dist"
+rsync -az --no-perms --no-owner --no-group --delete \
+  dist/ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp-releases/${RELEASE_ID}/dist/
+rsync -az --no-perms --no-owner --no-group --delete \
+  server-dist/ ubuntu@1.14.64.60:/home/ubuntu/gpu-erp-releases/${RELEASE_ID}/server-dist/
 ```
 
-注意：`/data/***` 必须带前导 `/`，避免误排除 `src/data/`。
-同步后必须检查 `stat -c %a /home/ubuntu/gpu-erp`，目录权限不得低于 `755`；否则 Nginx 无法读取 SPA 构建目录。
+生产机只做 release 校验、目录切换和进程重启；切换前必须确认 `dist/index.html` 与
+`server-dist/index.mjs` 非空。构建产物切换后保留上一份目录，失败时可以直接回滚，
+不触碰 `.env`、`data/` 或数据库。
 
-服务器构建与重启：
+服务器切换与重启：
 
 ```bash
 cd /home/ubuntu/gpu-erp
-npm run build
-npm prune --omit=dev
+RELEASE_DIR="/home/ubuntu/gpu-erp-releases/${RELEASE_ID}"
+test -s "${RELEASE_DIR}/dist/index.html"
+test -s "${RELEASE_DIR}/server-dist/index.mjs"
+BACKUP_DIR="/home/ubuntu/gpu-erp-releases/live-before-${RELEASE_ID}"
+mkdir -p "${BACKUP_DIR}"
+[ ! -e dist ] || mv dist "${BACKUP_DIR}/dist"
+[ ! -e server-dist ] || mv server-dist "${BACKUP_DIR}/server-dist"
+mv "${RELEASE_DIR}/dist" dist
+mv "${RELEASE_DIR}/server-dist" server-dist
+chmod 755 /home/ubuntu/gpu-erp
 pm2 startOrRestart ecosystem.config.cjs --only gpu-erp-api --update-env
 pm2 save
 sudo nginx -t
