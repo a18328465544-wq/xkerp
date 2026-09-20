@@ -1,5 +1,5 @@
 import type {ReturnOrder} from "../src/types.ts";
-import {NotFoundError} from "./errors.ts";
+import {ConflictError, NotFoundError} from "./errors.ts";
 import {createReturnFinancialHelpers} from "./storeReturnFinancials.ts";
 import {createReturnCreationHelpers} from "./storeReturnCreation.ts";
 import {createReturnCompletionHelpers} from "./storeReturnCompletion.ts";
@@ -120,6 +120,21 @@ export function createReturnOperationHelpers(dependencies: ReturnOperationsDepen
     addLog(systemActor(), "退货管理", "编辑退货单", updated.returnNo);
     return updated;
   };
+  const voidReturnOrder = (id: string) => {
+    const existing = state.returnOrders.find((item) => item.id === id || item.returnNo === id);
+    if (!existing) throw new NotFoundError(`退货单不存在: ${id}`);
+    if (existing.status === "已作废") return existing;
+    if (existing.status !== "待处理") {
+      throw new ConflictError("已完成退货不能作废，请使用删除并冲销");
+    }
+    const updated: ReturnOrder = {
+      ...existing,
+      status: "已作废",
+    };
+    state.returnOrders = state.returnOrders.map((item) => item.id === existing.id ? updated : item);
+    addLog(systemActor(), "退货管理", "作废退货单", updated.returnNo, "待处理", "已作废");
+    return updated;
+  };
   const {deleteReturnOrder} = createReturnDeletionHelpers({
     state,
     systemActor,
@@ -133,5 +148,5 @@ export function createReturnOperationHelpers(dependencies: ReturnOperationsDepen
     returnRefundPayments,
   });
 
-  return {createReturnOrder, completeReturnOrder, updateReturnOrder, deleteReturnOrder};
+  return {createReturnOrder, completeReturnOrder, updateReturnOrder, voidReturnOrder, deleteReturnOrder};
 }

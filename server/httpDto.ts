@@ -440,6 +440,10 @@ export const financeSummaryQueryDto = z.object({
   supplierName: queryText(120),
 }).strict();
 
+export const financeReconciliationQueryDto = z.object({
+  limit: queryNumber(200, 500),
+}).strict();
+
 export const financeProfitFlowQueryDto = z.object({
   dateStart: queryDate,
   dateEnd: queryDate,

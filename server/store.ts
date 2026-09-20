@@ -318,6 +318,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     createReturnOrder,
     completeReturnOrder,
     updateReturnOrder,
+    voidReturnOrder,
     deleteReturnOrder,
   } = createReturnOperationHelpers({
     state,
@@ -616,6 +617,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     createReturnOrder,
     completeReturnOrder,
     updateReturnOrder,
+    voidReturnOrder,
     deleteReturnOrder,
     createAccountTransfer,
     updateAccountTransfer,

@@ -22,6 +22,7 @@ export function toInventoryQueryParams(filters: InventoryFilters, includePaging 
     set("pageSize", filters.pageSize);
   }
   set("keyword", filters.keyword);
+  set("category", filters.category);
   set("brand", filters.brand);
   set("model", filters.model);
   set("warehouseLocation", filters.warehouseLocation);
@@ -75,6 +76,7 @@ export const inventoryApi = {
   async detail(id: string, permissions: InventoryPermissions, signal?: AbortSignal) {
     const filters: InventoryFilters = {
       keyword: id,
+      category: "",
       brand: "",
       model: "",
       warehouseLocation: "",

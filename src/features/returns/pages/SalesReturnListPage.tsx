@@ -19,7 +19,7 @@ import {returnOrderStatusValues} from "@/src/types/returns";
 import type {SalesReturnListFilters, SalesReturnListItem} from "@/src/types/returns";
 import {createSalesReturnColumns} from "../sales-return.columns";
 import {countActiveSalesReturnFilters, defaultSalesReturnListFilters, parseSalesReturnListFilters, salesReturnListFiltersToSearch} from "../sales-return.filters";
-import {csvCell, DeleteReturnDialog, ReturnEditDialog, type ReturnEditDraft} from "../components/ReturnMutationDialogs";
+import {csvCell, DeleteReturnDialog, ReturnEditDialog, VoidReturnDialog, type ReturnEditDraft} from "../components/ReturnMutationDialogs";
 
 const statusOptions = [{value: "", label: "全部处理状态"}, ...returnOrderStatusValues.map((value) => ({value, label: value}))];
 
@@ -65,6 +65,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [completeTarget, setCompleteTarget] = useState<SalesReturnListItem | null>(null);
+  const [voidTarget, setVoidTarget] = useState<SalesReturnListItem | null>(null);
   const [editTarget, setEditTarget] = useState<SalesReturnListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SalesReturnListItem | null>(null);
   const [editDraft, setEditDraft] = useState<ReturnEditDraft>({handler: "", reason: "", remarks: ""});
@@ -103,6 +104,16 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
     },
     onError: handleMutationError,
   });
+  const voidMutation = useMutation({
+    mutationFn: (item: SalesReturnListItem) => returnsApi.voidReturn(item.id),
+    onSuccess: (result) => {
+      notify.success(`${result?.returnNo || voidTarget?.returnNo || "退货单"} 已作废`);
+      setVoidTarget(null);
+      if (detailId) commitDetail(null);
+      void invalidateReturns();
+    },
+    onError: handleMutationError,
+  });
   const updateMutation = useMutation({
     mutationFn: ({item, values}: {item: SalesReturnListItem; values: ReturnEditDraft}) => returnsApi.update(item.id, values),
     onSuccess: (result) => {
@@ -134,7 +145,12 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
     setDeleteTarget(item);
     commitDetail(null);
   }, [commitDetail, deleteMutation]);
-  const columns = useMemo(() => createSalesReturnColumns({onDetail: openDetail, onComplete: (item) => {completeMutation.reset(); setCompleteTarget(item);}, onEdit: openEdit, onDelete: openDelete, canEdit, canDelete}), [canDelete, canEdit, completeMutation, openDelete, openDetail, openEdit]);
+  const openVoid = useCallback((item: SalesReturnListItem) => {
+    voidMutation.reset();
+    setVoidTarget(item);
+    commitDetail(null);
+  }, [commitDetail, voidMutation]);
+  const columns = useMemo(() => createSalesReturnColumns({onDetail: openDetail, onComplete: (item) => {completeMutation.reset(); setCompleteTarget(item);}, onVoid: openVoid, onEdit: openEdit, onDelete: openDelete, canEdit, canDelete}), [canDelete, canEdit, completeMutation, openDelete, openDetail, openEdit, openVoid]);
   const updateFilters = (patch: Partial<SalesReturnListFilters>) => commitFilters({...filters, ...patch, page: 1});
   const quickStatus: QuickStatusItemData[] = [
     {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", tone: activeFilterCount ? "info" : "neutral"},
@@ -173,10 +189,11 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
       <div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div>
     </div>
     <ErpDataTable ariaLabel="销售退货明细" columns={columns} data={items} getRowId={(item) => item.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="销售退货加载失败" emptyTitle="暂无销售退货" emptyDescription={activeFilterCount ? "当前筛选没有匹配的销售退货记录。" : "服务器当前没有销售退货记录。"} onRetry={() => void query.refetch()} onRowClick={openDetail} page={query.data?.meta.page || filters.page} pageSize={query.data?.meta.pageSize || filters.pageSize} total={query.data?.meta.total || 0} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader />
-    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-return-detail" defaultWidth={860} minWidth={680} maxWidth={1080} title={selectedDetail?.returnNo || detailId || "销售退货详情"} description="详情来自真实退货列表响应；退款、库存和冲销均由现有服务端动作处理。" footer={selectedDetail && <div className="flex flex-wrap justify-end gap-2">{canDelete && <Button type="button" size="sm" variant="danger" onClick={() => openDelete(selectedDetail)}>{selectedDetail.status === "已完成" ? "删除并冲销" : "删除"}</Button>}{canEdit && <Button type="button" size="sm" variant="secondary" onClick={() => openEdit(selectedDetail)}>编辑资料</Button>}{selectedDetail.status === "待处理" && <Button type="button" size="sm" variant="primary" onClick={() => setCompleteTarget(selectedDetail)}><CheckCircle2 className="h-4 w-4" />完成退货处理</Button>}</div>}>
+    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-return-detail" defaultWidth={860} minWidth={680} maxWidth={1080} title={selectedDetail?.returnNo || detailId || "销售退货详情"} description="详情来自真实退货列表响应；退款、库存和冲销均由现有服务端动作处理。" footer={selectedDetail && <div className="flex flex-wrap justify-end gap-2">{canDelete && selectedDetail.status === "待处理" && <Button type="button" size="sm" variant="danger" onClick={() => openVoid(selectedDetail)}>作废退货单</Button>}{canDelete && selectedDetail.status === "已完成" && <Button type="button" size="sm" variant="danger" onClick={() => openDelete(selectedDetail)}>删除并冲销</Button>}{canEdit && selectedDetail.status !== "已作废" && <Button type="button" size="sm" variant="secondary" onClick={() => openEdit(selectedDetail)}>编辑资料</Button>}{selectedDetail.status === "待处理" && <Button type="button" size="sm" variant="primary" onClick={() => setCompleteTarget(selectedDetail)}><CheckCircle2 className="h-4 w-4" />完成退货处理</Button>}</div>}>
       {selectedDetail ? <SalesReturnDetail item={selectedDetail} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位销售退货单" description="正在跨页查找完整退货明细。" /> : detailQuery.error ? <ErpEmptyState title="销售退货详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该退货单，可能已删除或当前账号无权查看。</div>}
     </ErpDetailDrawer>
     <CompleteReturnDialog target={completeTarget} pending={completeMutation.isPending} error={completeMutation.error instanceof Error ? completeMutation.error.message : ""} onClose={() => {if (!completeMutation.isPending) setCompleteTarget(null);}} onConfirm={() => {if (completeTarget) completeMutation.mutate(completeTarget);}} />
+    <VoidReturnDialog target={voidTarget} pending={voidMutation.isPending} error={voidMutation.error instanceof Error ? voidMutation.error.message : ""} onClose={() => {if (!voidMutation.isPending) setVoidTarget(null);}} onConfirm={() => {if (voidTarget) voidMutation.mutate(voidTarget);}} />
     <ReturnEditDialog target={editTarget} draft={editDraft} pending={updateMutation.isPending} error={updateMutation.error instanceof Error ? updateMutation.error.message : ""} onClose={() => {if (!updateMutation.isPending) setEditTarget(null);}} onDraftChange={setEditDraft} onConfirm={() => {if (editTarget) updateMutation.mutate({item: editTarget, values: editDraft});}} />
     <DeleteReturnDialog target={deleteTarget} pending={deleteMutation.isPending} error={deleteMutation.error instanceof Error ? deleteMutation.error.message : ""} onClose={() => {if (!deleteMutation.isPending) setDeleteTarget(null);}} onConfirm={() => {if (deleteTarget) deleteMutation.mutate(deleteTarget);}} />
     </ErpPageContent>

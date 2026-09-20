@@ -1,5 +1,5 @@
 import type {ColumnDef} from "@tanstack/react-table";
-import {Eye, ImageIcon, Trash2} from "lucide-react";
+import {CircleDollarSign, Eye, ImageIcon, Trash2} from "lucide-react";
 import {Button} from "@/src/components/ui";
 import {ErpStatusBadge} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
@@ -12,12 +12,14 @@ function statusTone(value: string) {
   return "neutral" as const;
 }
 
-export function createPurchaseListColumns({showCost, showProfit, canDelete, onDetail, onDelete}: {
+export function createPurchaseListColumns({showCost, showProfit, canDelete, canPay = false, onDetail, onDelete, onPay}: {
   showCost: boolean;
   showProfit: boolean;
   canDelete: boolean;
+  canPay?: boolean;
   onDetail: (item: PurchaseListItem) => void;
   onDelete: (item: PurchaseListItem) => void;
+  onPay?: (item: PurchaseListItem) => void;
 }): ColumnDef<PurchaseListItem, unknown>[] {
   const columns: ColumnDef<PurchaseListItem, unknown>[] = [
     {accessorKey: "invoiceNo", header: "采购单号", size: 180, cell: ({row}) => <div><p className="erp-data-number font-semibold text-[var(--erp-color-primary)]">{row.original.invoiceNo}</p>{row.original.hasImages && <p className="mt-1 flex items-center gap-1 text-xs text-[var(--erp-color-text-muted)]"><ImageIcon className="h-3 w-3" />含采购图片</p>}</div>},
@@ -33,7 +35,7 @@ export function createPurchaseListColumns({showCost, showProfit, canDelete, onDe
   columns.push(
     {accessorKey: "paymentStatus", header: "付款状态", size: 105, cell: ({getValue}) => <ErpStatusBadge label={String(getValue() || "未付款")} tone={statusTone(String(getValue() || ""))} />},
     {accessorKey: "handleBy", header: "经办人", size: 100, cell: ({getValue}) => String(getValue() || "—")},
-    {id: "actions", header: "操作", enableSorting: false, enableResizing: false, enableHiding: false, size: canDelete ? 150 : 82, cell: ({row}) => <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}><Button type="button" size="sm" variant="ghost" onClick={() => onDetail(row.original)}><Eye className="h-3.5 w-3.5" />详情</Button>{canDelete && <Button type="button" size="sm" variant="ghost" className="text-[var(--erp-color-danger)] hover:text-[var(--erp-color-danger)]" title="删除采购单" aria-label={`删除${row.original.invoiceNo}`} onClick={() => onDelete(row.original)}><Trash2 className="h-3.5 w-3.5" />删除</Button>}</div>},
+    {id: "actions", header: "操作", enableSorting: false, enableResizing: false, enableHiding: false, size: canDelete || canPay ? 220 : 82, cell: ({row}) => <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}><Button type="button" size="sm" variant="ghost" onClick={() => onDetail(row.original)}><Eye className="h-3.5 w-3.5" />详情</Button>{canPay && (row.original.unpaidAmount || 0) > 0 && onPay && <Button type="button" size="sm" variant="ghost" className="text-[var(--erp-color-warning)] hover:text-[var(--erp-color-warning)]" title={`补录 ${row.original.invoiceNo} 付款`} onClick={() => onPay(row.original)}><CircleDollarSign className="h-3.5 w-3.5" />待付款</Button>}{canDelete && <Button type="button" size="sm" variant="ghost" className="text-[var(--erp-color-danger)] hover:text-[var(--erp-color-danger)]" title="删除采购单" aria-label={`删除${row.original.invoiceNo}`} onClick={() => onDelete(row.original)}><Trash2 className="h-3.5 w-3.5" />删除</Button>}</div>},
   );
   return columns;
 }

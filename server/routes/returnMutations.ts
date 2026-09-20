@@ -168,6 +168,19 @@ export function registerReturnMutationRoutes(app: Express, dependencies: ReturnM
     }),
   );
 
+  app.post(
+    "/api/returns/:id/void",
+    dependencies.requireAnyMenu([...returnMenuIds]),
+    returnTypeGuard(dependencies),
+    dependencies.requireDeletePermission,
+    dependencies.asyncRoute(async (req, res) => {
+      const voided = dependencies.actions(req).voidReturnOrder(req.params.id!);
+      const stateMerge = returnOrderMerge(dependencies.getState(), voided);
+      await saveStateRecords(stateMergeRecords(stateMerge));
+      res.json(okMerge(voided, stateMerge));
+    }),
+  );
+
   app.patch(
     "/api/returns/:id",
     dependencies.requireAnyMenu([...returnMenuIds]),

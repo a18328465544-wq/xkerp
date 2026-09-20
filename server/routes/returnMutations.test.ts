@@ -37,6 +37,7 @@ test("return mutation routes keep type guard before destructive actions", () => 
   assert.deepEqual(registered, [
     {method: "POST", path: "/api/returns", middlewareCount: 2},
     {method: "POST", path: "/api/returns/:id/complete", middlewareCount: 3},
+    {method: "POST", path: "/api/returns/:id/void", middlewareCount: 4},
     {method: "PATCH", path: "/api/returns/:id", middlewareCount: 3},
     {method: "DELETE", path: "/api/returns/:id", middlewareCount: 4},
   ]);

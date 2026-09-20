@@ -171,6 +171,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/customers/page") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers") return ["customers"];
   if (method.toUpperCase() === "GET" && path === "/api/finance/dashboard") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/finance/reconciliation") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/account-transfers") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/settlement-ledger") return [];
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/finance/payment-ins") return [];

@@ -6,14 +6,15 @@ import {ErpSearchInput} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpDetailFact, ErpDocumentDeleteDialog, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDetailDrawer, ErpDetailFact, ErpDocumentDeleteDialog, ErpEmptyState, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpOutstandingSettlementDialog, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, salesApi} from "@/src/services/api";
-import {invalidateErpDomains} from "@/src/services/api";
+import {financeAccountsApi, financeSettlementApi, invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {AuthSession} from "@/src/services/api";
+import type {LinkedSettlementContext} from "@/src/types/finance-settlement";
 import {formatCurrency} from "@/src/lib/format";
 import {salesChannelValues, salesOutboundStatusValues, salesPaymentStatusValues} from "@/src/types/sales";
 import type {SalesListFilters, SalesListItem, SalesListLine, SalesListSortKey} from "@/src/types/sales";
@@ -84,6 +85,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
 }) {
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState<SalesListItem | null>(null);
+  const [settling, setSettling] = useState<SalesListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "sales-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectSalesList(query.data?.items || [], filters), [filters, query.data]);
   const {active} = useWorkspaceTabActivity();
@@ -96,11 +98,22 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   });
   useEffect(() => {if (detailQuery.error instanceof ApiError && detailQuery.error.isUnauthorized) onAuthExpired();}, [detailQuery.error, onAuthExpired]);
   const selectedDetail = selectedDetailFromPage || detailQuery.data || null;
+  const canReceive = createCapabilities(session).menu("payment_in") && createCapabilities(session).menu("settlement_accounts");
+  const accountsQuery = useQuery({queryKey: queryKeys.finance.accounts(), queryFn: ({signal}) => financeAccountsApi.listAll(signal), enabled: Boolean(canReceive), staleTime: 60_000, retry: false});
   const openDetail = useCallback((item: SalesListItem) => commitDetail(item.id), [commitDetail]);
   const invalidate = () => invalidateErpDomains(queryClient, ["sales", "inventory", "finance", "customers", "crm", "state"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} notify.error(error.message);};
   const deleteMutation = useMutation({mutationFn: (id: string) => salesApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); commitDetail(null); notify.success(`销售单 ${result.invoiceNo || id} 已删除`, {description: "关联待出库占用、收款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
-  const columns = useMemo(() => createSalesListColumns({showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail: openDetail, onDelete: setDeleting}), [openDetail, session.permissions.canDelete, session.permissions.showProfit]);
+  const settlementContext: LinkedSettlementContext | null = settling && settling.unpaidAmount > 0 ? {kind: "income", relatedDocType: "销售单", relatedDocNo: settling.invoiceNo || settling.id, partyName: settling.customerName, partyId: settling.customerId, partnerType: settling.customerPartnerType, defaultAccountId: settling.settlementAccountId, remainingAmount: settling.unpaidAmount} : null;
+  const settlementMutation = useMutation({
+    mutationFn: (values: Parameters<typeof financeSettlementApi.createIncome>[0]) => {
+      if (!settlementContext) throw new Error("销售单未处于待收款状态");
+      return financeSettlementApi.createIncome(values, settlementContext, session.user.displayName);
+    },
+    onSuccess: async () => {setSettling(null); notify.success("销售收款已补录", {description: "已关联原销售单，并同步更新收款状态与往来余额。"}); await invalidateErpDomains(queryClient, ["sales", "finance", "customers", "vendors", "state"]);},
+    onError: handleMutationError,
+  });
+  const columns = useMemo(() => createSalesListColumns({showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, canReceive, onDetail: openDetail, onDelete: setDeleting, onReceive: setSettling}), [canReceive, openDetail, session.permissions.canDelete, session.permissions.showProfit]);
   const activeFilterCount = countActiveSalesListFilters(filters);
   const canCreate = createCapabilities(session).menu("sales_add");
   const sorting: SortingState = [{id: filters.sortKey, desc: filters.sortDirection === "desc"}];
@@ -149,9 +162,10 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
       </ErpPageContent>
     </ErpListPageFrame>
 
-    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-detail" defaultWidth={900} minWidth={720} maxWidth={1160} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要" footer={selectedDetail ? <div className="flex flex-wrap items-center justify-end gap-2">{session.permissions.canEditHistory && <Link to="/sales/$salesId/edit" params={{salesId: selectedDetail.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑销售单</Link>}<Link to="/sales/$salesId" params={{salesId: selectedDetail.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-text)]">打开详情</Link>{session.permissions.canDelete ? selectedDetail.outboundStatus === "已出库" ? <span className="text-xs text-[var(--erp-color-text-muted)]">已出库销售单不能删除</span> : <Button type="button" size="sm" variant="danger" onClick={() => setDeleting(selectedDetail)}>删除销售单</Button> : null}</div> : undefined}>
+    <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-detail" defaultWidth={900} minWidth={720} maxWidth={1160} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要" footer={selectedDetail ? <div className="flex flex-wrap items-center justify-end gap-2">{canReceive && selectedDetail.unpaidAmount > 0 && <Button type="button" size="sm" variant="secondary" onClick={() => {settlementMutation.reset(); setSettling(selectedDetail);}}><CircleDollarSign className="h-4 w-4" />待收款 {formatCurrency(selectedDetail.unpaidAmount)}</Button>}{session.permissions.canEditHistory && <Link to="/sales/$salesId/edit" params={{salesId: selectedDetail.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑销售单</Link>}<Link to="/sales/$salesId" params={{salesId: selectedDetail.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-text)]">打开详情</Link>{session.permissions.canDelete ? selectedDetail.outboundStatus === "已出库" ? <span className="text-xs text-[var(--erp-color-text-muted)]">已出库销售单不能删除</span> : <Button type="button" size="sm" variant="danger" onClick={() => setDeleting(selectedDetail)}>删除销售单</Button> : null}</div> : undefined}>
       {selectedDetail ? <SalesSnapshotDetail item={selectedDetail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位销售单" description="正在跨页查找完整销售单明细。" /> : detailQuery.error ? <ErpEmptyState title="销售单详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该销售单，可能已删除或当前账号无权查看。</div>}
     </ErpDetailDrawer>
+    <ErpOutstandingSettlementDialog open={Boolean(settling)} context={settlementContext} accounts={accountsQuery.data?.accounts || []} accountsLoading={accountsQuery.isPending || accountsQuery.isFetching} error={settlementMutation.error instanceof Error ? settlementMutation.error.message : accountsQuery.error instanceof Error ? accountsQuery.error.message : undefined} pending={settlementMutation.isPending} onOpenChange={(open) => {if (!open) {setSettling(null); settlementMutation.reset();}}} onSubmit={(values) => settlementMutation.mutateAsync(values).then(() => undefined)} />
     <ErpDocumentDeleteDialog
       open={Boolean(deleting)}
       title="删除销售单"

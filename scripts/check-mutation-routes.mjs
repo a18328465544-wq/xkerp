@@ -26,7 +26,7 @@ const protectedPatterns = [
   /^\/api\/inspections(?:\/[^/]+)?$/,
   /^\/api\/assembly-operations(?:\/[^/]+)?$/,
   /^\/api\/sales-invoices(?:\/[^/]+)?(?:\/outbound)?$/,
-  /^\/api\/returns(?:\/[^/]+)?(?:\/complete)?$/,
+  /^\/api\/returns(?:\/[^/]+)?(?:\/(?:complete|void))?$/,
   /^\/api\/aftersales(?:\/[^/]+)?$/,
   /^\/api\/market-quotes(?:\/(?:import|[^/]+))?$/,
   /^\/api\/inventory\/(?:batch|import|scan-flow)$/,

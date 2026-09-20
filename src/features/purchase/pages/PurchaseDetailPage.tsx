@@ -5,14 +5,16 @@ import {useEffect, useMemo, useState} from "react";
 import {notify} from "@/src/utils/notification";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent, CardHeader} from "@/src/components/ui";
-import {ErpDataTable, ErpDetailPageFrame, ErpDocumentDeleteDialog, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
-import {ApiError, apiDownload, purchaseApi, queryKeys} from "@/src/services/api";
+import {ErpDataTable, ErpDetailPageFrame, ErpDocumentDeleteDialog, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpOutstandingSettlementDialog, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {ApiError, apiDownload, financeAccountsApi, financeSettlementApi, invalidateErpDomains, purchaseApi, queryKeys} from "@/src/services/api";
 import {useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
+import type {LinkedSettlementContext} from "@/src/types/finance-settlement";
 import type {PurchaseDetail, PurchaseDetailInventoryItem} from "@/src/types/purchase";
 import type {PurchaseInvoice} from "@/src/types/purchase";
 import {formatCurrency} from "@/src/lib/format";
 import {derivePurchaseEditPolicy, purchaseInventoryStageLabel} from "../purchase.edit-policy";
+import {isPersonalPurchaseSource} from "@/src/utils/purchaseSources";
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : "请求失败，请稍后重试";
@@ -107,7 +109,7 @@ function InventoryFacts({items}: {items: readonly PurchaseDetailInventoryItem[]}
   </div>;
 }
 
-function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete}: {detail: PurchaseDetail; session: AuthSession; onRefresh: () => void; refreshing: boolean; onDelete: () => void}) {
+function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete, settlementContext, onSettle}: {detail: PurchaseDetail; session: AuthSession; onRefresh: () => void; refreshing: boolean; onDelete: () => void; settlementContext: LinkedSettlementContext | null; onSettle: () => void}) {
   const invoice = detail.invoice;
   const showCost = session.permissions.showCost;
   const showProfit = session.permissions.showProfit;
@@ -128,7 +130,7 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete
   ];
 
   return <ErpDetailPageFrame className="max-w-[1600px] space-y-5 pb-12">
-    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label={editLabel} tone={policy.mode === "full" ? "success" : policy.mode === "limited" ? "warning" : "neutral"} /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link>{canEdit && <Link to="/purchase/$purchaseId/edit" params={{purchaseId: invoice.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑采购单</Link>}{session.permissions.canDelete && <Button type="button" size="sm" variant="danger" onClick={onDelete} disabled={Boolean(deleteBlockedReason)} title={deleteBlockedReason}><Trash2 className="h-4 w-4" />{deleteBlockedReason ? "不可删除" : "删除采购单"}</Button>}<Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
+    <ErpPageHeader title={invoice.invoiceNo || invoice.id} subtitle={<span className="flex flex-wrap items-center gap-2"><span>采购单详情 · {invoice.date}</span><ErpStatusBadge label={editLabel} tone={policy.mode === "full" ? "success" : policy.mode === "limited" ? "warning" : "neutral"} /></span>} quickStatus={quickStatus} actions={<><Link to="/purchase" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回采购单据</Link>{settlementContext && <Button type="button" size="sm" variant="secondary" onClick={onSettle}><CircleDollarSign className="h-4 w-4" />待付款 {formatCurrency(invoice.unpaidAmount)}</Button>}{canEdit && <Link to="/purchase/$purchaseId/edit" params={{purchaseId: invoice.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑采购单</Link>}{session.permissions.canDelete && <Button type="button" size="sm" variant="danger" onClick={onDelete} disabled={Boolean(deleteBlockedReason)} title={deleteBlockedReason}><Trash2 className="h-4 w-4" />{deleteBlockedReason ? "不可删除" : "删除采购单"}</Button>}<Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新</Button></>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -177,7 +179,9 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
   const navigate = useNavigate();
   const {session, status, error: authError, refresh, logout} = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [settlementOpen, setSettlementOpen] = useState(false);
   const allowed = hasMenu(session, "purchase_list");
+  const canPay = hasMenu(session, "payment_out") && hasMenu(session, "settlement_accounts");
   const detailPermissions = useMemo(() => ({
     showCost: Boolean(session?.permissions.showCost),
     showProfit: Boolean(session?.permissions.showProfit),
@@ -185,6 +189,21 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
     canReadPurchaseReturns: hasMenu(session, "return_purchase") || hasMenu(session, "return_orders"),
   }), [session]);
   const detailQuery = useQuery({queryKey: queryKeys.purchase.detail(purchaseId), queryFn: ({signal}) => purchaseApi.detail(purchaseId, detailPermissions, signal), enabled: Boolean(session && allowed), retry: false});
+  const accountQuery = useQuery({queryKey: queryKeys.finance.accounts(), queryFn: ({signal}) => financeAccountsApi.listAll(signal), enabled: Boolean(session && canPay), staleTime: 60_000, retry: false});
+  const settlementMutation = useMutation({
+    mutationFn: (values: Parameters<typeof financeSettlementApi.createExpense>[0]) => {
+      if (!detailQuery.data) throw new Error("采购单详情尚未加载完成");
+      const invoice = detailQuery.data.invoice;
+      const context: LinkedSettlementContext = {kind: "expense", relatedDocType: "采购单", relatedDocNo: invoice.invoiceNo || invoice.id, partyName: invoice.supplierName, partyId: invoice.sourcePartnerId, partnerType: invoice.sourcePartnerType || (isPersonalPurchaseSource(invoice.sourceType) ? "customer" : "vendor"), defaultAccountId: invoice.settlementAccountId, remainingAmount: invoice.unpaidAmount};
+      return financeSettlementApi.createExpense(values, context, session?.user.displayName || "当前操作人");
+    },
+    onSuccess: async () => {
+      notify.success("采购付款已补录", {description: "已关联原采购单，并同步更新付款状态与往来余额。"});
+      setSettlementOpen(false);
+      await Promise.all([detailQuery.refetch(), invalidateErpDomains(queryClient, ["purchase", "finance", "vendors", "customers", "state"])]);
+    },
+    onError: (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) logout(); else notify.error(error.message);},
+  });
   const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleteOpen(false); notify.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await Promise.all([
     queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
     queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
@@ -201,8 +220,11 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
   if (detailQuery.isPending) return <Card><ErpLoadingState title="正在加载采购详情" description="正在匹配单据、库存、检测和可见付款事实。" /></Card>;
   if (detailQuery.error) return <ErpPageError title="采购详情加载失败" description={errorText(detailQuery.error)} onRetry={() => void detailQuery.refetch()} />;
   if (!detailQuery.data) return <ErpPageError title="采购单不存在" description="该单据可能已删除，或当前账号无权查看。" />;
+  const invoice = detailQuery.data.invoice;
+  const settlementContext: LinkedSettlementContext | null = canPay && invoice.unpaidAmount > 0 ? {kind: "expense", relatedDocType: "采购单", relatedDocNo: invoice.invoiceNo || invoice.id, partyName: invoice.supplierName, partyId: invoice.sourcePartnerId, partnerType: invoice.sourcePartnerType || (isPersonalPurchaseSource(invoice.sourceType) ? "customer" : "vendor"), defaultAccountId: invoice.settlementAccountId, remainingAmount: invoice.unpaidAmount} : null;
   return <>
-    <PurchaseDetailContent detail={detailQuery.data} session={session} refreshing={detailQuery.isFetching} onDelete={() => {deleteMutation.reset(); setDeleteOpen(true);}} onRefresh={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()})]);}} />
+    <PurchaseDetailContent detail={detailQuery.data} session={session} settlementContext={settlementContext} onSettle={() => {settlementMutation.reset(); setSettlementOpen(true);}} refreshing={detailQuery.isFetching} onDelete={() => {deleteMutation.reset(); setDeleteOpen(true);}} onRefresh={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()})]);}} />
+    <ErpOutstandingSettlementDialog open={settlementOpen} context={settlementContext} accounts={accountQuery.data?.accounts || []} accountsLoading={accountQuery.isPending || accountQuery.isFetching} error={settlementMutation.error instanceof Error ? settlementMutation.error.message : accountQuery.error instanceof Error ? accountQuery.error.message : undefined} pending={settlementMutation.isPending} onOpenChange={(open) => {setSettlementOpen(open); if (!open) settlementMutation.reset();}} onSubmit={(values) => settlementMutation.mutateAsync(values).then(() => undefined)} />
     <ErpDocumentDeleteDialog
       open={deleteOpen}
       title="删除采购单"

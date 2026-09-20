@@ -342,7 +342,7 @@ export function createReturnCompletionHelpers(dependencies: ReturnCompletionDepe
       : item);
 
     const returnedSellPrice = Number(returnedItem.sellPrice || refundAmount);
-    const returnedProfit = Number(returnedItem.profit || returnedSellPrice - returnedItem.costPrice);
+    const returnedProfit = Number(returnedItem.profit ?? (returnedSellPrice - returnedItem.costPrice));
     if (invoice.customerPartnerType === "vendor" && invoice.customerId) {
       state.vendors = state.vendors.map((vendor) => vendor.id === invoice.customerId
         ? {

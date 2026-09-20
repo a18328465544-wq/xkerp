@@ -81,9 +81,15 @@ export interface PurchaseListItem {
   id: string;
   invoiceNo: string;
   date: string;
+  sourcePartnerId?: string;
+  sourcePartnerType?: PurchasePartnerType;
   supplierName: string;
   sourceType: SourceType;
   totalCount: number;
+  /** Exposed so list actions can open the same outstanding-payment flow as detail. */
+  paidAmount?: number;
+  unpaidAmount?: number;
+  settlementAccountId?: string;
   totalCost?: number;
   estTotalSell?: number;
   estTotalProfit?: number;

@@ -1,8 +1,9 @@
-import type {InventoryFilters, InventorySortDirection, InventorySortKey, InventoryRisk} from "@/src/types/inventory";
+import {inventoryCategories, type InventoryFilters, type InventorySortDirection, type InventorySortKey, type InventoryRisk} from "@/src/types/inventory";
 import {readDateRange} from "@/src/lib/dateRangePickerUtils";
 
 export const defaultInventoryFilters: InventoryFilters = {
   keyword: "",
+  category: "",
   brand: "",
   model: "",
   warehouseLocation: "",
@@ -43,6 +44,7 @@ export function parseInventoryFilters(search: string): InventoryFilters {
   return {
     ...defaultInventoryFilters,
     keyword: text(params, "keyword"),
+    category: inventoryCategories.includes(text(params, "category") as (typeof inventoryCategories)[number]) ? text(params, "category") as InventoryFilters["category"] : "",
     brand: text(params, "brand"),
     model: text(params, "model"),
     warehouseLocation: text(params, "warehouseLocation"),
@@ -71,6 +73,7 @@ export function inventoryFiltersToSearch(filters: InventoryFilters) {
     params.set(key, String(value));
   };
   set("keyword", filters.keyword);
+  set("category", filters.category);
   set("brand", filters.brand);
   set("model", filters.model);
   set("warehouseLocation", filters.warehouseLocation);

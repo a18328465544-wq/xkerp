@@ -1,11 +1,14 @@
-import {cardStatusValues} from "./core";
-import type {CardStatus} from "./core";
+import {cardStatusValues, productCategoryValues} from "./core";
+import type {CardStatus, ProductCategory} from "./core";
 
 /** Compatibility alias for inventory-owned consumers; values come from core. */
 export const inventoryStatuses = cardStatusValues;
 export type InventoryStatusValue = CardStatus;
 export {inventoryConditionValues} from "./core";
 export type {InventoryCondition} from "./core";
+/** Canonical product categories used by inventory filters and table grouping. */
+export const inventoryCategories = productCategoryValues;
+export type InventoryCategory = ProductCategory;
 /** Status groups used by cross-feature inventory queries and calculations. */
 export const inventorySellableStatusValues = ["已入库", "已上架"] as const;
 export const inventoryStockStatusValues = ["已入库", "已上架", "待检测", "检测中"] as const;
@@ -34,6 +37,7 @@ export type InventorySortDirection = "asc" | "desc";
 
 export interface InventoryFilters {
   keyword: string;
+  category: InventoryCategory | "";
   brand: string;
   model: string;
   warehouseLocation: string;

@@ -78,6 +78,11 @@ export const returnsApi = {
     return adaptSalesReturnComplete(response.data);
   },
 
+  async voidReturn(id: string, signal?: AbortSignal) {
+    const response = await apiRequest<SalesReturnMutationResponseDto>(`/api/returns/${encodeURIComponent(id)}/void`, {method: "POST", signal});
+    return adaptSalesReturnMutation(response);
+  },
+
   async update(id: string, values: Pick<SalesReturnListItem, "handler" | "reason" | "remarks">, signal?: AbortSignal) {
     const response = await apiRequest<SalesReturnMutationResponseDto>(`/api/returns/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(toSalesReturnUpdateRequestDto(values)), signal});
     return adaptSalesReturnMutation(response);

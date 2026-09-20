@@ -1,6 +1,7 @@
 import type {ColumnDef} from "@tanstack/react-table";
 import {Eye, ImageOff} from "lucide-react";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
+import {ErpStatusBadge} from "@/src/components/common";
 import {Button} from "@/src/components/ui";
 import {formatCurrency} from "@/src/lib/format";
 import type {InventoryListItem} from "@/src/types/inventory";
@@ -12,6 +13,7 @@ export function createInventoryColumns({showCost, showProfit, onDetail}: {showCo
   const columns: ColumnDef<InventoryListItem, unknown>[] = [
     {id: "select", header: "", enableSorting: false, enableResizing: false, size: 44, enableHiding: false, cell: ({row}) => <input type="checkbox" aria-label={`选择 ${row.original.serialNumber}`} checked={row.getIsSelected()} disabled={!row.getCanSelect()} onChange={row.getToggleSelectedHandler()} className="h-4 w-4 rounded border-[var(--erp-color-border-strong)] text-[var(--erp-color-primary)]" />},
     {id: "product", header: "商品", accessorFn: (row) => row.productName, size: 240, cell: ({row}) => <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--erp-radius-sm)] bg-[var(--erp-color-surface-muted)]">{row.original.imageUrl ? <img src={row.original.imageUrl} alt="" className="h-full w-full object-contain" /> : <ImageOff className="h-4 w-4 text-[var(--erp-color-text-muted)]" />}</div><div className="min-w-0"><p className="truncate font-semibold text-[var(--erp-color-text)]">{row.original.productName}</p><p className="truncate erp-data-number text-xs text-[var(--erp-color-primary)]">{row.original.serialNumber}</p>{row.original.inventoryStatus === "已售出" && <p className="truncate text-xs text-[var(--erp-color-text-secondary)]">卖给：{row.original.buyerName || "未记录买方"}</p>}</div></div>},
+    {id: "category", accessorKey: "category", header: "分类", size: 100, enableSorting: false, cell: ({row}) => <ErpStatusBadge label={row.original.category} tone="info" />},
     {accessorKey: "brand", header: "品牌", size: 100, enableSorting: false},
     {accessorKey: "model", header: "型号", size: 160, enableSorting: false, cell: ({row}) => <div><p className="font-semibold">{row.original.model}</p>{row.original.vram && <p className="text-xs text-[var(--erp-color-text-muted)]">{row.original.vram}</p>}</div>},
     {accessorKey: "condition", header: "成色", size: 86, enableSorting: false},

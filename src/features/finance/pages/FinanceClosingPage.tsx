@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldAlert,
+  ShieldCheck,
   WalletCards,
 } from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
@@ -42,6 +43,7 @@ import {
 import {
   ApiError,
   financeClosingApi,
+  financeReconciliationApi,
   queryKeys,
   type AuthSession,
 } from "@/src/services/api";
@@ -72,6 +74,8 @@ import {
   FinanceMetricCard,
 } from "../components/FinanceMetricCard";
 import {financeNetTone} from "../finance-chart.utils";
+import {FinanceReconciliationPanel} from "../components/FinanceReconciliationPanel";
+import type {FinanceReconciliationReport} from "@/src/types/finance-reconciliation";
 
 function useFinanceClosingUrlState() {
   const state = useUrlSearchState<FinanceClosingFilters>({
@@ -94,6 +98,12 @@ export function FinanceClosingPage() {
     queryFn: ({ signal }) => financeClosingApi.list(30, signal),
     enabled: Boolean(session && allowed),
     placeholderData: keepPreviousData,
+    retry: false,
+  });
+  const reconciliationQuery = useQuery<FinanceReconciliationReport, Error>({
+    queryKey: queryKeys.finance.reconciliation(200),
+    queryFn: ({signal}) => financeReconciliationApi.inspect(200, signal),
+    enabled: false,
     retry: false,
   });
   useEffect(() => {
@@ -129,6 +139,7 @@ export function FinanceClosingPage() {
       filters={filters}
       onFiltersChange={commit}
       query={closingQuery}
+      reconciliationQuery={reconciliationQuery}
     />
   );
 }
@@ -138,11 +149,13 @@ function FinanceClosingContent({
   filters,
   onFiltersChange,
   query,
+  reconciliationQuery,
 }: {
   session: AuthSession;
   filters: FinanceClosingFilters;
   onFiltersChange: (filters: FinanceClosingFilters) => void;
   query: UseQueryResult<FinanceDailyClosingCollection, Error>;
+  reconciliationQuery: UseQueryResult<FinanceReconciliationReport, Error>;
 }) {
   const navigate = useNavigate();
   const capabilities = createCapabilities(session);
@@ -231,6 +244,19 @@ function FinanceClosingContent({
           ? "warning"
           : "neutral",
     },
+    {
+      icon: <ShieldCheck className="h-4 w-4" />,
+      label: "账务体检",
+      value: reconciliationQuery.data
+        ? reconciliationQuery.data.summary.errorCount > 0
+          ? `${reconciliationQuery.data.summary.errorCount} 项异常`
+          : reconciliationQuery.data.summary.warningCount > 0
+            ? `${reconciliationQuery.data.summary.warningCount} 项提示`
+            : "正常"
+        : "未检查",
+      description: reconciliationQuery.data ? "账户、收付款与退货链检查结果" : "手动检查当前账务一致性",
+      tone: reconciliationQuery.data?.summary.errorCount ? "danger" : reconciliationQuery.data?.summary.warningCount ? "warning" : "info",
+    },
   ];
   return (
     <ErpFinancePageFrame>
@@ -269,6 +295,16 @@ function FinanceClosingContent({
               onClick={() => void navigate({ to: "/finance" })}
             >
               财务总览
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={reconciliationQuery.isFetching}
+              onClick={() => void reconciliationQuery.refetch()}
+            >
+              <ShieldCheck className={`h-4 w-4 ${reconciliationQuery.isFetching ? "animate-pulse" : ""}`} />
+              检查账务
             </Button>
           </>
         }
@@ -413,6 +449,7 @@ function FinanceClosingContent({
           />
         </MainRegion.Primary>
         <MainRegion.Secondary>
+          {reconciliationQuery.data ? <FinanceReconciliationPanel report={reconciliationQuery.data} /> : null}
           <DashboardSection
             title="最新异常"
             description={

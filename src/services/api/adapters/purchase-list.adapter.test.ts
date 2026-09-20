@@ -9,9 +9,13 @@ function response() {
       invoiceNo: "JH-20260808-001",
       date: "2026-08-08",
       sourceType: "同行拿货",
+      sourcePartnerId: "GY-1",
+      sourcePartnerType: "vendor",
       supplierName: "测试供应商",
       isPaid: false,
       paidAmount: 500,
+      unpaidAmount: 1500,
+      settlementAccountId: "ACC-1",
       paymentStatus: "部分付款",
       handleBy: "采购员",
       images: ["/api/media/assets/IMG-1"],
@@ -38,6 +42,10 @@ test("purchase list adapter projects snapshot records into list domain items", (
   assert.equal(result.items[0]?.hasImages, true);
   assert.equal(result.items[0]?.totalCost, 2000);
   assert.equal(result.items[0]?.estTotalProfit, 600);
+  assert.equal(result.items[0]?.unpaidAmount, 1500);
+  assert.equal(result.items[0]?.sourcePartnerId, "GY-1");
+  assert.equal(result.items[0]?.sourcePartnerType, "vendor");
+  assert.equal(result.items[0]?.settlementAccountId, "ACC-1");
 });
 
 test("purchase list adapter removes cost and profit fields before feature consumption", () => {

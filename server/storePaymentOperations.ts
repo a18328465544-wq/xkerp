@@ -16,13 +16,11 @@ import {
   type SettlementMovementInput,
   type SettlementState,
 } from "./storeSettlementLedger.ts";
+import {NON_OPERATING_EXPENSE_TYPES, NON_OPERATING_INCOME_TYPES} from "./financeAccountingBoundaries.ts";
 import {hasUniqueLegacyName, matchesCustomerByIdOrLegacyName} from "./storePartnerIdentity.ts";
-import {financeExpenseCategories} from "../src/types/finance-expense.ts";
-import {financeIncomeCategories} from "../src/types/finance-income.ts";
 import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 
-export const NON_OPERATING_INCOME_TYPES = new Set<string>(financeIncomeCategories);
-export const NON_OPERATING_EXPENSE_TYPES = new Set<string>(financeExpenseCategories);
+export {NON_OPERATING_EXPENSE_TYPES, NON_OPERATING_INCOME_TYPES} from "./financeAccountingBoundaries.ts";
 
 export type PaymentOperationsState = SettlementState & {
   returnOrders: ReturnOrder[];
@@ -99,6 +97,9 @@ export function createPaymentOperationHelpers(dependencies: PaymentOperationsDep
     }
     const account = findSettlementAccount(payment.accountId);
     const linkedSalesInvoice = findSalesInvoiceByDocNo(payment.relatedDocNo);
+    if (!options?.skipInvoiceUpdate && linkedSalesInvoice && paymentAmount > Math.max(0, linkedSalesInvoice.unpaidAmount) + 0.009) {
+      throw new ConflictError(`销售单 ${linkedSalesInvoice.invoiceNo || linkedSalesInvoice.id} 当前未收 ${Math.max(0, linkedSalesInvoice.unpaidAmount)} 元，不能补录 ${paymentAmount} 元`);
+    }
     const effectiveCustomerId = payment.customerId || linkedSalesInvoice?.customerId;
     const effectiveCustomerPartnerType = payment.customerPartnerType || linkedSalesInvoice?.customerPartnerType || "customer";
     const baseRecord: PaymentInRecord = {
@@ -280,6 +281,9 @@ export function createPaymentOperationHelpers(dependencies: PaymentOperationsDep
     }
     const account = findSettlementAccount(payment.accountId);
     const linkedPurchaseInvoice = findPurchaseInvoiceByDocNo(payment.relatedDocNo);
+    if (!options?.skipInvoiceUpdate && linkedPurchaseInvoice && paymentAmount > Math.max(0, linkedPurchaseInvoice.unpaidAmount) + 0.009) {
+      throw new ConflictError(`采购单 ${linkedPurchaseInvoice.invoiceNo || linkedPurchaseInvoice.id} 当前未付 ${Math.max(0, linkedPurchaseInvoice.unpaidAmount)} 元，不能补录 ${paymentAmount} 元`);
+    }
     const effectiveSupplierId = payment.supplierId || purchaseInvoiceVendorId(linkedPurchaseInvoice);
     const effectiveCustomerId = payment.customerId || (linkedPurchaseInvoice && isPersonalPurchaseSource(linkedPurchaseInvoice.sourceType) ? linkedPurchaseInvoice.sourcePartnerId : undefined);
     const baseRecord: PaymentOutRecord = {...payment, amount: paymentAmount, supplierId: effectiveSupplierId, customerId: effectiveCustomerId, id: genId("FK"), accountName: account.name, time: payment.time || nowStamp()};

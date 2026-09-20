@@ -64,6 +64,7 @@ export {financeAccountTypes} from "./finance-account";
 export type {FinanceAccountCollection, FinanceAccountCreateValues, FinanceAccountFilters, FinanceAccountItem, FinanceAccountLedgerItem, FinanceAccountLedgerPage, FinanceAccountReconcileValues, FinanceAccountSummaryView, FinanceAccountType} from "./finance-account";
 export {financeLedgerBusinessTypes, financeLedgerDirections, financePurchasePaymentBusinessTypeValues} from "./finance-ledger";
 export type {FinanceLedgerDirection, FinanceLedgerFilters, FinanceLedgerItem, FinanceLedgerPage, FinanceLedgerPageSummary} from "./finance-ledger";
+export type {FinanceReconciliationDomain, FinanceReconciliationIssue, FinanceReconciliationReport, FinanceReconciliationSeverity} from "./finance-reconciliation";
 export {financeIncomeCategories, financeIncomePaymentMethods} from "./finance-income";
 export type {FinanceIncomeCategory, FinanceIncomeCollection, FinanceIncomeFilters, FinanceIncomeFormValues, FinanceIncomeItem} from "./finance-income";
 export {financeExpenseCategories, financeExpensePaymentMethods, legacyFinanceExpenseCategories} from "./finance-expense";

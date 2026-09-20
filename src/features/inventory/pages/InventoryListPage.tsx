@@ -11,7 +11,7 @@ import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
 import {Link, useNavigate} from "@tanstack/react-router";
-import {inventoryJourneyFinancialMenuValues, inventoryStatuses, type InventoryFilters, type InventoryJourney, type InventoryJourneyEvent, type InventoryListItem, type InventoryModelSummary, type InventorySummary, type InventoryView} from "@/src/types/inventory";
+import {inventoryCategories, inventoryJourneyFinancialMenuValues, inventoryStatuses, type InventoryFilters, type InventoryJourney, type InventoryJourneyEvent, type InventoryListItem, type InventoryModelSummary, type InventorySummary, type InventoryView} from "@/src/types/inventory";
 import {createInventoryColumns} from "@/src/features/inventory/inventory.columns";
 import {createInventoryModelColumns} from "@/src/features/inventory/inventory.model-columns";
 import {InventoryJourneyPanel} from "@/src/features/inventory/components/InventoryJourneyPanel";
@@ -234,6 +234,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
       <ErpPageToolbar>
       <ErpFilterBar actions={<Button variant="ghost" size="sm" onClick={() => commitFilters(defaultInventoryFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
         <ErpSearchInput className="min-w-[240px] flex-1" value={filters.keyword} onChange={(event) => updateFilter({keyword: event.target.value})} placeholder="搜索 SN、商品、品牌、型号" aria-label="搜索库存" />
+        <FilterSelect value={filters.category} onChange={(value) => updateFilter({category: value as InventoryFilters["category"]})} label="商品分类" placeholder="全部分类" options={[...inventoryCategories]} />
         <FilterInput value={filters.brand} onChange={(value) => updateFilter({brand: value})} label="品牌" placeholder="品牌" />
         <FilterInput value={filters.warehouseLocation} onChange={(value) => updateFilter({warehouseLocation: value})} label="仓库 / 库位" placeholder="仓位" />
         <FilterSelect value={filters.status} onChange={(value) => updateFilter({status: value, inspectionStatus: ""})} label="库存 / 历史状态" placeholder="当前库存" options={[...inventoryStatuses]} />
@@ -330,5 +331,5 @@ function FilterSelect({value, onChange, label, placeholder, options = [], option
 function FilterInput({value, onChange, label, placeholder}: {value: string; onChange: (value: string) => void; label: string; placeholder: string}) { return <label className="relative min-w-0"><span className="sr-only">{label}</span><Input className="w-full lg:w-28" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={label} /></label>; }
 
 function countActiveInventoryFilters(filters: InventoryFilters) {
-  return [filters.keyword, filters.brand, filters.model, filters.warehouseLocation, filters.condition, filters.inspectionStatus, filters.status, filters.entryStart, filters.entryEnd, filters.risk, filters.minStorageDays, filters.maxStorageDays, filters.minProfitMargin].filter(Boolean).length + (filters.includeSold ? 1 : 0);
+  return [filters.keyword, filters.category, filters.brand, filters.model, filters.warehouseLocation, filters.condition, filters.inspectionStatus, filters.status, filters.entryStart, filters.entryEnd, filters.risk, filters.minStorageDays, filters.maxStorageDays, filters.minProfitMargin].filter(Boolean).length + (filters.includeSold ? 1 : 0);
 }

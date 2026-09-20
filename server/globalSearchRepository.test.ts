@@ -18,5 +18,6 @@ test("global search query is tenant/store scoped, bounded, and returns no sensit
   assert.match(query.sql, /tenant_id = \$1/);
   assert.match(query.sql, /store_id = \$2/);
   assert.match(query.sql, /LIMIT \$4/);
+  assert.doesNotMatch(query.sql, /updated_at/);
   assert.doesNotMatch(query.sql, /totalCost|totalProfit|costPrice|sellPrice|paidAmount/);
 });

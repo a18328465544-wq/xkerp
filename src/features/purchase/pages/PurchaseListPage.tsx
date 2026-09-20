@@ -6,14 +6,16 @@ import {ErpSearchInput} from "@/src/components/common";
 import {useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
-import {ApiError, purchaseApi, queryKeys} from "@/src/services/api";
+import {ErpColumnVisibilityMenu, ErpDataTable, ErpDateRangePicker, ErpDocumentDeleteDialog, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpOutstandingSettlementDialog, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {ApiError, financeAccountsApi, financeSettlementApi, purchaseApi, queryKeys} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import type {AuthSession} from "@/src/services/api";
+import type {LinkedSettlementContext} from "@/src/types/finance-settlement";
 import {formatCurrency} from "@/src/lib/format";
+import {isPersonalPurchaseSource} from "@/src/utils/purchaseSources";
 import {purchasePaymentStatusValues} from "@/src/types/purchase";
 import type {PurchaseListFilters, PurchaseListItem, PurchaseListSortKey} from "@/src/types/purchase";
 import {sourceTypeValues} from "@/src/types/core";
@@ -82,12 +84,24 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
 }) {
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState<PurchaseListItem | null>(null);
+  const [settling, setSettling] = useState<PurchaseListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "purchase-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectPurchaseList(query.data?.items || [], filters), [filters, query.data]);
   const invalidate = () => invalidateErpDomains(queryClient, ["purchase", "inventory", "finance", "customers", "crm", "state"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} notify.error(error.message);};
   const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); notify.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
-  const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, onDetail, onDelete: setDeleting}), [onDetail, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
+  const canPay = createCapabilities(session).menu("payment_out") && createCapabilities(session).menu("settlement_accounts");
+  const accountsQuery = useQuery({queryKey: queryKeys.finance.accounts(), queryFn: ({signal}) => financeAccountsApi.listAll(signal), enabled: Boolean(canPay), staleTime: 60_000, retry: false});
+  const settlementContext: LinkedSettlementContext | null = settling && (settling.unpaidAmount || 0) > 0 ? {kind: "expense", relatedDocType: "采购单", relatedDocNo: settling.invoiceNo || settling.id, partyName: settling.supplierName, partyId: settling.sourcePartnerId, partnerType: settling.sourcePartnerType || (isPersonalPurchaseSource(settling.sourceType) ? "customer" : "vendor"), defaultAccountId: settling.settlementAccountId, remainingAmount: settling.unpaidAmount || 0} : null;
+  const settlementMutation = useMutation({
+    mutationFn: (values: Parameters<typeof financeSettlementApi.createExpense>[0]) => {
+      if (!settlementContext) throw new Error("采购单未处于待付款状态");
+      return financeSettlementApi.createExpense(values, settlementContext, session.user.displayName);
+    },
+    onSuccess: async () => {setSettling(null); notify.success("采购付款已补录", {description: "已关联原采购单，并同步更新付款状态与往来余额。"}); await invalidateErpDomains(queryClient, ["purchase", "finance", "vendors", "customers", "state"]);},
+    onError: handleMutationError,
+  });
+  const columns = useMemo(() => createPurchaseListColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canDelete: session.permissions.canDelete, canPay, onDetail, onDelete: setDeleting, onPay: setSettling}), [canPay, onDetail, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
   const activeFilterCount = countActivePurchaseListFilters(filters);
   const canCreate = createCapabilities(session).menu("purchase_add");
   const sorting: SortingState = [{id: filters.sortKey, desc: filters.sortDirection === "desc"}];
@@ -175,6 +189,7 @@ function PurchaseListContent({filters, commitFilters, session, query, onDetail, 
       onOpenChange={(open) => {if (!open) {setDeleting(null); deleteMutation.reset();}}}
       onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}}
     />
+    <ErpOutstandingSettlementDialog open={Boolean(settling)} context={settlementContext} accounts={accountsQuery.data?.accounts || []} accountsLoading={accountsQuery.isPending || accountsQuery.isFetching} error={settlementMutation.error instanceof Error ? settlementMutation.error.message : accountsQuery.error instanceof Error ? accountsQuery.error.message : undefined} pending={settlementMutation.isPending} onOpenChange={(open) => {if (!open) {setSettling(null); settlementMutation.reset();}}} onSubmit={(values) => settlementMutation.mutateAsync(values).then(() => undefined)} />
     </ErpPageContent>
   </ErpListPageFrame>;
 }

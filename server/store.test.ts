@@ -3314,6 +3314,112 @@ test("multiple purchase return creates one atomic order for only the selected in
   assert.equal(state.inventory.find((item) => item.id === retainedCard.id)?.status, retainedCard.status);
 });
 
+test("pending return can be voided without changing inventory or finance, while completed return cannot be voided", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const invoice = actions.createPurchaseInvoice(buildPurchase([buildPurchaseItem(product, "VOID-RETURN-SN", 3000)]));
+  const card = state.inventory.find((item) => item.purchaseInvoiceNo === invoice.invoiceNo);
+  assert.ok(card);
+
+  const order = actions.createReturnOrder({
+    type: "进货退货",
+    relatedDocType: "采购单",
+    relatedDocNo: invoice.invoiceNo,
+    sourceInventoryId: card.id,
+    amount: 3000,
+    settlementMode: "抵扣账款",
+    handler: "采购测试",
+    reason: "作废流程测试",
+    inventoryAction: "退回供应商",
+  });
+  const originalCardStatus = card.status;
+  const voided = actions.voidReturnOrder(order.id);
+
+  assert.equal(voided.status, "已作废");
+  assert.equal(state.inventory.find((item) => item.id === card.id)?.status, originalCardStatus);
+  assert.equal(state.purchaseInvoices.find((item) => item.id === invoice.id)?.items.length, 1);
+  assert.equal(state.paymentInRecords.some((item) => item.relatedDocNo === order.returnNo), false);
+  assert.equal(actions.voidReturnOrder(order.id).status, "已作废");
+
+  const retry = actions.createReturnOrder({
+    type: "进货退货",
+    relatedDocType: "采购单",
+    relatedDocNo: invoice.invoiceNo,
+    sourceInventoryId: card.id,
+    amount: 3000,
+    settlementMode: "抵扣账款",
+    handler: "采购测试",
+    reason: "重新提交退货",
+    inventoryAction: "退回供应商",
+  });
+  const completed = actions.completeReturnOrder(retry.id);
+  assert.equal(completed.status, "已完成");
+  assert.throws(() => actions.voidReturnOrder(retry.id), /已完成退货不能作废/);
+});
+
+test("sales return preserves an explicit zero profit instead of falling back to sell price minus cost", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const card = state.inventory.find((item) => item.status === "已入库" || item.status === "已上架");
+  const account = state.settlementAccounts.find((item) => item.enabled);
+  const customer = actions.createCustomer({name: "零利润退货测试客户", contact: "13900008888"});
+  assert.ok(card);
+  assert.ok(account);
+
+  const sellPrice = card.costPrice + 1000;
+  const invoice = actions.createSalesInvoice({
+    date: "2026-06-12",
+    customerId: customer.id,
+    customerName: customer.name,
+    contact: customer.phone,
+    channel: "到店",
+    paymentMethod: "微信",
+    settlementAccountId: account.id,
+    settlementAccountName: account.name,
+    isPaid: true,
+    paidAmount: sellPrice,
+    unpaidAmount: 0,
+    needInvoice: false,
+    freeShipping: true,
+    aftersalesTerms: "店保三个月",
+    handleBy: "销售测试",
+    paymentHandler: "销售测试",
+    items: [{
+      inventoryId: card.id,
+      productId: card.productId,
+      productName: card.productName,
+      sn: card.sn,
+      condition: card.condition,
+      costPrice: card.costPrice,
+      sellPrice,
+      profit: sellPrice - card.costPrice,
+      aftersalesTerms: "店保三个月",
+    }],
+  });
+  actions.confirmSalesOutbound(invoice.id, {handler: "仓库测试", codes: [card.sn]});
+  state.salesInvoices = state.salesInvoices.map((item) => item.id === invoice.id
+    ? {...item, items: item.items.map((line) => ({...line, profit: 0})), totalProfit: 0}
+    : item);
+  state.customers = state.customers.map((item) => item.id === customer.id ? {...item, totalProfit: 2000} : item);
+
+  const order = actions.createReturnOrder({
+    type: "销售退货",
+    relatedDocType: "销售单",
+    relatedDocNo: invoice.invoiceNo,
+    sourceInventoryId: card.id,
+    amount: sellPrice,
+    settlementMode: "原路退款",
+    settlementAccountId: account.id,
+    handler: "销售测试",
+    reason: "零利润退货测试",
+    inventoryAction: "退回待检测",
+  });
+  actions.completeReturnOrder(order.id);
+
+  assert.equal(state.customers.find((item) => item.id === customer.id)?.totalProfit, 2000);
+});
+
 test("sales return creates a return order, refunds customer, and sends stock back to pending inspection", () => {
   const state = createInitialState();
   const actions = createStoreActions(state);

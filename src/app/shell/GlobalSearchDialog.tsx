@@ -24,8 +24,9 @@ import {matchesKeyword} from "@/src/utils/search";
 import {useAuth} from "@/src/app/auth";
 import {cn} from "@/src/lib/cn";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
-import {globalSearchApi, queryKeys} from "@/src/services/api";
+import {globalSearchApi, queryKeys, stateApi} from "@/src/services/api";
 import type {GlobalSearchResult, GlobalSearchResultKind} from "@/src/types/global-search";
+import {searchGlobalSnapshot} from "@/src/utils/globalSearchSnapshot";
 
 type DisplayResult = {
   id: string;
@@ -90,6 +91,13 @@ export function GlobalSearchDialog({open, onOpenChange}: {open: boolean; onOpenC
     retry: false,
     staleTime: 30_000,
   });
+  const snapshotQuery = useQuery({
+    queryKey: queryKeys.state.initial(),
+    queryFn: ({signal}) => stateApi.initial(signal),
+    enabled: open && Boolean(session) && Boolean(debouncedSearchText.trim()),
+    retry: false,
+    staleTime: 30_000,
+  });
   const moduleResults = useMemo<DisplayResult[]>(() => {
     const query = searchText.trim();
     return allowedItems
@@ -104,14 +112,20 @@ export function GlobalSearchDialog({open, onOpenChange}: {open: boolean; onOpenC
         section: "module" as const,
       }));
   }, [allowedItems, searchText]);
-  const businessResults = useMemo<DisplayResult[]>(() => (businessQuery.data?.items || []).map((item) => ({
+  const localFallbackResults = useMemo(
+    () => businessQuery.isError
+      ? searchGlobalSnapshot(snapshotQuery.data, debouncedSearchText, session?.permissions.allowedMenus || [])
+      : [],
+    [businessQuery.isError, debouncedSearchText, session?.permissions.allowedMenus, snapshotQuery.data],
+  );
+  const businessResults = useMemo<DisplayResult[]>(() => (businessQuery.isError ? localFallbackResults : businessQuery.data?.items || []).map((item) => ({
     id: `business:${item.kind}:${item.id}`,
     title: item.title,
     subtitle: [businessKindLabels[item.kind], item.subtitle].filter(Boolean).join(" · "),
     path: businessResultPath(item),
     icon: businessKindIcons[item.kind],
     section: "business" as const,
-  })), [businessQuery.data?.items]);
+  })), [businessQuery.data?.items, businessQuery.isError, localFallbackResults]);
   const results = useMemo(() => [...moduleResults, ...businessResults], [businessResults, moduleResults]);
   const hasQuery = Boolean(searchText.trim());
   const isSearching = hasQuery && (businessQuery.isPending || businessQuery.isFetching);
@@ -218,10 +232,11 @@ export function GlobalSearchDialog({open, onOpenChange}: {open: boolean; onOpenC
                 })
               ) : (
                 <p className="px-3 py-8 text-center text-sm text-[var(--erp-color-text-muted)]" role="status">
-                  {isSearching ? "正在搜索业务数据…" : hasQuery && businessQuery.isError ? "业务数据搜索暂时不可用，请稍后重试" : hasQuery ? "没有匹配的已授权页面或业务数据" : "没有匹配的已授权工作区"}
+                  {isSearching ? "正在搜索业务数据…" : hasQuery && businessQuery.isError ? "业务数据搜索暂时不可用，暂未找到已加载的匹配数据" : hasQuery ? "没有匹配的已授权页面或业务数据" : "没有匹配的已授权工作区"}
                 </p>
               )}
               {isSearching && results.length > 0 && <p className="px-3 pb-2 pt-1 text-center text-xs text-[var(--erp-color-text-muted)]">正在补充业务数据…</p>}
+              {businessQuery.isError && localFallbackResults.length > 0 && <p className="px-3 pb-2 pt-1 text-center text-xs text-[var(--erp-color-text-muted)]">业务搜索服务暂时不可用，已显示当前已加载的数据</p>}
             </div>
             {results.length > 0 && (
               <div className="flex items-center justify-between border-t border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]/60 px-4 py-2 text-xs text-[var(--erp-color-text-muted)]">

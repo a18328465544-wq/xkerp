@@ -353,6 +353,12 @@ function requireApiAuthentication(req: express.Request, res: express.Response, n
     const authRequest = req as AuthRequest;
     const tenantId = authRequest.tenantId || authRequest.authUser?.tenantId || DEFAULT_TENANT_ID;
     const storeId = authRequest.storeId || authRequest.authUser?.storeId || DEFAULT_STORE_ID;
+    // Keep the resolved scope on the request as well as in AsyncLocalStorage.
+    // Read-model routes (including global search) consume these fields directly;
+    // older sessions may not have scope columns populated yet, so leaving them
+    // undefined would make an otherwise valid authenticated search return no data.
+    authRequest.tenantId = tenantId;
+    authRequest.storeId = storeId;
     void assertCommercialTenantActive(tenantId)
       .then(() => loadState(tenantId, storeId))
       .then((tenantState) => runTenantContext({ tenantId, storeId, state: tenantState }, next))
@@ -960,6 +966,8 @@ registerFinancePaymentRoutes(app, {
 
 registerFinanceReadModelRoutes(app, {
   requireMenu,
+  asyncRoute,
+  loadState,
   getStoreDate: storeDate,
   startOfMonth: (date) => startOfMonth(date),
   addDateDays: (date, days) => addDateDays(date, days),

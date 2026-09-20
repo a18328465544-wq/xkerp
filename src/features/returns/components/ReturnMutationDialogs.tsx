@@ -23,6 +23,10 @@ export function DeleteReturnDialog({target, pending, error, onClose, onConfirm}:
   return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title={completed ? "删除并冲销退货" : "删除退货单"} description={completed ? "服务端会同步恢复原单据、库存状态、账户流水和供应商账款；只有服务端校验通过才会执行。" : "删除待处理退货单后不会触发退款或库存完成动作，操作仍由服务端校验。"} documentName={target ? `${target.returnNo} · ${target.productName} · ${formatCurrency(target.amount)} · ${target.settlementMode || "未记录结算方式"} · ${target.inventoryAction || "未记录库存处理"}` : undefined} confirmLabel={completed ? "确认删除并冲销" : "确认删除"} pendingLabel={completed ? "冲销中…" : "删除中…"} confirmVariant="danger" pending={pending} error={error} onConfirm={onConfirm} />;
 }
 
+export function VoidReturnDialog({target, pending, error, onClose, onConfirm}: {target: SalesReturnListItem | null; pending: boolean; error: string; onClose: () => void; onConfirm: () => void}) {
+  return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="作废退货单" description="作废只关闭待处理退货单并释放退货预占，不会退款、改变库存或冲减原单；作废后不能再完成处理。" documentName={target ? `${target.returnNo} · ${target.productName} · ${formatCurrency(target.amount)}` : undefined} confirmLabel="确认作废" pendingLabel="作废中…" confirmVariant="danger" pending={pending} error={error} onConfirm={onConfirm} />;
+}
+
 export function csvCell(value: string | number) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;

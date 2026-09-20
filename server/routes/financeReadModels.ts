@@ -3,12 +3,15 @@ import {getFinanceDashboard, listAccountTransfers} from "../financeDashboardRepo
 import {getCustomerFundsSnapshot} from "../customerFundsRepository.ts";
 import type {AppState} from "../store.ts";
 import type {createStoreActions} from "../store.ts";
-import {customerFundsQueryDto, financeAccountListQueryDto, financeDashboardQueryDto, financeSummaryQueryDto, financeTransferListQueryDto, parseHttpDto} from "../httpDto.ts";
+import {customerFundsQueryDto, financeAccountListQueryDto, financeDashboardQueryDto, financeReconciliationQueryDto, financeSummaryQueryDto, financeTransferListQueryDto, parseHttpDto} from "../httpDto.ts";
+import {inspectFinanceReconciliation} from "../financeReconciliation.ts";
 
 type FinanceRequest = Request & { authUser?: unknown; tenantId?: string; storeId?: string };
 
 type FinanceReadModelDependencies = {
   requireMenu: (menuId: string) => RequestHandler;
+  asyncRoute: (handler: RequestHandler) => RequestHandler;
+  loadState: (tenantId?: string, storeId?: string) => Promise<AppState>;
   getStoreDate: () => string;
   startOfMonth: (date: string) => string;
   addDateDays: (date: string, days: number) => string;
@@ -66,6 +69,15 @@ export function registerFinanceReadModelRoutes(app: Express, dependencies: Finan
       res.json(await getFinanceDashboard({tenantId: req.tenantId, storeId: req.storeId}, {startDate, endDate}, {showCost: permissions.showCost === true, showProfit: permissions.showProfit === true, canViewAccounts: hasMenu(permissions, "settlement_accounts"), canViewSettlementLedger: hasMenu(permissions, "settlement_ledger"), canViewReturns: hasMenu(permissions, "return_orders") || hasMenu(permissions, "return_sales") || hasMenu(permissions, "return_purchase")}));
     } catch (error) {next(error);}
   });
+
+  app.get("/api/finance/reconciliation", dependencies.requireMenu("finance"), dependencies.asyncRoute(async (req: FinanceRequest, res) => {
+    const query = parseHttpDto(financeReconciliationQueryDto, req.query);
+    // This endpoint intentionally loads the complete tenant/store snapshot. It is an
+    // operator-triggered audit, not a dashboard polling path, and partial state would
+    // make a clean result indistinguishable from "history not loaded".
+    const current = await dependencies.loadState(req.tenantId, req.storeId);
+    res.json(dependencies.ok(inspectFinanceReconciliation(current, {limit: query.limit})));
+  }));
 
   app.get("/api/gpu_erp/finance/account-transfers", dependencies.requireMenu("account_transfer"), async (req: FinanceRequest, res, next) => {
     try {

@@ -1,4 +1,5 @@
 import {withDatabaseTransaction} from "./db.ts";
+import type {PoolClient} from "pg";
 import type {GlobalSearchResult, GlobalSearchResultKind} from "../src/types/global-search.ts";
 
 type SearchBranch = {
@@ -10,6 +11,10 @@ type SearchBranch = {
   reference: string;
   route: string;
   searchable: string;
+  priority: number;
+};
+
+type GlobalSearchRow = GlobalSearchResult & {
   priority: number;
 };
 
@@ -175,13 +180,12 @@ function branchSql(branch: SearchBranch, branchLimit: number) {
     NULLIF(${branch.subtitle}, '')::text AS subtitle,
     ${branch.route}::text AS route,
     COALESCE(NULLIF(${branch.reference}, ''), id)::text AS reference,
-    ${branch.priority}::int AS priority,
-    updated_at
+    ${branch.priority}::int AS priority
   FROM ${branch.table}
   WHERE tenant_id = $1
     AND store_id = $2
     AND (POSITION(LOWER($3) IN LOWER(${branch.searchable})) > 0${itemClause})
-  ORDER BY updated_at DESC NULLS LAST, id ASC
+  ORDER BY id ASC
   LIMIT ${branchLimit}`;
 }
 
@@ -195,10 +199,54 @@ export function buildGlobalSearchQuery(filters: GlobalSearchFilters) {
   const sql = union
     ? `SELECT kind, id, title, subtitle, route, reference
        FROM (${union}) AS global_search
-       ORDER BY priority ASC, updated_at DESC NULLS LAST, id ASC
+       ORDER BY priority ASC, id ASC
        LIMIT $4`
     : "SELECT NULL::text AS kind, NULL::text AS id, NULL::text AS title, NULL::text AS subtitle, NULL::text AS route, NULL::text AS reference WHERE FALSE";
   return {sql, values, limit, branchLimit, kinds: selectedBranches.map((branch) => branch.kind)};
+}
+
+function toGlobalSearchItems(rows: GlobalSearchRow[]) {
+  return rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    ...(row.subtitle ? {subtitle: row.subtitle} : {}),
+    route: row.route,
+    reference: row.reference,
+  }));
+}
+
+async function runDegradedSearch(
+  client: PoolClient,
+  filters: GlobalSearchFilters,
+  limit: number,
+  branchLimit: number,
+) {
+  const query = filters.query.trim().slice(0, 120);
+  const values = [filters.tenantId?.trim() || "", filters.storeId?.trim() || "", query];
+  const selectedBranches = branches.filter((branch) => hasAnyMenu(filters.allowedMenus, branch.menus));
+  const rows: GlobalSearchRow[] = [];
+
+  for (const [index, branch] of selectedBranches.entries()) {
+    const savepoint = `global_search_branch_${index}`;
+    await client.query(`SAVEPOINT ${savepoint}`);
+    try {
+      const result = await client.query<GlobalSearchRow>(branchSql(branch, branchLimit), values);
+      rows.push(...result.rows);
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    } catch (error) {
+      // A single optional collection must not make the global search unusable
+      // when a production database is mid-migration. The savepoint keeps the
+      // transaction valid while the failing branch is skipped and logged.
+      await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+      console.warn("[global-search] skipped unavailable branch", {kind: branch.kind, table: branch.table, code});
+    }
+  }
+
+  rows.sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
+  return toGlobalSearchItems(rows.slice(0, limit));
 }
 
 export async function searchGlobalEntities(filters: GlobalSearchFilters) {
@@ -210,15 +258,21 @@ export async function searchGlobalEntities(filters: GlobalSearchFilters) {
 
   return withDatabaseTransaction(async (client) => {
     const statement = buildGlobalSearchQuery({...filters, query, limit});
-    const result = await client.query<GlobalSearchResult>(statement.sql, statement.values);
-    const items = result.rows.map((row) => ({
-      id: row.id,
-      kind: row.kind,
-      title: row.title,
-      ...(row.subtitle ? {subtitle: row.subtitle} : {}),
-      route: row.route,
-      reference: row.reference,
-    }));
-    return {data: {items}, meta: {query, total: items.length, limit, truncated: items.length >= limit}};
+    try {
+      const result = await client.query<GlobalSearchRow>(statement.sql, statement.values);
+      const items = toGlobalSearchItems(result.rows);
+      return {data: {items}, meta: {query, total: items.length, limit, truncated: items.length >= limit}};
+    } catch (error) {
+      // Keep search available while one legacy collection has a schema or
+      // migration issue. Fatal connection/transaction errors still propagate
+      // from the savepoint recovery below and are handled by the API boundary.
+      await client.query("ROLLBACK");
+      await client.query("BEGIN");
+      const items = await runDegradedSearch(client, {...filters, query, limit}, limit, statement.branchLimit);
+      const degraded = items.length < limit;
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+      console.warn("[global-search] using branch fallback", {code, kinds: statement.kinds});
+      return {data: {items}, meta: {query, total: items.length, limit, truncated: items.length >= limit, degraded}};
+    }
   });
 }

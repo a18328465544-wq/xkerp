@@ -1,5 +1,6 @@
 import type {FinanceLedger, PaymentInRecord, PaymentOutRecord, SettlementAccount, SettlementBusinessType, SettlementDirection, SettlementLedger} from "../src/types.ts";
 import {ConflictError, NotFoundError} from "./errors.ts";
+import {assertAccountingMovementBoundary} from "./financeAccountingBoundaries.ts";
 
 export type SettlementState = {
   settlementAccounts: SettlementAccount[];
@@ -69,6 +70,11 @@ export function createSettlementLedgerHelpers(dependencies: SettlementLedgerDepe
   };
 
   const createFinanceLedgerForSettlement = (entry: FinanceSettlementLedgerInput) => {
+    assertAccountingMovementBoundary({
+      businessType: entry.type,
+      relatedDocType: entry.relatedDocType,
+      signedAmount: entry.amount,
+    });
     const ledgerItem: FinanceLedger = {
       id: genId("LS"),
       time: entry.time || nowStamp(),
@@ -124,6 +130,12 @@ export function createSettlementLedgerHelpers(dependencies: SettlementLedgerDepe
   const recordSettlementMovement = (movement: SettlementMovementInput) => {
     const account = findSettlementAccount(movement.accountId);
     const movementAmount = positiveAmount(movement.amount, "流水金额");
+    assertAccountingMovementBoundary({
+      businessType: movement.businessType,
+      relatedDocType: movement.relatedDocType,
+      direction: movement.direction,
+      amount: movementAmount,
+    });
     const beforeBalance = account.balance;
     const signedAmount = movement.direction === "收入" || movement.direction === "转入" ? movementAmount : -movementAmount;
     const afterBalance = beforeBalance + signedAmount;
