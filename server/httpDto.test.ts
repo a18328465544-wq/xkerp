@@ -12,6 +12,7 @@ import {
   paymentOutCreateDto,
   purchaseInvoiceCreateDto,
   purchaseInvoiceUpdateDto,
+  returnCreateDto,
 } from "./httpDto.ts";
 
 test("payment DTOs normalize allowed text and reject unknown or invalid fields", () => {
@@ -39,6 +40,28 @@ test("purchase DTO validates nested lines before entering the domain store", () 
   assert.throws(() => parseHttpDto(purchaseInvoiceCreateDto, {...base, totalCost: 100}), /Unrecognized key/);
   assert.equal(parseHttpDto(purchaseInvoiceUpdateDto, {remarks: "补充说明", expectedRecordVersion: 2}).expectedRecordVersion, 2);
   assert.throws(() => parseHttpDto(purchaseInvoiceUpdateDto, {remarks: "缺少版本"}), /采购单版本号无效|Invalid input/);
+});
+
+test("return DTO accepts selected multi-item purchase returns", () => {
+  const parsed = parseHttpDto(returnCreateDto, {
+    type: "进货退货",
+    relatedDocType: "采购单",
+    date: "2026-08-23",
+    relatedDocNo: "JH-1",
+    sourceInventoryId: "KC-1",
+    amount: 3000,
+    settlementMode: "抵扣账款",
+    handler: "郭鑫",
+    reason: "部分退货",
+    inventoryAction: "退回供应商",
+    batchMode: "多件退货",
+    items: [
+      {sourceInventoryId: "KC-1", sourcePurchaseItemIndex: 0},
+      {sourceInventoryId: "KC-2", sourcePurchaseItemIndex: 1},
+    ],
+  });
+  assert.equal(parsed.batchMode, "多件退货");
+  assert.equal(parsed.items?.length, 2);
 });
 
 test("inspection DTO enforces bounded metrics and domain enums", () => {

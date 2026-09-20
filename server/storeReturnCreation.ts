@@ -61,11 +61,12 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
   } = dependencies;
 
   const createBatchReturnOrder = (input: ReturnOrderCreateInput, batchInputs: ReturnOrderBatchItemInput[]) => {
-    if (batchInputs.length < 1) throw new ValidationError("整单退货至少需要一条商品明细");
-    if (batchInputs.length > 200) throw new ValidationError("单次整单退货最多处理 200 条商品明细");
+    const batchLabel = input.batchMode === "多件退货" ? "多件退货" : "整单退货";
+    if (batchInputs.length < 1) throw new ValidationError(`${batchLabel}至少需要一条商品明细`);
+    if (batchInputs.length > 200) throw new ValidationError(`单次${batchLabel}最多处理 200 条商品明细`);
     const inventoryIds = batchInputs.map((item) => String(item?.sourceInventoryId || "").trim());
-    if (inventoryIds.some((id) => !id)) throw new ValidationError("整单退货的每条明细都必须关联库存卡片");
-    if (new Set(inventoryIds).size !== inventoryIds.length) throw new ConflictError("整单退货中不能重复选择同一库存卡片");
+    if (inventoryIds.some((id) => !id)) throw new ValidationError(`${batchLabel}的每条明细都必须关联库存卡片`);
+    if (new Set(inventoryIds).size !== inventoryIds.length) throw new ConflictError(`${batchLabel}中不能重复选择同一库存卡片`);
 
     const salesInvoice = input.type === "销售退货"
       ? state.salesInvoices.find((invoice) => invoice.invoiceNo === input.relatedDocNo || invoice.id === input.relatedDocNo)
@@ -75,7 +76,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       : undefined;
     if (input.type === "销售退货" && !salesInvoice) throw new NotFoundError(`销售退货关联销售单不存在: ${input.relatedDocNo}`);
     if (input.type === "进货退货" && !purchaseInvoice) throw new NotFoundError(`进货退货关联采购单不存在: ${input.relatedDocNo}`);
-    if (input.type === "销售退货" && salesInvoice?.outboundStatus !== "已出库") throw new ConflictError("销售单尚未完成出库，不能办理整单退货");
+    if (input.type === "销售退货" && salesInvoice?.outboundStatus !== "已出库") throw new ConflictError(`销售单尚未完成出库，不能办理${batchLabel}`);
     if (input.type === "进货退货" && !purchaseInvoice) throw new NotFoundError(`进货退货关联采购单不存在: ${input.relatedDocNo}`);
 
     const activeReturnForInventory = (inventoryId: string) => state.returnOrders.find((order) =>
@@ -90,7 +91,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
 
     for (const batchItem of batchInputs) {
       const sourceCard = findReturnInventory({sourceInventoryId: String(batchItem.sourceInventoryId).trim(), sn: undefined});
-      if (!sourceCard) throw new NotFoundError(`整单退货库存卡片不存在: ${batchItem.sourceInventoryId}`);
+      if (!sourceCard) throw new NotFoundError(`${batchLabel}库存卡片不存在: ${batchItem.sourceInventoryId}`);
       const existingReturn = activeReturnForInventory(sourceCard.id);
       if (existingReturn) throw new ConflictError(`库存 ${sourceCard.id} 已有未完成的退货单: ${existingReturn.returnNo}`);
 
@@ -103,7 +104,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
           throw new ConflictError(`库存 ${sourceCard.id} 与销售单明细不匹配`);
         }
         if (sourceCard.salesInvoiceId !== invoice.invoiceNo) throw new ConflictError("所选库存不属于关联销售单");
-        if (salesLines.some((item) => item.index === line.index)) throw new ConflictError("整单退货不能重复选择同一销售明细");
+        if (salesLines.some((item) => item.index === line.index)) throw new ConflictError(`${batchLabel}不能重复选择同一销售明细`);
         const amount = Number(line.item.sellPrice || 0);
         if (amount <= 0) throw new ValidationError("销售退货明细金额必须大于 0");
         salesLines.push(line);
@@ -121,7 +122,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
         const invoice = purchaseInvoice!;
         if (findPurchaseInvoiceForCard(sourceCard)?.id !== invoice.id) throw new ConflictError(`库存 ${sourceCard.id} 与采购单不匹配`);
         if (inventoryInactiveStatuses.has(sourceCard.status)) {
-          throw new ConflictError(`库存状态为${sourceCard.status}，不能办理整单退货`);
+          throw new ConflictError(`库存状态为${sourceCard.status}，不能办理${batchLabel}`);
         }
         const line = typeof batchItem.sourcePurchaseItemIndex === "number"
           ? invoice.items.map((item, index) => ({id: makePurchaseReturnLineId(item, index), index, item}))[batchItem.sourcePurchaseItemIndex]
@@ -129,7 +130,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
         if (!line || (line.item.sn && sourceCard.sn && line.item.sn !== sourceCard.sn && line.item.tempId !== sourceCard.id)) {
           throw new ConflictError(`库存 ${sourceCard.id} 与采购单明细不匹配`);
         }
-        if (purchaseLines.some((item) => item.index === line.index)) throw new ConflictError("整单退货不能重复选择同一采购明细");
+        if (purchaseLines.some((item) => item.index === line.index)) throw new ConflictError(`${batchLabel}不能重复选择同一采购明细`);
         const amount = Number(line.item.buyPrice || sourceCard.costPrice || 0);
         if (amount <= 0) throw new ValidationError("进货退货明细金额必须大于 0");
         purchaseLines.push(line);
@@ -181,7 +182,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       date: input.date || storeDate(),
       relatedDocType: input.relatedDocType || (input.type === "销售退货" ? "销售单" : "采购单"),
       relatedDocNo: input.relatedDocNo,
-      batchMode: "整单退货",
+      batchMode: input.batchMode === "多件退货" ? "多件退货" : "整单退货",
       items: resolvedItems,
       sourceInventoryId: undefined,
       sourceSalesItemId: undefined,
@@ -191,7 +192,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       sourcePurchaseItemIndex: undefined,
       sourcePurchaseItemSnapshot: undefined,
       productId: undefined,
-      productName: `整单退货（${resolvedItems.length}件）`,
+      productName: `${batchLabel}（${resolvedItems.length}件）`,
       sn: `共${resolvedItems.length}件`,
       partyId: input.partyId || salesInvoice?.customerId || purchaseInvoice?.sourcePartnerId,
       partyType: input.partyType || (input.type === "销售退货" ? (salesInvoice?.customerPartnerType === "vendor" ? "vendor" : "customer") : (purchaseInvoice?.sourcePartnerType || (isPersonalPurchaseSource(purchaseInvoice?.sourceType) ? "customer" : "vendor"))),
@@ -203,7 +204,7 @@ export function createReturnCreationHelpers(dependencies: ReturnCreationDependen
       settlementAccountName: refundAllocations.length === 1 ? refundAllocations[0]?.accountName : undefined,
     };
     state.returnOrders = [order, ...state.returnOrders];
-    addLog(systemActor(), "退货管理", `创建${order.type}`, order.returnNo, undefined, `${order.partyName || "未记录对象"} / 整单 ${resolvedItems.length} 件 / ${order.amount}元`);
+    addLog(systemActor(), "退货管理", `创建${order.type}`, order.returnNo, undefined, `${order.partyName || "未记录对象"} / ${batchLabel} ${resolvedItems.length} 件 / ${order.amount}元`);
     return order;
   };
 

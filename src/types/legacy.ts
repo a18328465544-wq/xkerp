@@ -889,7 +889,7 @@ export interface ReturnOrder {
   relatedDocType: "销售单" | "采购单" | string;
   relatedDocNo: string;
   /** Present when one return order covers the whole source document. */
-  batchMode?: "整单退货";
+  batchMode?: "多件退货" | "整单退货";
   items?: ReturnOrderItem[];
   sourceInventoryId?: string;
   sourceSalesItemId?: string;

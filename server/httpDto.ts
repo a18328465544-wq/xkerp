@@ -1091,8 +1091,8 @@ const returnMutationFields = {
   responsibility: z.enum(returnResponsibilityValues).optional(),
   inventoryAction: z.enum(returnInventoryActionValues),
   remarks: optionalText(500),
-  batchMode: z.literal("整单退货").optional(),
-  items: z.array(returnBatchItemDto).max(200, "单次整单退货最多 200 件").optional(),
+  batchMode: z.enum(["多件退货", "整单退货"] as const).optional(),
+  items: z.array(returnBatchItemDto).max(200, "单次退货最多 200 件").optional(),
 };
 
 export const returnCreateDto = z.object(returnMutationFields).strict().superRefine((value, context) => {

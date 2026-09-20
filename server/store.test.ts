@@ -3274,6 +3274,46 @@ test("whole-document purchase return creates one atomic order for every purchase
   cards.forEach((card) => assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已入库"));
 });
 
+test("multiple purchase return creates one atomic order for only the selected inventory cards", () => {
+  const state = createInitialState();
+  const actions = createStoreActions(state);
+  const product = state.products[0];
+  const invoice = actions.createPurchaseInvoice(buildPurchase([
+    buildPurchaseItem(product, "MULTI-PURCHASE-SN-1", 2000),
+    buildPurchaseItem(product, "MULTI-PURCHASE-SN-2", 3000),
+    buildPurchaseItem(product, "MULTI-PURCHASE-SN-3", 4000),
+  ]));
+  const cards = state.inventory.filter((item) => item.purchaseInvoiceNo === invoice.invoiceNo);
+  const selectedCards = cards.slice(0, 2);
+  assert.equal(cards.length, 3);
+  assert.equal(selectedCards.length, 2);
+
+  const order = actions.createReturnOrder({
+    type: "进货退货",
+    relatedDocType: "采购单",
+    relatedDocNo: invoice.invoiceNo,
+    sourceInventoryId: selectedCards[0]?.id,
+    amount: 0,
+    settlementMode: "抵扣账款",
+    handler: "采购小李",
+    reason: "部分商品退回",
+    inventoryAction: "退回供应商",
+    batchMode: "多件退货",
+    items: selectedCards.map((card, sourcePurchaseItemIndex) => ({sourceInventoryId: card.id, sourcePurchaseItemIndex})),
+  });
+
+  assert.equal(order.batchMode, "多件退货");
+  assert.equal(order.items?.length, 2);
+  assert.equal(order.amount, 5000);
+  const completed = actions.completeReturnOrder(order.id);
+  assert.equal(completed.status, "已完成");
+  assert.equal(state.purchaseInvoices.find((item) => item.id === invoice.id)?.items.length, 1);
+  selectedCards.forEach((card) => assert.equal(state.inventory.find((item) => item.id === card.id)?.status, "已退货"));
+  const retainedCard = cards[2];
+  assert.ok(retainedCard);
+  assert.equal(state.inventory.find((item) => item.id === retainedCard.id)?.status, retainedCard.status);
+});
+
 test("sales return creates a return order, refunds customer, and sends stock back to pending inspection", () => {
   const state = createInitialState();
   const actions = createStoreActions(state);

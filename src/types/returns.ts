@@ -59,7 +59,7 @@ export interface ReturnOrder {
   relatedDocType: "销售单" | "采购单" | string;
   relatedDocNo: string;
   /** Present when one return order covers the whole source document. */
-  batchMode?: "整单退货";
+  batchMode?: "多件退货" | "整单退货";
   items?: ReturnOrderItem[];
   sourceInventoryId?: string;
   sourceSalesItemId?: string;
@@ -175,7 +175,7 @@ export interface PurchaseReturnFormValues {
   reason: string;
   inventoryAction: "退回供应商" | "直接报废";
   remarks: string;
-  returnScope?: "single" | "document";
+  returnScope?: "single" | "multiple" | "document";
   returnItems?: ReturnOrderBatchItemInput[];
 }
 

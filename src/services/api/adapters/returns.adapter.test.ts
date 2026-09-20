@@ -111,6 +111,46 @@ test("purchase return request adapter serializes whole-document lines without le
   });
 });
 
+test("purchase return request adapter serializes selected multi-item lines distinctly from whole-document returns", () => {
+  const values: PurchaseReturnFormValues = {
+    date: "2026-08-09",
+    relatedDocNo: "JH-MULTIPLE-1",
+    sourceInventoryId: "KC-1",
+    amount: 8000,
+    settlementMode: "抵扣账款",
+    settlementAccountId: "",
+    handler: "郭鑫",
+    reason: "部分商品退回",
+    inventoryAction: "退回供应商",
+    remarks: "只退选中的两件",
+    returnScope: "multiple",
+    returnItems: [
+      {sourceInventoryId: "KC-1", sourcePurchaseItemIndex: 0},
+      {sourceInventoryId: "KC-3", sourcePurchaseItemIndex: 2},
+    ],
+  };
+
+  assert.deepEqual(toPurchaseReturnRequestDto(values), {
+    type: "进货退货",
+    relatedDocType: "采购单",
+    date: "2026-08-09",
+    relatedDocNo: "JH-MULTIPLE-1",
+    sourceInventoryId: "KC-1",
+    amount: 8000,
+    settlementMode: "抵扣账款",
+    settlementAccountId: undefined,
+    handler: "郭鑫",
+    reason: "部分商品退回",
+    inventoryAction: "退回供应商",
+    remarks: "只退选中的两件",
+    batchMode: "多件退货",
+    items: [
+      {sourceInventoryId: "KC-1", sourcePurchaseItemIndex: 0},
+      {sourceInventoryId: "KC-3", sourcePurchaseItemIndex: 2},
+    ],
+  });
+});
+
 test("sales return update adapter only sends editable history fields", () => {
   assert.deepEqual(toSalesReturnUpdateRequestDto({handler: " 郭鑫 ", reason: " 客户拒收 ", remarks: " 外包装完整 ",}), {
     handler: "郭鑫",

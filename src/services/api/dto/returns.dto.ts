@@ -33,7 +33,7 @@ export interface PurchaseReturnCreateRequestDto {
   reason: string;
   inventoryAction: "退回供应商" | "直接报废";
   remarks?: string;
-  batchMode?: "整单退货";
+  batchMode?: "多件退货" | "整单退货";
   items?: ReturnBatchItemRequestDto[];
 }
 

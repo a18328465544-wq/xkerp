@@ -120,6 +120,8 @@ export function toPurchaseReturnRequestDto(values: PurchaseReturnFormValues): Pu
     reason: formValues.reason.trim(),
     inventoryAction: formValues.inventoryAction,
     remarks: formValues.remarks.trim() || undefined,
-    ...(returnScope === "document" && returnItems?.length ? {batchMode: "整单退货", items: returnItems as ReturnBatchItemRequestDto[]} : {}),
+    ...(returnItems?.length && (returnScope === "multiple" || returnScope === "document")
+      ? {batchMode: returnScope === "multiple" ? "多件退货" : "整单退货", items: returnItems as ReturnBatchItemRequestDto[]}
+      : {}),
   };
 }
