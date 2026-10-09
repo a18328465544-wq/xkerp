@@ -965,7 +965,7 @@ try {
             } else if (mode === "cross-url-success") {
               await tabPage.evaluate(() => {history.replaceState(null, "", "/inspections?inventory=KC-ATTEMPT-B"); window.dispatchEvent(new PopStateEvent("popstate"));});
               otherUrl = tabPage.url();
-              if (!(await form.locator("h3").filter({hasText: cards[0].productName}).isVisible())) throw new Error("new URL relabeled A's pending form as B");
+              if (!(await form.locator('h3, [aria-label="本次入库商品"]').filter({hasText: cards[0].productName}).isVisible())) throw new Error("new URL relabeled A's pending form as B");
             }
             const rejected = ["selected-failure", "edited-feedback", "hidden-failure"].includes(mode);
             if (rejected) await held.pop().fulfill({status: 409, contentType: "application/json", body: JSON.stringify({error: {code: "CONFLICT", message: "A 的库存已被其他人修改", requestId: "local-inspection-conflict"}})});
