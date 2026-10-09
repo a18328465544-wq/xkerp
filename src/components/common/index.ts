@@ -6,6 +6,8 @@ export {ErpEntityThumbnail} from "./ErpEntityThumbnail";
 export {ErpDialogShell, type ErpDialogShellProps, type ErpDialogSize} from "./ErpDialogShell";
 export {ErpMobileWorkflow, ErpMobileWorkflowSection, type ErpMobileWorkflowStep} from "./ErpMobileWorkflow";
 export {ErpMobileSummary} from "./ErpMobileSummary";
+export {ErpMobileRecordRow} from "./ErpMobileRecordRow";
+export {ErpMobileActionDock} from "./ErpMobileActionDock";
 export {ErpOutstandingSettlementDialog} from "./ErpOutstandingSettlementDialog";
 export {ErpField, type ErpFieldProps} from "./ErpField";
 export {ErpImagePreviewDialog, type ErpImagePreviewDialogProps} from "./ErpImagePreviewDialog";

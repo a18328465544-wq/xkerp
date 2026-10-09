@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {adaptFinanceAccountLedgerPage} from "@/src/services/api/adapters/finance-account.adapter";
 import {summarizeFinanceLedgerPage} from "./finance-ledger.summary";
+import {formatLedgerChangeAmount} from "./finance-ledger.columns";
 
 test("ledger summary explicitly summarizes the loaded page", () => {
   const page = adaptFinanceAccountLedgerPage({data: [
@@ -10,4 +11,26 @@ test("ledger summary explicitly summarizes the loaded page", () => {
   ], meta: {total: 99}});
   assert.deepEqual(summarizeFinanceLedgerPage(page.items), {income: 100, expense: 30, net: 70, accountCount: 2, anomalyCount: 1});
   assert.equal(page.total, 99);
+});
+
+test("formatLedgerChangeAmount handles positive, negative, and zero without double negatives", () => {
+  const positive = formatLedgerChangeAmount(150);
+  assert.equal(positive.isIncome, true);
+  assert.equal(positive.sign, "+");
+  assert.match(positive.formatted, /^\+.*150\.00$/);
+  assert.doesNotMatch(positive.formatted, /--/);
+  assert.equal(positive.colorClass, "text-[var(--erp-color-income)]");
+
+  const negative = formatLedgerChangeAmount(-150);
+  assert.equal(negative.isIncome, false);
+  assert.equal(negative.sign, "−");
+  assert.match(negative.formatted, /^−.*150\.00$/);
+  assert.doesNotMatch(negative.formatted, /--/);
+  assert.equal(negative.colorClass, "text-[var(--erp-color-expense)]");
+
+  const zero = formatLedgerChangeAmount(0);
+  assert.equal(zero.isIncome, true);
+  assert.equal(zero.sign, "+");
+  assert.match(zero.formatted, /^\+.*0\.00$/);
+  assert.equal(zero.colorClass, "text-[var(--erp-color-income)]");
 });

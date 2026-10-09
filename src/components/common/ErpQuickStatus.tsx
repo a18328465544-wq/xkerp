@@ -49,7 +49,7 @@ export function QuickStatusItem({item, variant = "compact"}: {item: QuickStatusI
     <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tone.icon)} aria-hidden="true">{item.icon}</span>
     <span className="min-w-0 flex-1">
       <span className="block truncate text-xs font-medium text-[var(--erp-color-text-secondary)]">{item.label}</span>
-      <span className={cn("erp-data-number mt-0.5 block break-words text-sm font-semibold", tone.value)}>{item.value}</span>
+      <span className={cn("erp-data-number mt-0.5 block truncate text-sm font-semibold", tone.value)}>{item.value}</span>
       {item.description ? <span className="erp-annotation-slot mt-0.5 text-xs text-[var(--erp-color-text-muted)]">{item.description}</span> : null}
     </span>
     {action ? <ArrowRight className="h-4 w-4 shrink-0 text-[var(--erp-color-text-muted)]" aria-hidden="true" /> : null}
@@ -93,7 +93,7 @@ export function QuickStatusGroup({items, maxVisible = 4, className, variant = "c
   if (variant === "workflow") {
     const first = visible[0]!;
     return <div data-erp-component="quick-status-group" data-variant="workflow" className={cn("relative min-w-0 sm:flex sm:items-center sm:gap-2", className)}>
-      <div className="hidden min-w-0 flex-1 grid-cols-1 gap-2 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden min-w-0 flex-1 gap-2 sm:grid sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
         {visible.map((item, index) => <QuickStatusItem key={index} item={item} variant="workflow" />)}
       </div>
       <div className="flex min-w-0 items-center gap-2 sm:hidden">

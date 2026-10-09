@@ -68,7 +68,7 @@ export function WorkspaceTabKeepAlive({fallback, scrollContainerRef}: WorkspaceT
       const active = item.id === currentTabId;
       return <div key={`${item.id}:${page.pageKey}`} data-workspace-tab-panel={item.id} data-route-path={routePath} data-active={active ? "true" : "false"} hidden={!active} aria-hidden={!active} className="min-w-0">
         <WorkspaceTabActivityProvider value={{tabId: item.id, pageKey: page.pageKey, active}}>
-          <Suspense fallback={<div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-5"><ErpLoadingState title="正在打开页面" description="只加载当前页面所需的资源。" /></div>}>
+          <Suspense fallback={<div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-5"><ErpLoadingState title="加载中…" /></div>}>
             {page.render()}
           </Suspense>
         </WorkspaceTabActivityProvider>

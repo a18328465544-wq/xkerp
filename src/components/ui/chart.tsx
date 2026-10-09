@@ -148,6 +148,17 @@ export interface ChartTooltipContentProps extends Omit<React.ComponentProps<"div
   indicator?: "dot" | "line" | "dashed";
   labelFormatter?: (label: unknown, payload: readonly ChartTooltipPayloadItem[]) => React.ReactNode;
   formatter?: (value: unknown, name: string, item: ChartTooltipPayloadItem, index: number) => React.ReactNode | [React.ReactNode, React.ReactNode];
+  coordinate?: unknown;
+  viewBox?: unknown;
+  offset?: unknown;
+  itemSorter?: unknown;
+  isAnimationActive?: unknown;
+  accessibilityLayer?: unknown;
+  cursor?: unknown;
+  allowEscapeViewBox?: unknown;
+  animationDuration?: unknown;
+  animationEasing?: unknown;
+  content?: unknown;
 }
 
 function configForKey(config: ChartConfig, key: unknown) {
@@ -173,6 +184,17 @@ export function ChartTooltipContent({
   labelFormatter,
   formatter,
   className,
+  coordinate: _coordinate,
+  viewBox: _viewBox,
+  offset: _offset,
+  itemSorter: _itemSorter,
+  isAnimationActive: _isAnimationActive,
+  accessibilityLayer: _accessibilityLayer,
+  cursor: _cursor,
+  allowEscapeViewBox: _allowEscapeViewBox,
+  animationDuration: _animationDuration,
+  animationEasing: _animationEasing,
+  content: _content,
   ...props
 }: ChartTooltipContentProps) {
   const {config} = useChart();
@@ -217,9 +239,33 @@ export interface ChartLegendContentProps extends Omit<React.ComponentProps<"div"
   payload?: DefaultLegendContentProps["payload"];
   nameKey?: string;
   hideIcon?: boolean;
+  verticalAlign?: unknown;
+  align?: unknown;
+  wrapperStyle?: unknown;
+  iconSize?: unknown;
+  chartWidth?: unknown;
+  chartHeight?: unknown;
+  layout?: unknown;
+  margin?: unknown;
+  content?: unknown;
 }
 
-export function ChartLegendContent({payload, nameKey, hideIcon = false, className, ...props}: ChartLegendContentProps) {
+export function ChartLegendContent({
+  payload,
+  nameKey,
+  hideIcon = false,
+  className,
+  verticalAlign: _verticalAlign,
+  align: _align,
+  wrapperStyle: _wrapperStyle,
+  iconSize: _iconSize,
+  chartWidth: _chartWidth,
+  chartHeight: _chartHeight,
+  layout: _layout,
+  margin: _margin,
+  content: _content,
+  ...props
+}: ChartLegendContentProps) {
   const {config} = useChart();
   if (!payload?.length) return null;
 

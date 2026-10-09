@@ -21,7 +21,7 @@ export function ErpSegmentedControl<T extends string>({label, value, options, on
   const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled);
   const tabStop = selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabled);
   return <div data-erp-component="segmented-control" role="group" aria-label={label} className={cn("erp-segmented-control", className)}>
-    {options.map((option, index) => <Button key={option.value} type="button" size="sm" variant={value === option.value ? "primary" : "ghost"} aria-pressed={value === option.value} tabIndex={!disabled && index === tabStop ? 0 : -1} disabled={disabled || option.disabled} onClick={() => onValueChange(option.value)} onKeyDown={(event) => {
+    {options.map((option, index) => <Button key={option.value} type="button" size="sm" variant="ghost" aria-pressed={value === option.value} tabIndex={!disabled && index === tabStop ? 0 : -1} disabled={disabled || option.disabled} onClick={() => onValueChange(option.value)} onKeyDown={(event) => {
       if (disabled || isComposingKey(event.nativeEvent) || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       const next = nextEnabledChoice(options, index, event.key);

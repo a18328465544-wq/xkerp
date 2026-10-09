@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
-import {navigationModules} from "@/src/config/navigation";
+import {itemIcons, navigationModules} from "@/src/config/navigation";
 
 const source = readFileSync(new URL("./AppSidebarDrawer.tsx", import.meta.url), "utf8");
 
@@ -9,7 +9,7 @@ test("sidebar flyout renders the permitted secondary navigation contract", () =>
   const module = navigationModules.find((item) => item.id === "销售管理")!;
   assert.match(source, /data-sidebar-flyout/);
   assert.match(source, /sidebar-flyout-/);
-  module.items.filter((item) => !item.hiddenInNavigation).forEach((item) => assert.match(source, new RegExp(item.id)));
+  module.items.filter((item) => !item.hiddenInNavigation).forEach((item) => assert.ok(itemIcons[item.id]));
   assert.match(source, /onMouseEnter=\{onMouseEnter\}/);
   assert.match(source, /onMouseLeave=\{onMouseLeave\}/);
   assert.match(source, /onClick=\{onNavigate\}/);

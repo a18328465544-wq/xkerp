@@ -1,8 +1,8 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState, VisibilityState} from "@tanstack/react-table";
-import {BadgeDollarSign, CircleDollarSign, Download, Filter, Handshake, Plus, RefreshCw, RotateCcw, ShieldAlert, Star} from "lucide-react";
-import {ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
+import {ArrowDown, ArrowUp, BadgeDollarSign, ChevronDown, CircleDollarSign, Download, Filter, Handshake, Plus, RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, Star} from "lucide-react";
+import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpMobileRecordRow, ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Select} from "@/src/components/ui";
@@ -47,6 +47,7 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
   const [editing, setEditing] = useState<VendorDirectoryItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<VendorDirectoryItem | null>(null);
+  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const vendors = query.data?.vendors || [];
   const canEdit = true;
   const canDelete = session.permissions.canDelete;
@@ -78,16 +79,151 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
     const link = document.createElement("a"); link.href = url; link.download = "同行档案.csv"; link.click(); URL.revokeObjectURL(url);
   };
 
-  return <ErpListPageFrame>
-    <ErpPageHeader title="供应商 / 同行" subtitle="维护供应商、同行与往来余额。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="primary" onClick={openCreate}><Plus className="h-4 w-4" />新建同行</Button></>} />
-    <ErpMobileSummary><MetricsRegion><MetricCard label="同行总数" value={`${total} 家`} detail="按当前筛选" icon={<Handshake className="h-4 w-4" />} /><MetricCard label="核心 / S级" value={`${coreCount} 家`} detail="核心采购方与核心同行" icon={<Star className="h-4 w-4" />} tone="info" /><MetricCard label="应付余额" value={formatCurrency(payable)} detail="门店应向同行支付" icon={<BadgeDollarSign className="h-4 w-4" />} tone={payable ? "warning" : "success"} /><MetricCard label="应收 / 退货抵扣" value={`${formatCurrency(receivable)} / ${formatCurrency(credit)}`} detail="应收与抵扣分别核算" icon={<CircleDollarSign className="h-4 w-4" />} tone={receivable || credit ? "info" : "success"} /></MetricsRegion></ErpMobileSummary>
-    <ErpPageToolbar><ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultVendorFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" size="sm" variant="secondary" onClick={exportVendors}><Download className="h-4 w-4" />导出</Button></>}><ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="同行名称、联系方式、档案编号、风险或备注" aria-label="搜索同行档案" /><Select className="w-40" value={filters.type} onValueChange={(type) => onFiltersChange({...filters, type, page: 1})} options={[{value: "all", label: "全部类型"}, ...vendorTypes.map((value) => ({value, label: value}))]} aria-label="筛选同行类型" /><Select className="w-32" value={filters.level} onValueChange={(level) => onFiltersChange({...filters, level, page: 1})} options={[{value: "all", label: "全部等级"}, ...vendorLevels.map((value) => ({value, label: value}))]} aria-label="筛选同行等级" /><Select className="w-40" value={filters.balance} onValueChange={(balance) => onFiltersChange({...filters, balance: balance as VendorDirectoryFilters["balance"], page: 1})} options={[{value: "all", label: "全部往来余额"}, {value: "payable", label: "有应付余额"}, {value: "receivable", label: "有应收余额"}, {value: "credit", label: "有退货抵扣"}]} aria-label="筛选往来余额" /></ErpFilterBar></ErpPageToolbar>
+  const filterFields = (
+    <>
+      <Select className="w-40" value={filters.type} onValueChange={(type) => onFiltersChange({...filters, type, page: 1})} options={[{value: "all", label: "全部类型"}, ...vendorTypes.map((value) => ({value, label: value}))]} aria-label="筛选同行类型" />
+      <Select className="w-32" value={filters.level} onValueChange={(level) => onFiltersChange({...filters, level, page: 1})} options={[{value: "all", label: "全部等级"}, ...vendorLevels.map((value) => ({value, label: value}))]} aria-label="筛选同行等级" />
+      <Select className="w-40" value={filters.balance} onValueChange={(balance) => onFiltersChange({...filters, balance: balance as VendorDirectoryFilters["balance"], page: 1})} options={[{value: "all", label: "全部往来余额"}, {value: "payable", label: "有应付余额"}, {value: "receivable", label: "有应收余额"}, {value: "credit", label: "有退货抵扣"}]} aria-label="筛选往来余额" />
+    </>
+  );
+
+  const filterActions = (
+    <>
+      <Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultVendorFilters)}><RotateCcw className="h-4 w-4" />重置</Button>
+      <Button type="button" size="sm" variant="secondary" onClick={exportVendors}><Download className="h-4 w-4" />导出</Button>
+    </>
+  );
+
+  const search = (
+    <ErpSearchInput className={phone ? "w-full" : "min-w-64 flex-1"} value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder={phone ? "搜索名称、联系方式、编号" : "同行名称、联系方式、档案编号、风险或备注"} aria-label="搜索同行档案" />
+  );
+
+  const vendorTable = (
+    <ErpDataTable
+      surface={phone ? "plain" : "card"}
+      mobilePagination="compact"
+      mobileShowDetailAction={false}
+      mobileToolbar={({openSorting, sortLabel, descending}) => (
+        <div className="erp-customer-list-toolbar">
+          <div className="erp-customer-quick-filters" role="group" aria-label="同行快捷筛选">
+            <Button type="button" variant={filters.level === "all" ? "primary" : "ghost"} aria-pressed={filters.level === "all"} onClick={() => onFiltersChange({...filters, level: "all", page: 1})}>全部</Button>
+            <Button type="button" variant={filters.level === "S级" ? "primary" : "ghost"} aria-pressed={filters.level === "S级"} onClick={() => onFiltersChange({...filters, level: "S级", page: 1})}>核心 / S级</Button>
+          </div>
+          <Button type="button" variant="ghost" className="erp-customer-sort" aria-label="同行排序" onClick={openSorting}>
+            <span>{sortLabel || "默认排序"}</span>
+            {descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+          </Button>
+        </div>
+      )}
+      mobileRow={(item) => (
+        <ErpMobileRecordRow
+          title={item.name}
+          thumbnail={<ErpEntityThumbnail kind="customer" name={item.name} />}
+          subtitle={item.contact || "未记录联系方式"}
+          meta={`${item.type} · ${item.level}${item.isCoreCustomer ? " · 核心" : ""}${item.lastDealTime ? ` · 最近 ${item.lastDealTime.slice(0, 10)}` : ""}`}
+          statusPlacement="title"
+          status={<ErpStatusBadge label={item.level} tone={item.level === "S级" ? "info" : "neutral"} />}
+          amountLabel="应付余额"
+          amount={formatCurrency(item.payableBalance)}
+          onOpen={() => setDetail(item)}
+        />
+      )}
+      mobileFieldOrder={["contact","level","balances","lastDealTime"]}
+      ariaLabel="同行档案明细"
+      columns={columns}
+      data={vendors}
+      getRowId={(row) => row.id}
+      loading={query.isPending}
+      fetching={query.isFetching}
+      error={query.error as Error | null}
+      errorTitle="同行档案加载失败"
+      emptyTitle="暂无匹配同行"
+      emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击新建同行创建第一份档案。"}
+      onRetry={() => void query.refetch()}
+      onRowClick={setDetail}
+      manualSorting
+      sorting={sorting}
+      onSortingChange={onSortingChange}
+      page={filters.page}
+      pageSize={filters.pageSize}
+      total={total}
+      onPageChange={(page) => onFiltersChange({...filters, page})}
+      onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})}
+      columnVisibility={columnVisibility}
+      onColumnVisibilityChange={setColumnVisibility}
+      enableColumnResizing
+      density={density}
+      stickyHeader
+    />
+  );
+
+  return <ErpListPageFrame className="erp-customer-directory" data-phone-layout={phone ? "thumb" : undefined}>
+    <ErpPageHeader
+      title={phone ? <span className="erp-customer-phone-title">供应商 / 同行<small>{query.isPending ? "正在加载…" : query.error && !query.data ? "加载失败" : `${total} 家同行`}</small></span> : "供应商 / 同行"}
+      subtitle="维护供应商、同行与往来余额。"
+      quickStatus={quickStatus}
+      actions={phone ? (
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPhoneFiltersOpen(true)} aria-label="同行筛选与操作">
+            <SlidersHorizontal className="h-4 w-4" />筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
+          </Button>
+          <Button type="button" variant="secondary" size="icon" onClick={openCreate} aria-label="新建同行">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>
+          <Button type="button" size="sm" variant="primary" onClick={openCreate}><Plus className="h-4 w-4" />新建同行</Button>
+        </>
+      )}
+    />
+    {!phone && (
+      <>
+        <ErpMobileSummary>
+          <MetricsRegion>
+            <MetricCard label="同行总数" value={`${total} 家`} detail="按当前筛选" icon={<Handshake className="h-4 w-4" />} />
+            <MetricCard label="核心 / S级" value={`${coreCount} 家`} detail="核心采购方与核心同行" icon={<Star className="h-4 w-4" />} tone="info" />
+            <MetricCard label="应付余额" value={formatCurrency(payable)} detail="门店应向同行支付" icon={<BadgeDollarSign className="h-4 w-4" />} tone={payable ? "warning" : "success"} />
+            <MetricCard label="应收 / 退货抵扣" value={`${formatCurrency(receivable)} / ${formatCurrency(credit)}`} detail="应收与抵扣分别核算" icon={<CircleDollarSign className="h-4 w-4" />} tone={receivable || credit ? "info" : "success"} />
+          </MetricsRegion>
+        </ErpMobileSummary>
+        <ErpPageToolbar>
+          <ErpFilterBar actions={filterActions}>
+            {search}
+            {filterFields}
+          </ErpFilterBar>
+        </ErpPageToolbar>
+      </>
+    )}
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-    {!phone && <ErpTableResultsBar summary={<span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部同行"} tone={activeFilters ? "info" : "neutral"} /><span>筛选、排序和分页仅作用于已加载同行集合。</span></span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
-    <DashboardSection title="同行档案明细" description="点击行查看基础档案和三类往来余额；删除已关联采购或销售单据的同行会被服务端拒绝。" actions={<ErpStatusBadge label={`当前页 ${vendors.length} / 共 ${total} 条`} tone="info" />}><ErpDataTable mobileFieldOrder={["contact","level","balances","lastDealTime"]} ariaLabel="同行档案明细" columns={columns} data={vendors} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="同行档案加载失败" emptyTitle="暂无匹配同行" emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击新建同行创建第一份档案。"} onRetry={() => void query.refetch()} onRowClick={setDetail} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={filters.page} pageSize={filters.pageSize} total={total} onPageChange={(page) => onFiltersChange({...filters, page})} onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader /></DashboardSection>
-    <VendorDetailDrawer vendor={detail} showProfit={session.permissions.showProfit} canEdit={canEdit} onClose={() => setDetail(null)} onEdit={() => {if (detail) openEdit(detail);}} />
-    <VendorRecordDialog open={dialogOpen} vendor={editing} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, current: editing});}} />
-    <DeleteVendorDialog vendor={deleting} pending={deleteMutation.isPending} error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined} onClose={() => {setDeleting(null); deleteMutation.reset();}} onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}} />
+      {!phone && <ErpTableResultsBar summary={<span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部同行"} tone={activeFilters ? "info" : "neutral"} /><span>筛选、排序和分页仅作用于已加载同行集合。</span></span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
+      {phone ? vendorTable : <DashboardSection title="同行档案明细" description="点击行查看基础档案和三类往来余额；删除已关联采购或销售单据的同行会被服务端拒绝。" actions={<ErpStatusBadge label={`当前页 ${vendors.length} / 共 ${total} 条`} tone="info" />}>{vendorTable}</DashboardSection>}
+      <ErpMobileActionDock hidden={Boolean(detail || dialogOpen || deleting || phoneFiltersOpen)} ariaLabel="同行搜索">{search}</ErpMobileActionDock>
+      {phone && (
+        <ErpDialogShell open={phoneFiltersOpen} onOpenChange={setPhoneFiltersOpen} title="同行筛选与操作" mobilePresentation="sheet" footer={<>{filterActions}<Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>查看结果</Button></>}>
+          <div className="space-y-4">
+            <div data-erp-region="phone-filter-fields" className="grid gap-3">
+              {filterFields}
+              <Select aria-label="每页条数" value={String(filters.pageSize)} onValueChange={(value) => onFiltersChange({...filters, page: 1, pageSize: Number(value)})} options={[20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}))} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>
+                <RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新
+              </Button>
+              <ErpStatusBadge label={canDelete ? "可维护 / 删除" : "可维护"} tone="success" />
+            </div>
+            <dl className="erp-customer-filter-summary">
+              <div><dt>核心 / S级</dt><dd>{coreCount} 家</dd></div>
+              <div><dt>应付余额</dt><dd>{formatCurrency(payable)}</dd></div>
+              <div><dt>应收余额</dt><dd>{formatCurrency(receivable)}</dd></div>
+            </dl>
+          </div>
+        </ErpDialogShell>
+      )}
+      <VendorDetailDrawer vendor={detail} showProfit={session.permissions.showProfit} canEdit={canEdit} onClose={() => setDetail(null)} onEdit={() => {if (detail) openEdit(detail);}} />
+      <VendorRecordDialog open={dialogOpen} vendor={editing} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, current: editing});}} />
+      <DeleteVendorDialog vendor={deleting} pending={deleteMutation.isPending} error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined} onClose={() => {setDeleting(null); deleteMutation.reset();}} onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}} />
     </ErpPageContent>
   </ErpListPageFrame>;
 }

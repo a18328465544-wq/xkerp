@@ -44,3 +44,43 @@ test("short tables derive their minimum width from visible columns, not a global
   assert.match(markup, /aria-label="调整金额列宽"/);
   assert.match(markup, /Shift 加速，Home 恢复默认/);
 });
+
+test("generic mobile card makes whole card clickable and removes detail button on phone", () => {
+  const markup = renderToStaticMarkup(
+    <ErpDataTable
+      columns={columns}
+      data={[{id: "row1", amount: 100}]}
+      onRowClick={() => {}}
+      phone={true}
+      compactViewport={true}
+    />,
+  );
+  assert.match(markup, /data-clickable="true"/);
+  assert.match(markup, /role="button"/);
+  assert.doesNotMatch(markup, />查看详情</);
+});
+
+test("generic mobile card renders MoreHorizontal icon button and ChevronDown expander on phone", () => {
+  type ExtraRow = {id: string; amount: number; remark: string};
+  const extraColumns: ColumnDef<ExtraRow, unknown>[] = [
+    {accessorKey: "id", header: "编号"},
+    {accessorKey: "amount", header: "金额"},
+    {accessorKey: "remark", header: "备注"},
+    {id: "actions", header: "操作", cell: () => <span>按钮</span>},
+  ];
+  const markup = renderToStaticMarkup(
+    <ErpDataTable
+      columns={extraColumns}
+      data={[{id: "row1", amount: 100, remark: "测试"}]}
+      phone={true}
+      compactViewport={true}
+      mobileFields={1}
+    />,
+  );
+  // Action button uses MoreHorizontal, not text "操作"
+  assert.doesNotMatch(markup, />操作</);
+  assert.match(markup, /data-erp-button-size="iconTouch"/);
+  // Expand button uses ChevronDown with touch target
+  assert.match(markup, /aria-label="查看其余 1 项"/);
+});
+

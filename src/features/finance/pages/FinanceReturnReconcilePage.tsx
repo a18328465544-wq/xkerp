@@ -5,6 +5,7 @@ import { Filter, RefreshCw, Undo2 } from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import { Button, Card, Select } from "@/src/components/ui";
 import {
   ErpFinancePageFrame,
@@ -13,6 +14,7 @@ import {
   ErpDetailDrawer,
   ErpFilterBar,
   ErpMetricCard,
+  ErpMobileRecordRow,
   ErpPageContent,
   ErpPageError,
   ErpPageHeader,
@@ -148,6 +150,7 @@ function FinanceReturnReconcileContent({
   error: Error | null;
   onRetry: () => void;
 }) {
+  const phone = useErpPhone();
   const navigate = useNavigate();
   const [detail, setDetail] = useState<FinanceReturnReconcileItem | null>(null);
   const items = useMemo(
@@ -304,18 +307,20 @@ function FinanceReturnReconcileContent({
         subtitle="集中处理日结异常与退货对账，保留原有权限和业务边界。"
         quickStatus={quickStatus}
         actions={
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={onRetry}
-            disabled={fetching}
-          >
-            <RefreshCw
-              className={fetching ? "h-4 w-4 animate-spin" : "h-4 w-4"}
-            />
-            刷新
-          </Button>
+          !phone ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+              disabled={fetching}
+            >
+              <RefreshCw
+                className={fetching ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+              />
+              刷新
+            </Button>
+          ) : undefined
         }
       />
       <FinanceSectionTabs
@@ -420,6 +425,18 @@ function FinanceReturnReconcileContent({
           onPageChange: (page) => setFilters({ ...filters, page }),
           onPageSizeChange: (pageSize) =>
             setFilters({ ...filters, page: 1, pageSize }),
+          mobileRow: (item) => (
+            <ErpMobileRecordRow
+              title={item.returnNo}
+              subtitle={`${item.reconcileType} · ${item.partyName || "—"}`}
+              meta={`${item.date?.slice(0, 10) || "—"}${item.relatedDocNo ? ` · 原单: ${item.relatedDocNo}` : ""}`}
+              amount={formatCurrency(item.amount)}
+              amountLabel="退款金额"
+              status={<ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : "warning"} />}
+              statusPlacement="title"
+              onOpen={() => setDetail(item)}
+            />
+          ),
           stickyHeader: true,
           density: "compact",
           virtualized: pageRows.length >= 50,

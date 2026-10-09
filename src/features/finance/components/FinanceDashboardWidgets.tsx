@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {ErpEmptyState, ErpStatusBadge} from "@/src/components/common";
 import {Button} from "@/src/components/ui";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {formatCurrency} from "@/src/lib/format";
 import type {FinanceDashboardView} from "@/src/types/finance";
 import type {financeApi} from "@/src/services/api";
@@ -16,6 +17,7 @@ import type {financeApi} from "@/src/services/api";
 type DashboardDataset = Awaited<ReturnType<typeof financeApi.dashboard>>;
 
 export function FinanceHealthPanel({view}: {view: FinanceDashboardView}) {
+  const phone = useErpPhone();
   if (view.healthScore === undefined)
     return (
       <ErpEmptyState
@@ -31,6 +33,51 @@ export function FinanceHealthPanel({view}: {view: FinanceDashboardView}) {
       : view.healthRisk === "attention"
         ? "var(--erp-color-warning)"
         : "var(--erp-color-success)";
+
+  if (phone) {
+    const riskLabel =
+      view.healthRisk === "high"
+        ? "高风险"
+        : view.healthRisk === "attention"
+          ? "关注"
+          : "健康";
+    return (
+      <div className="flex flex-col gap-2 py-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: stroke }}
+            />
+            <span className="text-sm font-semibold">
+              {riskLabel} · {view.healthScore} 分
+            </span>
+          </div>
+          <div className="flex items-center gap-2.5 text-xs text-[var(--erp-color-text-secondary)]">
+            <span className="flex items-center gap-1">
+              <span className={Boolean(view.availableCash && view.availableCash > 0) ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-warning)]"}>
+                {Boolean(view.availableCash && view.availableCash > 0) ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              </span>
+              <span>现金储备</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className={!view.unreviewed ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-warning)]"}>
+                {!view.unreviewed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              </span>
+              <span>流水复核</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className={!view.accountDifferences ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-warning)]"}>
+                {!view.accountDifferences ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              </span>
+              <span>账户核对</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row">
       <div className="relative h-32 w-32 shrink-0">

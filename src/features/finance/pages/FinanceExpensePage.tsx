@@ -24,11 +24,13 @@ import {
   useState,
 } from "react";
 import {notify} from "@/src/utils/notification";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import { Button, Card, Input, Select } from "@/src/components/ui";
 import {
   ErpDateRangePicker,
   ErpFilterBar,
   ErpLoadingState,
+  ErpMobileRecordRow,
   ErpPageError,
   ErpStatusBadge,
   MetricsRegion,
@@ -135,6 +137,7 @@ function FinanceExpenseContent({
   accounts: Awaited<ReturnType<typeof financeAccountsApi.listAll>>["accounts"];
   canReadAccounts: boolean;
 }) {
+  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<FinanceExpenseItem | null>(null);
   const [editing, setEditing] = useState<FinanceExpenseItem | null>(null);
@@ -284,17 +287,19 @@ function FinanceExpenseContent({
         quickStatus: quickStatus,
         actions: (
           <>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={expenseQuery.isFetching}
-              onClick={() => void expenseQuery.refetch()}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${expenseQuery.isFetching ? "animate-spin" : ""}`}
-              />
-              刷新
-            </Button>
+            {!phone && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={expenseQuery.isFetching}
+                onClick={() => void expenseQuery.refetch()}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${expenseQuery.isFetching ? "animate-spin" : ""}`}
+                />
+                刷新
+              </Button>
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -455,6 +460,16 @@ function FinanceExpenseContent({
           total: collection.total,
           onPageChange: (page) => update({ page }),
           onPageSizeChange: (pageSize) => update({ page: 1, pageSize }),
+          mobileRow: (item) => (
+            <ErpMobileRecordRow
+              title={item.businessType}
+              subtitle={item.party}
+              meta={`${item.time?.slice(0, 10)} · ${item.accountName}${item.handler ? ` · 经办: ${item.handler}` : ""}`}
+              amount={`−${formatCurrency(item.amount)}`}
+              amountLabel="支出金额"
+              onOpen={() => setDetail(item)}
+            />
+          ),
           enableColumnResizing: true,
           stickyHeader: true,
           virtualized: collection.items.length >= 50,

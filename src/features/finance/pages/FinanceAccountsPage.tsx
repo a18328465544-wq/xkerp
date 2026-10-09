@@ -9,11 +9,12 @@ import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Select} from "@/src/components/ui";
 import {StackedStructureBar} from "@/src/components/ui/chart-primitives";
 import {ChartMeta} from "@/src/components/ui/chart";
-import {DashboardSection, ErpDataTable, ErpEmptyState, ErpFinancePageFrame, ErpFilterBar, ErpLoadingState, ErpMetricCard, MetricsRegion, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpEmptyState, ErpFinancePageFrame, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpMobileRecordRow, MetricsRegion, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, financeAccountsApi, queryKeys} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api/invalidation";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import type {AuthSession} from "@/src/services/api/endpoints/auth";
 import {financeAccountTypes, type FinanceAccountCollection, type FinanceAccountCreateValues, type FinanceAccountItem, type FinanceAccountLedgerItem, type FinanceAccountReconcileValues} from "@/src/types/finance-account";
 import {FinanceAccountCreateDialog, FinanceAccountDeleteDialog, FinanceAccountReconcileDialog} from "../components/FinanceAccountDialogs";
@@ -143,6 +144,7 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
 }
 
 function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCreate}: {accounts?: FinanceAccountItem[]; loading?: boolean; onRefresh?: () => void; onCreate?: () => void}) {
+  const phone = useErpPhone();
   const hasDifference = accounts.some((account) => account.difference !== undefined && Math.abs(account.difference) > 0.009);
   const pending = accounts.some(isPendingAccount);
   const reconciled = accounts.filter((account) => account.lastReconciledAt).sort((left, right) => String(right.lastReconciledAt).localeCompare(String(left.lastReconciledAt)))[0];
@@ -157,7 +159,7 @@ function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCre
     {icon: <CheckCircle2 className="h-4 w-4" />, label: "数据连接", value: loading ? "连接中" : "已连接", tone: loading ? "info" : "success", description: "真实账户接口"},
     {icon: <FileCheck2 className="h-4 w-4" />, label: "对账状态", value: reconciliation.label, tone: reconciliation.tone, description: reconciliation.description},
   ];
-  return <ErpPageHeader title="资金账户" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button><Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
+  return <ErpPageHeader title="资金账户" quickStatus={quickStatus} actions={<>{!phone && <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>}<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
 }
 
 function SummaryCards({summary, accountCount}: {summary: ReturnType<typeof summarizeFinanceAccounts>; accountCount: number}) {
@@ -192,7 +194,7 @@ const recentLedgerColumns: ColumnDef<FinanceAccountLedgerItem, unknown>[] = [
 ];
 
 function RecentChangesCard({available = true, rows, loading, error, onRetry, onRowClick, onViewAll}: {available?: boolean; rows: FinanceAccountLedgerItem[]; loading: boolean; error: Error | null; onRetry: () => void; onRowClick: (row: FinanceAccountLedgerItem) => void; onViewAll: () => void}) {
-  return <DashboardSection title={<span>最近资金变动 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {rows.length} 笔</span></span>} actions={<Button type="button" size="sm" variant="ghost" onClick={onViewAll} disabled={!available}>查看全部</Button>} className="overflow-hidden p-0">{available ? <ErpDataTable surface="plain" columns={recentLedgerColumns} data={rows} getRowId={(row) => row.id} loading={loading} fetching={loading} error={error} errorTitle="资金变动加载失败" emptyTitle="暂无资金变动" emptyDescription="创建收入、支出或调拨后，最近变动会显示在这里。" onRetry={onRetry} onRowClick={onRowClick} ariaLabel="最近资金变动" mobileMode="table" density="compact" stickyHeader total={rows.length} /> : <ErpEmptyState title="资金变动需要权限" description="当前账号没有 settlement_ledger 权限，服务器不会返回流水数据。" />}</DashboardSection>;
+  return <DashboardSection title={<span>最近资金变动 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {rows.length} 笔</span></span>} actions={<Button type="button" size="sm" variant="ghost" onClick={onViewAll} disabled={!available}>查看全部</Button>} className="overflow-hidden p-0">{available ? <ErpDataTable surface="plain" mobilePagination="compact" columns={recentLedgerColumns} data={rows} getRowId={(row) => row.id} loading={loading} fetching={loading} error={error} errorTitle="资金变动加载失败" emptyTitle="暂无资金变动" emptyDescription="创建收入、支出或调拨后，最近变动会显示在这里。" onRetry={onRetry} onRowClick={onRowClick} ariaLabel="最近资金变动" mobileRow={(row) => <ErpMobileRecordRow title={row.businessType || row.accountName} subtitle={row.accountName} meta={`${formatLedgerDateTime(row.time)} · ${row.party || row.customerName || row.supplierName || row.remarks || "—"}`} statusPlacement="title" status={<ErpStatusBadge label={row.changeAmount >= 0 ? "收入" : "支出"} tone={row.changeAmount >= 0 ? "success" : "danger"} />} amount={`${row.changeAmount >= 0 ? "+" : "−"}${formatMoney(Math.abs(row.changeAmount))}`} amountLabel={row.changeAmount >= 0 ? "收入" : "支出"} onOpen={() => onRowClick(row)} />} density="compact" stickyHeader total={rows.length} /> : <ErpEmptyState title="资金变动需要权限" description="当前账号没有 settlement_ledger 权限，服务器不会返回流水数据。" />}</DashboardSection>;
 }
 
 function DistributionCard({rows, positiveTotal, netBalance}: ReturnType<typeof buildDistribution>) {

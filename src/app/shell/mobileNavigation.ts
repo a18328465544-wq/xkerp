@@ -19,7 +19,7 @@ export function mobileNavigationSections(allowedMenus: string[], keyword = "") {
 export function mobileDestinationForPath(pathname: string): MobileDestination {
   const path = (pathname.split(/[?#]/)[0] || "/").replace(/\/+$/, "") || "/";
   const within = (root: string) => path === root || path.startsWith(`${root}/`);
-  if (path === "/" || ["/finance", "/quotes", "/ai-insights"].some(within)) return "workbench";
+  if (path === "/") return "workbench";
   if (path === "/sales/new" || path === "/purchase/new") return "entry";
   if (["/inventory", "/inspections", "/products", "/assembly", "/aftersales"].some(within)) return "inventory";
   if (["/customers", "/crm"].some(within)) return "customers";

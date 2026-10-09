@@ -61,7 +61,11 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-button, input, textarea, select { font: inherit; }
+/* Must stay in the base layer: an unlayered `font: inherit` outranks every
+   Tailwind utility and silently erased font-medium/text-sm on all controls. */
+@layer base {
+  button, input, textarea, select { font: inherit; }
+}
 svg text { font-family: var(--erp-font-sans); }
 button, a { -webkit-tap-highlight-color: transparent; }
 ::selection { background: var(--erp-color-selection); }
@@ -76,6 +80,12 @@ label.text-base {
 button.font-semibold,
 button.font-bold {
   font-weight: var(--erp-font-medium);
+}
+/* Button hierarchy: the primary action carries the only semibold label. */
+button[data-erp-button-variant="primary"],
+button[data-erp-button-variant="danger"],
+button[data-erp-button-variant="warning"] {
+  font-weight: var(--erp-font-semibold);
 }
 /* Legacy utility compatibility: existing font-bold markup now resolves to
    the approved semibold tier without introducing a fourth weight. */
@@ -143,6 +153,58 @@ input[inputmode="numeric"] {
   cursor: not-allowed;
   background-color: var(--erp-color-surface-muted);
   color: var(--erp-color-text-muted);
+}
+/* Read-only values are information, not fields: no border, tinted fill, so
+   nobody tries to type into a locked document. Pickers render a readonly
+   input as their trigger (role=combobox) and keep the editable look. */
+[data-erp-component="input"][readonly]:not([role="combobox"]),
+[data-erp-component="amount-input"][readonly]:not([role="combobox"]),
+[data-erp-component="textarea"][readonly] {
+  border-color: transparent;
+  background-color: var(--erp-color-readonly);
+  box-shadow: none;
+  cursor: default;
+}
+.erp-switch-root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-color: var(--erp-color-border-strong);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+  padding: 0;
+}
+.erp-switch-root:focus-visible {
+  box-shadow: 0 0 0 2px var(--erp-color-surface), 0 0 0 4px var(--erp-color-primary);
+}
+.erp-switch-root[data-checked] {
+  background-color: var(--erp-color-primary);
+}
+.erp-switch-root[data-disabled],
+.erp-switch-root:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.erp-switch-thumb {
+  pointer-events: none;
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background-color: var(--erp-color-surface);
+  box-shadow: var(--erp-shadow-control);
+  transform: translateX(0px);
+  transition: transform 0.2s ease;
+}
+.erp-switch-root[data-checked] .erp-switch-thumb,
+.erp-switch-thumb[data-checked] {
+  transform: translateX(16px);
 }
 /* A compact filter bar owns the density of the controls it contains. This
    keeps pages from having to repeat size props on every search/select field;
@@ -1129,6 +1191,19 @@ input[inputmode="numeric"] {
   [data-erp-shell] {
     --erp-mobile-bottom-offset: calc(var(--erp-mobile-nav-height) + env(safe-area-inset-bottom));
     --erp-mobile-action-offset: calc(var(--erp-mobile-bottom-offset) + var(--erp-phone-keyboard-inset));
+    --erp-phone-dock-height: 0px;
+  }
+  body:has([data-erp-component="mobile-action-dock"]:not([hidden])) [data-erp-shell] {
+    --erp-phone-dock-height: calc(var(--erp-mobile-touch-size) + var(--erp-space-6));
+  }
+  body:has([data-erp-component="mobile-action-dock"]:not([hidden]):has([data-erp-region="mobile-action-primary"])) [data-erp-shell] {
+    --erp-phone-dock-height: calc(var(--erp-mobile-search-action-height) + var(--erp-space-2));
+  }
+  body:has([data-erp-component="submit-bar"]:not([hidden])) [data-erp-shell] {
+    --erp-phone-dock-height: 64px;
+  }
+  body:has([role="dialog"][data-open]:not([data-mobile-presentation="tab"]), .erp-option-popup[data-open], .erp-popover-surface[data-open]) [data-erp-shell] {
+    --erp-phone-dock-height: 0px;
   }
   [data-erp-shell][data-phone-keyboard="open"] { --erp-mobile-bottom-offset: 0px; }
   body:has([data-erp-component="mobile-workflow"], [data-phone-task="true"]) [data-erp-shell] {
@@ -1141,7 +1216,7 @@ input[inputmode="numeric"] {
   .erp-main-content [data-erp-component="card"] { box-shadow: none; }
   .erp-main-content {
     padding: var(--erp-space-3);
-    padding-bottom: calc(var(--erp-mobile-bottom-offset) + var(--erp-space-6) + var(--erp-phone-keyboard-inset));
+    padding-bottom: calc(var(--erp-mobile-bottom-offset) + var(--erp-phone-dock-height, 0px) + var(--erp-space-6) + var(--erp-phone-keyboard-inset));
     scroll-padding-block: var(--erp-space-3) calc(var(--erp-mobile-action-height) + var(--erp-mobile-action-offset));
     overscroll-behavior-y: contain;
   }
@@ -1228,7 +1303,7 @@ input[inputmode="numeric"] {
   .erp-phone-scroll-top {
     position: fixed;
     right: var(--erp-space-4);
-    bottom: calc(var(--erp-mobile-bottom-offset) + var(--erp-space-4));
+    bottom: calc(var(--erp-mobile-bottom-offset) + var(--erp-phone-dock-height, 0px) + var(--erp-space-4));
     z-index: var(--erp-layer-content-sticky);
     border-radius: var(--erp-radius-pill);
     box-shadow: var(--erp-shadow-popover);
@@ -1291,9 +1366,9 @@ input[inputmode="numeric"] {
   .erp-inspection-settings-summary { padding: var(--erp-space-3); font-size: var(--erp-text-xs); color: var(--erp-color-text-secondary); }
   .erp-inspection-settings-summary > div { display: flex; align-items: start; justify-content: space-between; gap: var(--erp-space-3); padding-block: var(--erp-space-1); }
   .erp-inspection-settings-summary dd { min-width: 0; overflow-wrap: anywhere; text-align: right; }
-  .erp-inspection-queue-tabs { display: flex; padding: var(--erp-space-1); border-radius: var(--erp-radius-md); background: var(--erp-color-surface-muted); }
+  .erp-inspection-queue-tabs { display: flex; padding: 3px; border-radius: var(--erp-radius-control); background: var(--erp-color-segmented-track); }
   .erp-inspection-queue-tabs > button { flex: 1; }
-  .erp-inspection-queue-tabs > button[aria-pressed="true"] { background: var(--erp-color-surface); color: var(--erp-color-primary); }
+  .erp-inspection-queue-tabs > button[aria-pressed="true"] { background: var(--erp-color-surface); color: var(--erp-color-text); font-weight: var(--erp-font-semibold); box-shadow: var(--erp-shadow-segmented-thumb); }
   .erp-inspection-queue-records { overflow: hidden; border-radius: var(--erp-radius-md); background: var(--erp-color-surface); }
   .erp-phone-warehouse-tasks { display: flex; gap: var(--erp-space-2); }
   .erp-phone-warehouse-tasks > a { display: flex; align-items: center; justify-content: center; gap: var(--erp-space-2); flex: 1; min-width: 0; min-height: var(--erp-mobile-touch-size); padding: var(--erp-space-2); border: 1px solid var(--erp-color-border); border-radius: var(--erp-radius-md); background: var(--erp-color-surface); font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); }
@@ -1374,7 +1449,7 @@ input[inputmode="numeric"] {
   [data-erp-region="page-content"]:has([data-mobile-projection="list"]) > [data-erp-region="table-results"] { display: none; }
   [data-mobile-projection="list"] [data-erp-region="mobile-table-sorting"] { margin: 0; border-bottom: 1px solid var(--erp-color-border); }
   .erp-phone-record-end { max-width: 38%; }
-  .erp-phone-record-end > :not(svg) { white-space: normal; text-align: right; }
+  .erp-phone-record-end > :not(svg) { white-space: nowrap; text-align: right; }
   .erp-mobile-summary-trigger { padding: 0; }
 }
 /* Phone-first presentation. Domain state and desktop geometry stay shared. */
@@ -1443,7 +1518,7 @@ input[inputmode="numeric"] {
   .erp-mobile-workflow-actions > div:last-child > button { flex: 0 1 auto; }
   :root { --erp-workspace-bar-height: 0px; }
   .erp-tab-navigation { display: none; }
-  .erp-main-content { padding: var(--erp-space-4); padding-bottom: calc(var(--erp-mobile-bottom-offset) + var(--erp-space-6) + var(--erp-phone-keyboard-inset)); }
+  .erp-main-content { padding: var(--erp-space-4); padding-bottom: calc(var(--erp-mobile-bottom-offset) + var(--erp-phone-dock-height, 0px) + var(--erp-space-6) + var(--erp-phone-keyboard-inset)); }
   .erp-mobile-bottom-nav { gap: 0; border-radius: 0; padding-inline: var(--erp-space-2); border-top: 1px solid var(--erp-mobile-bottom-nav-border); background: var(--erp-mobile-bottom-nav-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
   .erp-mobile-bottom-nav .erp-mobile-nav-active { background: transparent; }
   .erp-mobile-bottom-nav .erp-mobile-nav-item { border-radius: 0; font-weight: var(--erp-font-medium); }
@@ -1492,8 +1567,9 @@ input[inputmode="numeric"] {
   .erp-phone-record-image { display: flex; align-items: center; justify-content: center; flex: 0 0 var(--erp-mobile-record-image-size); height: var(--erp-mobile-record-image-size); border-radius: var(--erp-radius-md); background: var(--erp-color-surface-muted); color: var(--erp-color-text-muted); border: 1px solid var(--erp-color-border-soft); overflow: hidden; }
   .erp-phone-record-image img { width: 100%; height: 100%; object-fit: contain; }
   .erp-phone-record-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: var(--erp-space-1); }
-  .erp-phone-record-title { font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); overflow-wrap: anywhere; }
-  .erp-phone-record-subtitle, .erp-phone-record-meta { font-size: var(--erp-text-xs); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); overflow-wrap: anywhere; }
+  .erp-phone-record-title { font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .erp-phone-record-title-mono { font-variant-numeric: tabular-nums; font-family: var(--erp-font-mono, monospace); }
+  .erp-phone-record-subtitle, .erp-phone-record-meta { font-size: var(--erp-text-xs); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .erp-phone-record-end { display: flex; flex-direction: column; align-items: end; gap: var(--erp-space-1); flex-shrink: 0; font-size: var(--erp-text-base); }
   .erp-phone-record-end .erp-data-number { display: inline-block; font-weight: var(--erp-font-medium); }
   .erp-phone-record-end .erp-data-number::first-letter { font-size: 0.82em; margin-right: 1px; font-weight: var(--erp-font-regular); }
@@ -1520,7 +1596,7 @@ input[inputmode="numeric"] {
     align-items: center;
     padding: 2px;
     border-radius: var(--erp-radius-pill);
-    background: var(--erp-color-surface-muted);
+    background: var(--erp-color-segmented-track);
     margin-block: var(--erp-space-3);
     border: 1px solid var(--erp-color-border-soft);
   }
@@ -1535,8 +1611,8 @@ input[inputmode="numeric"] {
   }
   .erp-phone-period button[aria-pressed="true"] {
     background: var(--erp-color-surface);
-    color: var(--erp-color-primary);
-    box-shadow: var(--erp-phone-segment-active-shadow);
+    color: var(--erp-color-text);
+    box-shadow: var(--erp-shadow-segmented-thumb);
     font-weight: var(--erp-font-semibold);
   }
   .erp-phone-period button[aria-pressed="false"] {
@@ -1605,7 +1681,8 @@ input[inputmode="numeric"] {
     font-size: var(--erp-text-sm);
     border-bottom: 1px solid var(--erp-color-border-soft);
   }
-  .erp-phone-task > svg { color: var(--erp-color-warning); flex-shrink: 0; }
+  .erp-phone-task > svg:first-child { color: var(--erp-color-warning); flex-shrink: 0; }
+  .erp-phone-task > svg:last-child { color: var(--erp-color-text-muted); flex-shrink: 0; }
   .erp-phone-task strong { margin-left: auto; font-weight: var(--erp-font-semibold); }
   .erp-phone-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--erp-space-2); }
   .erp-phone-shortcuts a { display: flex; flex-direction: column; align-items: center; gap: var(--erp-space-2); font-size: var(--erp-text-xs); text-align: center; }
@@ -1810,8 +1887,14 @@ input[inputmode="numeric"] {
 
 /* Payment intent is shared. Phone order geometry is scoped to the two entry
    pages; desktop editable tables and other workflows retain their layout. */
-.erp-order-payment-mode { grid-column: 1 / -1; }
-.erp-segmented-control { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--erp-space-1); padding: var(--erp-space-1); border-radius: var(--erp-radius-control); background: var(--erp-color-surface-muted); }
+/* One segmented language everywhere (desktop, phone, inventory view,
+   period and queue switches): grey track + raised white thumb. The selected
+   segment must never look like the page's primary action. */
+.erp-segmented-control { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; padding: 3px; border-radius: var(--erp-radius-control); background: var(--erp-color-segmented-track); }
+.erp-segmented-control.erp-segmented-control-inline { display: inline-grid; grid-auto-columns: auto; }
+.erp-segmented-control > button[data-erp-control="button"] { height: calc(var(--erp-control-height) - 6px); border-radius: calc(var(--erp-radius-control) - 3px); color: var(--erp-color-text-secondary); font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); }
+.erp-segmented-control > button[data-erp-control="button"]:hover:not([aria-pressed="true"]) { background: var(--erp-color-segmented-hover); color: var(--erp-color-text); }
+.erp-segmented-control > button[aria-pressed="true"] { background: var(--erp-color-surface); color: var(--erp-color-text); font-weight: var(--erp-font-semibold); box-shadow: var(--erp-shadow-segmented-thumb); }
 .erp-payment-mode-options { margin-top: var(--erp-space-2); }
 .erp-order-payment-balance { display: grid; gap: var(--erp-space-2); }
 .erp-order-payment-balance > div { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); font-size: var(--erp-text-sm); }
@@ -1921,8 +2004,10 @@ input[inputmode="numeric"] {
 .erp-phone-stepper-input { appearance: textfield; }
 .erp-phone-stepper-input::-webkit-inner-spin-button, .erp-phone-stepper-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 @media (min-width: 768px) {
-  [data-erp-component="quantity-stepper"] { display: inline-flex; align-items: center; gap: var(--erp-space-1); max-width: 100%; vertical-align: middle; }
-  [data-erp-component="quantity-stepper"] .erp-phone-stepper-input { width: var(--erp-space-16); min-width: 0; padding-inline: var(--erp-space-1); text-align: center; }
+  /* Same bordered group as the phone stepper: one control, not three. */
+  [data-erp-component="quantity-stepper"] { display: inline-flex; align-items: center; gap: 0; max-width: 100%; height: var(--erp-control-height); overflow: hidden; vertical-align: middle; border: 1px solid var(--erp-color-border); border-radius: var(--erp-radius-control); background: var(--erp-color-surface); }
+  [data-erp-component="quantity-stepper"] > button { height: 100%; border-radius: 0; }
+  [data-erp-component="quantity-stepper"] .erp-phone-stepper-input { width: var(--erp-space-12); height: 100%; min-width: 0; padding-inline: var(--erp-space-1); border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: center; }
 }
 @media (max-width: 767px) {
   .erp-order-entry-page { --erp-page-gap: var(--erp-mobile-section-gap); }

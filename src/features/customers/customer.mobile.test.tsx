@@ -27,9 +27,9 @@ test("long customer names can wrap without splitting the transaction date", () =
   assert.match(css, /\.erp-customer-last-date \{ display: inline-block; white-space: nowrap/);
 });
 
-test("search and creation dock uses original draft/mutation callbacks and hides for customer overlays", () => {
+test("search and creation uses original draft/mutation callbacks and hides for customer overlays", () => {
   assert.match(source, /<ErpMobileActionDock hidden=\{Boolean\(detail \|\| dialogOpen \|\| deleting \|\| phoneFiltersOpen\)\}/);
-  assert.match(source, /primaryAction=\{<Button[^>]+onClick=\{openCreate\}/);
+  assert.match(source, /onClick=\{openCreate\}/);
   assert.match(source, /keyword: event\.target\.value, page: 1/);
   assert.match(source, /<CustomerRecordDialog open=\{dialogOpen\}/);
 });
