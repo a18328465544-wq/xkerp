@@ -1,7 +1,7 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryResult} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState} from "@tanstack/react-table";
-import {ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarRange, Download, Pencil, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2} from "lucide-react";
+import {ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarRange, Download, Pencil, Plus, RefreshCw, RotateCcw, Trash2} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -33,7 +33,7 @@ export function FinanceTransfersPage() {
   const accountsQuery = useQuery({queryKey: queryKeys.finance.accounts(), queryFn: ({signal}) => financeAccountsApi.listAll(signal), enabled: active && Boolean(session && canAccess && canReadAccounts), staleTime: 60_000, retry: false});
   useEffect(() => {if (transferQuery.error instanceof ApiError && transferQuery.error.isUnauthorized) logout();}, [logout, transferQuery.error]);
   if (!session) return <Card><ErpLoadingState title="正在验证资金调拨权限" /></Card>;
-  if (!session || !canAccess) return <ErpPageError title="当前账号没有资金调拨权限" description="服务端权限未包含 account_transfer；页面不会请求或展示调拨记录。" />;
+  if (!session || !canAccess) return <ErpPageError title="当前账号没有资金调拨权限" description="当前账号没有查看调拨记录的权限，请联系管理员开通。" />;
   return <FinanceTransfersContent session={session} onAuthExpired={logout} filters={filters} onFiltersChange={commit} transferQuery={transferQuery} accounts={accountsQuery.data?.accounts || []} accountOptionsAvailable={canReadAccounts && !accountsQuery.isPending && !accountsQuery.error} />;
 }
 
@@ -61,10 +61,7 @@ function FinanceTransfersContent({session, onAuthExpired, filters, onFiltersChan
     const first = next[0];
     update({sortKey: first?.id || undefined, sortDirection: first ? (first.desc ? "desc" : "asc") : undefined});
   };
-  const quickStatus: QuickStatusItemData[] = [
-    {icon: <ShieldCheck className="h-4 w-4" />, label: "账户权限", value: accountOptionsAvailable ? "可登记" : "仅查看", description: accountOptionsAvailable ? "可读取真实余额和账户候选" : "账户候选与余额未请求", tone: accountOptionsAvailable ? "success" : "neutral"},
-    {icon: <ArrowLeftRight className="h-4 w-4" />, label: "到账规则", value: "实时入账", description: "转入 = 调拨金额 − 手续费", tone: "info"},
-  ];
+  const quickStatus: QuickStatusItemData[] = [];
   const exportCurrentPage = () => {
     const table = [["调拨编号", "日期", "转出账户", "转入账户", "调拨金额", "手续费", "实际到账", "经办人", "备注"], ...collection.items.map((item) => [item.id, item.time.slice(0, 10), item.fromAccountName, item.toAccountName, item.amount, item.fee, item.receivedAmount, item.handler, item.remarks || ""])];
     const csv = `\uFEFF${table.map((row) => row.map(csvCell).join(",")).join("\n")}`;
@@ -107,7 +104,7 @@ function TransferDetail({item, canEdit, canDelete, onClose, onEdit, onDelete}: {
 }
 
 function ConfirmDelete({item, pending, onClose, onConfirm}: {item: FinanceTransferItem | null; pending: boolean; onClose: () => void; onConfirm: () => void}) {
-  return <ErpDetailDrawer open={Boolean(item)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="冲销资金调拨" description="服务端将反向修正两边账户余额与关联流水并保留操作记录" footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={pending}>取消</Button><Button variant="danger" onClick={onConfirm} disabled={pending}>{pending ? "冲销中…" : "确认冲销"}</Button></div>}><p className="text-sm leading-6 text-[var(--erp-color-text-secondary)]">确认冲销调拨「{item?.id}」？转出 {item?.fromAccountName} 的 {formatCurrency(item?.amount || 0)}、转入 {item?.toAccountName} 的 {formatCurrency(item?.receivedAmount || 0)} 将由服务端反向修正。</p></ErpDetailDrawer>;
+  return <ErpDetailDrawer open={Boolean(item)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="冲销资金调拨" description="两边账户余额与关联流水会反向修正，并保留操作记录" footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={pending}>取消</Button><Button variant="danger" onClick={onConfirm} disabled={pending}>{pending ? "冲销中…" : "确认冲销"}</Button></div>}><p className="text-sm leading-6 text-[var(--erp-color-text-secondary)]">确认冲销调拨「{item?.id}」？转出 {item?.fromAccountName} 的 {formatCurrency(item?.amount || 0)}、转入 {item?.toAccountName} 的 {formatCurrency(item?.receivedAmount || 0)} 将反向修正。</p></ErpDetailDrawer>;
 }
 
 function Metric({label, value, detail, icon, tone}: {label: string; value: string; detail: string; icon: ReactNode; tone: "neutral" | "info" | "success" | "warning" | "danger"}) {

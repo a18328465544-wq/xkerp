@@ -85,7 +85,7 @@ export function adaptVendorDirectory(response: VendorDirectoryResponseDto, permi
 }
 
 export function adaptVendorMutation(response: VendorMutationResponseDto, permissions: {showProfit: boolean}) {
-  if (!response.data) throw new Error("同行接口未返回档案数据");
+  if (!response.data) throw new Error("暂时无法读取同行档案，请稍后重试");
   return adaptVendor(response.data, permissions);
 }
 

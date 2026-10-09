@@ -1,3 +1,5 @@
+> **已归档**：本文是实施过程记录，规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)，两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 库存手机呈现：单手浏览与仓库作业
 
 2026-10-08，`codex/frontend-v2`，起始HEAD `b49cc98`，起始工作树干净。沿用用户已选择的第2张单手操作风格。当前任务不包含上线。

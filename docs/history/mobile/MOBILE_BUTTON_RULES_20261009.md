@@ -1,3 +1,5 @@
+> **已归档**：本文的规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)（M4、M24、M26、M27），两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 移动端按钮尺寸体系与交互设计规范
 
 更新时间：2026-10-09  

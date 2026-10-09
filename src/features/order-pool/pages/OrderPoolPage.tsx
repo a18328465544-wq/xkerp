@@ -1,7 +1,7 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ColumnDef} from "@tanstack/react-table";
-import {AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, ChevronDown, CircleDot, ClipboardList, Link2, MessageSquarePlus, Plus, RefreshCw, RotateCcw, SlidersHorizontal, UserRound, Users} from "lucide-react";
+import {AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronDown, CircleDot, ClipboardList, Link2, MessageSquarePlus, Plus, RefreshCw, RotateCcw, SlidersHorizontal, UserRound, Users} from "lucide-react";
 import {ErpDateTimePicker, ErpDetailFact, ErpDialogShell, ErpField, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -54,7 +54,7 @@ export function OrderPoolPage() {
   });
   useEffect(() => {if (query.error instanceof ApiError && query.error.isUnauthorized) logout();}, [logout, query.error]);
   if (!session) return <Card><ErpLoadingState title="正在验证订单池权限" /></Card>;
-  if (!allowed) return <ErpPageError title="当前账号没有订单池权限" description="服务器权限未包含 order_pool 菜单，请联系管理员授权。" />;
+  if (!allowed) return <ErpPageError title="当前账号没有订单池权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <OrderPoolContent session={session} filters={filters} commitFilters={commit} query={query} onAuthExpired={logout} />;
 }
 
@@ -237,7 +237,6 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
           <Metric label="待认领" value={`${collection.summary.pendingClaim} 单`} detail="共享队列中尚未分配负责人" icon={<CircleDot className="h-4 w-4" />} tone={collection.summary.pendingClaim ? "warning" : "neutral"} />
           <Metric label="跟进中" value={`${collection.summary.following} 单`} detail="已有负责人持续推进" icon={<Users className="h-4 w-4" />} tone="info" />
           <Metric label="待执行" value={`${collection.summary.pendingExecution} 单`} detail="报价、备货、收款或出库" icon={<ClipboardList className="h-4 w-4" />} tone={collection.summary.pendingExecution ? "warning" : "neutral"} />
-          <Metric label="已完成" value={`${collection.summary.completed} 单`} detail="主线已闭环" icon={<CheckCircle2 className="h-4 w-4" />} tone="success" />
           <Metric label="异常订单" value={`${collection.summary.exceptions} 单`} detail="暂停 / 丢单 / 取消 / 售后" icon={<AlertTriangle className="h-4 w-4" />} tone={collection.summary.exceptions ? "danger" : "neutral"} />
         </MetricsRegion>
         <ErpPageToolbar>

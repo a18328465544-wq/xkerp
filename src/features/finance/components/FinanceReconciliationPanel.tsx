@@ -57,7 +57,7 @@ export function FinanceReconciliationPanel({report}: {report: FinanceReconciliat
               </div>
             </div>
           ))}
-          {report.truncated ? <p className="text-xs text-[var(--erp-color-text-muted)]">仅显示前 6 项，完整结果请查看账务体检接口返回。</p> : null}
+          {report.truncated ? <p className="text-xs text-[var(--erp-color-text-muted)]">仅显示前 6 项。</p> : null}
         </div>
       ) : (
         <ErpEmptyState title="暂未发现账务漂移" description="账户余额、收付款关联、单据结算和退货资金链通过检查。" />

@@ -1,3 +1,5 @@
+> **已归档**：本文是实施过程记录，规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)，两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 移动控件全局规则与复用清单
 
 适用范围：手机宽度小于 768px。沿用现有 `tokens.css`、`globals.css` 和组件目录；不增加第二套移动主题，不改业务数据或金额算法。

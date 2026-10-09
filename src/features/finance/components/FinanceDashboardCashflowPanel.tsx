@@ -26,7 +26,7 @@ export function FinanceDashboardCashflowPanel({view, access, range, cashTrendAct
       <div className="space-y-2">
         <ErpEmptyState
           title="当前账号无账户流水权限"
-          description="需要 settlement_ledger 权限才能查看真实收支趋势；页面不会把不可见数据展示为 0。"
+          description="当前账号没有查看收支趋势的权限。"
           density="compact"
         />
         <ChartMeta className="mt-2" summary="收支趋势暂不可见 · 账户流水权限受限" updatedAt={storeDate()} />

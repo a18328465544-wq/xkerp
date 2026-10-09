@@ -44,7 +44,7 @@ export function salesFieldErrors(error: unknown): SalesFieldErrorMap {
 export function salesSubmitErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
     if (error.isUnauthorized) return "登录状态已失效，请重新登录后再提交销售单。";
-    if (error.isForbidden) return "服务器拒绝了销售开单或关联数据访问（403），请检查销售、CRM、库存和收款账户权限。";
+    if (error.isForbidden) return "当前账号缺少销售开单所需的权限（销售、CRM、库存或收款账户），请联系管理员开通。";
     if (error.status === 409) {
       const details = record(record(record(error.payload).error).details);
       if (details.kind === "STALE_SALES_RECORD") return `${error.message}。当前输入已保留；请先复制需保留的修改，再重新打开销售单核对后保存。`;

@@ -74,7 +74,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   const valueFont = `--erp-font-metric-${compact ? "compact" : "primary"}-${resolvedValueSize}`;
   const fittedFont = `min(var(${valueFont}), max(var(--erp-text-sm), calc((100cqi - var(--erp-space-10)) / ${Math.max(1, value.trim().replace(/\s+/g, "").length * 0.65)})))`;
   return <Card data-erp-component="metric-card" data-density={compact ? "compact" : "default"} data-value-size={resolvedValueSize}>
-    <CardContent className={`relative ${compact ? "p-4" : "p-5"}`} style={{minHeight: minHeight ?? (compact ? 76 : 112)}}>
+    <CardContent className={`relative ${compact ? "p-4" : "p-5"}`} style={{minHeight: minHeight ?? (compact ? 76 : hasFooter ? 112 : 88)}}>
       <div className="min-w-0">
         <p data-erp-region="metric-label" className={`text-xs font-medium text-[var(--erp-color-text-secondary)] ${icon ? "pr-10" : ""}`}>{label}</p>
         <p data-erp-region="metric-value" data-value-size={resolvedValueSize} title={value} style={{fontSize: fittedFont}} className={`${compact ? "mt-1" : "mt-2"} ${valueSizeClasses[variant][resolvedValueSize]} ${valueToneClasses[valueTone]} erp-data-number min-w-0 font-semibold leading-tight tracking-tight`}>{value}</p>

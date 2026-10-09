@@ -1,7 +1,7 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState, VisibilityState} from "@tanstack/react-table";
-import {ArrowDown, ArrowUp, BadgeDollarSign, ChevronDown, CircleDollarSign, Download, Filter, Handshake, Plus, RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, Star} from "lucide-react";
+import {ArrowDown, ArrowUp, BadgeDollarSign, ChevronDown, CircleDollarSign, Download, Filter, Handshake, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Star} from "lucide-react";
 import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpMobileRecordRow, ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -35,7 +35,7 @@ export function VendorDirectoryPage() {
   const listQuery = useQuery({queryKey: queryKeys.vendors.directory({showProfit: Boolean(session?.permissions.showProfit)}, serverFilters, sorting), queryFn: ({signal}) => vendorsApi.list(serverFilters, sorting, {showProfit: Boolean(session?.permissions.showProfit)}, signal), enabled: active && Boolean(session && allowed), placeholderData: keepPreviousData, retry: false});
   useEffect(() => {if (listQuery.error instanceof ApiError && listQuery.error.isUnauthorized) logout();}, [listQuery.error, logout]);
   if (!session) return <Card><ErpLoadingState title="正在验证同行档案权限" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有同行档案权限" description="服务器权限未包含 vendors 菜单，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有同行档案权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <VendorDirectoryContent session={session} query={listQuery} filters={filters} sorting={sorting} onSortingChange={(next) => {setSorting(next); commitFilters({...filters, page: 1});}} onFiltersChange={commitFilters} onAuthExpired={logout} />;
 }
 
@@ -69,7 +69,6 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(filters.level !== "all") + Number(filters.balance !== "all");
   const quickStatus: QuickStatusItemData[] = [
     {icon: <Star className="h-4 w-4" />, label: "核心同行", value: `${coreCount} 家`, description: "核心采购方固定 S 级", tone: coreCount ? "info" : "neutral"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "档案权限", value: canDelete ? "可维护 / 删除" : "可维护", description: "删除额外受 canDelete 控制", tone: "success"},
   ];
 
   const exportVendors = () => {
@@ -182,7 +181,7 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
       <>
         <ErpMobileSummary>
           <MetricsRegion>
-            <MetricCard label="同行总数" value={`${total} 家`} detail="按当前筛选" icon={<Handshake className="h-4 w-4" />} />
+            <MetricCard label="同行总数" value={`${total} 家`} icon={<Handshake className="h-4 w-4" />} />
             <MetricCard label="核心 / S级" value={`${coreCount} 家`} detail="核心采购方与核心同行" icon={<Star className="h-4 w-4" />} tone="info" />
             <MetricCard label="应付余额" value={formatCurrency(payable)} detail="门店应向同行支付" icon={<BadgeDollarSign className="h-4 w-4" />} tone={payable ? "warning" : "success"} />
             <MetricCard label="应收 / 退货抵扣" value={`${formatCurrency(receivable)} / ${formatCurrency(credit)}`} detail="应收与抵扣分别核算" icon={<CircleDollarSign className="h-4 w-4" />} tone={receivable || credit ? "info" : "success"} />
@@ -198,7 +197,7 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
     )}
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {!phone && <ErpTableResultsBar summary={<span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部同行"} tone={activeFilters ? "info" : "neutral"} /><span>筛选、排序和分页仅作用于已加载同行集合。</span></span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
-      {phone ? vendorTable : <DashboardSection title="同行档案明细" description="点击行查看基础档案和三类往来余额；删除已关联采购或销售单据的同行会被服务端拒绝。" actions={<ErpStatusBadge label={`当前页 ${vendors.length} / 共 ${total} 条`} tone="info" />}>{vendorTable}</DashboardSection>}
+      {phone ? vendorTable : <DashboardSection title="同行档案明细" description="点击行查看基础档案和三类往来余额。" actions={<ErpStatusBadge label={`当前页 ${vendors.length} / 共 ${total} 条`} tone="info" />}>{vendorTable}</DashboardSection>}
       <ErpMobileActionDock hidden={Boolean(detail || dialogOpen || deleting || phoneFiltersOpen)} ariaLabel="同行搜索">{search}</ErpMobileActionDock>
       {phone && (
         <ErpDialogShell open={phoneFiltersOpen} onOpenChange={setPhoneFiltersOpen} title="同行筛选与操作" mobilePresentation="sheet" footer={<>{filterActions}<Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>查看结果</Button></>}>
@@ -233,9 +232,9 @@ function VendorDetailDrawer({vendor, showProfit, canEdit, onClose, onEdit}: {ven
 }
 
 function DeleteVendorDialog({vendor, pending, error, onClose, onConfirm}: {vendor: VendorDirectoryItem | null; pending: boolean; error?: string; onClose: () => void; onConfirm: () => void}) {
-  return <ErpConfirmDialog open={Boolean(vendor)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="删除同行档案" description="已有采购或销售单据的同行会由服务端拒绝删除；有风险的同行建议保留档案并标记 R 级。" documentName={vendor?.name} confirmLabel="确认删除" pendingLabel="删除中…" confirmVariant="danger" pending={pending} error={error} onConfirm={onConfirm} />;
+  return <ErpConfirmDialog open={Boolean(vendor)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="删除同行档案" description="已有采购或销售单据的同行无法删除；有风险的同行建议保留档案并标记 R 级。" documentName={vendor?.name} confirmLabel="确认删除" pendingLabel="删除中…" confirmVariant="danger" pending={pending} error={error} onConfirm={onConfirm} />;
 }
 
-function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "neutral" | "info" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;}
+function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "info" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;}
 const Fact = ErpDetailFact;
 function csvCell(value: string | number) {const text = String(value); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;}

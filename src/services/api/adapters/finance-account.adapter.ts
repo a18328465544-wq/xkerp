@@ -76,7 +76,7 @@ export function mergeFinanceAccountPages(pages: FinanceAccountCollection[]): Fin
 }
 
 export function adaptFinanceAccountMutation(response: FinanceAccountMutationResponseDto) {
-  if (!response.data) throw new Error("资金账户接口未返回账户数据");
+  if (!response.data) throw new Error("暂时无法读取资金账户，请稍后重试");
   return adaptFinanceAccount(response.data);
 }
 

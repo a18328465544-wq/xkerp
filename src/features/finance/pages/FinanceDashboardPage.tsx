@@ -124,7 +124,7 @@ export function FinanceDashboardPage() {
     return (
       <ErpPageError
         title="当前账号没有财务总览权限"
-        description="服务器权限未包含 finance 菜单，请联系管理员授权。"
+        description="当前账号没有此页面的访问权限，请联系管理员开通。"
       />
     );
   return (

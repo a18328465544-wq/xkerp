@@ -56,7 +56,7 @@ function RootLayout() {
 }
 
 function RouteLoadingState() {
-  return <Card><ErpLoadingState title="正在打开页面" description="仅加载当前业务页面所需的资源。" /></Card>;
+  return <Card><ErpLoadingState title="正在打开页面" description="请稍候…" /></Card>;
 }
 
 function RouteErrorState({error}: {error: unknown}) {

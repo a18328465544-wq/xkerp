@@ -58,7 +58,7 @@ export function adaptFinanceDailyClosings(response: FinanceDailyClosingResponseD
 
 export function adaptFinanceDailyClosingMutation(response: FinanceDailyClosingResponseDto): FinanceDailyClosing {
   const closing = adaptFinanceDailyClosing(response.data);
-  if (!closing) throw new Error("日结接口未返回有效快照");
+  if (!closing) throw new Error("暂时无法读取日结数据，请稍后重试");
   return closing;
 }
 

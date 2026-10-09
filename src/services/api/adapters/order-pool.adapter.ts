@@ -47,7 +47,7 @@ export function adaptOrderPoolCollection(response: OrderPoolCollectionResponseDt
 
 export function adaptOrderPoolMutation(response: OrderPoolMutationResponseDto): CustomerOrder {
   const parsed = order(response.data);
-  if (!parsed) throw new Error("订单池接口返回的数据无效");
+  if (!parsed) throw new Error("订单数据无效，请刷新后确认");
   return parsed;
 }
 

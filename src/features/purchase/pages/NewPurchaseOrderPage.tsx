@@ -55,7 +55,7 @@ function mergeByIdentity<T extends {id: string}>(primary: T[], secondary: T[]) {
 export function NewPurchaseOrderPage() {
   const {session, logout} = useAuth();
   if (!session) return <Card><ErpLoadingState title="正在验证登录状态" description="正在读取当前账号的采购开单权限。" /></Card>;
-  if (!createCapabilities(session).menu("purchase_add")) return <ErpPageError title="当前账号没有采购开单权限" description="服务器已拒绝 purchase_add 菜单访问（403），请联系管理员授权。" />;
+  if (!createCapabilities(session).menu("purchase_add")) return <ErpPageError title="当前账号没有采购开单权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <PurchaseOrderForm session={session} onAuthExpired={logout} />;
 }
 
@@ -249,7 +249,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
       const hasGpu = categories.has("显卡");
       const hasAccessory = Array.from(categories).some((category) => category !== "显卡");
       setSuccessMessage(`采购单 ${result.invoice.invoiceNo || "已创建"} 已提交，当前仍停留在采购开单页面。`);
-      notify.success(`采购单 ${result.invoice.invoiceNo || "已创建"} 已提交`, {description: hasGpu ? "已进入检测质检流程，SN、成色、库位和最终状态在该阶段确认。" : hasAccessory ? "已按后端现有规则进入后续检测与入库流程。" : "采购单已创建。"});
+      notify.success(`采购单 ${result.invoice.invoiceNo || "已创建"} 已提交`, {description: hasGpu ? "已进入检测质检流程，SN、成色、库位和最终状态在该阶段确认。" : hasAccessory ? "已进入后续检测与入库流程。" : "采购单已创建。"});
       clearMediaRef.current?.();
       discardDraft();
       setRestoredDraftActive(false);
@@ -297,8 +297,8 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader density="default" title={phone ? "采购开单" : "进货与回收"} subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" leading={phone ? backAction : undefined} actions={!phone ? <>{backAction}<GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></> : <div className="flex items-center gap-2"><span className="erp-order-draft-label">草稿 · 切页保留</span><GpuSnDateLookupButton label="SN 查询" /></div>} /></CardContent></Card>
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">表单已重置为下一张采购单；如需处理 SN、成色或库位，请从检测质检入口进入。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
-    {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">余额、来源或服务端状态可能已变化；表单内容保留，请重新核对后重试。</p>}</div><Button type="button" size="icon" variant="ghost" onClick={() => {submission.clearFeedback(); setServerError(null); setConflictError(false);}} aria-label="关闭错误提示">×</Button></CardContent></Card>}
-    {!canReadProducts && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有商品规格读取权限，商品选择已禁用；服务端仍会校验采购商品。</CardContent></Card>}
+    {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">余额或来源可能已变化；表单内容已保留，请核对后重试。</p>}</div><Button type="button" size="icon" variant="ghost" onClick={() => {submission.clearFeedback(); setServerError(null); setConflictError(false);}} aria-label="关闭错误提示">×</Button></CardContent></Card>}
+    {!canReadProducts && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有查看商品规格的权限，暂时无法选择商品。</CardContent></Card>}
     <ErpMobileWorkflow resetKey={editorScope.current} pending={createMutation.isPending || submission.validating} steps={[
       {label: "来源与商品", ready: Boolean(selectedSource) && !hasWorkflowErrors(issues, ["items"]) && !quantityError && Boolean((values.items || []).some((item) => item.productId)), blockedReason: !selectedSource ? "请选择采购来源" : workflowBlockedReason(issues, ["items"], "请填写商品采购价与数量")},
       {label: "结算"},

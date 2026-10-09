@@ -39,7 +39,7 @@ export function CustomerRecordDialog({open, customer, channels, types, pending, 
     <form id="customer-record-form" className="space-y-5" onSubmit={(event) => {void handleSubmit(onSubmit)(event);}}>
       <div className="grid gap-4 sm:grid-cols-2">
         <ErpField label="客户名称" htmlFor="customer-name" required error={message("name")}><Input id="customer-name" {...register("name")} placeholder="请输入客户名称" autoFocus disabled={pending} /></ErpField>
-        <ErpField label="电话 / 微信 / 闲鱼号" htmlFor="customer-contact" error={message("contact")}><Input id="customer-contact" {...register("contact")} placeholder="可留空，但同名客户可能被服务端拒绝" disabled={pending} /></ErpField>
+        <ErpField label="电话 / 微信 / 闲鱼号" htmlFor="customer-contact" error={message("contact")}><Input id="customer-contact" {...register("contact")} placeholder="可留空；与已有客户同名时可能无法保存" disabled={pending} /></ErpField>
         <ErpField label="客户类型" htmlFor="customer-type" required error={message("type")}><Controller control={control} name="type" render={({field}) => <Select id="customer-type" value={field.value} onValueChange={field.onChange} options={typeOptions} disabled={pending} aria-label="客户类型" />} /></ErpField>
         <ErpField label="客户来源" htmlFor="customer-source" error={message("source")}><Controller control={control} name="source" render={({field}) => <Select id="customer-source" value={field.value} onValueChange={field.onChange} options={sourceOptions} disabled={pending} aria-label="客户来源" />} /></ErpField>
       </div>

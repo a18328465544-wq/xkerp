@@ -3,7 +3,7 @@
 本文件是本仓库内开发、审查和部署工作的最低约束。开始改代码前先阅读
 `docs/PROJECT_RULES.md`；它记录完整的产品、数据、UI、测试和上线规则。
 
-UI 具体执行以 [`docs/UI_DESIGN_RULES.md`](docs/UI_DESIGN_RULES.md) 为准；新增组件、截图复刻和视觉改版必须同步遵守。
+UI 具体执行以 [`docs/UI_DESIGN_RULES.md`](docs/UI_DESIGN_RULES.md) 为准；新增组件、截图复刻和视觉改版必须同步遵守。手机端（< 768px）以 [`docs/MOBILE_UI_RULES.md`](docs/MOBILE_UI_RULES.md) 为唯一准则，改动手机界面后运行 `npm run lint`（含 `lint:mobile`）和 `npm run test:mobile-rules`。
 
 报表页面额外遵循 [`docs/REPORT_UI_STANDARD.md`](docs/REPORT_UI_STANDARD.md)，统一复用 `ErpAnalyticsPageFrame`、`AnalyticsFrame` 和 `ErpDataTable`（当前实现位于 `src/components/common`）。
 

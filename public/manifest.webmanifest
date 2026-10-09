@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "成都显卡一号店 ERP",
-  "short_name": "GPU ERP",
-  "description": "显卡与配件交易工作台",
+  "name": "成都显卡一号店 · 进销存",
+  "short_name": "显卡一号店",
+  "description": "显卡与配件的回收、质检、库存、销售和资金管理",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",

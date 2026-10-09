@@ -52,7 +52,7 @@ export function adaptAftersalesWorkspace(response: AftersalesStateResponseDto): 
 }
 
 export function adaptAftersalesMutation(response: AftersalesMutationResponseDto) {
-  if (!response.data) throw new Error("售后接口未返回工单数据");
+  if (!response.data) throw new Error("暂时无法读取售后工单，请稍后重试");
   return adaptAftersalesItem(response.data);
 }
 

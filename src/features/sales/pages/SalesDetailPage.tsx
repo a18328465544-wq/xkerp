@@ -94,7 +94,7 @@ export function SalesDetailPage({salesId}: {salesId: string}) {
 
   if (status === "loading") return <Card><ErpLoadingState title="正在验证销售权限" /></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有销售单据权限" description="服务器已拒绝 sales_list 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有销售单据权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   if (detailQuery.isPending) return <Card><ErpLoadingState title="正在加载销售详情" description="正在定位销售单和出库状态。" /></Card>;
   if (detailQuery.error) return <ErpPageError title="销售详情加载失败" description={errorText(detailQuery.error)} onRetry={() => void detailQuery.refetch()} />;
   if (!detailQuery.data) return <ErpPageError title="销售单不存在" description="该单据可能已删除，或当前账号无权查看。" />;

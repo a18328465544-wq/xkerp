@@ -14,7 +14,6 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
 } from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import {
@@ -99,7 +98,7 @@ export function FinanceIncomePage() {
     return (
       <ErpPageError
         title="当前账号没有收入登记权限"
-        description="服务端权限未包含 payment_in；页面不会请求或展示收入记录。"
+        description="当前账号没有查看收入记录的权限，请联系管理员开通。"
       />
     );
   return (
@@ -233,15 +232,7 @@ function FinanceIncomeContent({
       {},
     ),
   ).sort((a, b) => b[1] - a[1])[0];
-  const quickStatus: QuickStatusItemData[] = [
-    {
-      icon: <ShieldCheck className="h-4 w-4" />,
-      label: "账户权限",
-      value: canReadAccounts ? "可登记" : "仅查看",
-      description: canReadAccounts ? "真实账户候选可用" : "未请求账户余额",
-      tone: canReadAccounts ? "success" : "neutral",
-    },
-  ];
+  const quickStatus: QuickStatusItemData[] = [];
   const exportRows = () => {
     const table = [
       [

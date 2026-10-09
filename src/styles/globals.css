@@ -1171,8 +1171,10 @@ input[inputmode="numeric"] {
 .erp-mobile-workflow-actions,
 .erp-mobile-summary-trigger { display: none; }
 [data-erp-component="mobile-workflow"],
-[data-erp-region="mobile-workflow-content"],
-[data-erp-component="mobile-summary"] { display: contents; }
+[data-erp-region="mobile-workflow-content"] { display: contents; }
+/* Must stay a real box: page frames space siblings with margins, which a
+   display:contents wrapper silently drops (metrics touched the toolbar). */
+[data-erp-component="mobile-summary"] { display: block; }
 [data-erp-region="mobile-workflow-section"][hidden] { display: none !important; }
 @media (min-width: 768px) {
   [data-erp-region="mobile-workflow-section"] { display: contents; }
@@ -1534,6 +1536,12 @@ input[inputmode="numeric"] {
   [data-erp-component="page-header"] { padding: 0; border: 0; background: transparent; box-shadow: none; }
   [data-erp-region="quick-status"], [data-erp-region="page-subtitle"] { display: none; }
   .erp-phone-section-title { margin-block: var(--erp-space-4) var(--erp-space-2); font-size: var(--erp-mobile-section-title); font-weight: var(--erp-font-medium); }
+  /* Title + trailing link on one baseline; the title's own margin moves to the row. */
+  .erp-phone-section-header { display: flex; align-items: center; justify-content: space-between; margin-block: var(--erp-space-4) var(--erp-space-2); }
+  .erp-phone-section-header > .erp-phone-section-title { margin: 0; }
+  /* M8: document number and date stay on one line. */
+  .erp-phone-recent > span { min-width: 0; }
+  .erp-phone-recent small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .erp-phone-menu { margin-top: var(--erp-space-3); border-radius: var(--erp-radius-lg); background: var(--erp-color-surface); overflow: hidden; }
   .erp-phone-menu-row { display: flex; align-items: center; gap: var(--erp-space-3); min-height: var(--erp-mobile-touch-size); padding: var(--erp-space-3); font-size: var(--erp-text-base); border-bottom: 1px solid var(--erp-color-border-soft); }
   .erp-phone-menu-row > span { flex: 1; min-width: 0; }
@@ -1602,8 +1610,8 @@ input[inputmode="numeric"] {
   }
   .erp-phone-period button {
     min-width: var(--erp-space-16);
-    height: 32px;
-    min-height: 32px;
+    height: var(--erp-mobile-touch-size);
+    min-height: var(--erp-mobile-touch-size);
     border-radius: var(--erp-radius-pill);
     font-size: var(--erp-text-xs);
     font-weight: var(--erp-font-medium);

@@ -1,3 +1,5 @@
+> **已归档**：本文是实施过程记录，规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)，两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 移动端共享 UI 尺寸适配
 
 日期：2026-10-08。本轮仅本地实现，没有上线、提交或推送。保留工作区已有改动；没有改后端、权限、账务、录单状态或接口。
@@ -66,8 +68,8 @@
 
 ## 截图与边界
 
-![客户列表 390](mobile-v2-evidence/20261008/sizing/customers-390.jpg)
+![客户列表 390](../../mobile-v2-evidence/20261008/sizing/customers-390.jpg)
 
-![客户表单 390](mobile-v2-evidence/20261008/sizing/customer-form-390.jpg)
+![客户表单 390](../../mobile-v2-evidence/20261008/sizing/customer-form-390.jpg)
 
 本轮是共用尺寸适配，不声称重新设计了每个页面，也不代表所有真实数据、极长金额、软键盘、扫码摄像头和 iPhone 横屏安全区已经通过真机验收。部分管理页在 fixture 下为空列表，其布局和入口已检查，但不等于验证真实权限或业务写入。

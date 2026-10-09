@@ -41,7 +41,7 @@ export function NewPurchaseReturnPage() {
   const stateQuery = useQuery({queryKey: queryKeys.returns.reference(referenceFilters), queryFn: ({signal}) => returnsApi.reference(referenceFilters, signal), enabled: active && (Boolean(session && allowed)), retry: false});
   if (status === "loading") return <Card><CardContent><ReturnState title="正在验证采购退货权限" icon={<RefreshCw className="h-5 w-5 animate-spin" />} /></CardContent></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有采购退货权限" description="服务器已拒绝 return_purchase / return_orders 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有采购退货权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   if (stateQuery.error && (!stateQuery.data || (stateQuery.error instanceof ApiError && [401, 403].includes(stateQuery.error.status)))) return <ErpPageError title="无法加载采购退货基础数据" description={stateQuery.error.message} onRetry={() => void stateQuery.refetch()} />;
   if (stateQuery.isPending || !stateQuery.data) return <Card><CardContent><ReturnState title="正在加载采购单、库存与付款关系" icon={<RefreshCw className="h-5 w-5 animate-spin" />} /></CardContent></Card>;
   return <PurchaseReturnForm session={session} state={stateQuery.data} referenceUpdatedAt={stateQuery.dataUpdatedAt} refreshError={stateQuery.error?.message} onRetry={() => void stateQuery.refetch()} onAuthExpired={logout} onSuccess={() => refreshErpAfterDocument(queryClient, ["state","returns","purchase","inventory","finance","inspections","vendors","ai"])} />;
@@ -184,7 +184,7 @@ function PurchaseReturnForm({session, state, referenceUpdatedAt, refreshError, o
   const blocker = useWorkspaceTabBlocker(dirty);
 
   return <ErpTransactionPageFrame className="max-w-[1400px]">
-    <ErpPageHeader title="新建采购退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联原采购单和真实库存卡片，最终金额与结算由服务端再次校验。</span><ErpStatusBadge label="待完成处理" tone="warning" /></span>} actions={<Link to="/purchase/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><ArrowLeft className="h-4 w-4" />返回采购退货</Link>} />
+    <ErpPageHeader title="新建采购退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联原采购单和对应的库存卡片。</span><ErpStatusBadge label="待完成处理" tone="warning" /></span>} actions={<Link to="/purchase/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold max-md:h-11 max-md:text-sm"><ArrowLeft className="h-4 w-4" />返回采购退货</Link>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {refreshError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm text-[var(--erp-color-warning)]"><span>基础数据刷新失败，当前表单和上次数据已保留。{refreshError}</span><Button type="button" variant="secondary" onClick={onRetry}>重试刷新</Button></CardContent></Card>}
     {success && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="p-4 text-sm font-semibold text-[var(--erp-color-success)]">{success}</CardContent></Card>}

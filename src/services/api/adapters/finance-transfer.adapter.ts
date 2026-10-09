@@ -98,6 +98,6 @@ export function toFinanceTransferRequest(values: FinanceTransferFormValues, hand
 }
 
 export function adaptFinanceTransferMutation(response: FinanceTransferMutationResponseDto) {
-  if (!response.data) throw new Error("资金调拨接口未返回调拨记录");
+  if (!response.data) throw new Error("暂时无法读取调拨记录，请稍后重试");
   return adaptFinanceTransfer(response.data);
 }

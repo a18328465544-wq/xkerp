@@ -1,6 +1,6 @@
 import {useQuery, useQueryClient, type QueryClient} from "@tanstack/react-query";
 import {createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
-import {ArrowUpRight, Boxes, Eye, EyeOff, LockKeyhole, ShieldAlert, ShieldCheck, Store, UserRound, WalletCards} from "lucide-react";
+import {ArrowUpRight, ClipboardCheck, Eye, EyeOff, LockKeyhole, ScanLine, ShieldAlert, ShieldCheck, UserRound, WalletCards} from "lucide-react";
 import {authApi, type AuthSession} from "@/src/services/api/endpoints/auth";
 import {ApiError, clearBrowserAuthState} from "@/src/services/api/client";
 import {queryKeys} from "@/src/services/api/query-keys";
@@ -10,6 +10,8 @@ import {Button, Card, Input} from "@/src/components/ui";
 // the app shell/auth chunk graph circular during Rollup code splitting.
 import {ErpLoadingState} from "@/src/components/common/ErpLoadingState";
 import {ErpPageError} from "@/src/components/common/ErpPageError";
+import {ErpBrandLockup} from "@/src/components/common/ErpBrandMark";
+import {BRAND} from "@/src/config/brand";
 
 type AuthContextValue = {
   session: AuthSession | null;
@@ -137,52 +139,41 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
     }
   };
 
+  const capabilities = [
+    {icon: <ScanLine className="h-4 w-4" />, title: "SN 追踪", text: "每张卡一份完整履历"},
+    {icon: <ClipboardCheck className="h-4 w-4" />, title: "质检入库", text: "检测结论随卡入库"},
+    {icon: <WalletCards className="h-4 w-4" />, title: "资金对账", text: "收付款自动入账"},
+  ];
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--erp-color-canvas)] px-4 py-6 sm:px-6 sm:py-10">
-      <div aria-hidden="true" className="pointer-events-none absolute -left-24 top-12 h-64 w-64 rounded-full bg-[var(--erp-color-primary)] opacity-10 blur-3xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-[var(--erp-color-primary)] opacity-10 blur-3xl" />
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[var(--erp-color-canvas)] lg:items-center lg:justify-center lg:px-6 lg:py-10">
+      <div aria-hidden="true" className="pointer-events-none absolute -left-24 top-12 hidden h-64 w-64 rounded-full bg-[var(--erp-color-primary)] opacity-10 blur-3xl lg:block" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 -right-20 hidden h-80 w-80 rounded-full bg-[var(--erp-color-primary)] opacity-10 blur-3xl lg:block" />
 
-      <Card className="relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-login)] lg:grid-cols-[1.08fr_0.92fr]">
+      {/* Phone: a branded header the form card overlaps, instead of a lone card. */}
+      <section className="relative overflow-hidden bg-[var(--erp-color-text)] px-6 pb-16 pt-[max(env(safe-area-inset-top),2.5rem)] text-white lg:hidden">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full border-[22px] border-[var(--erp-color-primary)] opacity-30" />
+        <ErpBrandLockup tone="inverse" size="lg" className="relative" />
+        <p className="relative mt-7 text-balance text-erp-2xl font-semibold leading-snug">{BRAND.slogan}</p>
+      </section>
+
+      <Card className="relative mx-4 -mt-8 mb-6 grid overflow-hidden rounded-[var(--erp-radius-card)] border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-login)] lg:mx-0 lg:mt-0 lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-[1.08fr_0.92fr] lg:rounded-[2rem]">
         <section className="relative hidden min-h-[580px] overflow-hidden bg-[var(--erp-color-text)] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
           <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full border-[28px] border-[var(--erp-color-primary)] opacity-30" />
           <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full border-[34px] border-white opacity-5" />
 
           <div className="relative">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-primary)] shadow-[var(--erp-shadow-brand)]">
-                <Store className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-base font-semibold tracking-wide">GPU ERP</p>
-                <p className="mt-0.5 text-xs text-white/60">经营工作台</p>
-              </div>
-            </div>
-            <p className="mt-16 text-xs font-semibold uppercase tracking-[0.24em] text-white/50">OPERATING DESK</p>
-            <h2 className="mt-5 max-w-md text-erp-5xl font-semibold leading-tight tracking-tight">
-              让库存、资金和订单，始终清晰可见。
-            </h2>
-            <p className="mt-6 max-w-md text-sm leading-7 text-white/65">
-              从采购入库到销售出库，在同一个工作台里掌握每天的经营节奏。
-            </p>
+            <ErpBrandLockup tone="inverse" size="lg" />
+            <h2 className="mt-20 max-w-md text-balance text-erp-5xl font-semibold leading-tight tracking-tight">{BRAND.slogan}</h2>
+            <p className="mt-6 max-w-md text-sm leading-7 text-white/65">回收、质检、库存、销售和资金，在同一处完成。</p>
           </div>
 
           <div className="relative space-y-5">
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
-                <Boxes className="h-4 w-4 text-[var(--erp-color-info-soft)]" />
-                <p className="mt-3 text-xs font-semibold">库存</p>
-                <p className="mt-1 text-xs text-white/50">实时掌握</p>
-              </div>
-              <div className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
-                <WalletCards className="h-4 w-4 text-[var(--erp-color-success-soft)]" />
-                <p className="mt-3 text-xs font-semibold">资金</p>
-                <p className="mt-1 text-xs text-white/50">清晰可追溯</p>
-              </div>
-              <div className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
-                <ArrowUpRight className="h-4 w-4 text-[var(--erp-color-warning-soft)]" />
-                <p className="mt-3 text-xs font-semibold">订单</p>
-                <p className="mt-1 text-xs text-white/50">流程可跟进</p>
-              </div>
+              {capabilities.map((item) => <div key={item.title} className="rounded-[var(--erp-radius-lg)] border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
+                <span className="text-[var(--erp-color-info-soft)]">{item.icon}</span>
+                <p className="mt-3 text-xs font-semibold">{item.title}</p>
+                <p className="mt-1 text-xs text-white/50">{item.text}</p>
+              </div>)}
             </div>
             <div className="flex items-center gap-2 text-xs text-white/45">
               <ShieldCheck className="h-4 w-4" />
@@ -192,26 +183,12 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
         </section>
 
         <section className="min-w-0 p-6 sm:p-10 lg:p-12">
-          <div className="flex items-center justify-between gap-3 lg:hidden">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]">
-                <Store className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-[var(--erp-color-text)]">GPU ERP</p>
-                <p className="mt-0.5 text-xs text-[var(--erp-color-text-muted)]">经营工作台</p>
-              </div>
-            </div>
-            <span className="rounded-full bg-[var(--erp-color-info-soft)] px-3 py-1 text-xs font-semibold text-[var(--erp-color-primary)]">员工登录</span>
+          <div>
+            <h1 className="text-erp-3xl font-semibold tracking-tight text-[var(--erp-color-text)] sm:text-erp-4xl">员工登录</h1>
+            <p className="mt-3 text-sm leading-6 text-[var(--erp-color-text-secondary)]">使用授权账号继续今天的业务。</p>
           </div>
 
-          <div className="mt-8 lg:mt-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--erp-color-primary)]">WELCOME BACK</p>
-            <h1 className="mt-3 text-erp-3xl font-semibold tracking-tight text-[var(--erp-color-text)] sm:text-erp-4xl">登录经营工作台</h1>
-            <p className="mt-3 text-sm leading-6 text-[var(--erp-color-text-secondary)]">使用授权账号继续处理今天的业务。</p>
-          </div>
-
-          <form className="mt-9 space-y-5" onSubmit={submit}>
+          <form className="mt-8 space-y-5" onSubmit={submit}>
             <div>
               <label htmlFor="login-username" className="text-sm font-semibold text-[var(--erp-color-text)]">账号</label>
               <div className="relative mt-2">
@@ -220,10 +197,7 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
               </div>
             </div>
             <div>
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="login-password" className="text-sm font-semibold text-[var(--erp-color-text)]">密码</label>
-                <span className="text-xs text-[var(--erp-color-text-muted)]">安全登录</span>
-              </div>
+              <label htmlFor="login-password" className="text-sm font-semibold text-[var(--erp-color-text)]">密码</label>
               <div className="relative mt-2">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--erp-color-text-muted)]" />
                 <Input id="login-password" className="pl-10 pr-11" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="请输入密码" aria-invalid={Boolean(message)} aria-describedby={message ? "login-error" : undefined} required />
@@ -233,12 +207,12 @@ function LoginView({onLogin}: {onLogin: (username: string, password: string) => 
               </div>
             </div>
             {message && <div id="login-error" role="alert" aria-live="assertive" className="flex items-start gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-danger)]/20 bg-[var(--erp-color-danger-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--erp-color-danger)]"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>{message}</p></div>}
-            <Button className="w-full shadow-[var(--erp-shadow-primary)]" size="lg" type="submit" variant="primary" disabled={pending}>{pending ? "登录中…" : "登录并继续"}<ArrowUpRight className="h-4 w-4" /></Button>
+            <Button className="w-full shadow-[var(--erp-shadow-primary)]" size="lg" type="submit" variant="primary" disabled={pending}>{pending ? "登录中…" : "登录"}<ArrowUpRight className="h-4 w-4" /></Button>
           </form>
 
           <div className="mt-8 flex items-start gap-2 border-t border-[var(--erp-color-border)] pt-5 text-xs leading-5 text-[var(--erp-color-text-muted)]">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--erp-color-success)]" />
-            <p>仅限授权员工使用。登录后将按当前账号角色展示可访问的业务模块。</p>
+            <p>仅限授权员工使用，登录后按账号角色显示可用的业务模块。</p>
           </div>
         </section>
       </Card>

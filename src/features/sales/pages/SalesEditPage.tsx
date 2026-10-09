@@ -64,7 +64,7 @@ export function SalesEditPage({salesId}: {salesId: string}) {
 
   if (status === "loading") return <Card><ErpLoadingState title="正在验证销售编辑权限" /></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有销售单据权限" description="服务器已拒绝 sales_list 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有销售单据权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   if (!session.permissions.canEditHistory) return <ErpPageError title="当前账号不能编辑历史销售单" description="需要“修改历史记录”权限，详情页仍可正常查看。" />;
   if (detailQuery.isPending) return <Card><ErpLoadingState title="正在加载销售单" description="正在核对商品预占和出库状态。" /></Card>;
   if (detailQuery.error) {
@@ -188,7 +188,7 @@ function SalesEditForm({item, policy, session, onAuthExpired}: {item: SalesListI
       // reset with the submitted model before navigating to clear RHF dirty
       // state without expanding physical rows a second time.
       reset({...submitted, paidAmount: result.invoice.paidAmount, settlementAccountId: result.invoice.settlementAccountId || submitted.settlementAccountId});
-      notify.success(`销售单 ${result.invoice.invoiceNo} 已更新`, {description: fullMode ? "商品预占、收款和客户信息已由服务端重新核对。" : "快递单号和销售备注已保存。"});
+      notify.success(`销售单 ${result.invoice.invoiceNo} 已更新`, {description: fullMode ? "商品预占、收款和客户信息已重新核对。" : "快递单号和销售备注已保存。"});
       await Promise.all([
         queryClient.invalidateQueries({queryKey: queryKeys.sales.all()}),
         queryClient.invalidateQueries({queryKey: queryKeys.sales.detail(item.id)}),

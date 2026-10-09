@@ -35,7 +35,7 @@ export const crmApi = {
   },
   async parseQuickCapture(rawText: string, sourceType: QuickCaptureSourceType, signal?: AbortSignal) {
     const response = await apiRequest<{data?: QuickCaptureParseResult}>("/api/gpu_erp/crm/quick-capture/parse", {method: "POST", body: JSON.stringify({rawText, sourceType}), signal});
-    if (!response.data) throw new Error("CRM 解析接口未返回结果");
+    if (!response.data) throw new Error("暂时无法识别客户信息，请稍后重试");
     return response.data;
   },
   async confirmQuickCapture(input: QuickCaptureConfirmInput, signal?: AbortSignal) {

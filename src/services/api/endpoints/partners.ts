@@ -4,7 +4,7 @@ import type {EntityCreateResponseDto} from "../dto/entity-create.dto";
 import type {PurchaseSourceOption} from "@/src/types/purchase";
 
 function createdData(response: EntityCreateResponseDto, label: string) {
-  if (response.data === undefined || response.data === null) throw new Error(`${label}接口未返回新建档案`);
+  if (response.data === undefined || response.data === null) throw new Error(`${label}新建档案未成功返回，请刷新后确认`);
   return response.data;
 }
 

@@ -99,7 +99,7 @@ export function FinanceExpensePage() {
     return (
       <ErpPageError
         title="当前账号没有支出登记权限"
-        description="服务端权限未包含 payment_out；页面不会请求或展示支出记录。"
+        description="当前账号没有查看支出记录的权限，请联系管理员开通。"
       />
     );
   return (
@@ -233,15 +233,7 @@ function FinanceExpenseContent({
       {},
     ),
   ).sort((a, b) => b[1] - a[1])[0];
-  const quickStatus: QuickStatusItemData[] = [
-    {
-      icon: <ShieldCheck className="h-4 w-4" />,
-      label: "账户权限",
-      value: canReadAccounts ? "可登记" : "仅查看",
-      description: canReadAccounts ? "真实账户候选可用" : "未请求账户余额",
-      tone: canReadAccounts ? "success" : "neutral",
-    },
-  ];
+  const quickStatus: QuickStatusItemData[] = [];
   const exportRows = () => {
     const table = [
       [

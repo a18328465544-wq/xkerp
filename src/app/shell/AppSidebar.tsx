@@ -1,4 +1,4 @@
-import {ChevronLeft, ChevronRight, Sparkles, Store, X} from "lucide-react";
+import {ChevronLeft, ChevronRight, Sparkles, X} from "lucide-react";
 import {Link, useRouterState} from "@tanstack/react-router";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {isNavigationItemActive, navigationModules} from "@/src/config/navigation";
@@ -6,6 +6,7 @@ import {isMenuAllowed} from "@/src/utils/menu";
 import {useAuth} from "@/src/app/auth";
 import {useUiStore} from "@/src/stores";
 import {Button} from "@/src/components/ui";
+import {ErpBrandLockup, ErpBrandMark} from "@/src/components/common";
 import {cn} from "@/src/lib/cn";
 import {AppSidebarDrawer} from "./AppSidebarDrawer";
 import {searchForNavigation} from "./navigationSearch";
@@ -135,15 +136,7 @@ export function AppSidebar() {
         )}
       >
         <div className="flex h-[var(--erp-workspace-bar-height)] items-center gap-3 border-b border-[var(--erp-color-border)] px-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-primary)] text-white">
-            <Store className="h-5 w-5" />
-          </div>
-          {showLabels && (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">GPU ERP</p>
-              <p className="truncate text-xs text-[var(--erp-color-text-muted)]">经营工作台</p>
-            </div>
-          )}
+          {showLabels ? <ErpBrandLockup className="flex-1" /> : <ErpBrandMark />}
           {mobileSidebarOpen && <Button type="button" className="ml-auto lg:hidden" aria-label="关闭菜单" title="关闭菜单" size="icon" variant="ghost" onClick={() => setMobileSidebarOpen(false)}><X className="h-4 w-4" /></Button>}
         </div>
         <nav aria-label="主导航" className="erp-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto p-3">

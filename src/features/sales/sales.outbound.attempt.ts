@@ -50,10 +50,10 @@ export async function runOutboundAttempt(attempt: SalesOutboundAttempt, api: Out
   if (!preflight.ready) {
     const missingCount = preflight.rows.filter((row) => !row.matched).length;
     throw new Error(preflight.duplicateCodes.length > 0
-      ? `服务器检测到 ${preflight.duplicateCodes.length} 个重复扫码内容`
+      ? `检测到 ${preflight.duplicateCodes.length} 个重复扫码内容`
       : preflight.unknownCodes.length > 0
-        ? `服务器检测到 ${preflight.unknownCodes.length} 个无效库存 ID / SN`
-        : `服务器仍有 ${missingCount} 件商品无法匹配可售库存`);
+        ? `检测到 ${preflight.unknownCodes.length} 个无效库存 ID / SN`
+        : `仍有 ${missingCount} 件商品无法匹配可售库存`);
   }
   const result = await api.confirmOutbound(attempt.invoiceId, attempt.values, undefined, attempt.idempotencyKey);
   if (result.id !== attempt.invoiceId || result.outboundStatus !== "已出库") throw new Error("出库结果尚未确认，请刷新核对单据后再操作");

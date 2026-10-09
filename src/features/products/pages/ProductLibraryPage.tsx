@@ -1,7 +1,7 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState} from "@tanstack/react-table";
-import {ArrowDown, ArrowUp, Boxes, ChevronDown, Download, Filter, Layers3, PackageCheck, Plus, RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, Upload} from "lucide-react";
+import {ArrowDown, ArrowUp, Boxes, ChevronDown, Download, Layers3, PackageCheck, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Upload} from "lucide-react";
 import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpMobileRecordRow, ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -43,7 +43,7 @@ export function ProductLibraryPage() {
   const permissions = session?.permissions;
   const listQuery = useQuery({queryKey: queryKeys.products.list({showCost: Boolean(permissions?.showCost), showProfit: Boolean(permissions?.showProfit)}, serverFilters, sorting), queryFn: ({signal}) => productsApi.list(serverFilters, sorting, {showCost: Boolean(permissions?.showCost), showProfit: Boolean(permissions?.showProfit)}, signal), enabled: active && Boolean(session && allowed), placeholderData: keepPreviousData, retry: false});
   if (!session) return <Card><ErpLoadingState title="正在验证商品库权限" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有商品库权限" description="服务器已拒绝 products 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有商品库权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <ProductLibraryContent session={session} query={listQuery} filters={filters} sorting={sorting} onSortingChange={(next) => {setSorting(next); commit({...filters, page: 1});}} onFiltersChange={commit} onAuthExpired={logout} canViewLedger={canViewLedger} />;
 }
 
@@ -115,7 +115,6 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const quickStatus: QuickStatusItemData[] = [
     {icon: <Layers3 className="h-4 w-4" />, label: "模板总数", value: `${total} 款`, description: `${query.data?.categories.length || 0} 个品类`, tone: "info"},
     {icon: <PackageCheck className="h-4 w-4" />, label: "有库存模板", value: `${stockedTemplates} 款`, description: `共 ${stockUnits} 件在库`, tone: stockedTemplates ? "success" : "neutral"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "价格权限", value: fullPriceAccess ? "完整" : "受限", description: fullPriceAccess ? "可安全编辑模板" : "隐藏字段不会被编辑覆盖", tone: fullPriceAccess ? "success" : "warning"},
   ];
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.category !== "all") + Number(filters.brand !== "all");
 
@@ -258,10 +257,9 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
         <>
           <ErpMobileSummary>
               <MetricsRegion>
-                <MetricCard label="商品模板" value={`${total} 款`} detail="按当前筛选" icon={<Boxes className="h-4 w-4" />} />
+                <MetricCard label="商品模板" value={`${total} 款`} icon={<Boxes className="h-4 w-4" />} />
                 <MetricCard label="有库存规格" value={`${stockedTemplates} 款`} detail={`${stockUnits} 件物理库存`} icon={<PackageCheck className="h-4 w-4" />} tone="success" />
                 <MetricCard label="品类覆盖" value={`${query.data?.categories.length || 0} 类`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<Layers3 className="h-4 w-4" />} />
-                <MetricCard label="当前筛选" value={`${total} 款`} detail={activeFilters ? `${activeFilters} 项筛选生效` : "全部商品模板"} icon={<Filter className="h-4 w-4" />} tone={activeFilters ? "warning" : "neutral"} />
               </MetricsRegion>
             </ErpMobileSummary>
             <ErpPageToolbar>
@@ -362,11 +360,11 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   );
 }
 
-function MetricCard({label, value, detail, icon, tone = "info"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "info" | "success" | "warning" | "neutral"}) {
+function MetricCard({label, value, detail, icon, tone = "info"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "info" | "success" | "warning" | "neutral"}) {
   return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;
 }
 
 function ConfirmationDialog({state, pending, onClose, onConfirm}: {state: {kind: "delete"; product: ProductLibraryItem} | {kind: "import"; rows: ProductImportRow[]; overwrite: number} | null; pending: boolean; onClose: () => void; onConfirm: () => void}) {
   const deleting = state?.kind === "delete";
-  return <ErpConfirmDialog open={Boolean(state)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title={deleting ? "删除商品模板" : "导入将覆盖已有模板"} description={deleting ? "被库存或单据引用的模板会由服务端拒绝删除。" : `本次共识别 ${state?.kind === "import" ? state.rows.length : 0} 行，其中 ${state?.kind === "import" ? state.overwrite : 0} 个配件 ID 已存在。继续后将按现有后端规则覆盖模板，但不改写历史单据名称。`} documentName={deleting && state?.kind === "delete" ? productDisplayName(state.product) : undefined} confirmLabel={deleting ? "确认删除" : "继续导入"} pendingLabel="处理中…" confirmVariant={deleting ? "danger" : "primary"} pending={pending} onConfirm={onConfirm} />;
+  return <ErpConfirmDialog open={Boolean(state)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title={deleting ? "删除商品模板" : "导入将覆盖已有模板"} description={deleting ? "已被库存或单据使用的模板无法删除。" : `本次共识别 ${state?.kind === "import" ? state.rows.length : 0} 行，其中 ${state?.kind === "import" ? state.overwrite : 0} 个配件 ID 已存在。继续将覆盖这些模板，但不会改写历史单据中的名称。`} documentName={deleting && state?.kind === "delete" ? productDisplayName(state.product) : undefined} confirmLabel={deleting ? "确认删除" : "继续导入"} pendingLabel="处理中…" confirmVariant={deleting ? "danger" : "primary"} pending={pending} onConfirm={onConfirm} />;
 }

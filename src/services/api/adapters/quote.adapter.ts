@@ -99,7 +99,7 @@ export function toMarketQuoteUpdateRequest(values: MarketQuoteFormValues): Marke
 
 export function adaptMarketQuoteMutation(response: MarketQuoteSnapshotResponseDto, permissions: Pick<PermissionModel, "showCost" | "showProfit">) {
   const quote = adaptMarketQuote(response.data, permissions);
-  if (!quote.id) throw new Error("行情接口没有返回有效记录");
+  if (!quote.id) throw new Error("暂时无法读取行情，请稍后重试");
   return quote;
 }
 

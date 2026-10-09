@@ -55,7 +55,7 @@ export function FinanceExpenseDialog({open, item, accounts, pending, error, onOp
       open={open}
       pending={pending}
       title={item ? "编辑非经营支出" : "新增非经营支出"}
-      description="只登记非采购、非退款流程自动生成的临时支出；保存后由后端同步账户和财务流水。"
+      description="只登记采购、退款以外的临时支出；保存后会同步更新账户和财务流水。"
       submitLabel={pending ? "保存中…" : submission.validating ? "校验中…" : media.blocking ? "请处理图片状态" : item ? "保存修改" : "登记支出"}
       submitDisabled={media.blocking || submission.validating}
       error={submission.feedback || error}
