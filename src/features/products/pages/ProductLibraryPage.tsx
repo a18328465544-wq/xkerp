@@ -1,12 +1,12 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState} from "@tanstack/react-table";
-import {ArrowDown, ArrowUp, Boxes, ChevronDown, Download, Layers3, PackageCheck, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Upload} from "lucide-react";
-import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpMobileRecordRow, ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
+import {Boxes, Download, Layers3, PackageCheck, Plus, Upload} from "lucide-react";
+import {ErpEntityThumbnail, ErpListPage, ErpMobileRecordRow, type ErpFilterField} from "@/src/components/common";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
-import {Button, Card, Select} from "@/src/components/ui";
-import {DashboardSection, ErpConfirmDialog, ErpDataTable, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpProductTemplateDialog, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
+import {Card} from "@/src/components/ui";
+import {ErpConfirmDialog, ErpDataTable, ErpLoadingState, ErpMetricCard, ErpPageError, ErpProductLedgerDrawer, ErpProductTemplateDialog, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, productsApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -21,7 +21,6 @@ import {defaultProductFilters, parseProductFilters, productFiltersToSearch} from
 import {parseProductImportCsv, productCsv, productImportHeaders, type ProductImportRow} from "../product.import";
 import {productDisplayName} from "@/src/lib/productName";
 import {formatCurrency} from "@/src/lib/format";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 
 function useProductUrlState() {
   return useUrlSearchState({defaultValue: defaultProductFilters, parse: parseProductFilters, serialize: productFiltersToSearch});
@@ -48,11 +47,9 @@ export function ProductLibraryPage() {
 }
 
 function ProductLibraryContent({session, query, filters, sorting, onSortingChange, onFiltersChange, onAuthExpired, canViewLedger}: {session: AuthSession; query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof productsApi.list>>>>; filters: ProductLibraryFilters; sorting: SortingState; onSortingChange: OnChangeFn<SortingState>; onFiltersChange: (filters: ProductLibraryFilters) => void; onAuthExpired: () => void; canViewLedger: boolean}) {
-  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const [editing, setEditing] = useState<ProductLibraryItem | null>(null);
   const [ledgerSubject, setLedgerSubject] = useState<ProductLedgerSubject | null>(null);
   const [confirmState, setConfirmState] = useState<{kind: "delete"; product: ProductLibraryItem} | {kind: "import"; rows: ProductImportRow[]; overwrite: number} | null>(null);
@@ -116,248 +113,82 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
     {icon: <Layers3 className="h-4 w-4" />, label: "模板总数", value: `${total} 款`, description: `${query.data?.categories.length || 0} 个品类`, tone: "info"},
     {icon: <PackageCheck className="h-4 w-4" />, label: "有库存模板", value: `${stockedTemplates} 款`, description: `共 ${stockUnits} 件在库`, tone: stockedTemplates ? "success" : "neutral"},
   ];
-  const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.category !== "all") + Number(filters.brand !== "all");
+  const filterFields: ErpFilterField[] = [
+    {kind: "select", key: "category", label: "商品品类", width: "w-40", value: filters.category, defaultValue: "all", options: [{value: "all", label: "全部品类"}, ...(query.data?.categories || []).map((value) => ({value, label: value}))], onChange: (category) => onFiltersChange({...filters, category, page: 1})},
+    {kind: "select", key: "brand", label: "商品品牌", width: "w-40", value: filters.brand, defaultValue: "all", options: [{value: "all", label: "全部品牌"}, ...(query.data?.brands || []).map((value) => ({value, label: value}))], onChange: (brand) => onFiltersChange({...filters, brand, page: 1})},
+  ];
+  const table: React.ComponentProps<typeof ErpDataTable<ProductLibraryItem>> = {
+    mobileRow: (item) => {
+      const subtitle = [item.category, item.brand, item.model].filter(Boolean).join(" · ");
+      const price = session.permissions.showCost && item.refBuyPrice ? formatCurrency(item.refBuyPrice) : undefined;
+      return <ErpMobileRecordRow title={productDisplayName(item)} subtitle={subtitle} meta={`当前库存 ${item.currentStock} 件${item.version && item.version !== item.model ? ` · ${item.version}` : ""}`} amount={price} amountLabel={price ? "参考回收价" : undefined} thumbnail={<ErpEntityThumbnail name={productDisplayName(item)} imageUrl={item.imageUrls?.[0]} category={item.category} />} onOpen={fullPriceAccess ? () => openEdit(item) : undefined} />;
+    },
+    mobileShowDetailAction: false,
+    ariaLabel: "商品规格库",
+    columns,
+    data: products,
+    getRowId: (row) => row.id,
+    loading: query.isPending,
+    fetching: query.isFetching,
+    error: query.error as Error | null,
+    errorTitle: "商品库加载失败",
+    emptyTitle: "暂无匹配商品",
+    emptyDescription: filters.keyword || filters.category !== "all" || filters.brand !== "all" ? "请调整搜索或筛选条件。" : "点击新建模板创建第一条商品规格。",
+    onRetry: () => void query.refetch(),
+    onRowClick: fullPriceAccess ? openEdit : undefined,
+    manualSorting: true,
+    sorting,
+    onSortingChange,
+    page: filters.page,
+    pageSize: filters.pageSize,
+    total,
+    onPageChange: (page) => onFiltersChange({...filters, page}),
+    onPageSizeChange: (pageSize) => onFiltersChange({...filters, page: 1, pageSize}),
+    enableColumnResizing: true,
+    density: "compact",
+    stickyHeader: true,
+  };
+  const categories = query.data?.categories || [];
 
-  const phoneSearch = (
-    <ErpSearchInput
-      className={phone ? "w-full" : "min-w-64 flex-1"}
-      value={filters.keyword}
-      onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})}
-      placeholder={phone ? "搜索商品名、型号、品牌" : "商品名称、型号、品牌、版本、规格或配件 ID"}
-      aria-label="搜索商品模板"
-    />
-  );
-
-  const productTable = (
-    <ErpDataTable
-      surface={phone ? "plain" : "card"}
-      mobilePagination="compact"
-      mobileToolbar={({openSorting, sortLabel, descending}) => (
-        <div className="erp-customer-list-toolbar">
-          <div className="erp-customer-quick-filters" role="group" aria-label="快捷品类筛选">
-            <Button
-              type="button"
-              variant={filters.category === "all" ? "primary" : "ghost"}
-              aria-pressed={filters.category === "all"}
-              onClick={() => onFiltersChange({...filters, category: "all", page: 1})}
-            >
-              全部
-            </Button>
-            {(query.data?.categories || []).slice(0, 3).map((cat) => (
-              <Button
-                key={cat}
-                type="button"
-                variant={filters.category === cat ? "primary" : "ghost"}
-                aria-pressed={filters.category === cat}
-                onClick={() => onFiltersChange({...filters, category: cat, page: 1})}
-              >
-                {cat}
-              </Button>
-            ))}
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            className="erp-customer-sort"
-            aria-label="商品排序"
-            onClick={openSorting}
-          >
-            <span>{sortLabel || "默认排序"}</span>
-            {descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
-      mobileRow={(item) => {
-        const subtitle = [item.category, item.brand, item.model].filter(Boolean).join(" · ");
-        const price = session.permissions.showCost && item.refBuyPrice ? formatCurrency(item.refBuyPrice) : undefined;
-        return (
-          <ErpMobileRecordRow
-            title={productDisplayName(item)}
-            subtitle={subtitle}
-            meta={`当前库存 ${item.currentStock} 件${item.version && item.version !== item.model ? ` · ${item.version}` : ""}`}
-            amount={price}
-            amountLabel={price ? "参考回收价" : undefined}
-            thumbnail={<ErpEntityThumbnail name={productDisplayName(item)} imageUrl={item.imageUrls?.[0]} category={item.category} />}
-            onOpen={fullPriceAccess ? () => openEdit(item) : undefined}
-          />
-        );
-      }}
-      mobileShowDetailAction={false}
-      ariaLabel="商品规格库"
-      columns={columns}
-      data={products}
-      getRowId={(row) => row.id}
-      loading={query.isPending}
-      fetching={query.isFetching}
-      error={query.error as Error | null}
-      errorTitle="商品库加载失败"
-      emptyTitle="暂无匹配商品"
-      emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击新建模板创建第一条商品规格。"}
-      onRetry={() => void query.refetch()}
-      onRowClick={fullPriceAccess ? openEdit : undefined}
-      manualSorting
-      sorting={sorting}
-      onSortingChange={onSortingChange}
-      page={filters.page}
-      pageSize={filters.pageSize}
-      total={total}
-      onPageChange={(page) => onFiltersChange({...filters, page})}
-      onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})}
-      enableColumnResizing
-      density="compact"
-      stickyHeader
-    />
-  );
-
-  return (
-    <ErpListPageFrame data-phone-layout={phone ? "thumb" : undefined}>
-      <ErpPageHeader
-        title={phone ? (
-          <span className="erp-customer-phone-title">
-            商品库<small>{query.isPending ? "正在加载…" : query.error && !query.data ? "加载失败" : `${total} 款`}</small>
-          </span>
-        ) : "商品库"}
-        subtitle="维护采购、检测、库存与行情共用的商品规格模板。"
-        quickStatus={quickStatus}
-        actions={phone ? (
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setPhoneFiltersOpen(true)}
-              aria-label="商品筛选与操作"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              onClick={openCreate}
-              aria-label="新建模板"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <>
-            <input ref={importRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => {const file = event.target.files?.[0]; if (file) void onImportFile(file); event.target.value = "";}} />
-            <Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}>
-              <RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新
-            </Button>
-            <Button type="button" size="sm" variant="primary" onClick={openCreate}>
-              <Plus className="h-4 w-4" />新建模板
-            </Button>
-          </>
-        )}
-      />
-      {!phone && (
-        <>
-          <ErpMobileSummary>
-              <MetricsRegion>
-                <MetricCard label="商品模板" value={`${total} 款`} icon={<Boxes className="h-4 w-4" />} />
-                <MetricCard label="有库存规格" value={`${stockedTemplates} 款`} detail={`${stockUnits} 件物理库存`} icon={<PackageCheck className="h-4 w-4" />} tone="success" />
-                <MetricCard label="品类覆盖" value={`${query.data?.categories.length || 0} 类`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<Layers3 className="h-4 w-4" />} />
-              </MetricsRegion>
-            </ErpMobileSummary>
-            <ErpPageToolbar>
-              <ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultProductFilters)}>重置</Button><Button type="button" size="sm" variant="secondary" onClick={downloadTemplate}><Download className="h-4 w-4" />导入模板</Button><Button type="button" size="sm" variant="secondary" onClick={() => importRef.current?.click()} disabled={importMutation.isPending}><Upload className="h-4 w-4" />CSV 导入</Button><Button type="button" size="sm" variant="secondary" onClick={exportProducts}><Download className="h-4 w-4" />导出</Button></>}>
-                {phoneSearch}
-                <Select value={filters.category} onValueChange={(category) => onFiltersChange({...filters, category, page: 1})} options={[{value: "all", label: "全部品类"}, ...(query.data?.categories || []).map((value) => ({value, label: value}))]} className="w-40" aria-label="筛选商品品类" />
-                <Select value={filters.brand} onValueChange={(brand) => onFiltersChange({...filters, brand, page: 1})} options={[{value: "all", label: "全部品牌"}, ...(query.data?.brands || []).map((value) => ({value, label: value}))]} className="w-40" aria-label="筛选商品品牌" />
-              </ErpFilterBar>
-            </ErpPageToolbar>
-          </>
-        )}
-        <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-          {!fullPriceAccess && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div>}
-        {phone ? productTable : <DashboardSection title="商品规格列表">{productTable}</DashboardSection>}
-        <ErpMobileActionDock
-          hidden={Boolean(dialogOpen || confirmState || ledgerSubject || phoneFiltersOpen)}
-          ariaLabel="商品模板搜索"
-        >
-          {phoneSearch}
-        </ErpMobileActionDock>
-        {phone && (
-          <ErpDialogShell
-            open={phoneFiltersOpen}
-            onOpenChange={setPhoneFiltersOpen}
-            mobilePresentation="sheet"
-            title="商品库筛选与设置"
-            description="调整品类、品牌及每页条数"
-            footer={
-              <div className="flex w-full items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    onFiltersChange(defaultProductFilters);
-                    setPhoneFiltersOpen(false);
-                  }}
-                  disabled={!activeFilters}
-                >
-                  <RotateCcw className="h-4 w-4" />重置
-                </Button>
-                <div className="flex gap-2">
-                  <Button type="button" variant="secondary" size="sm" onClick={exportProducts}>
-                    <Download className="h-4 w-4" />导出
-                  </Button>
-                  <Button type="button" variant="primary" size="sm" onClick={() => setPhoneFiltersOpen(false)}>
-                    完成
-                  </Button>
-                </div>
-              </div>
-            }
-          >
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-[var(--erp-color-text-secondary)]">商品品类</label>
-                <Select
-                  value={filters.category}
-                  onValueChange={(category) => onFiltersChange({...filters, category, page: 1})}
-                  options={[{value: "all", label: "全部品类"}, ...(query.data?.categories || []).map((value) => ({value, label: value}))]}
-                  className="w-full"
-                  aria-label="筛选商品品类"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-[var(--erp-color-text-secondary)]">商品品牌</label>
-                <Select
-                  value={filters.brand}
-                  onValueChange={(brand) => onFiltersChange({...filters, brand, page: 1})}
-                  options={[{value: "all", label: "全部品牌"}, ...(query.data?.brands || []).map((value) => ({value, label: value}))]}
-                  className="w-full"
-                  aria-label="筛选商品品牌"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-[var(--erp-color-text-secondary)]">每页显示</label>
-                <div className="flex gap-2">
-                  {[10, 20, 50].map((size) => (
-                    <Button
-                      key={size}
-                      type="button"
-                      size="sm"
-                      variant={filters.pageSize === size ? "primary" : "secondary"}
-                      onClick={() => onFiltersChange({...filters, pageSize: size, page: 1})}
-                    >
-                      {size} 条/页
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </ErpDialogShell>
-        )}
-        <ErpProductTemplateDialog open={dialogOpen} product={editing} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, product: editing});}} />
-        <ConfirmationDialog state={confirmState} pending={deleteMutation.isPending || importMutation.isPending} onClose={() => setConfirmState(null)} onConfirm={() => {if (confirmState?.kind === "delete") deleteMutation.mutate(confirmState.product.id); if (confirmState?.kind === "import") importMutation.mutate(confirmState.rows);}} />
-        <ErpProductLedgerDrawer open={Boolean(ledgerSubject)} subject={ledgerSubject} subjects={ledgerSubjects} onSubjectChange={setLedgerSubject} filters={productLedger.filters} page={productLedger.query.data} loading={productLedger.query.isPending} fetching={productLedger.query.isFetching} error={productLedger.query.error as Error | null} onRetry={() => { void productLedger.query.refetch(); }} onFiltersChange={productLedger.updateFilter} onResetFilters={productLedger.clearFilters} onPageChange={productLedger.changePage} onPageSizeChange={productLedger.changePageSize} onOpenChange={(open) => {if (!open) setLedgerSubject(null);}} onOpenDocument={openProductLedgerDocument} />
-      </ErpPageContent>
-    </ErpListPageFrame>
-  );
+  return <ErpListPage
+    title="商品库"
+    subtitle="维护采购、检测、库存与行情共用的商品规格模板。"
+    countLabel={(count) => `${count} 款`}
+    loading={query.isPending}
+    loadError={Boolean(query.error && !query.data)}
+    quickStatus={quickStatus}
+    metrics={[
+      <MetricCard key="products" label="商品模板" value={`${total} 款`} icon={<Boxes className="h-4 w-4" />} />,
+      <MetricCard key="stocked" label="有库存规格" value={`${stockedTemplates} 款`} detail={`${stockUnits} 件物理库存`} icon={<PackageCheck className="h-4 w-4" />} tone="success" />,
+      <MetricCard key="categories" label="品类覆盖" value={`${categories.length} 类`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<Layers3 className="h-4 w-4" />} />,
+    ]}
+    search={{value: filters.keyword, onChange: (keyword) => onFiltersChange({...filters, keyword, page: 1}), label: "搜索商品模板", placeholder: "商品名称、型号、品牌、版本、规格或配件 ID", phonePlaceholder: "搜索商品名、型号、品牌"}}
+    filters={filterFields}
+    onResetFilters={() => onFiltersChange(defaultProductFilters)}
+    quickFilters={[{label: "全部", active: filters.category === "all", onSelect: () => onFiltersChange({...filters, category: "all", page: 1})}, ...categories.slice(0, 3).map((category) => ({label: category, active: filters.category === category, onSelect: () => onFiltersChange({...filters, category, page: 1})}))]}
+    defaultSortLabel="默认排序"
+    primaryAction={{label: "新建模板", icon: <Plus className="h-4 w-4" />, onClick: openCreate}}
+    actions={[
+      {label: "导入模板", icon: <Download className="h-4 w-4" />, onClick: downloadTemplate},
+      {label: "CSV 导入", icon: <Upload className="h-4 w-4" />, onClick: () => importRef.current?.click(), disabled: importMutation.isPending},
+      {label: "导出", icon: <Download className="h-4 w-4" />, onClick: exportProducts},
+    ]}
+    onRefresh={() => void query.refetch()}
+    refreshing={query.isFetching}
+    resultsLabel="全部商品模板"
+    tableTitle="商品规格列表"
+    table={table}
+    tableDensity="compact"
+    phonePageSizeOptions={[10, 20, 50]}
+    tableNotice={!fullPriceAccess ? <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div> : undefined}
+    overlayOpen={Boolean(dialogOpen || confirmState || ledgerSubject)}
+    overlays={<>
+      <input ref={importRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => {const file = event.target.files?.[0]; if (file) void onImportFile(file); event.target.value = "";}} />
+      <ErpProductTemplateDialog open={dialogOpen} product={editing} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, product: editing});}} />
+      <ConfirmationDialog state={confirmState} pending={deleteMutation.isPending || importMutation.isPending} onClose={() => setConfirmState(null)} onConfirm={() => {if (confirmState?.kind === "delete") deleteMutation.mutate(confirmState.product.id); if (confirmState?.kind === "import") importMutation.mutate(confirmState.rows);}} />
+      <ErpProductLedgerDrawer open={Boolean(ledgerSubject)} subject={ledgerSubject} subjects={ledgerSubjects} onSubjectChange={setLedgerSubject} filters={productLedger.filters} page={productLedger.query.data} loading={productLedger.query.isPending} fetching={productLedger.query.isFetching} error={productLedger.query.error as Error | null} onRetry={() => {void productLedger.query.refetch();}} onFiltersChange={productLedger.updateFilter} onResetFilters={productLedger.clearFilters} onPageChange={productLedger.changePage} onPageSizeChange={productLedger.changePageSize} onOpenChange={(open) => {if (!open) setLedgerSubject(null);}} onOpenDocument={openProductLedgerDocument} />
+    </>}
+  />;
 }
 
 function MetricCard({label, value, detail, icon, tone = "info"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "info" | "success" | "warning" | "neutral"}) {

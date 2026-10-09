@@ -8,7 +8,9 @@ const targets = [
   {
     name: "库存正式页",
     file: "src/features/inventory/pages/InventoryListPage.tsx",
-    required: ["ErpPageHeader", "ErpFilterBar", "ErpDataTable", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError", "MetricsRegion"],
+    // Shared header and filters are supplied by ErpListPage; inventory retains
+    // its domain-owned card/model tables and detail overlays.
+    required: ["ErpListPage", "ErpDataTable", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError", "MetricsRegion"],
     forbidden: [
       [/<table\b/, "不得在库存列表页重复实现 DataTable 外壳"],
       [/<Sheet\b|<Sheet\./, "详情必须使用 ErpDetailDrawer，不能直接使用基础 Sheet"],
@@ -51,7 +53,9 @@ const targets = [
   {
     name: "同行档案页",
     file: "src/features/vendors/pages/VendorDirectoryPage.tsx",
-    required: ["ErpPageHeader", "ErpFilterBar", "ErpDataTable", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError", "MetricsRegion"],
+    // Header, filters, data table and metrics are intentionally owned by the
+    // shared ErpListPage template.
+    required: ["ErpListPage", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError"],
     forbidden: [
       [/<table\b/, "不得在同行档案页重复实现 DataTable 外壳"],
       [/<Sheet\b|<Sheet\./, "详情必须使用 ErpDetailDrawer，不能直接使用基础 Sheet"],
@@ -90,4 +94,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Component Reuse 检查通过：库存、CRM List/Dashboard 与销售 Create/Edit Page 均复用统一骨架和公共能力。");
+console.log("Component Reuse 检查通过：库存、客户/同行 List、CRM Dashboard 与销售 Create/Edit Page 均复用统一骨架和公共能力。");

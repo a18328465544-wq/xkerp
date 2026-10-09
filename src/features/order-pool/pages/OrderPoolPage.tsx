@@ -1,17 +1,16 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ColumnDef} from "@tanstack/react-table";
-import {AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronDown, CircleDot, ClipboardList, Link2, MessageSquarePlus, Plus, RefreshCw, RotateCcw, SlidersHorizontal, UserRound, Users} from "lucide-react";
-import {ErpDateTimePicker, ErpDetailFact, ErpDialogShell, ErpField, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
+import {AlertTriangle, CalendarClock, CircleDot, ClipboardList, Link2, MessageSquarePlus, Plus, UserRound, Users} from "lucide-react";
+import {ErpDateTimePicker, ErpDetailFact, ErpField, ErpListPage, ErpMobileRecordRow, type ErpFilterField, type ErpListTableProps} from "@/src/components/common";
 import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Select, Textarea} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpFilterBar, ErpListPageFrame, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpLoadingState, ErpMetricCard, ErpPageError, ErpStatusBadge, MainRegion, type QuickStatusItemData} from "@/src/components/common";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {ApiError, orderPoolApi, queryKeys, refreshErpAfterDocument, type AuthSession} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api/invalidation";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import type {CustomerOrder, OrderPoolBlocker, OrderPoolCollaboratorOption, OrderPoolCreateInput, OrderPoolDocumentLinkInput, OrderPoolFilters, OrderPoolOrderType, OrderPoolPriority, OrderPoolQueue, OrderPoolStage, OrderPoolUpdateInput} from "@/src/types/order-pool";
 import {orderPoolPartyTypeValues, orderPoolPriorityValues} from "@/src/types/order-pool";
 import {formatStoreDateTime} from "@/src/utils/storeTime";
@@ -89,8 +88,6 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
   const noteMutation = useMutation({mutationFn: ({id, content}: {id: string; content: string}) => orderPoolApi.addNote(id, {content}), onSuccess: async (order) => {setSelected(order); notify.success("跟进记录已添加"); await invalidate();}, onError: handleError});
   const linkMutation = useMutation({mutationFn: ({id, input}: {id: string; input: OrderPoolDocumentLinkInput}) => orderPoolApi.linkDocument(id, input), onSuccess: async (order) => {setSelected(order); notify.success("业务单据已关联"); await invalidate();}, onError: handleError});
   const activeFilterCount = countActiveOrderPoolFilters(filters);
-  const phone = useErpPhone();
-  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const queueCounts: Record<OrderPoolQueue, number> = {
     mine: collection.summary.mine,
     all: collection.summary.total,
@@ -153,146 +150,84 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
     </div>},
   ], [claimOrder, completeOrder, session.user.id, updateMutation.isPending]);
 
-  const filterFields = (
-    <>
-      <Select size="sm" className="w-full" value={filters.orderType} onValueChange={(value) => updateFilters({orderType: value as OrderPoolFilters["orderType"]})} options={[{value: "all", label: "全部类型"}, ...orderPoolOrderTypeOptions]} aria-label="订单类型筛选" />
-      <Select size="sm" className="w-full" value={filters.mainStage} onValueChange={(value) => updateFilters({mainStage: value as OrderPoolFilters["mainStage"]})} options={[{value: "all", label: "全部阶段"}, ...orderPoolStageOptions]} aria-label="订单阶段筛选" />
-      <Select size="sm" className="w-full" value={filters.owner} onValueChange={(owner) => updateFilters({owner})} options={[{value: "", label: "全部协作者"}, ...owners]} aria-label="负责人或协作者筛选" />
-    </>
-  );
+  const filterFields: ErpFilterField[] = [
+    {kind: "select", key: "orderType", label: "订单类型", width: "w-32", value: filters.orderType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...orderPoolOrderTypeOptions], onChange: (value) => updateFilters({orderType: value as OrderPoolFilters["orderType"]})},
+    {kind: "select", key: "mainStage", label: "订单阶段", width: "w-36", value: filters.mainStage, defaultValue: "all", options: [{value: "all", label: "全部阶段"}, ...orderPoolStageOptions], onChange: (value) => updateFilters({mainStage: value as OrderPoolFilters["mainStage"]})},
+    {kind: "select", key: "owner", label: "负责人或协作者", width: "w-40", value: filters.owner, defaultValue: "", options: [{value: "", label: "全部协作者"}, ...owners], onChange: (owner) => updateFilters({owner})},
+  ];
+  const table: ErpListTableProps<CustomerOrder> = {
+    mobileShowDetailAction: false,
+    mobileRow: (item) => <ErpMobileRecordRow title={item.orderNo} titleMono subtitle={item.title} meta={`${item.customerName}${item.contact ? ` · ${item.contact}` : ""} · ${item.ownerName || "待认领"}`} statusPlacement="title" status={<ErpStatusBadge label={item.mainStage} tone={orderPoolStageTone(item.mainStage)} />} amount={item.orderType} amountLabel={item.blocker || undefined} onOpen={() => openDetails(item)} />,
+    columns,
+    data: items,
+    getRowId: (row) => row.id,
+    loading: query.isPending,
+    fetching: query.isFetching,
+    error: query.error as Error | null,
+    errorTitle: "订单池加载失败",
+    emptyTitle: "暂无协同订单",
+    emptyDescription: activeFilterCount ? "请调整队列或筛选条件；也可以切换到全部订单查看共享队列。" : mineQueueEmpty ? "当前没有分配给你的订单，请切换“全部订单”或“待认领”查看共享队列。" : "点击新建协同订单创建第一条记录。",
+    onRetry: () => void query.refetch(),
+    onRowClick: setSelected,
+    page: collection.page,
+    pageSize: collection.pageSize,
+    total: collection.total,
+    onPageChange: (page) => updateFilters({page}),
+    onPageSizeChange: (pageSize) => updateFilters({page: 1, pageSize}),
+    stickyHeader: true,
+    ariaLabel: "客户协同订单列表",
+  };
+  const openCreateOrder = () => {createMutation.reset(); setCreateOpen(true);};
+  const desktopTable = <MainRegion variant="70-30" className="lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <DashboardSection title="协同订单列表" description="主状态表达阶段，待办标签说明卡点；行内可直接认领或完成，点击订单查看完整协作上下文。" actions={<ErpStatusBadge label={`共 ${collection.total} 单`} tone="info" />}>
+      <ErpDataTable {...table} mobileRow={table.mobileRow} surface="card" mobilePagination="compact" density="compact" />
+    </DashboardSection>
+    <OrderPoolSidePanel order={selected} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={updateMutation.isPending} onClaim={claimOrder} onAssign={assignOrder} onRelease={releaseOrder} onPause={pauseOrder} onResume={resumeOrder} onComplete={completeOrder} onOpenDetails={() => {if (selected) openDetails(selected);}} />
+  </MainRegion>;
+  const metrics = [
+    <Metric key="unassigned" label="待认领" value={`${collection.summary.pendingClaim} 单`} detail="共享队列中尚未分配负责人" icon={<CircleDot className="h-4 w-4" />} tone={collection.summary.pendingClaim ? "warning" : "neutral"} />,
+    <Metric key="following" label="跟进中" value={`${collection.summary.following} 单`} detail="已有负责人持续推进" icon={<Users className="h-4 w-4" />} tone="info" />,
+    <Metric key="execution" label="待执行" value={`${collection.summary.pendingExecution} 单`} detail="报价、备货、收款或出库" icon={<ClipboardList className="h-4 w-4" />} tone={collection.summary.pendingExecution ? "warning" : "neutral"} />,
+    <Metric key="exceptions" label="异常订单" value={`${collection.summary.exceptions} 单`} detail="暂停 / 丢单 / 取消 / 售后" icon={<AlertTriangle className="h-4 w-4" />} tone={collection.summary.exceptions ? "danger" : "neutral"} />,
+  ];
 
-  const orderPoolTable = (
-    <ErpDataTable
-      surface={phone ? "plain" : "card"}
-      mobilePagination="compact"
-      mobileShowDetailAction={false}
-      mobileToolbar={({openSorting, sortLabel, descending}) => (
-        <div className="erp-customer-list-toolbar">
-          <div className="erp-customer-quick-filters" role="group" aria-label="订单快捷筛选">
-            <Button type="button" variant={filters.queue === "all" ? "primary" : "ghost"} aria-pressed={filters.queue === "all"} onClick={() => updateFilters({queue: "all"})}>全部</Button>
-            <Button type="button" variant={filters.queue === "mine" ? "primary" : "ghost"} aria-pressed={filters.queue === "mine"} onClick={() => updateFilters({queue: "mine"})}>我的待办</Button>
-            <Button type="button" variant={filters.queue === "unassigned" ? "primary" : "ghost"} aria-pressed={filters.queue === "unassigned"} onClick={() => updateFilters({queue: "unassigned"})}>待认领</Button>
-          </div>
-          <Button type="button" variant="ghost" className="erp-customer-sort" aria-label="订单排序" onClick={openSorting}>
-            <span>{sortLabel || "默认排序"}</span>
-            {descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
-      mobileRow={(item) => (
-        <ErpMobileRecordRow
-          title={item.orderNo}
-          titleMono
-          subtitle={item.title}
-          meta={`${item.customerName}${item.contact ? ` · ${item.contact}` : ""} · ${item.ownerName || "待认领"}`}
-          statusPlacement="title"
-          status={<ErpStatusBadge label={item.mainStage} tone={orderPoolStageTone(item.mainStage)} />}
-          amount={item.orderType}
-          amountLabel={item.blocker || undefined}
-          onOpen={() => openDetails(item)}
-        />
-      )}
-      columns={columns}
-      data={items}
-      getRowId={(row) => row.id}
-      loading={query.isPending}
-      fetching={query.isFetching}
-      error={query.error as Error | null}
-      errorTitle="订单池加载失败"
-      emptyTitle="暂无协同订单"
-      emptyDescription={activeFilterCount ? "请调整队列或筛选条件；也可以切换到全部订单查看共享队列。" : mineQueueEmpty ? "当前没有分配给你的订单，请切换“全部订单”或“待认领”查看共享队列。" : "点击新建协同订单创建第一条记录。"}
-      onRetry={() => void query.refetch()}
-      onRowClick={phone ? openDetails : setSelected}
-      page={collection.page}
-      pageSize={collection.pageSize}
-      total={collection.total}
-      onPageChange={(page) => updateFilters({page})}
-      onPageSizeChange={(pageSize) => updateFilters({page: 1, pageSize})}
-      density="compact"
-      stickyHeader
-      ariaLabel="客户协同订单列表"
-    />
-  );
-
-  return <ErpListPageFrame className="erp-customer-directory" data-phone-layout={phone ? "thumb" : undefined}>
-    <ErpPageHeader
-      title={phone ? <span className="erp-customer-phone-title">订单池<small>{collection.total} 单</small></span> : "客户订单池"}
-      subtitle="把客户意向、销售、回收和置换放在一条协同主线上；业务单据只保存引用，金额和库存仍以原模块为准。"
-      quickStatus={quickStatus}
-      actions={phone ? (
-        <Button type="button" variant="secondary" onClick={() => setPhoneFiltersOpen(true)} aria-label="订单池筛选与操作">
-          <SlidersHorizontal className="h-5 w-5" />筛选{activeFilterCount > 0 && <span className="tabular-nums">{activeFilterCount}</span>}
-        </Button>
-      ) : (
-        <>
-          <Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>
-          <Button type="button" size="sm" variant="primary" onClick={() => {createMutation.reset(); setCreateOpen(true);}}><Plus className="h-4 w-4" />新建协同订单</Button>
-        </>
-      )}
-    />
-    {!phone && (
-      <>
-        <OrderPoolQueueBar active={filters.queue} counts={queueCounts} onChange={(queue) => updateFilters({queue})} />
-        <MetricsRegion>
-          <Metric label="待认领" value={`${collection.summary.pendingClaim} 单`} detail="共享队列中尚未分配负责人" icon={<CircleDot className="h-4 w-4" />} tone={collection.summary.pendingClaim ? "warning" : "neutral"} />
-          <Metric label="跟进中" value={`${collection.summary.following} 单`} detail="已有负责人持续推进" icon={<Users className="h-4 w-4" />} tone="info" />
-          <Metric label="待执行" value={`${collection.summary.pendingExecution} 单`} detail="报价、备货、收款或出库" icon={<ClipboardList className="h-4 w-4" />} tone={collection.summary.pendingExecution ? "warning" : "neutral"} />
-          <Metric label="异常订单" value={`${collection.summary.exceptions} 单`} detail="暂停 / 丢单 / 取消 / 售后" icon={<AlertTriangle className="h-4 w-4" />} tone={collection.summary.exceptions ? "danger" : "neutral"} />
-        </MetricsRegion>
-        <ErpPageToolbar>
-          <ErpFilterBar compact actions={<Button type="button" size="sm" variant="ghost" disabled={!activeFilterCount} onClick={() => commitFilters(defaultOrderPoolFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}>
-            <ErpSearchInput className="min-w-[260px] flex-1" density="compact" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索订单号、客户、联系人、下一步或备注" aria-label="搜索客户协同订单" />
-            <Select size="sm" className="w-32" value={filters.orderType} onValueChange={(value) => updateFilters({orderType: value as OrderPoolFilters["orderType"]})} options={[{value: "all", label: "全部类型"}, ...orderPoolOrderTypeOptions]} aria-label="订单类型筛选" />
-            <Select size="sm" className="w-36" value={filters.mainStage} onValueChange={(value) => updateFilters({mainStage: value as OrderPoolFilters["mainStage"]})} options={[{value: "all", label: "全部阶段"}, ...orderPoolStageOptions]} aria-label="订单阶段筛选" />
-            <Select size="sm" className="w-40" value={filters.owner} onValueChange={(owner) => updateFilters({owner})} options={[{value: "", label: "全部协作者"}, ...owners]} aria-label="负责人或协作者筛选" />
-          </ErpFilterBar>
-        </ErpPageToolbar>
-      </>
-    )}
-    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      {!phone && <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--erp-color-text-muted)]"><span>{activeFilterCount ? `${activeFilterCount} 项筛选 · ` : ""}筛选结果 {collection.total} 条订单</span><ErpStatusBadge label="协同主线" tone="info" /></div>}
-      {phone ? (
-        orderPoolTable
-      ) : (
-        <MainRegion variant="70-30" className="lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <DashboardSection title="协同订单列表" description="主状态表达阶段，待办标签说明卡点；行内可直接认领或完成，点击订单查看完整协作上下文。" actions={<ErpStatusBadge label={`共 ${collection.total} 单`} tone="info" />}>
-            {orderPoolTable}
-          </DashboardSection>
-          <OrderPoolSidePanel order={selected} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={updateMutation.isPending} onClaim={claimOrder} onAssign={assignOrder} onRelease={releaseOrder} onPause={pauseOrder} onResume={resumeOrder} onComplete={completeOrder} onOpenDetails={() => {if (selected) openDetails(selected);}} />
-        </MainRegion>
-      )}
-      <ErpMobileActionDock hidden={Boolean(detailOpen || createOpen || phoneFiltersOpen)} ariaLabel="订单搜索与新建" primaryAction={<Button type="button" variant="primary" onClick={() => {createMutation.reset(); setCreateOpen(true);}}><Plus className="h-5 w-5" />新建订单</Button>}>
-        <ErpSearchInput className="w-full" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索订单号、客户、联系人" aria-label="搜索客户协同订单" />
-      </ErpMobileActionDock>
-      {phone && (
-        <ErpDialogShell open={phoneFiltersOpen} onOpenChange={setPhoneFiltersOpen} title="订单池筛选与队列" mobilePresentation="sheet" footer={<><Button type="button" size="sm" variant="ghost" disabled={!activeFilterCount} onClick={() => commitFilters(defaultOrderPoolFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>查看结果</Button></>}>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">工作队列</span>
-              <div className="flex flex-wrap gap-1.5">
-                {orderPoolQueueOptions.map((opt) => (
-                  <Button key={opt.value} type="button" size="sm" variant={filters.queue === opt.value ? "primary" : "ghost"} onClick={() => updateFilters({queue: opt.value})}>
-                    {opt.label} ({queueCounts[opt.value]})
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div data-erp-region="phone-filter-fields" className="grid gap-3">
-              {filterFields}
-              <Select aria-label="每页条数" value={String(filters.pageSize)} onValueChange={(value) => updateFilters({page: 1, pageSize: Number(value)})} options={[20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}))} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>
-                <RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新
-              </Button>
-            </div>
-          </div>
-        </ErpDialogShell>
-      )}
-    </ErpPageContent>
-    <OrderPoolDetailDrawer order={detailOpen ? selected : null} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={updateMutation.isPending || noteMutation.isPending || linkMutation.isPending} onClose={() => setDetailOpen(false)} onAssign={(patch) => {if (selected) updateMutation.mutate({id: selected.id, patch});}} onSave={(patch) => {if (selected) updateMutation.mutate({id: selected.id, patch});}} onAddNote={(content) => {if (selected) noteMutation.mutate({id: selected.id, content});}} onLink={(input) => {if (selected) linkMutation.mutate({id: selected.id, input});}} />
-    <CreateOrderDrawer open={createOpen} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={createMutation.isPending} error={createMutation.error instanceof Error ? createMutation.error.message : undefined} onClose={() => setCreateOpen(false)} onSubmit={(input) => createMutation.mutate(input)} />
-  </ErpListPageFrame>;
+  return <ErpListPage
+    title="客户订单池"
+    phoneTitle="订单池"
+    subtitle="把客户意向、销售、回收和置换放在一条协同主线上；业务单据只保存引用，金额和库存仍以原模块为准。"
+    countLabel={(count) => `${count} 单`}
+    loading={query.isPending}
+    loadError={Boolean(query.error && !query.data)}
+    quickStatus={quickStatus}
+    tabs={<div className="hidden md:block"><OrderPoolQueueBar active={filters.queue} counts={queueCounts} onChange={(queue) => updateFilters({queue})} /></div>}
+    metrics={metrics}
+    search={{value: filters.keyword, onChange: (keyword) => updateFilters({keyword}), label: "搜索客户协同订单", placeholder: "搜索订单号、客户、联系人、下一步或备注", phonePlaceholder: "搜索订单号、客户、联系人"}}
+    filters={filterFields}
+    onResetFilters={() => commitFilters(defaultOrderPoolFilters)}
+    additionalActiveFilterCount={Number(filters.queue !== defaultOrderPoolFilters.queue)}
+    quickFilters={[
+      {label: "全部", active: filters.queue === "all", onSelect: () => updateFilters({queue: "all"})},
+      {label: "我的待办", active: filters.queue === "mine", onSelect: () => updateFilters({queue: "mine"})},
+      {label: "待认领", active: filters.queue === "unassigned", onSelect: () => updateFilters({queue: "unassigned"})},
+    ]}
+    defaultSortLabel="最近更新"
+    primaryAction={{label: "新建订单", icon: <Plus className="h-4 w-4" />, onClick: openCreateOrder}}
+    onRefresh={() => void query.refetch()}
+    refreshing={query.isFetching}
+    tableTitle="协同订单列表"
+    table={table}
+    tableDensity="compact"
+    phonePageSizeOptions={[20, 50, 100]}
+    sheetExtra={<section className="space-y-2" aria-label="全部工作队列"><p className="text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">工作队列</p><div className="flex flex-wrap gap-1.5">{orderPoolQueueOptions.map((option) => <Button key={option.value} type="button" size="sm" variant={filters.queue === option.value ? "primary" : "ghost"} aria-pressed={filters.queue === option.value} onClick={() => updateFilters({queue: option.value})}>{option.label} ({queueCounts[option.value]})</Button>)}</div><p className="text-xs text-[var(--erp-color-text-muted)]">队列只改变当前视图，不会改变订单阶段；所有成员看到同一条协作主线。</p></section>}
+    desktopTableSection={false}
+    desktopTableContent={desktopTable}
+    tableNotice={<div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--erp-color-text-muted)]"><span>{activeFilterCount ? `${activeFilterCount} 项筛选 · ` : ""}筛选结果 {collection.total} 条订单</span><ErpStatusBadge label="协同主线" tone="info" /></div>}
+    overlayOpen={Boolean(detailOpen || createOpen)}
+    overlays={<>
+      <OrderPoolDetailDrawer order={detailOpen ? selected : null} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={updateMutation.isPending || noteMutation.isPending || linkMutation.isPending} onClose={() => setDetailOpen(false)} onAssign={(patch) => {if (selected) updateMutation.mutate({id: selected.id, patch});}} onSave={(patch) => {if (selected) updateMutation.mutate({id: selected.id, patch});}} onAddNote={(content) => {if (selected) noteMutation.mutate({id: selected.id, content});}} onLink={(input) => {if (selected) linkMutation.mutate({id: selected.id, input});}} />
+      <CreateOrderDrawer open={createOpen} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={createMutation.isPending} error={createMutation.error instanceof Error ? createMutation.error.message : undefined} onClose={() => setCreateOpen(false)} onSubmit={(input) => createMutation.mutate(input)} />
+    </>}
+  />;
 }
 
 function OrderPoolQueueBar({active, counts, onChange}: {active: OrderPoolQueue; counts: Record<OrderPoolQueue, number>; onChange: (queue: OrderPoolQueue) => void}) {

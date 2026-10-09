@@ -41,7 +41,7 @@ test("compact paging stays opt-in and desktop page-size controls remain availabl
   assert.match(table, /mobilePagination = "full"/);
   assert.match(table, /!phone \|\| mobilePagination === "full" \|\| totalPages > 1/);
   assert.match(table, /\(!phone \|\| mobilePagination === "full"\) && <Select/);
-  assert.match(template, /aria-label="每页条数"[^\n]+table\.onPageSizeChange\?\.\(Number\(value\)\)/);
+  assert.match(template, /aria-label="每页条数" value=\{String\(pageSize\)\} onValueChange=\{\(value\) => onPageSizeChange\(Number\(value\)\)\}/);
   assert.match(source, /onPageSizeChange: \(pageSize\) => onFiltersChange\(\{\.\.\.filters, page: 1, pageSize\}\)/);
 });
 
