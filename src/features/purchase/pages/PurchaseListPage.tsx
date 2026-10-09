@@ -23,7 +23,6 @@ import {isPersonalPurchaseSource} from "@/src/utils/purchaseSources";
 import {purchasePaymentStatusValues} from "@/src/types/purchase";
 import type {PurchaseListFilters, PurchaseListItem, PurchaseListSortKey} from "@/src/types/purchase";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
-import {cn} from "@/src/lib/cn";
 import {sourceTypeValues} from "@/src/types/core";
 import {createPurchaseListColumns} from "../purchase.columns";
 import {countActivePurchaseListFilters, defaultPurchaseListFilters, parsePurchaseListFilters, purchaseListFiltersToSearch, selectPurchaseList} from "../purchase.filters";

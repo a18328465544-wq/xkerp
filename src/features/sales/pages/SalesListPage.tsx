@@ -22,7 +22,6 @@ import type {LinkedSettlementContext} from "@/src/types/finance-settlement";
 import {formatCurrency} from "@/src/lib/format";
 import {salesChannelValues, salesOutboundStatusValues, salesPaymentStatusValues} from "@/src/types/sales";
 import type {SalesListFilters, SalesListItem, SalesListLine, SalesListSortKey} from "@/src/types/sales";
-import {cn} from "@/src/lib/cn";
 import {createSalesListColumns} from "../sales.columns";
 import {SalesDetailActions} from "../components/SalesDetailActions";
 import {countActiveSalesListFilters, defaultSalesListFilters, parseSalesListFilters, salesListFiltersToSearch, selectSalesList} from "../sales.filters";

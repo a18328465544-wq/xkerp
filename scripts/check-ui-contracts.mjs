@@ -141,6 +141,58 @@ function inspectStyles(directory) {
 
 for (const file of collectComponentFiles(componentsDir).sort()) inspectFile(file);
 
+const tableWhitelist = new Set([
+  "src/features/design-system/pages/DesignSystemPage.tsx",
+  "src/features/finance/components/FinanceTableRegion.tsx",
+  "src/components/common/ErpProductLedgerDrawer.tsx",
+]);
+
+function collectFeatureFiles(directory) {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectFeatureFiles(file);
+    return entry.name.endsWith(".tsx") && !/\.test\.tsx$/.test(entry.name) ? [file] : [];
+  });
+}
+
+function inspectFeatureDataTable(file) {
+  const sourceText = fs.readFileSync(file, "utf8");
+  if (!sourceText.includes("<ErpDataTable")) return;
+  const rel = path.relative(projectRoot, file).split(path.sep).join("/");
+  if (tableWhitelist.has(rel)) return;
+  const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+  function visit(node) {
+    const jsxNode = ts.isJsxElement(node)
+      ? node.openingElement
+      : ts.isJsxSelfClosingElement(node)
+        ? node
+        : undefined;
+
+    if (jsxNode) {
+      const tagName = jsxNode.tagName.getText(sourceFile);
+      if (tagName === "ErpDataTable") {
+        const hasMobileRow = Boolean(findAttribute(jsxNode, "mobileRow"));
+        const mobileMode = literalAttributeValue(findAttribute(jsxNode, "mobileMode"));
+        const hasMobileModeTable = mobileMode === "table";
+        const hasSpread = attributesOf(jsxNode).some((attr) => ts.isJsxSpreadAttribute(attr));
+        if (!hasMobileRow && !hasMobileModeTable && !hasSpread) {
+          fail(file, sourceFile, jsxNode, "Feature 页面使用 <ErpDataTable> 必须提供 mobileRow，或者显式传 mobileMode=\"table\"。");
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+}
+
+for (const file of collectFeatureFiles(path.join(projectRoot, "src", "features")).sort()) {
+  inspectFeatureDataTable(file);
+}
+
+
 function inspectFormalTree(directory) {
   if (!fs.existsSync(directory)) return;
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {

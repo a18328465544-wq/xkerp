@@ -1,6 +1,6 @@
 import {flexRender, getCoreRowModel, getSortedRowModel, type Cell, type ColumnDef, type OnChangeFn, type RowSelectionState, type SortingState, type Updater, type VisibilityState, useReactTable} from "@tanstack/react-table";
 import {useVirtualizer} from "@tanstack/react-virtual";
-import {ArrowDown, ArrowUp, ChevronsUpDown, ChevronLeft, ChevronRight, GripVertical} from "lucide-react";
+import {ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, GripVertical, MoreHorizontal} from "lucide-react";
 import {useEffect, useId, useRef, useState, type ReactNode} from "react";
 import {Button, Card, Select} from "@/src/components/ui";
 import {ErpDialogShell} from "./ErpDialogShell";
@@ -77,6 +77,8 @@ export interface ErpDataTableProps<TData> {
   /** Opt-in windowing for large client-side pages. Server pagination remains the primary guard. */
   virtualized?: boolean;
   virtualRowHeight?: number;
+  phone?: boolean;
+  compactViewport?: boolean;
 }
 
 function resolveState<T>(updater: Updater<T>, current: T) {
@@ -124,9 +126,12 @@ export function ErpDataTable<TData>({
   mobilePagination = "full",
   virtualized = false,
   virtualRowHeight = 56,
+  phone: phoneProp,
+  compactViewport: compactViewportProp,
 }: ErpDataTableProps<TData>) {
   const detailId = useId();
-  const phone = useErpPhone();
+  const phoneFromHook = useErpPhone();
+  const phone = phoneProp ?? phoneFromHook;
   const [sortOpen, setSortOpen] = useState(false);
   const [actionRowId, setActionRowId] = useState<string | null>(null);
   const [internalSorting, setInternalSorting] = useState<SortingState>([]);
@@ -141,7 +146,7 @@ export function ErpDataTable<TData>({
   const scrollRef = useRef<HTMLDivElement>(null);
   // Keep the server and first client render identical; the media listener
   // applies the compact presentation immediately after hydration.
-  const [compactViewport, setCompactViewport] = useState(false);
+  const [compactViewport, setCompactViewport] = useState(compactViewportProp ?? false);
 
   useEffect(() => {
     // Keep desktop windows from 1024px on the table view (the table may scroll
@@ -251,18 +256,32 @@ export function ErpDataTable<TData>({
         const {hiddenCount, visibleCount} = resolveMobileCardDetails(Math.max(0, contentCells.length - 1), phone ? Math.min(mobileFields, 2) : mobileFields, expanded);
         const detailCells = orderedCells.slice(0, visibleCount);
         const fieldsId = `${detailId}-${encodeURIComponent(row.id)}`;
+        const isClickable = Boolean(phone && onRowClick);
         return <article
           key={row.id}
           data-erp-selected={row.getIsSelected() ? "true" : undefined}
           data-mobile-record={phone ? "compact" : undefined}
-          className="relative rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3"
+          data-clickable={isClickable ? "true" : undefined}
+          onClick={isClickable ? () => onRowClick?.(row.original) : undefined}
+          role={isClickable ? "button" : undefined}
+          tabIndex={isClickable ? 0 : undefined}
+          onKeyDown={isClickable ? (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onRowClick?.(row.original);
+            }
+          } : undefined}
+          className={cn(
+            "relative rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3",
+            isClickable && "cursor-pointer active:bg-[var(--erp-color-surface-muted)]",
+          )}
         >
           {selectionCell && <label data-erp-region="mobile-card-selection" className="absolute right-1 top-1 flex h-11 w-11 cursor-pointer items-center justify-center" onClick={(event) => event.stopPropagation()}>{flexRender(selectionCell.column.columnDef.cell, selectionCell.getContext())}</label>}
           <div data-erp-region="mobile-card-header" className={cn("flex min-w-0 flex-col items-start gap-2 sm:flex-row", selectionCell ? "pr-10" : "")}>
             <div data-erp-region="mobile-card-title" className="w-full min-w-0 flex-1 break-words text-erp-sm font-medium text-[var(--erp-color-text)]">
               {titleCell ? flexRender(titleCell.column.columnDef.cell, titleCell.getContext()) : "—"}
             </div>
-            {actionCell && <div data-erp-region="mobile-card-actions" className="w-full min-w-0 sm:w-auto sm:shrink-0" onClick={(event) => event.stopPropagation()}>{phone ? <><Button type="button" size="sm" variant="ghost" onClick={() => setActionRowId(row.id)} aria-label={`${resolvedAriaLabel}记录操作`}>操作</Button><ErpDialogShell open={actionRowId === row.id} onOpenChange={(open) => {if (!open) setActionRowId(null);}} title="记录操作" mobilePresentation="sheet"><div className="erp-phone-action-menu">{flexRender(actionCell.column.columnDef.cell, actionCell.getContext())}</div></ErpDialogShell></> : flexRender(actionCell.column.columnDef.cell, actionCell.getContext())}</div>}
+            {actionCell && <div data-erp-region="mobile-card-actions" className="w-full min-w-0 sm:w-auto sm:shrink-0" onClick={(event) => event.stopPropagation()}>{phone ? <><Button type="button" size="iconTouch" variant="ghost" onClick={() => setActionRowId(row.id)} aria-label={`${resolvedAriaLabel}记录操作`}><MoreHorizontal className="h-4 w-4" /></Button><ErpDialogShell open={actionRowId === row.id} onOpenChange={(open) => {if (!open) setActionRowId(null);}} title="记录操作" mobilePresentation="sheet"><div className="erp-phone-action-menu">{flexRender(actionCell.column.columnDef.cell, actionCell.getContext())}</div></ErpDialogShell></> : flexRender(actionCell.column.columnDef.cell, actionCell.getContext())}</div>}
           </div>
           {(detailCells.length > 0 || hiddenCount > 0) && <dl id={fieldsId} className={cn("mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[var(--erp-color-border)] pt-3", !detailCells.length && "hidden")}>
             {detailCells.map((cell) => <div key={cell.id} className="min-w-0">
@@ -270,11 +289,11 @@ export function ErpDataTable<TData>({
               <dd data-erp-region="mobile-card-value" className="mt-0.5 min-w-0 break-words text-erp-sm text-[var(--erp-color-text-secondary)]">{flexRender(cell.column.columnDef.cell, cell.getContext())}</dd>
             </div>)}
           </dl>}
-          {(hiddenCount > 0 || (onRowClick && mobileShowDetailAction)) && <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--erp-color-border)] pt-3">
-            {hiddenCount > 0 && <Button type="button" size="sm" variant="ghost" className="flex-1" aria-expanded={expanded} aria-controls={fieldsId} onClick={() => setExpandedMobileRows((current) => ({...current, [row.id]: !expanded}))}>
+          {(hiddenCount > 0 || (onRowClick && mobileShowDetailAction && !phone)) && <div className={cn("mt-3 flex flex-wrap gap-2 border-t border-[var(--erp-color-border)] pt-2", phone ? "items-center justify-center" : "")}>
+            {hiddenCount > 0 && (phone ? <Button type="button" size="iconTouch" variant="ghost" className="text-[var(--erp-color-text-muted)]" aria-expanded={expanded} aria-controls={fieldsId} aria-label={expanded ? "收起详情" : `查看其余 ${hiddenCount} 项`} onClick={(event) => {event.stopPropagation(); setExpandedMobileRows((current) => ({...current, [row.id]: !expanded}));}}><ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} /></Button> : <Button type="button" size="sm" variant="ghost" className="flex-1" aria-expanded={expanded} aria-controls={fieldsId} onClick={() => setExpandedMobileRows((current) => ({...current, [row.id]: !expanded}))}>
               {expanded ? "收起详情" : `查看其余 ${hiddenCount} 项`}
-            </Button>}
-            {onRowClick && mobileShowDetailAction && <Button type="button" size="sm" variant="secondary" className="flex-1" onClick={() => onRowClick(row.original)}>查看详情</Button>}
+            </Button>)}
+            {onRowClick && mobileShowDetailAction && !phone && <Button type="button" size="sm" variant="secondary" className="flex-1" onClick={() => onRowClick(row.original)}>查看详情</Button>}
           </div>}
         </article>;
       })}
