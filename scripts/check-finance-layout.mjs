@@ -37,6 +37,14 @@ function containsMetric(node) {
   return count;
 }
 
+function isInsideFoldedMetricRegion(node) {
+  for (let current = node.parent; current; current = current.parent) {
+    const tag = jsxTag(current);
+    if (tag && foldedMetricRegion.test(tag)) return true;
+  }
+  return false;
+}
+
 function isAllowed(rule, file, text) {
   return (allowlist[rule] || []).some((entry) => entry.file === file
     && (entry.text === undefined || entry.text === text)
@@ -49,7 +57,7 @@ for (const file of walkPages(pagesRoot)) {
   const source = fs.readFileSync(file, "utf8");
   const sourceFile = ts.createSourceFile(relative, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const scan = (node) => {
-    if (ts.isJsxElement(node) && jsxTag(node) === "MetricsRegion") {
+    if (ts.isJsxElement(node) && jsxTag(node) === "MetricsRegion" && !isInsideFoldedMetricRegion(node)) {
       const count = containsMetric(node);
       if (count > 4 && !isAllowed("metrics", relative)) {
         const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;

@@ -1,8 +1,7 @@
 import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import {useNavigate} from "@tanstack/react-router";
 import type {OnChangeFn, VisibilityState} from "@tanstack/react-table";
-import {ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
+import {ChevronDown, ChevronUp, CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
 import {ErpDialogShell, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, Input, Select} from "@/src/components/ui";
@@ -23,6 +22,7 @@ import {financeChartCategoryColor, financeNetColor} from "../finance-chart.utils
 import {formatStoreDateTime, storeDate} from "@/src/utils/storeTime";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {cn} from "@/src/lib/cn";
+import {FinanceDetailPageLayout} from "../components/FinanceDetailPageLayout";
 
 type LedgerQuery = ReturnType<typeof useQuery<Awaited<ReturnType<typeof financeLedgerApi.list>>>>;
 type Tone = "neutral" | "info" | "success" | "warning" | "danger";
@@ -51,7 +51,6 @@ export function FinanceLedgerPage() {
 
 function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, accounts, accountOptionsAvailable}: {session: AuthSession; filters: FinanceLedgerFilters; onFiltersChange: (filters: FinanceLedgerFilters) => void; ledgerQuery: LedgerQuery; accounts: FinanceAccountItem[]; accountOptionsAvailable: boolean}) {
   const phone = useErpPhone();
-  const navigate = useNavigate();
   const [detail, setDetail] = useState<FinanceLedgerItem | null>(null);
   const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
@@ -62,8 +61,8 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
   const summary = useMemo(() => summarizeFinanceLedgerPage(rows), [rows]);
   const account = useMemo(() => accounts.find((item) => item.id === filters.accountId) || accounts[0], [accounts, filters.accountId]);
   const trendRows = useMemo(() => buildTrendRows(rows, Number(trendRange)), [rows, trendRange]);
+  const hasTrendData = trendRows.some((row) => row.income > 0 || row.expense > 0);
   const expenses = useMemo(() => buildExpenseDistribution(rows), [rows]);
-  const accountDistribution = useMemo(() => buildAccountDistribution(accounts), [accounts]);
   const columns = useMemo(() => createFinanceLedgerColumns(setDetail), []);
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.accountId !== "all") + Number(Boolean(filters.handler)) + Number(filters.businessType !== "all") + Number(filters.direction !== "all") + Number(Boolean(filters.relatedDocNo)) + Number(Boolean(filters.customerName)) + Number(Boolean(filters.supplierName)) + Number(Boolean(filters.dateStart)) + Number(Boolean(filters.dateEnd));
   const openingBalance = deriveOpeningBalance(rows, account?.balance);
@@ -93,8 +92,37 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
     />
   );
 
+  const desktopFilters = (
+    <ErpPageToolbar>
+    <div className="space-y-2">
+      <ErpFilterBar className="bg-[var(--erp-color-surface)]" actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" size="sm" variant={advancedOpen ? "secondary" : "ghost"} onClick={() => setAdvancedOpen((value) => !value)}><SlidersHorizontal className="h-4 w-4" />更多筛选</Button></>}>
+        <ErpSearchInput className="min-w-[220px] flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索备注、对方账户、单号" aria-label="搜索备注、对方账户或单号" />
+        {accountOptionsAvailable ? <Select className="w-36" value={filters.accountId} onValueChange={(accountId) => update({accountId})} options={[{value: "all", label: "全部账户"}, ...accounts.map((item) => ({value: item.id, label: item.name}))]} aria-label="筛选账户" /> : <Select className="w-36" value="unavailable" onValueChange={() => undefined} options={[{value: "unavailable", label: "账户权限受限"}]} disabled aria-label="账户筛选不可用" />}
+        <Select className="w-32" value={filters.businessType} onValueChange={(businessType) => update({businessType})} options={[{value: "all", label: "全部类型"}, ...financeLedgerBusinessTypes.map((value) => ({value, label: value}))]} aria-label="筛选交易类型" />
+        <Select className="w-28" value={filters.direction} onValueChange={(direction) => update({direction: direction as FinanceLedgerFilters["direction"]})} options={[{value: "all", label: "全部方向"}, ...financeLedgerDirections.map((value) => ({value, label: value}))]} aria-label="筛选交易方向" />
+        <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-32" startPlaceholder="开始日期" endPlaceholder="结束日期" startAriaLabel="流水开始日期" endAriaLabel="流水结束日期" ariaLabel="流水日期范围" />
+        {advancedOpen && <><Input className="w-32" value={filters.handler} onChange={(event) => update({handler: event.target.value})} placeholder="经办人" aria-label="筛选经办人" /><Input className="w-36" value={filters.relatedDocNo} onChange={(event) => update({relatedDocNo: event.target.value})} placeholder="关联单号" aria-label="筛选关联单号" /><Select className="w-32" value={filters.customerName} onValueChange={(customerName) => update({customerName})} options={customerOptions} aria-label="筛选客户" /></>}
+      </ErpFilterBar>
+      {activeFilters > 0 && <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[var(--erp-color-text-secondary)]"><span>已应用 {activeFilters} 项筛选</span><Button type="button" size="xs" variant="ghost" className="h-auto px-0 font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}>清空全部</Button></div>}
+    </div>
+    </ErpPageToolbar>
+  );
+
+  if (!phone) {
+    const analysisAvailable = hasTrendData || expenses.length > 0;
+    return <FinanceDetailPageLayout
+      header={<FinanceLedgerHeader reconciliation={reconciliation} loading={ledgerQuery.isFetching} onRefresh={() => void ledgerQuery.refetch()} onExport={exportCurrentPage} hasRows={rows.length > 0} total={ledgerQuery.data?.total || 0} activeFilters={activeFilters} />}
+      filters={desktopFilters}
+      metrics={<SummaryCards openingBalance={openingBalance} income={summary.income} expense={summary.expense} closingBalance={closingBalance} />}
+      table={<LedgerTableCard rows={rows} summary={summary} total={ledgerQuery.data?.total || 0} page={ledgerQuery.data?.page || filters.page} pageSize={ledgerQuery.data?.pageSize || filters.pageSize} query={ledgerQuery} columns={columns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} activeFilters={activeFilters} onRowClick={setDetail} />}
+      analysis={analysisAvailable ? {title: "收支分析", preferenceKey: "ledger", children: <div className="grid min-w-0 gap-4 2xl:grid-cols-2">{hasTrendData && <TrendCard rows={trendRows} range={trendRange} onRangeChange={setTrendRange} />}{expenses.length > 0 && <ExpenseShareCard rows={expenses} />}</div>} : undefined}
+    >
+      <LedgerDetailDrawer item={detail} onClose={() => setDetail(null)} />
+    </FinanceDetailPageLayout>;
+  }
+
   return (
-    <ErpFinancePageFrame data-phone-layout={phone ? "thumb" : undefined}>
+    <ErpFinancePageFrame data-phone-layout="thumb">
       <FinanceLedgerHeader
         reconciliation={reconciliation}
         loading={ledgerQuery.isFetching}
@@ -107,7 +135,6 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
         onOpenFilters={() => setPhoneFiltersOpen(true)}
       />
       <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
-        {phone ? (
           <div className="space-y-4">
             <SummaryCards openingBalance={openingBalance} income={summary.income} expense={summary.expense} closingBalance={closingBalance} phone={phone} />
             <LedgerTableCard
@@ -253,27 +280,6 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
               </div>
             </ErpDialogShell>
           </div>
-        ) : (
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_232px]">
-            <section aria-label="账户流水明细" className="min-w-0 space-y-4">
-              <SummaryCards openingBalance={openingBalance} income={summary.income} expense={summary.expense} closingBalance={closingBalance} />
-              <ErpPageToolbar>
-                <ErpFilterBar className="bg-[var(--erp-color-surface)]" actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" size="sm" variant={advancedOpen ? "secondary" : "ghost"} onClick={() => setAdvancedOpen((value) => !value)}><SlidersHorizontal className="h-4 w-4" />更多筛选</Button></>}>
-                  <ErpSearchInput className="min-w-[220px] flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索备注、对方账户、单号" aria-label="搜索备注、对方账户或单号" />
-                  {accountOptionsAvailable ? <Select className="w-36" value={filters.accountId} onValueChange={(accountId) => update({accountId})} options={[{value: "all", label: "全部账户"}, ...accounts.map((item) => ({value: item.id, label: item.name}))]} aria-label="筛选账户" /> : <Select className="w-36" value="unavailable" onValueChange={() => undefined} options={[{value: "unavailable", label: "账户权限受限"}]} disabled aria-label="账户筛选不可用" />}
-                  <Select className="w-32" value={filters.businessType} onValueChange={(businessType) => update({businessType})} options={[{value: "all", label: "全部类型"}, ...financeLedgerBusinessTypes.map((value) => ({value, label: value}))]} aria-label="筛选交易类型" />
-                  <Select className="w-28" value={filters.direction} onValueChange={(direction) => update({direction: direction as FinanceLedgerFilters["direction"]})} options={[{value: "all", label: "全部方向"}, ...financeLedgerDirections.map((value) => ({value, label: value}))]} aria-label="筛选交易方向" />
-                  <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-32" startPlaceholder="开始日期" endPlaceholder="结束日期" startAriaLabel="流水开始日期" endAriaLabel="流水结束日期" ariaLabel="流水日期范围" />
-                  {advancedOpen && <><Input className="w-32" value={filters.handler} onChange={(event) => update({handler: event.target.value})} placeholder="经办人" aria-label="筛选经办人" /><Input className="w-36" value={filters.relatedDocNo} onChange={(event) => update({relatedDocNo: event.target.value})} placeholder="关联单号" aria-label="筛选关联单号" /><Select className="w-32" value={filters.customerName} onValueChange={(customerName) => update({customerName})} options={customerOptions} aria-label="筛选客户" /></>}
-                </ErpFilterBar>
-              </ErpPageToolbar>
-              {activeFilters > 0 && <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[var(--erp-color-text-secondary)]"><span>已应用 {activeFilters} 项筛选</span><Button type="button" size="xs" variant="ghost" className="h-auto px-0 font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}>清空全部</Button></div>}
-              <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]"><TrendCard rows={trendRows} range={trendRange} onRangeChange={setTrendRange} /><ExpenseShareCard rows={expenses} /></div>
-              <LedgerTableCard rows={rows} summary={summary} total={ledgerQuery.data?.total || 0} page={ledgerQuery.data?.page || filters.page} pageSize={ledgerQuery.data?.pageSize || filters.pageSize} query={ledgerQuery} columns={columns} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} activeFilters={activeFilters} onRowClick={setDetail} />
-            </section>
-            <LedgerAside account={account} accounts={accounts} accountDistribution={accountDistribution} navigate={navigate} onAccountChange={(accountId) => update({accountId})} />
-          </div>
-        )}
         
         <LedgerDetailDrawer item={detail} onClose={() => setDetail(null)} />
       </ErpPageContent>
@@ -447,10 +453,6 @@ function TableControls({columns, visibility, onVisibilityChange, density, onDens
   return <div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={visibility} onVisibilityChange={onVisibilityChange} label="列设置" /><Button type="button" size="sm" variant="ghost" onClick={() => onDensityChange(density === "compact" ? "comfortable" : "compact")}>{density === "compact" ? "舒适" : "紧凑"}</Button></div>;
 }
 
-function LedgerAside({account, accounts, accountDistribution, navigate, onAccountChange}: {account?: FinanceAccountItem; accounts: FinanceAccountItem[]; accountDistribution: AccountDistributionRow[]; navigate: ReturnType<typeof useNavigate>; onAccountChange: (accountId: string) => void}) {
-  return <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start"><Card><div className="border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">账户信息</h2></div><div className="space-y-3 p-4"><Select value={account?.id || ""} onValueChange={onAccountChange} options={accounts.map((item) => ({value: item.id, label: item.name}))} placeholder="选择账户" aria-label="选择账户" /><div className="grid grid-cols-2 gap-3"><div><p className="text-xs text-[var(--erp-color-text-muted)]">当前余额</p><p className="mt-1 erp-data-number text-sm font-semibold">{formatMoney(account?.balance)}</p></div><div><p className="text-xs text-[var(--erp-color-text-muted)]">可用余额</p><p className="mt-1 erp-data-number text-sm font-semibold">{formatMoney(account?.availableBalance)}</p></div></div><div className="flex gap-2"><Button className="flex-1" size="sm" onClick={() => void navigate({to: "/finance/accounts"})}>账户管理</Button><Button className="flex-1" size="sm" variant="secondary" onClick={() => void navigate({to: "/finance/income"})}>收款</Button></div></div></Card><Card><div className="border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">账户分布</h2></div><div className="space-y-3 p-4">{accountDistribution.length ? accountDistribution.map((row) => <div key={row.id} className="flex items-center justify-between gap-2 text-xs"><span className="flex min-w-0 items-center gap-2 truncate"><span className="h-2 w-2 rounded-full" style={{backgroundColor: row.color}} />{row.name}</span><span className="shrink-0 erp-data-number">{formatMoney(row.balance)}</span></div>) : <ErpEmptyState title="暂无账户" description="当前账号没有可展示的资金账户。" />}</div></Card><Card><div className="border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">常用账户</h2></div><div className="divide-y divide-[var(--erp-color-border)]">{accounts.slice(0, 3).map((item) => <Button type="button" variant="ghost" key={item.id} className="h-auto w-full justify-between gap-2 rounded-none px-4 py-3 text-left text-xs hover:bg-[var(--erp-color-surface-muted)]" onClick={() => onAccountChange(item.id)}><span className="min-w-0 truncate font-medium">{item.name}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--erp-color-text-muted)]" /></Button>)}</div></Card></aside>;
-}
-
 function LedgerDetailDrawer({item, onClose}: {item: FinanceLedgerItem | null; onClose: () => void}) {
   return <ErpDetailDrawer modal={false} resizable drawerKey="finance-ledger-detail" defaultWidth={680} minWidth={520} maxWidth={820} open={Boolean(item)} onOpenChange={(open) => {if (!open) onClose();}} title={item?.businessType || "流水详情"} description={item ? `${item.id} · ${formatLedgerDateTime(item.time)}` : undefined}><div className="space-y-5">{item && <><div className="grid grid-cols-2 gap-3"><Fact label="收入" value={formatMoney(item.incomeAmount)} tone="success" /><Fact label="支出" value={formatMoney(item.expenseAmount)} tone="danger" /><Fact label="变动前余额" value={formatMoney(item.beforeBalance)} /><Fact label="变动后余额" value={formatMoney(item.afterBalance)} tone={item.afterBalance < 0 ? "danger" : "neutral"} /></div><DashboardSection title="流水归属"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="账户" value={`${item.accountName} · ${item.accountType}`} /><DetailRow label="方向" value={item.direction} /><DetailRow label="往来方" value={item.party || item.customerName || item.supplierName || "未记录"} /><DetailRow label="经办人" value={item.handler} /><DetailRow label="创建人" value={item.createdBy} /><DetailRow label="发生时间" value={formatLedgerDateTime(item.time)} /></div></DashboardSection><DashboardSection title="关联单据"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="单据类型" value={item.relatedDocType || "未记录"} /><DetailRow label="单据编号" value={item.relatedDocNo || "未关联"} /></div></DashboardSection>{item.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{item.remarks}</p>}</>}</div></ErpDetailDrawer>;
 }
@@ -459,7 +461,6 @@ function Fact({label, value, tone = "neutral"}: {label: string; value: string; t
 function DetailRow({label, value}: {label: string; value: string}) {return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className="mt-0.5 truncate text-sm font-medium">{value}</p></div>;}
 type TrendRow = {label: string; income: number; expense: number; key: string};
 type ExpenseRow = {label: string; value: number};
-type AccountDistributionRow = {id: string; name: string; balance: number; color: string};
 type ReconciliationState = {label: string; tone: Tone};
 
 function buildTrendRows(items: FinanceLedgerItem[], range: number): TrendRow[] {
@@ -480,10 +481,6 @@ function buildExpenseDistribution(items: FinanceLedgerItem[]): ExpenseRow[] {
   const grouped = new Map<string, number>();
   items.filter((item) => item.expenseAmount > 0).forEach((item) => grouped.set(item.businessType, (grouped.get(item.businessType) || 0) + item.expenseAmount));
   return Array.from(grouped, ([label, value]) => ({label, value})).sort((left, right) => right.value - left.value).slice(0, 5);
-}
-
-function buildAccountDistribution(accounts: FinanceAccountItem[]): AccountDistributionRow[] {
-  return accounts.filter((item) => item.enabled).sort((left, right) => right.balance - left.balance).slice(0, 5).map((item) => ({id: item.id, name: item.name, balance: item.balance, color: financeChartCategoryColor(item.id)}));
 }
 
 function deriveOpeningBalance(items: FinanceLedgerItem[], fallback?: number) {

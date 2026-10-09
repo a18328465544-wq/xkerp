@@ -63,6 +63,13 @@ function jsxName(node) {
   return opening ? opening.tagName.getText() : null;
 }
 
+function isInsideFoldedMetricRegion(node) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (jsxName(current) === "details" && /<summary\b[^>]*>[\s\S]*?更多指标[\s\S]*?<\/summary>/.test(current.getText())) return true;
+  }
+  return false;
+}
+
 for (const file of UI_ROOTS.flatMap(walkFiles)) {
   const source = fs.readFileSync(path.join(projectRoot, file), "utf8");
   const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -89,7 +96,7 @@ for (const file of UI_ROOTS.flatMap(walkFiles)) {
       scan(node.initializer);
     }
 
-    if (isFeature && jsxName(node) === "MetricsRegion" && ts.isJsxElement(node)) {
+    if (isFeature && jsxName(node) === "MetricsRegion" && ts.isJsxElement(node) && !isInsideFoldedMetricRegion(node)) {
       let count = 0;
       const countCards = (inner) => {
         const name = jsxName(inner);

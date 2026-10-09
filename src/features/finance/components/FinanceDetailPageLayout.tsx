@@ -3,9 +3,6 @@ import {ChevronDown, ChevronUp} from "lucide-react";
 import {
   ErpFinancePageFrame,
   ErpPageContent,
-  ErpPageHeader,
-  ErpPageToolbar,
-  type ErpPageHeaderProps,
 } from "@/src/components/common";
 import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
@@ -13,13 +10,14 @@ import {useFinanceAnalysisPreference} from "@/src/hooks/useFinanceAnalysisPrefer
 import {FinanceSectionTabs, type FinanceSectionTab} from "./FinanceSectionTabs";
 
 export interface FinanceDetailPageLayoutProps {
-  header: ErpPageHeaderProps;
+  header: ReactNode;
   tabs?: {
     label: string;
     items: FinanceSectionTab[];
   };
   filters?: ReactNode;
   metrics?: ReactNode;
+  beforeTable?: ReactNode;
   table: ReactNode;
   analysis?: {
     title: string;
@@ -33,18 +31,19 @@ export interface FinanceDetailPageLayoutProps {
  * Shared desktop-first finance detail layout. Mobile keeps the existing
  * Finance frame search-first ordering; desktop follows filters → metrics → table.
  */
-export function FinanceDetailPageLayout({header, tabs, filters, metrics, table, analysis, children}: FinanceDetailPageLayoutProps) {
+export function FinanceDetailPageLayout({header, tabs, filters, metrics, beforeTable, table, analysis, children}: FinanceDetailPageLayoutProps) {
   return (
     <ErpFinancePageFrame>
-      <ErpPageHeader {...header} />
+      {header}
       {tabs && (
         <div data-finance-layout-slot="tabs">
           <FinanceSectionTabs label={tabs.label} items={tabs.items} />
         </div>
       )}
-      {filters && <ErpPageToolbar>{filters}</ErpPageToolbar>}
+      {filters}
       {metrics && <div data-finance-layout-slot="metrics">{metrics}</div>}
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+        {beforeTable && <div data-finance-layout-slot="before-table">{beforeTable}</div>}
         <div data-finance-layout-slot="table">{table}</div>
         {analysis && (
           <FinanceAnalysisDisclosure
