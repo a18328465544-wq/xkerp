@@ -1,0 +1,16 @@
+{
+  "_comment": "财务桌面布局整改例外；完成对应页面迁移后应移除此项。",
+  "metrics": [],
+  "aside": [
+    {
+      "file": "src/features/finance/pages/FinanceLedgerPage.tsx",
+      "text": "xl:grid-cols-[minmax(0,1fr)_232px]",
+      "reason": "F3 会将账户切换并入筛选栏并移除 LedgerAside，当前在迁移 PR 前暂时保留。"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceAccountsPage.tsx",
+      "text": "xl:grid-cols-[minmax(0,1fr)_360px]",
+      "reason": "F9 会删除重复账户右侧栏并把异常提示和分布摘要并入账户列表，当前在迁移 PR 前暂时保留。"
+    }
+  ]
+}

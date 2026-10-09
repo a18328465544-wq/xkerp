@@ -127,6 +127,7 @@ const allowedHistoryBoundaries = new Set([
 ]);
 const allowedStorageBoundaries = new Set([
   "src/hooks/useTablePreferences.ts",
+  "src/hooks/useFinanceAnalysisPreference.ts",
   "src/services/api/client.ts",
   // Workspace tabs persist shell state, not table preferences.
   "src/app/shell/workspaceTabStorage.ts",
@@ -142,7 +143,7 @@ const localAuthFiles = allSource.filter(({file, source}) => /authApi\.login\s*\(
 
 if (rootTypeImports) warn(`仍有 ${rootTypeImports} 个正式文件使用 src/types.ts 兼容入口；新代码请使用 src/types/*。`);
 if (rawHistoryFiles > 0) warn(`仍有 ${rawHistoryFiles} 个文件直接操作 window.history；新 List 页面必须使用 useUrlSearchState。`);
-if (rawStorageFiles > 0) warn(`仍有 ${rawStorageFiles} 个文件直接操作 localStorage；表格偏好必须使用 useTablePreferences。`);
+if (rawStorageFiles > 0) warn(`仍有 ${rawStorageFiles} 个文件直接操作 localStorage；偏好必须使用共享 storage hook。`);
 if (localAuthFiles) warn(`仍有 ${localAuthFiles} 个页面保留局部 authApi.login；新增页面不得复制登录表单，逐批迁移到 AuthBoundary。`);
 
 for (const file of [
