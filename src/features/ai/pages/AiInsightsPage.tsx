@@ -3,6 +3,7 @@ import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle2, Clock3, PackageCheck, RefreshCw, ReceiptText, Sparkles, TriangleAlert} from "lucide-react";
 import {Link} from "@tanstack/react-router";
 import {useEffect} from "react";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {Button, Card, CardContent} from "@/src/components/ui";
 import {AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, DashboardSection, ErpAnalyticsPageFrame, ErpEmptyState, ErpMetricCard, ErpPageContent, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, aiApi, queryKeys} from "@/src/services/api";
@@ -61,6 +62,7 @@ function DailySalesSummaryCard({data, pending, fetching, error, onRetry}: {
 }
 
 export function AiInsightsPage() {
+  const phone = useErpPhone();
   const {active} = useWorkspaceTabActivity();
   const {session, status, error: authError, refresh, logout} = useAuth();
   const allowed = createCapabilities(session).menu("ai_insights");
@@ -84,7 +86,7 @@ export function AiInsightsPage() {
   ];
 
   return <ErpAnalyticsPageFrame>
-    <ErpPageHeader density="default" title="AI 经营建议" subtitle="基于真实经营数据生成可执行建议，不直接修改订单、价格或账务。" quickStatus={hasData ? quickStatus : []} actions={<Button variant="secondary" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新建议</Button>} />
+    <ErpPageHeader density="default" title="AI 经营建议" subtitle="基于真实经营数据生成可执行建议，不直接修改订单、价格或账务。" quickStatus={hasData ? quickStatus : []} actions={phone ? undefined : <Button variant="secondary" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新建议</Button>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <DailySalesSummaryCard data={dailySalesQuery.data} pending={dailySalesQuery.isPending} fetching={dailySalesQuery.isFetching} error={dailySalesQuery.error as Error | null} onRetry={() => void dailySalesQuery.refetch()} />
     {hasData && <AnalyticsKpiRegion primary={<>

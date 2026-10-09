@@ -22,8 +22,9 @@
 | --- | --- |
 | 主操作/链接/中性汇总 | `--erp-color-primary`、`--erp-color-net` |
 | 收入/收款/到账/成功 | `--erp-color-income`、`--erp-color-success` |
-| 支出/付款/成本/损失 | `--erp-color-expense`、`--erp-color-danger` |
-| 提醒/待处理/逾期/风险 | `--erp-color-risk`、`--erp-color-warning` |
+| 支出/付款/成本 | `--erp-color-expense`（中性深灰，正常资金流动不用报警色） |
+| 错误/删除/损失/失败 | `--erp-color-danger`（红） |
+| 提醒/待处理/逾期/风险 | `--erp-color-risk`、`--erp-color-warning`（琥珀） |
 | 辅助信息 | `--erp-color-text-secondary`、`--erp-color-text-muted` |
 
 颜色必须配合文字、图标、正负号或状态徽章，不能单独承担信息。
@@ -34,6 +35,12 @@
 ### 几何和层级
 
 - 控件默认高度 `--erp-control-height`（40px）；筛选和密集表格使用 `--erp-control-height-filter`（36px）。
+- 控件高度只有四档：表格行内 xs 按钮 28px、筛选/工具栏 36px、表单默认 40px、手机 44px，不新增其他高度。
+- 按钮层级：主按钮（primary/danger/warning）字重 600，其余 500；secondary 是带 `--erp-shadow-control` 的“凸起”按钮，输入框保持扁平无阴影，二者不得长得一样。
+- 分段控件（`ErpSegmentedControl`、首页时段、质检队列、库存视图）统一为灰色槽 `--erp-color-segmented-track` + 白色凸起滑块，选中文字 600；选中项不得使用 primary 实心蓝，避免与页面主操作争抢。
+- 只读字段（非 combobox 的 `readonly` 输入）无边框、底色 `--erp-color-readonly`；选择器触发框（role=combobox）保持可编辑外观。
+- 数量步进器在桌面与手机都是一个带边框的组合控件；勾选卡片选中时与单选卡片一样显示主色描边和浅底。
+- `button, input, select, textarea { font: inherit }` 必须留在 `@layer base`；放到 layer 外会覆盖所有 Tailwind 字号/字重工具类。
 - 卡片使用 `--erp-radius-card`，控件使用 `--erp-radius-control`，标签使用 `--erp-radius-pill`。
 - 阴影统一使用 `--erp-shadow-card`、`--erp-shadow-popover` 和对应语义 Token；焦点使用 `--erp-color-focus-ring`。
 - 层级固定为 Tab `--erp-layer-tab-navigation` > Popover `--erp-layer-popover` > Modal `--erp-layer-modal` > Drawer `--erp-layer-drawer`/遮罩。业务 CSS 只使用 `erp-popover-layer`、`erp-modal-layer`、`erp-drawer-layer` 等语义类。
@@ -125,6 +132,11 @@ ErpPageFrame
 - 「我的」是一级非模态手机面板，保留底部导航；显示时仅把背景主要内容设为 inert，切换目标后清理面板。不能把一级导航做成无法切走的全屏弹窗。快速新建需等原查找弹层关闭完成，再打开系统已有创建窗口，避免焦点/遮罩阻挡新窗口。
 - 扫码统一复用 ErpBarcodeScannerDialog，手机使用紧凑居中弹窗、16:9 相机预览和 3:1 横向条码对准框，尺寸来自 scanner Token；不得重新拉高到全屏相机。对准框只作引导，识别仍读取完整画面并支持二维码。原生 BarcodeDetector 不可用、所需格式支持不完整或持续识别失败时，按需加载 barcode-detector / ZXing WASM 兼容引擎。解码在 Worker 中运行，版本匹配的 WASM 资源随 Vite 构建部署到本站，不依赖公共 CDN。保留会话清理、所属 Tab 检查、图片识别及手工 SN/编号回填；识别只回填草稿，最终状态由既有服务端动作核验。没有能力支持的闪光灯入口不显示。实体设备权限/摄像头验收不能用模拟数据通过代替，详见 BARCODE_SCANNING.md。
 - 同意使用现有 Design Token 进行上述手机布局变化，不建立另一套主题或字体系统；桌面原表格结构和默认录入行数不变。详见 MOBILE_WORKBENCH_V2.md。
+- **移动端列表页规范**：
+  * **页头**：标题加一行小字数量（如「2 位客户」），数量在页面内仅出现一次；右侧放「筛选」按钮（`variant="secondary"`，有生效筛选时显示数字角标），新建操作在页头放 `size="icon"` 的「+」按钮，低频动作收入筛选或工作面板。
+  * **工具栏**（`mobileToolbar`）：左侧放快捷筛选（最多 4 项）；右侧放排序按钮（触发底部排序抽屉）。手机端不显示桌面端结果汇总条、列显隐菜单与舒适/紧凑切换。
+  * **底部栏**（`ErpMobileActionDock`）：单行紧凑布局（~44-50px），主操作移至页头后底部仅保留全宽搜索框（可配合单图标如扫码），大幅节省垂直视口。
+  * **刷新机制**：手机端全局依赖下拉刷新（Pull-to-refresh），页头和工具栏不渲染多余的「刷新」按钮；必要时在弹出筛选面板内保留辅助刷新入口。
 
 `npm run lint:ui` 递归检查组件树中的原生按钮、颜色、层级和按钮契约；`npm run lint` 检查页面壳、通知、第三方适配和边界；`scripts/browser-smoke.mjs` 覆盖桌面、平板、手机导航与关键流程。
 

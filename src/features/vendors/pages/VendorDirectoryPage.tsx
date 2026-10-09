@@ -163,9 +163,14 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
       subtitle="维护供应商、同行与往来余额。"
       quickStatus={quickStatus}
       actions={phone ? (
-        <Button type="button" variant="secondary" onClick={() => setPhoneFiltersOpen(true)} aria-label="同行筛选与操作">
-          <SlidersHorizontal className="h-5 w-5" />筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPhoneFiltersOpen(true)} aria-label="同行筛选与操作">
+            <SlidersHorizontal className="h-4 w-4" />筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
+          </Button>
+          <Button type="button" variant="secondary" size="icon" onClick={openCreate} aria-label="新建同行">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       ) : (
         <>
           <Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>
@@ -194,7 +199,7 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {!phone && <ErpTableResultsBar summary={<span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部同行"} tone={activeFilters ? "info" : "neutral"} /><span>筛选、排序和分页仅作用于已加载同行集合。</span></span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
       {phone ? vendorTable : <DashboardSection title="同行档案明细" description="点击行查看基础档案和三类往来余额；删除已关联采购或销售单据的同行会被服务端拒绝。" actions={<ErpStatusBadge label={`当前页 ${vendors.length} / 共 ${total} 条`} tone="info" />}>{vendorTable}</DashboardSection>}
-      <ErpMobileActionDock hidden={Boolean(detail || dialogOpen || deleting || phoneFiltersOpen)} ariaLabel="同行搜索与新建" primaryAction={<Button type="button" variant="primary" onClick={openCreate}><Plus className="h-5 w-5" />新建同行</Button>}>{search}</ErpMobileActionDock>
+      <ErpMobileActionDock hidden={Boolean(detail || dialogOpen || deleting || phoneFiltersOpen)} ariaLabel="同行搜索">{search}</ErpMobileActionDock>
       {phone && (
         <ErpDialogShell open={phoneFiltersOpen} onOpenChange={setPhoneFiltersOpen} title="同行筛选与操作" mobilePresentation="sheet" footer={<>{filterActions}<Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>查看结果</Button></>}>
           <div className="space-y-4">

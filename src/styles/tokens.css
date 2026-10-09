@@ -15,10 +15,13 @@
   --erp-color-info-soft: #eaf3ff;
   --erp-color-success: #12805c;
   --erp-color-success-soft: #e8f7f0;
-  --erp-color-warning: #b45309;
-  --erp-color-warning-soft: #fff4e5;
-  --erp-color-danger: #c2410c;
-  --erp-color-danger-soft: #fff0ed;
+  /* Four semantic hues stay far apart: green success, amber warning, red
+     danger and neutral expense. Expense is ordinary money movement, not an
+     error, so it never borrows the alarm colour. */
+  --erp-color-warning: #9a6100;
+  --erp-color-warning-soft: #fef7e6;
+  --erp-color-danger: #c8231c;
+  --erp-color-danger-soft: #fef3f2;
   /* Semantic aliases keep feature-level status language on the same palette. */
   --erp-color-info: var(--erp-color-primary);
   --erp-color-primary-soft: var(--erp-color-info-soft);
@@ -27,8 +30,8 @@
      finance, sales, purchase, inventory and CRM surfaces. */
   --erp-color-income: var(--erp-color-success);
   --erp-color-income-soft: var(--erp-color-success-soft);
-  --erp-color-expense: var(--erp-color-danger);
-  --erp-color-expense-soft: var(--erp-color-danger-soft);
+  --erp-color-expense: #475569;
+  --erp-color-expense-soft: #f1f5f9;
   --erp-color-net: var(--erp-color-primary);
   --erp-color-risk: var(--erp-color-warning);
   --erp-color-risk-soft: var(--erp-color-warning-soft);
@@ -80,6 +83,12 @@
   --erp-shadow-popover: 0 16px 48px rgb(15 23 42 / 0.16);
   --erp-shadow-sticky-edge: -8px 0 12px -12px rgb(15 23 42 / 0.32);
   --erp-shadow-metric: 0 1px 2px rgb(15 23 42 / 0.025);
+  /* Raised controls (buttons, segmented thumb) vs flat fields (inputs). */
+  --erp-shadow-control: 0 1px 2px rgb(15 23 42 / 0.06);
+  --erp-shadow-segmented-thumb: 0 1px 2px rgb(15 23 42 / 0.08), 0 1px 1px rgb(15 23 42 / 0.04);
+  --erp-color-segmented-track: #eef1f6;
+  --erp-color-segmented-hover: rgb(255 255 255 / 0.55);
+  --erp-color-readonly: #f3f5f9;
   --erp-shadow-login: 0 24px 80px rgb(15 23 42 / 0.12);
   --erp-shadow-primary: 0 8px 18px rgb(10 132 255 / 0.2);
   --erp-shadow-brand: 0 8px 20px rgb(3 37 65 / 0.3);

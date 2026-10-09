@@ -34,3 +34,9 @@ test("a disabled selected choice falls back to one enabled tab stop", () => {
   const markup = renderToStaticMarkup(<ErpSegmentedControl label="收款方式" value="partial" options={options} onValueChange={() => undefined} />);
   assert.equal((markup.match(/tabindex="0"/g) || []).length, 1);
 });
+
+test("selected segment never borrows the primary action style", () => {
+  const markup = renderToStaticMarkup(<ErpSegmentedControl label="收款方式" value="full" options={options} onValueChange={() => undefined} />);
+  assert.doesNotMatch(markup, /data-erp-button-variant="primary"/);
+  assert.match(markup, /aria-pressed="true"[^>]*data-erp-button-variant="ghost"|data-erp-button-variant="ghost"[^>]*aria-pressed="true"/);
+});

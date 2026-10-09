@@ -10,3 +10,4 @@ export * from "./separator";
 export * from "./skeleton";
 export * from "./select";
 export * from "./textarea";
+export * from "./switch";

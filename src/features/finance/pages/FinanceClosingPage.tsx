@@ -25,6 +25,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import { Button, Card } from "@/src/components/ui";
 import {
   DashboardSection,
@@ -172,6 +173,7 @@ function FinanceClosingContent({
   accountingPeriodsQuery: UseQueryResult<Awaited<ReturnType<typeof financeClosingApi.listAccountingPeriods>>, Error>;
   reconciliationQuery: UseQueryResult<FinanceReconciliationReport, Error>;
 }) {
+  const phone = useErpPhone();
   const navigate = useNavigate();
   const capabilities = createCapabilities(session);
   const [detail, setDetail] = useState<FinanceDailyClosing | null>(null);
@@ -296,18 +298,20 @@ function FinanceClosingContent({
         quickStatus={quickStatus}
         actions={
           <>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={query.isFetching}
-              onClick={() => void query.refetch()}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`}
-              />
-              刷新
-            </Button>
+            {!phone && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`}
+                />
+                刷新
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"

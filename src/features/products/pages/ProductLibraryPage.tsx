@@ -221,15 +221,27 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
         subtitle="维护采购、检测、库存与行情共用的商品规格模板。"
         quickStatus={quickStatus}
         actions={phone ? (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setPhoneFiltersOpen(true)}
-            aria-label="商品筛选与操作"
-          >
-            <SlidersHorizontal className="h-5 w-5" />
-            筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setPhoneFiltersOpen(true)}
+              aria-label="商品筛选与操作"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              onClick={openCreate}
+              aria-label="新建模板"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         ) : (
           <>
             <input ref={importRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => {const file = event.target.files?.[0]; if (file) void onImportFile(file); event.target.value = "";}} />
@@ -266,12 +278,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
         {phone ? productTable : <DashboardSection title="商品规格列表">{productTable}</DashboardSection>}
         <ErpMobileActionDock
           hidden={Boolean(dialogOpen || confirmState || ledgerSubject || phoneFiltersOpen)}
-          ariaLabel="商品模板搜索与新建"
-          primaryAction={
-            <Button type="button" variant="primary" onClick={openCreate}>
-              <Plus className="h-5 w-5" />新建模板
-            </Button>
-          }
+          ariaLabel="商品模板搜索"
         >
           {phoneSearch}
         </ErpMobileActionDock>

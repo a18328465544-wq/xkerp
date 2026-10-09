@@ -24,6 +24,7 @@ import {
   useState,
 } from "react";
 import {notify} from "@/src/utils/notification";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import { Button, Card, Input, Select } from "@/src/components/ui";
 import {
   ErpDateRangePicker,
@@ -136,6 +137,7 @@ function FinanceIncomeContent({
   accounts: Awaited<ReturnType<typeof financeAccountsApi.listAll>>["accounts"];
   canReadAccounts: boolean;
 }) {
+  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<FinanceIncomeItem | null>(null);
   const [editing, setEditing] = useState<FinanceIncomeItem | null>(null);
@@ -285,17 +287,19 @@ function FinanceIncomeContent({
         quickStatus: quickStatus,
         actions: (
           <>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={incomeQuery.isFetching}
-              onClick={() => void incomeQuery.refetch()}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${incomeQuery.isFetching ? "animate-spin" : ""}`}
-              />
-              刷新
-            </Button>
+            {!phone && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={incomeQuery.isFetching}
+                onClick={() => void incomeQuery.refetch()}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${incomeQuery.isFetching ? "animate-spin" : ""}`}
+                />
+                刷新
+              </Button>
+            )}
             <Button
               size="sm"
               variant="secondary"
