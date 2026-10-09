@@ -17,7 +17,10 @@ for (const relative of analyticsPages) {
     continue;
   }
   const source = fs.readFileSync(file, "utf8");
-  if (!source.includes("ErpAnalyticsPageFrame")) failures.push(`${relative}: 必须使用 ErpAnalyticsPageFrame`);
+  const usesFinanceTemplateAnalyticsFrame = relative.includes("FinanceCommissionPage")
+    && source.includes("FinanceDetailPageLayout")
+    && source.includes('phonePageFrame="analytics"');
+  if (!source.includes("ErpAnalyticsPageFrame") && !usesFinanceTemplateAnalyticsFrame) failures.push(`${relative}: 必须使用 ErpAnalyticsPageFrame（或财务列表模板提供的 analytics 手机框架）`);
   if (!source.includes("ErpMetricCard")) failures.push(`${relative}: 指标必须复用公共 ErpMetricCard`);
   if (source.includes("FinanceMetricCard")) failures.push(`${relative}: 不应通过业务别名重复实现指标卡，应直接复用 ErpMetricCard`);
   const requiredRegions = relative.includes("AiInsightsPage")
