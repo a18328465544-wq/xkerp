@@ -28,7 +28,7 @@ import {
   type AuthSession,
 } from "@/src/services/api";
 import { createCapabilities, useAuth } from "@/src/app/auth";
-import { useErpPhone } from "@/src/hooks/useErpViewport";
+import { useErpDesktop, useErpPhone } from "@/src/hooks/useErpViewport";
 import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import { buildFinanceDashboard } from "@/src/services/api/adapters";
@@ -44,7 +44,7 @@ import {
   validateFinanceRange,
 } from "../finance.range";
 import {FinanceRangeControls} from "../components/FinanceRangeControls";
-import {FinanceDashboardBottomRegion, FinanceDashboardHealthRegions, FinanceDashboardMetricRegion} from "../components/FinanceDashboardRegions";
+import {FinanceDashboardBottomRegion, FinanceDashboardHealthRegions, FinanceDashboardMetricRegion, FinanceDashboardTaskRegion, financeHealthQuickStatus} from "../components/FinanceDashboardRegions";
 import {FinanceDashboardCashflowPanel} from "../components/FinanceDashboardCashflowPanel";
 
 function accessFor(session: AuthSession): FinanceDashboardAccess {
@@ -171,6 +171,7 @@ function FinanceDashboardContent({
   commit: (next: FinanceDateRange) => boolean;
 }) {
   const phone = useErpPhone();
+  const desktop = useErpDesktop();
   const navigate = useNavigate();
   const capabilities = createCapabilities(session);
   const [draftRange, setDraftRange] = useState(range);
@@ -193,14 +194,14 @@ function FinanceDashboardContent({
   ) : undefined;
   const quickStatus: QuickStatusItemData[] = view
     ? [
-        {
+        ...(desktop ? [financeHealthQuickStatus(view)] : [{
           icon: <ShieldAlert className="h-4 w-4" />,
           label: "待处理",
           value: `${view.exceptions.length} 项`,
           description: "资金、应收付与对账",
-          tone: view.exceptions.length ? "warning" : "success",
+          tone: view.exceptions.length ? "warning" as const : "success" as const,
           action: () => go("/finance/closing"),
-        },
+        }]),
         {
           icon: <CircleDollarSign className="h-4 w-4" />,
           label: "应收 / 应付",
@@ -285,7 +286,20 @@ function FinanceDashboardContent({
       ) : view ? (
         <>
           <FinanceDashboardMetricRegion view={view} />
-          <MainRegion variant="60-40" className="gap-3">
+          {desktop ? <MainRegion variant="60-40" className="gap-3">
+            <MainRegion.Primary className="order-1">
+              <DashboardSection
+                title="现金流趋势"
+                description="收入、支出与净现金流"
+                actions={<FinanceRangeControls range={draftRange} error={validationError} onChange={setDraftRange} onApply={(nextRange) => {if (commit(nextRange)) notify.success("日期范围已更新");}} />}
+              >
+                <FinanceDashboardCashflowPanel view={view} access={access} range={range} cashTrendAction={cashTrendAction} />
+              </DashboardSection>
+            </MainRegion.Primary>
+            <MainRegion.Secondary className="order-2">
+              <FinanceDashboardTaskRegion view={view} onNavigate={go} />
+            </MainRegion.Secondary>
+          </MainRegion> : <MainRegion variant="60-40" className="gap-3">
             <MainRegion.Primary className="order-2 xl:order-1">
               <DashboardSection
                 title="现金流趋势"
@@ -307,8 +321,8 @@ function FinanceDashboardContent({
             <MainRegion.Secondary className="order-1 space-y-3 xl:order-2">
               <FinanceDashboardHealthRegions view={view} access={access} />
             </MainRegion.Secondary>
-          </MainRegion>
-          <FinanceDashboardBottomRegion view={view} accounts={dataset?.accounts || []} access={access} onNavigate={go} />
+          </MainRegion>}
+          <FinanceDashboardBottomRegion view={view} accounts={dataset?.accounts || []} access={access} onNavigate={go} desktop={desktop} />
         </>
       ) : null}
       </ErpPageContent>
