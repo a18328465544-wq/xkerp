@@ -5,9 +5,34 @@
 
 ---
 
+## 进度（2026-10-10）
+
+**第一阶段 T1–T5 已完成，T6 完成了客户页**，都在 `mobile-templates` 分支上：
+
+- **T1**：`MetricsRegion` 会展开 Fragment；M18 检查能识别「卡片写在变量里」和 `ErpListPage metrics={[…]}`。员工提成页恢复成一行 4 列。
+- **T2**：`ErpDataTable` 支持 `mobileRow="columns"`，按列定义的 `meta.mobile` 角色生成手机行；`meta.mobileCell` 用来单独写手机上的显示（电脑端单元格太复杂时用）。类型声明在 `src/components/common/tableMeta.d.ts`。
+- **T3**：`ErpFilterFields` / `ErpFilterField[]`，`countActiveErpFilterFields` 计算生效筛选数量。**重置由页面传 `onResetFilters`**：逐个字段调用 `onChange` 会因为闭包里的旧状态互相覆盖，所以不这样做。
+- **T4**：`ErpListPage`（`src/components/common/page-templates/ErpListPage.tsx`）。手机主操作统一放进底部栏，符合 M13。
+- **T5**：`ErpRecordDetail`。电脑端是一张两列字段网格，手机端是单列文档，可以折叠分组。
+- **T6（客户页）**：`CustomerDirectoryPage` 的列表和详情抽屉都已迁移，页面里没有 `useErpPhone` 了。
+  - 电脑 1440 和 1024：迁移前后截图像素完全一致。
+  - 手机 390：列表行和原来一样；「新建客户」从右上角「⋯」移到了底部主按钮。
+  - 电脑端详情抽屉：字段顺序改成和手机分组一致；「风险原因」从单独的区块改成红色字段。
+- 验证结果：`verify:ci` 通过（单元测试 1624 个，0 失败）；手机规则浏览器检查 38 页 × 2 个宽度通过；控件浏览器检查通过。
+
+**Codex 从这里接着做**：
+
+1. T6 剩下的供应商页 `VendorDirectoryPage`，写法照抄客户页。
+2. 然后按第二阶段的 T7–T10 顺序迁移。
+
+迁移时可以直接参考两个文件：
+
+- `src/features/customers/pages/CustomerDirectoryPage.tsx`：模板的用法。
+- `src/features/customers/customer.columns.tsx`：`meta.mobile` 和 `mobileCell` 的写法。
+
 ## 0. 约束（必读）
 
-1. **基线分支**：从 `codex/finance-desktop-pr3` 新建 `codex/mobile-templates`，先 `git cherry-pick 8c605cf`（CI 测试 token 修复，只在 pr1 上）。main 合并了这些分支以后，再 rebase 到 main 上。
+1. **基线分支**：从 `mobile-templates` 分支（3b81ea8）接着做。这个分支基于 `codex/finance-desktop-pr3`，已经包含 CI 修复 `8c605cf`，以及第一阶段全部公共部件和客户页样板（见下面的「进度」）。main 合并以后，再 rebase 到 main 上。
 2. **不改业务**：不改路由、查询、接口、DTO、校验、权限、金额和库存计算（MOBILE_UI_RULES M2）。这次只改「页面怎么拼」。
 3. **电脑端不能变**：1440 和 1024 两个宽度下，迁移前后的截图必须一致（见第 5 节）。确实需要改的，要在 PR 里逐条列出。
 4. **不碰扫码相关文件**：main 上有人正在改扫码功能，还没提交：`AppShell.tsx`、`AppSidebar.tsx`、`tokens.css`、`globals.css` 里的扫码部分、`scripts/browser-barcode-scanner.py`。这些文件不要动，避免冲突。
@@ -254,6 +279,6 @@ type ErpFilterField =
   - 第二阶段每批 1 个（T6–T10）
   - 第三阶段 1–2 个（T11–T14）
   - 第四阶段 1 个（T15–T17）
-- **先只交 T1–T6**（公共部件加客户和供应商样板），等确认模板 API 后再批量迁移。模板接口在样板阶段定型，后面的批次就不会返工。
+- T1–T5 和客户页已经完成，模板接口以客户页的用法为准。如果迁移中发现模板确实缺少某项能力，就在模板里补上并加测试，不要在页面里绕开。
 - 每个 PR 的描述要写清：任务编号、迁移页面、第 5.3 节的数量变化、三个宽度的前后截图、验收清单的勾选情况。
 - 不推送生产仓库，也不部署。
