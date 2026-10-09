@@ -1,6 +1,6 @@
-import {ArrowRight, ArrowDownRight, ArrowUpRight, ReceiptText, WalletCards} from "lucide-react";
+import {ArrowRight, ArrowDownRight, ArrowUpRight, ReceiptText, ShieldAlert, WalletCards} from "lucide-react";
 import {Button} from "@/src/components/ui";
-import {BottomRegion, DashboardSection, ErpStatusBadge, MetricsRegion} from "@/src/components/common";
+import {BottomRegion, DashboardSection, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {FinanceHealthPanel, FinanceInsightRow, FinanceAccountList, FinanceEventList, FinanceExceptionList} from "./FinanceDashboardWidgets";
 import {FinanceMetricCard} from "./FinanceMetricCard";
 import type {FinanceDashboardAccess, FinanceDashboardView, FinanceHealthRisk} from "@/src/types/finance";
@@ -20,7 +20,17 @@ export function FinanceDashboardMetricRegion({view}: {view: FinanceDashboardView
 
 type FinanceDashboardAccounts = Awaited<ReturnType<typeof financeApi.dashboard>>["accounts"];
 
-export function FinanceDashboardBottomRegion({view, accounts, access, onNavigate}: {view: FinanceDashboardView; accounts: FinanceDashboardAccounts; access: FinanceDashboardAccess; onNavigate: (path: string) => void}) {
+export function FinanceDashboardBottomRegion({view, accounts, access, onNavigate, desktop = false}: {view: FinanceDashboardView; accounts: FinanceDashboardAccounts; access: FinanceDashboardAccess; onNavigate: (path: string) => void; desktop?: boolean}) {
+  if (desktop) return (
+    <BottomRegion className="grid gap-3 lg:grid-cols-2">
+      <DashboardSection title="账户余额" actions={access.canViewAccounts && <Button size="sm" variant="ghost" onClick={() => onNavigate("/finance/accounts")}>全部账户 <ArrowRight className="h-3.5 w-3.5" /></Button>}>
+        <FinanceAccountList accounts={accounts} canView={access.canViewAccounts} />
+      </DashboardSection>
+      <DashboardSection title="近期资金事件" actions={access.canViewSettlementLedger && <Button size="sm" variant="ghost" onClick={() => onNavigate("/finance/ledger")}>全部流水 <ArrowRight className="h-3.5 w-3.5" /></Button>}>
+        <FinanceEventList view={view} canView={access.canViewSettlementLedger} />
+      </DashboardSection>
+    </BottomRegion>
+  );
   return (
     <BottomRegion className="grid gap-3 xl:grid-cols-3">
       <DashboardSection title="账户余额" actions={access.canViewAccounts && <Button size="sm" variant="ghost" onClick={() => onNavigate("/finance/accounts")}>全部账户 <ArrowRight className="h-3.5 w-3.5" /></Button>} className="xl:col-span-1">
@@ -34,6 +44,29 @@ export function FinanceDashboardBottomRegion({view, accounts, access, onNavigate
       </DashboardSection>
     </BottomRegion>
   );
+}
+
+export function FinanceDashboardTaskRegion({view, onNavigate}: {view: FinanceDashboardView; onNavigate: (path: string) => void}) {
+  return <DashboardSection title="待办与异常" actions={<Button size="sm" variant="ghost" onClick={() => onNavigate("/finance/closing")}>前往处理 <ArrowRight className="h-3.5 w-3.5" /></Button>}>
+    <FinanceExceptionList view={view} onOpen={onNavigate} />
+  </DashboardSection>;
+}
+
+export function financeHealthQuickStatus(view: FinanceDashboardView): QuickStatusItemData {
+  const risk = view.healthRisk;
+  const label = healthLabel(risk);
+  const tone = healthTone(risk);
+  const score = view.healthScore === undefined ? "无法计算" : `${label} · ${view.healthScore} 分`;
+  const cash = view.availableCash === undefined ? "权限受限" : view.availableCash > 0 ? `正常（${formatCurrency(view.availableCash)}）` : `需关注（${formatCurrency(view.availableCash)}）`;
+  const review = view.unreviewed ? `${view.unreviewed} 笔待复核` : "无待复核流水";
+  const reconciliation = view.accountDifferences ? `${view.accountDifferences} 个账户有差额，共 ${formatCurrency(view.accountDifferenceAmount || 0)}` : "无账户差额";
+  return {
+    icon: <ShieldAlert className="h-4 w-4" />,
+    label: "资金健康度",
+    value: score,
+    tone,
+    tooltip: `现金储备：${cash}\n流水复核：${review}\n账户核对：${reconciliation}`,
+  };
 }
 
 export function FinanceDashboardHealthRegions({view, access}: {view: FinanceDashboardView; access: FinanceDashboardAccess}) {
