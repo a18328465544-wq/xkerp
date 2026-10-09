@@ -3,8 +3,8 @@ import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-table";
-import {Banknote, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, ShoppingCart, Truck} from "lucide-react";
-import {ErpEntityThumbnail, ErpSearchInput} from "@/src/components/common";
+import {ArrowDown, ArrowUp, Banknote, ChevronDown, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, ShoppingCart, SlidersHorizontal, Truck} from "lucide-react";
+import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpSearchInput, ErpStatusBadge} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Select} from "@/src/components/ui";
@@ -95,6 +95,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   onAuthExpired: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const [deleting, setDeleting] = useState<SalesListItem | null>(null);
   const [settling, setSettling] = useState<SalesListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "sales-list", userId: session.user.id, defaultVisibility: emptyVisibility});
@@ -103,12 +104,6 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   const {active} = useWorkspaceTabActivity();
   const phone = useErpPhone();
   const updateFilters = useCallback((patch: Partial<SalesListFilters>) => commitFilters({...filters, ...patch, page: 1}), [commitFilters, filters]);
-  const phoneStatusPresets = useMemo(() => [
-    {id: "all", label: "全部", active: !filters.paymentStatus && !filters.outboundStatus, apply: () => updateFilters({paymentStatus: "", outboundStatus: ""})},
-    {id: "pending_outbound", label: "待出库", count: selection.summary.pendingOutboundCount, active: filters.outboundStatus === "待出库" && !filters.paymentStatus, apply: () => updateFilters({outboundStatus: "待出库", paymentStatus: ""})},
-    {id: "pending_payment", label: "待收款", count: selection.summary.pendingPaymentCount, active: filters.paymentStatus === "未收款" && !filters.outboundStatus, apply: () => updateFilters({paymentStatus: "未收款", outboundStatus: ""})},
-    {id: "completed", label: "已完成", active: filters.outboundStatus === "已出库" && filters.paymentStatus === "已收款", apply: () => updateFilters({outboundStatus: "已出库", paymentStatus: "已收款"})},
-  ], [filters.outboundStatus, filters.paymentStatus, selection.summary.pendingOutboundCount, selection.summary.pendingPaymentCount, updateFilters]);
   const selectedDetailFromPage = useMemo(() => query.data?.items.find((item) => item.id === detailId || item.invoiceNo === detailId) || null, [detailId, query.data?.items]);
   const detailQuery = useQuery({
     queryKey: queryKeys.sales.detail(detailId || ""),
@@ -151,50 +146,230 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
     {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "按账号权限裁剪", tone: session.permissions.showProfit ? "success" : "neutral"},
   ];
 
-  return <>
-    <ErpListPageFrame>
-      <ErpPageHeader title="销售单据" subtitle="查看销售客户、成交金额、收款状态和出库进度。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>{canCreate && <Button type="button" size="sm" variant="primary" onClick={onCreate}><Plus className="h-4 w-4" />新建销售单</Button>}</>} />
-      <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
-      <ErpMobileSummary label="销售统计" summary={metricValue(`${selection.summary.orderCount} 单 · 待出库 ${selection.summary.pendingOutboundCount}`)}><MetricsRegion>
-        <MetricCard label="销售单数" value={metricValue(`${selection.summary.orderCount} 单`)} detail="按当前筛选" icon={<FileText className="h-4 w-4" />} />
-        <MetricCard label="销售金额" value={metricValue(formatCurrency(selection.summary.totalAmount))} detail="当前筛选汇总" icon={<ShoppingCart className="h-4 w-4" />} />
-        <MetricCard label="销售件数" value={metricValue(`${selection.summary.unitCount} 件`)} detail="销售单实物数量" icon={<PackageCheck className="h-4 w-4" />} />
-        <MetricCard label="待收款" value={metricValue(`${selection.summary.pendingPaymentCount} 单`)} detail="未收款 / 部分收款" tone={selection.summary.pendingPaymentCount ? "warning" : "neutral"} icon={<Banknote className="h-4 w-4" />} />
-        <MetricCard label="待出库" value={metricValue(`${selection.summary.pendingOutboundCount} 单`)} detail="等待仓库处理" tone={selection.summary.pendingOutboundCount ? "warning" : "neutral"} icon={<Truck className="h-4 w-4" />} />
-        {session.permissions.showProfit && <MetricCard label="销售利润" value={metricValue(selection.summary.totalProfit === undefined ? "—" : formatCurrency(selection.summary.totalProfit))} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} />}
-      </MetricsRegion></ErpMobileSummary>
+  const phoneSearch = (
+    <ErpSearchInput
+      className={phone ? "w-full" : "min-w-[260px] flex-1"}
+      value={filters.keyword}
+      onChange={(event) => updateFilters({keyword: event.target.value})}
+      placeholder={phone ? "搜索单号、客户、商品、SN" : "搜索销售单号、客户、商品、SN 或经办人"}
+      aria-label="搜索销售单据"
+    />
+  );
 
-      <ErpPageToolbar>
-        {phone && (
-          <div className="erp-phone-chips-scroll mb-2" role="group" aria-label="快捷状态筛选">
-            {phoneStatusPresets.map((preset) => (
-              <Button
-                key={preset.id}
-                type="button"
-                size="sm"
-                variant={preset.active ? "secondary" : "ghost"}
-                className={cn("erp-phone-chip shrink-0", preset.active && "erp-phone-chip-active font-semibold")}
-                aria-pressed={preset.active}
-                onClick={preset.apply}
-              >
-                <span>{preset.label}</span>
-                {preset.count !== undefined && preset.count > 0 && (
-                  <span className="tabular-nums text-xs opacity-80">({preset.count})</span>
-                )}
-              </Button>
-            ))}
+  const salesTable = (
+    <ErpDataTable
+      surface={phone ? "plain" : "card"}
+      mobilePagination="compact"
+      mobileToolbar={({openSorting, sortLabel, descending}) => (
+        <div className="erp-customer-list-toolbar">
+          <div className="erp-customer-quick-filters" role="group" aria-label="快捷状态筛选">
+            <Button
+              type="button"
+              variant={!filters.paymentStatus && !filters.outboundStatus ? "primary" : "ghost"}
+              aria-pressed={!filters.paymentStatus && !filters.outboundStatus}
+              onClick={() => updateFilters({paymentStatus: "", outboundStatus: ""})}
+            >
+              全部
+            </Button>
+            <Button
+              type="button"
+              variant={filters.outboundStatus === "待出库" && !filters.paymentStatus ? "primary" : "ghost"}
+              aria-pressed={filters.outboundStatus === "待出库" && !filters.paymentStatus}
+              onClick={() => updateFilters({outboundStatus: "待出库", paymentStatus: ""})}
+            >
+              待出库{selection.summary.pendingOutboundCount > 0 ? ` (${selection.summary.pendingOutboundCount})` : ""}
+            </Button>
+            <Button
+              type="button"
+              variant={filters.paymentStatus === "未收款" && !filters.outboundStatus ? "primary" : "ghost"}
+              aria-pressed={filters.paymentStatus === "未收款" && !filters.outboundStatus}
+              onClick={() => updateFilters({paymentStatus: "未收款", outboundStatus: ""})}
+            >
+              待收款{selection.summary.pendingPaymentCount > 0 ? ` (${selection.summary.pendingPaymentCount})` : ""}
+            </Button>
+            <Button
+              type="button"
+              variant={filters.outboundStatus === "已出库" && filters.paymentStatus === "已收款" ? "primary" : "ghost"}
+              aria-pressed={filters.outboundStatus === "已出库" && filters.paymentStatus === "已收款"}
+              onClick={() => updateFilters({outboundStatus: "已出库", paymentStatus: "已收款"})}
+            >
+              已完成
+            </Button>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="erp-customer-sort"
+            aria-label="销售单排序"
+            onClick={openSorting}
+          >
+            <span>{sortLabel || "单据日期"}</span>
+            {descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+          </Button>
+        </div>
+      )}
+      mobileRow={(item) => {
+        const isPendingOutbound = item.outboundStatus === "待出库";
+        const isPendingPayment = item.paymentStatus === "未收款" || item.paymentStatus === "部分收款";
+        const isCompleted = item.outboundStatus === "已出库" && item.paymentStatus === "已收款";
+        const primaryBadge = isPendingOutbound
+          ? {label: "待出库", tone: "warning" as const}
+          : isPendingPayment
+            ? {label: item.paymentStatus, tone: "warning" as const}
+            : isCompleted
+              ? {label: "已完成", tone: "success" as const}
+              : {label: item.outboundStatus || item.paymentStatus, tone: "info" as const};
+        const secondaryText = isPendingOutbound ? item.paymentStatus : item.outboundStatus;
+        return (
+          <ErpMobileRecordRow
+            title={item.invoiceNo}
+            titleMono
+            subtitle={item.customerName}
+            meta={`${item.totalCount} 件 · ${item.date}${secondaryText ? ` · ${secondaryText}` : ""}${item.handleBy ? ` · ${item.handleBy}` : ""}`}
+            amount={formatCurrency(item.totalAmount)}
+            status={<ErpStatusBadge label={primaryBadge.label} tone={primaryBadge.tone} />}
+            onOpen={() => openDetail(item)}
+          />
+        );
+      }}
+      mobileFields={6}
+      mobileFieldOrder={["customerName","totalAmount","paymentStatus","outboundStatus","handleBy","date","totalCount"]}
+      ariaLabel="销售单据明细"
+      columns={columns}
+      data={selection.data}
+      getRowId={(row) => row.id}
+      loading={query.isPending}
+      fetching={query.isFetching || filterPending}
+      error={query.error as Error | null}
+      errorTitle="销售单据加载失败"
+      emptyTitle="暂无销售单据"
+      emptyDescription={activeFilterCount ? "当前筛选条件没有匹配的销售单。" : "服务器当前没有返回销售单据。"}
+      onRetry={() => void query.refetch()}
+      onRowClick={openDetail}
+      mobileShowDetailAction={false}
+      manualSorting
+      sorting={sorting}
+      onSortingChange={onSortingChange}
+      page={selection.meta.page}
+      pageSize={selection.meta.pageSize}
+      total={selection.meta.total}
+      onPageChange={(page) => commitFilters({...filters, page})}
+      onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})}
+      columnVisibility={columnVisibility}
+      onColumnVisibilityChange={setColumnVisibility}
+      enableColumnResizing
+      density={density}
+      stickyHeader
+    />
+  );
+
+  return <>
+    <ErpListPageFrame data-phone-layout={phone ? "thumb" : undefined}>
+      <ErpPageHeader
+        title={phone ? (
+          <span className="erp-customer-phone-title">
+            销售单据<small>{query.isPending ? "正在加载…" : query.error && !query.data ? "加载失败" : `${selection.meta.total} 单`}</small>
+          </span>
+        ) : "销售单据"}
+        subtitle="查看销售客户、成交金额、收款状态和出库进度。"
+        quickStatus={quickStatus}
+        actions={phone ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setPhoneFiltersOpen(true)}
+            aria-label="销售筛选与操作"
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+            筛选{activeFilterCount > 0 && <span className="tabular-nums">{activeFilterCount}</span>}
+          </Button>
+        ) : (
+          <>
+            <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={query.isFetching}>
+              <RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新
+            </Button>
+            {canCreate && (
+              <Button type="button" size="sm" variant="primary" onClick={onCreate}>
+                <Plus className="h-4 w-4" />新建销售单
+              </Button>
+            )}
+          </>
         )}
-        <ErpFilterBar mobileActiveCount={activeFilterCount - Number(Boolean(filters.keyword))} mobilePrimary={<ErpSearchInput className="min-w-[260px] flex-1" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索销售单号、客户、商品、SN 或经办人" aria-label="搜索销售单据" />} actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
-        <Select className="w-36" value={filters.channel} options={channelOptions} onValueChange={(value) => updateFilters({channel: value as SalesListFilters["channel"]})} aria-label="销售渠道筛选" />
-        <Select className="w-36" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as SalesListFilters["paymentStatus"]})} aria-label="收款状态筛选" />
-        <Select className="w-36" value={filters.outboundStatus} options={outboundOptions} onValueChange={(value) => updateFilters({outboundStatus: value as SalesListFilters["outboundStatus"]})} aria-label="出库状态筛选" />
-        <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-36" startAriaLabel="销售开始日期" endAriaLabel="销售结束日期" ariaLabel="销售日期范围" />
-      </ErpFilterBar></ErpPageToolbar>
+      />
+      <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
+      {!phone && <>
+        <ErpMobileSummary label="销售统计" summary={metricValue(`${selection.summary.orderCount} 单 · 待出库 ${selection.summary.pendingOutboundCount}`)}><MetricsRegion>
+          <MetricCard label="销售单数" value={metricValue(`${selection.summary.orderCount} 单`)} detail="按当前筛选" icon={<FileText className="h-4 w-4" />} />
+          <MetricCard label="销售金额" value={metricValue(formatCurrency(selection.summary.totalAmount))} detail="当前筛选汇总" icon={<ShoppingCart className="h-4 w-4" />} />
+          <MetricCard label="销售件数" value={metricValue(`${selection.summary.unitCount} 件`)} detail="销售单实物数量" icon={<PackageCheck className="h-4 w-4" />} />
+          <MetricCard label="待收款" value={metricValue(`${selection.summary.pendingPaymentCount} 单`)} detail="未收款 / 部分收款" tone={selection.summary.pendingPaymentCount ? "warning" : "neutral"} icon={<Banknote className="h-4 w-4" />} />
+          <MetricCard label="待出库" value={metricValue(`${selection.summary.pendingOutboundCount} 单`)} detail="等待仓库处理" tone={selection.summary.pendingOutboundCount ? "warning" : "neutral"} icon={<Truck className="h-4 w-4" />} />
+          {session.permissions.showProfit && <MetricCard label="销售利润" value={metricValue(selection.summary.totalProfit === undefined ? "—" : formatCurrency(selection.summary.totalProfit))} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} />}
+        </MetricsRegion></ErpMobileSummary>
 
-      {!phone && <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Filter className="h-4 w-4 text-[var(--erp-color-primary)]" />共 {selection.meta.total} 条</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={emptyVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
+        <ErpPageToolbar>
+          <ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesListFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
+            {phoneSearch}
+            <Select className="w-36" value={filters.channel} options={channelOptions} onValueChange={(value) => updateFilters({channel: value as SalesListFilters["channel"]})} aria-label="销售渠道筛选" />
+            <Select className="w-36" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as SalesListFilters["paymentStatus"]})} aria-label="收款状态筛选" />
+            <Select className="w-36" value={filters.outboundStatus} options={outboundOptions} onValueChange={(value) => updateFilters({outboundStatus: value as SalesListFilters["outboundStatus"]})} aria-label="出库状态筛选" />
+            <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-36" startAriaLabel="销售开始日期" endAriaLabel="销售结束日期" ariaLabel="销售日期范围" />
+          </ErpFilterBar>
+        </ErpPageToolbar>
 
-      <ErpDataTable mobileRow={(item) => <ErpMobileRecordRow title={item.invoiceNo} subtitle={item.customerName} meta={`${item.totalCount} 件 · ${item.date} · ${item.handleBy}`} amount={formatCurrency(item.totalAmount)} status={<span>{item.paymentStatus} · {item.outboundStatus}</span>} onOpen={() => openDetail(item)} />} mobileFields={6} mobileFieldOrder={["customerName","totalAmount","paymentStatus","outboundStatus","handleBy","date","totalCount"]} ariaLabel="销售单据明细" columns={columns} data={selection.data} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching || filterPending} error={query.error as Error | null} errorTitle="销售单据加载失败" emptyTitle="暂无销售单据" emptyDescription={activeFilterCount ? "当前筛选条件没有匹配的销售单。" : "服务器当前没有返回销售单据。"} onRetry={() => void query.refetch()} onRowClick={openDetail} mobileShowDetailAction={false} manualSorting sorting={sorting} onSortingChange={onSortingChange} page={selection.meta.page} pageSize={selection.meta.pageSize} total={selection.meta.total} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader />
+        <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Filter className="h-4 w-4 text-[var(--erp-color-primary)]" />共 {selection.meta.total} 条</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={emptyVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
+      </>}
+
+      {salesTable}
+
+      <ErpMobileActionDock
+        hidden={Boolean(detailId || deleting || settling || phoneFiltersOpen)}
+        ariaLabel="销售单搜索与新建"
+        primaryAction={canCreate ? (
+          <Button type="button" variant="primary" onClick={onCreate}>
+            <Plus className="h-5 w-5" />新建销售单
+          </Button>
+        ) : undefined}
+      >
+        {phoneSearch}
+      </ErpMobileActionDock>
+
+      {phone && (
+        <ErpDialogShell
+          open={phoneFiltersOpen}
+          onOpenChange={setPhoneFiltersOpen}
+          title="销售单筛选与操作"
+          mobilePresentation="sheet"
+          footer={
+            <>
+              <Button type="button" variant="ghost" onClick={() => commitFilters(defaultSalesListFilters)}>
+                <RotateCcw className="h-4 w-4" />重置
+              </Button>
+              <Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>
+                查看结果
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div data-erp-region="phone-filter-fields" className="grid gap-3">
+              <Select className="w-full" value={filters.channel} options={channelOptions} onValueChange={(value) => updateFilters({channel: value as SalesListFilters["channel"]})} aria-label="销售渠道筛选" />
+              <Select className="w-full" value={filters.paymentStatus} options={paymentOptions} onValueChange={(value) => updateFilters({paymentStatus: value as SalesListFilters["paymentStatus"]})} aria-label="收款状态筛选" />
+              <Select className="w-full" value={filters.outboundStatus} options={outboundOptions} onValueChange={(value) => updateFilters({outboundStatus: value as SalesListFilters["outboundStatus"]})} aria-label="出库状态筛选" />
+              <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})} triggerClassName="w-full" startAriaLabel="销售开始日期" endAriaLabel="销售结束日期" ariaLabel="销售日期范围" />
+              <Select aria-label="每页条数" value={String(filters.pageSize)} onValueChange={(value) => updateFilters({pageSize: Number(value)})} options={[20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}))} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ErpStatusBadge label={canCreate ? "可新建销售单" : "仅查看"} tone={canCreate ? "success" : "neutral"} />
+            </div>
+            <dl className="erp-customer-filter-summary">
+              <div><dt>待出库</dt><dd>{selection.summary.pendingOutboundCount} 单</dd></div>
+              <div><dt>待收款</dt><dd>{selection.summary.pendingPaymentCount} 单</dd></div>
+              <div><dt>销售总额</dt><dd>{formatCurrency(selection.summary.totalAmount)}</dd></div>
+            </dl>
+          </div>
+        </ErpDialogShell>
+      )}
       </ErpPageContent>
     </ErpListPageFrame>
 
