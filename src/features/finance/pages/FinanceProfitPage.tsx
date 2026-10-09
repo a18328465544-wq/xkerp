@@ -8,12 +8,13 @@ import {useEffect, useMemo} from "react";
 import {Button, Card, Select} from "@/src/components/ui";
 import {AreaTrendChart} from "@/src/components/ui/chart-primitives";
 import {ChartMeta} from "@/src/components/ui/chart";
-import {AnalyticsDetailRegion, AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDateRangePicker, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type AnalyticsVisualizationSize, type QuickStatusItemData} from "@/src/components/common";
+import {AnalyticsDetailRegion, AnalyticsInsightItem, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpDataTable, ErpDateRangePicker, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpMobileRecordRow, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type AnalyticsVisualizationSize, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, financeApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {formatCurrency} from "@/src/lib/format";
 import {storeDate} from "@/src/utils/storeTime";
 import {FinanceTableControls} from "../components/FinanceTableControls";
@@ -55,6 +56,7 @@ export function FinanceProfitPage() {
 }
 
 function FinanceProfitContent({session, filters, onFiltersChange, query}: {session: AuthSession; filters: FinanceProfitFilters; onFiltersChange: (filters: FinanceProfitFilters) => void; query: ReturnType<typeof useQuery<FinanceProfitReport>>}) {
+  const phone = useErpPhone();
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "finance-profit", userId: session.user.id, defaultVisibility: {}});
   const ready = !query.isPending && !query.isError && Object.entries(filters).every(([key, value]) => (query.data?.filters as unknown as Record<string, unknown> | undefined)?.[key] === value);
   const report = ready && query.data ? query.data : emptyReport;
@@ -109,11 +111,30 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
       <Select className="w-32" value={filters.dimension} options={dimensionOptions} onValueChange={(value) => update({dimension: value as FinanceProfitDimension})} aria-label="利润分析维度" />
       <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} density="compact" triggerClassName="sm:w-36" startAriaLabel="利润开始日期" endAriaLabel="利润结束日期" ariaLabel="利润日期范围" />
     </AnalyticsToolbar>
-    <AnalyticsMainRegion variant="3-1">
-      <AnalyticsMainRegion.Visualization size={visualizationSize}><DashboardSection title="毛利趋势" description="销售毛利来自销售额减商品成本；净利润额外叠加日期范围内的其他收支。" actions={<ErpStatusBadge label={`${report.trend.length} 个日期`} tone="info" />}><ProfitTrend trend={report.trend} showProfit={session.permissions.showProfit} showNetProfit={session.permissions.showProfit && report.summary.netProfit !== undefined} updatedAt={storeDate()} /></DashboardSection></AnalyticsMainRegion.Visualization>
-      <AnalyticsMainRegion.Insights><DashboardSection title="毛利洞察" description="从当前销售毛利结果中优先展示机会与风险。"><ProfitInsights insights={insights} showProfit={session.permissions.showProfit} /></DashboardSection></AnalyticsMainRegion.Insights>
-    </AnalyticsMainRegion>
-    <AnalyticsDetailRegion><DashboardSection title="毛利明细" description="按当前维度展示销售毛利；其他收支只在净利润汇总中体现，不分摊到商品、客户或经办人。" actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`${report.meta.page} / ${report.meta.totalPages} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}><ErpDataTable ariaLabel="销售毛利明细" surface="plain" columns={columns} data={report.pageRows} getRowId={(row) => row.id} loading={!ready && !query.isError} fetching={query.isFetching || !ready} error={query.error as Error | null} errorTitle="销售毛利加载失败" emptyTitle="暂无毛利数据" emptyDescription={activeFilters ? "当前筛选条件没有匹配的销售单。" : "当前没有可展示的销售单据。"} onRetry={() => void query.refetch()} page={report.meta.page} pageSize={report.meta.pageSize} total={report.meta.total} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} manualSorting sorting={sorting} onSortingChange={(updater) => {const next = typeof updater === "function" ? updater(sorting) : updater; update({sortKey: next[0]?.id as FinanceProfitFilters["sortKey"], sortDirection: next[0] ? next[0].desc ? "desc" : "asc" : undefined});}} stickyHeader /></DashboardSection></AnalyticsDetailRegion>
+    {phone ? (
+      <>
+        <AnalyticsDetailRegion><DashboardSection title="毛利明细" description="按当前维度展示销售毛利；其他收支只在净利润汇总中体现，不分摊到商品、客户或经办人。" actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`${report.meta.page} / ${report.meta.totalPages} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}><ErpDataTable ariaLabel="销售毛利明细" surface="plain" columns={columns} data={report.pageRows} getRowId={(row) => row.id} loading={!ready && !query.isError} fetching={query.isFetching || !ready} error={query.error as Error | null} errorTitle="销售毛利加载失败" emptyTitle="暂无毛利数据" emptyDescription={activeFilters ? "当前筛选条件没有匹配的销售单。" : "当前没有可展示的销售单据。"} onRetry={() => void query.refetch()} page={report.meta.page} pageSize={report.meta.pageSize} total={report.meta.total} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} manualSorting sorting={sorting} onSortingChange={(updater) => {const next = typeof updater === "function" ? updater(sorting) : updater; update({sortKey: next[0]?.id as FinanceProfitFilters["sortKey"], sortDirection: next[0] ? next[0].desc ? "desc" : "asc" : undefined});}} mobileRow={(item) => <ErpMobileRecordRow title={item.label} subtitle={item.secondary} meta={`${item.orderCount} 单 · ${item.quantity} 件`} amount={session.permissions.showProfit && item.profit !== undefined ? formatCurrency(item.profit) : formatCurrency(item.revenue)} amountLabel={session.permissions.showProfit && item.profit !== undefined ? "毛利" : "销售额"} />} stickyHeader /></DashboardSection></AnalyticsDetailRegion>
+        <details className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--erp-color-text)]">
+            毛利分析与趋势
+          </summary>
+          <div className="mt-3 space-y-4">
+            <AnalyticsMainRegion variant="3-1">
+              <AnalyticsMainRegion.Visualization size={visualizationSize}><DashboardSection title="毛利趋势" description="销售毛利来自销售额减商品成本；净利润额外叠加日期范围内的其他收支。" actions={<ErpStatusBadge label={`${report.trend.length} 个日期`} tone="info" />}><ProfitTrend trend={report.trend} showProfit={session.permissions.showProfit} showNetProfit={session.permissions.showProfit && report.summary.netProfit !== undefined} updatedAt={storeDate()} /></DashboardSection></AnalyticsMainRegion.Visualization>
+              <AnalyticsMainRegion.Insights><DashboardSection title="毛利洞察" description="从当前销售毛利结果中优先展示机会与风险。"><ProfitInsights insights={insights} showProfit={session.permissions.showProfit} /></DashboardSection></AnalyticsMainRegion.Insights>
+            </AnalyticsMainRegion>
+          </div>
+        </details>
+      </>
+    ) : (
+      <>
+        <AnalyticsMainRegion variant="3-1">
+          <AnalyticsMainRegion.Visualization size={visualizationSize}><DashboardSection title="毛利趋势" description="销售毛利来自销售额减商品成本；净利润额外叠加日期范围内的其他收支。" actions={<ErpStatusBadge label={`${report.trend.length} 个日期`} tone="info" />}><ProfitTrend trend={report.trend} showProfit={session.permissions.showProfit} showNetProfit={session.permissions.showProfit && report.summary.netProfit !== undefined} updatedAt={storeDate()} /></DashboardSection></AnalyticsMainRegion.Visualization>
+          <AnalyticsMainRegion.Insights><DashboardSection title="毛利洞察" description="从当前销售毛利结果中优先展示机会与风险。"><ProfitInsights insights={insights} showProfit={session.permissions.showProfit} /></DashboardSection></AnalyticsMainRegion.Insights>
+        </AnalyticsMainRegion>
+        <AnalyticsDetailRegion><DashboardSection title="毛利明细" description="按当前维度展示销售毛利；其他收支只在净利润汇总中体现，不分摊到商品、客户或经办人。" actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`${report.meta.page} / ${report.meta.totalPages} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}><ErpDataTable ariaLabel="销售毛利明细" surface="plain" columns={columns} data={report.pageRows} getRowId={(row) => row.id} loading={!ready && !query.isError} fetching={query.isFetching || !ready} error={query.error as Error | null} errorTitle="销售毛利加载失败" emptyTitle="暂无毛利数据" emptyDescription={activeFilters ? "当前筛选条件没有匹配的销售单。" : "当前没有可展示的销售单据。"} onRetry={() => void query.refetch()} page={report.meta.page} pageSize={report.meta.pageSize} total={report.meta.total} onPageChange={(page) => update({page})} onPageSizeChange={(pageSize) => update({page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} manualSorting sorting={sorting} onSortingChange={(updater) => {const next = typeof updater === "function" ? updater(sorting) : updater; update({sortKey: next[0]?.id as FinanceProfitFilters["sortKey"], sortDirection: next[0] ? next[0].desc ? "desc" : "asc" : undefined});}} mobileRow={(item) => <ErpMobileRecordRow title={item.label} subtitle={item.secondary} meta={`${item.orderCount} 单 · ${item.quantity} 件`} amount={session.permissions.showProfit && item.profit !== undefined ? formatCurrency(item.profit) : formatCurrency(item.revenue)} amountLabel={session.permissions.showProfit && item.profit !== undefined ? "毛利" : "销售额"} />} stickyHeader /></DashboardSection></AnalyticsDetailRegion>
+      </>
+    )}
     </ErpPageContent>
   </ErpAnalyticsPageFrame>;
 }

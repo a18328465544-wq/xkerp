@@ -2,8 +2,8 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
 import type {SortingState} from "@tanstack/react-table";
-import {AlertTriangle, CheckCircle2, Download, Filter, History, Plus, RefreshCw, RotateCcw, ShieldAlert, Wrench} from "lucide-react";
-import {ErpSearchInput} from "@/src/components/common";
+import {AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Download, Filter, History, Plus, RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, Wrench} from "lucide-react";
+import {ErpDialogShell, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Select} from "@/src/components/ui";
@@ -13,6 +13,7 @@ import {invalidateErpDomains, refreshErpAfterDocument} from "@/src/services/api"
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {formatCurrency} from "@/src/lib/format";
 import {aftersalesActiveStatusValues, aftersalesStatuses, aftersalesTypes, type AftersalesCreateFormValues, type AftersalesFilters, type AftersalesListItem, type AftersalesResolutionFormValues, type AftersalesWorkspaceSnapshot} from "@/src/types/aftersales";
 import {AftersalesCreateDialog} from "../components/AftersalesCreateDialog";
@@ -32,7 +33,9 @@ export function AftersalesWorkspacePage() {
 }
 
 function AftersalesContent({session, snapshot, pending, fetching, error, filters, onFiltersChange, onRetry, onAuthExpired}: {session: AuthSession; snapshot?: AftersalesWorkspaceSnapshot; pending: boolean; fetching: boolean; error: Error | null; filters: AftersalesFilters; onFiltersChange: (filters: AftersalesFilters) => void; onRetry: () => void; onAuthExpired: () => void}) {
+  const phone = useErpPhone();
   const navigate = useNavigate(); const queryClient = useQueryClient(); const [sorting, setSorting] = useState<SortingState>([]); const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<Record<string, boolean>>({feature: "aftersales", userId: session.user.id, defaultVisibility: {}, defaultDensity: "compact"}); const [detail, setDetail] = useState<AftersalesListItem | null>(null); const [createOpen, setCreateOpen] = useState(false); const [resolving, setResolving] = useState<AftersalesListItem | null>(null);
+  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const items = snapshot?.items || []; const candidates = snapshot?.candidates || [];
   const filtered = useMemo(() => sortAftersales(filterAftersales(items, filters), sorting), [filters, items, sorting]); const totalPages = Math.max(1, Math.ceil(filtered.length / filters.pageSize)); useEffect(() => {if (filters.page > totalPages) onFiltersChange({...filters, page: totalPages});}, [filters, onFiltersChange, totalPages]); const pageRows = filtered.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
   const goToReturns = () => {void navigate({to: "/sales/returns/new"});};
@@ -44,15 +47,136 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
   const activeCount = items.filter((item) => aftersalesActiveStatusValues.includes(item.status as (typeof aftersalesActiveStatusValues)[number])).length; const completeCount = items.filter((item) => item.status === "已完成").length; const repairCost = items.reduce((sum, item) => sum + item.repairCost, 0); const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.status !== "all") + Number(filters.type !== "all");
   const quickStatus: QuickStatusItemData[] = [{icon: <ShieldAlert className="h-4 w-4" />, label: "待处理", value: `${activeCount} 件`, description: "待处理与检测中", tone: activeCount ? "warning" : "success"}, {icon: <Wrench className="h-4 w-4" />, label: "可登记 SN", value: `${candidates.filter((item) => !item.activeClaimId).length} 张`, description: "已售且已关联销售单", tone: "info"}];
   const exportRows = () => {const rows = [["售后编号", "销售单号", "客户", "联系方式", "商品", "SN", "类型", "状态", "客户反馈", "维修支出", "退款金额", "结论", "经办人", "登记时间"], ...filtered.map((item) => [item.id, item.salesInvoiceNo, item.customerName, item.contact, item.productName, item.serialNumber, item.type, item.status, item.description, item.repairCost, item.refundAmount, item.finalResult, item.handler || "", item.createdAt])]; const url = URL.createObjectURL(new Blob([`\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\n")}`], {type: "text/csv;charset=utf-8"})); const link = document.createElement("a"); link.href = url; link.download = "售后工单.csv"; link.click(); URL.revokeObjectURL(url);};
-  return <ErpWarehousePageFrame><ErpPageHeader title="售后维护" subtitle="按已售 SN 登记并追踪维修、检测争议、换货与补差价；退货退款统一走销售退货。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={goToReturns}>办理销售退货</Button><Button type="button" size="sm" variant="secondary" onClick={onRetry} disabled={fetching}><RefreshCw className={`h-4 w-4 ${fetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="primary" onClick={() => {createMutation.reset(); setCreateOpen(true);}}><Plus className="h-4 w-4" />登记售后</Button></>} />
-    <MetricsRegion><MetricCard label="售后工单" value={`${items.length} 件`} detail="当前账号可见整库" icon={<History className="h-4 w-4" />} /><MetricCard label="待处理 / 检测中" value={`${activeCount} 件`} detail="需要继续跟进" icon={<AlertTriangle className="h-4 w-4" />} tone={activeCount ? "warning" : "success"} /><MetricCard label="已完成" value={`${completeCount} 件`} detail="已记录处理结论" icon={<CheckCircle2 className="h-4 w-4" />} tone="success" /><MetricCard label="累计维修支出" value={formatCurrency(repairCost)} detail="结案记录中的维修费用" icon={<Wrench className="h-4 w-4" />} tone={repairCost ? "warning" : "neutral"} /></MetricsRegion>
-    <ErpPageToolbar><ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultAftersalesFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" size="sm" variant="secondary" onClick={exportRows}><Download className="h-4 w-4" />导出</Button></>}><ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="工单、销售单、客户、SN、型号或问题描述" aria-label="搜索售后工单" /><Select className="w-36" value={filters.status} onValueChange={(status) => onFiltersChange({...filters, status: status as AftersalesFilters["status"], page: 1})} options={[{value: "all", label: "全部状态"}, ...aftersalesStatuses.map((value) => ({value, label: value}))]} aria-label="售后状态" /><Select className="w-36" value={filters.type} onValueChange={(type) => onFiltersChange({...filters, type: type as AftersalesFilters["type"], page: 1})} options={[{value: "all", label: "全部类型"}, ...aftersalesTypes.map((value) => ({value, label: value}))]} aria-label="售后类型" /></ErpFilterBar></ErpPageToolbar>
+
+  const filterFields = (
+    <>
+      <Select className="w-full" value={filters.status} onValueChange={(status) => onFiltersChange({...filters, status: status as AftersalesFilters["status"], page: 1})} options={[{value: "all", label: "全部状态"}, ...aftersalesStatuses.map((value) => ({value, label: value}))]} aria-label="售后状态" />
+      <Select className="w-full" value={filters.type} onValueChange={(type) => onFiltersChange({...filters, type: type as AftersalesFilters["type"], page: 1})} options={[{value: "all", label: "全部类型"}, ...aftersalesTypes.map((value) => ({value, label: value}))]} aria-label="售后类型" />
+    </>
+  );
+
+  const aftersalesTable = (
+    <ErpDataTable
+      surface={phone ? "plain" : "card"}
+      mobilePagination="compact"
+      mobileShowDetailAction={false}
+      mobileToolbar={({openSorting, sortLabel, descending}) => (
+        <div className="erp-customer-list-toolbar">
+          <div className="erp-customer-quick-filters" role="group" aria-label="售后快捷筛选">
+            <Button type="button" variant={filters.status === "all" ? "primary" : "ghost"} aria-pressed={filters.status === "all"} onClick={() => onFiltersChange({...filters, status: "all", page: 1})}>全部</Button>
+            <Button type="button" variant={filters.status === "待处理" ? "primary" : "ghost"} aria-pressed={filters.status === "待处理"} onClick={() => onFiltersChange({...filters, status: "待处理", page: 1})}>待处理</Button>
+            <Button type="button" variant={filters.status === "已完成" ? "primary" : "ghost"} aria-pressed={filters.status === "已完成"} onClick={() => onFiltersChange({...filters, status: "已完成", page: 1})}>已完成</Button>
+          </div>
+          <Button type="button" variant="ghost" className="erp-customer-sort" aria-label="售后排序" onClick={openSorting}>
+            <span>{sortLabel || "默认排序"}</span>
+            {descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+          </Button>
+        </div>
+      )}
+      mobileRow={(item) => (
+        <ErpMobileRecordRow
+          title={item.model || item.productName || item.serialNumber || item.id}
+          subtitle={item.customerName}
+          meta={`${item.serialNumber ? `SN: ${item.serialNumber} · ` : ""}${item.type} · ${item.createdAt?.slice(0, 10)}`}
+          statusPlacement="title"
+          status={<ErpStatusBadge label={item.status} tone={statusTone(item.status)} />}
+          amountLabel={item.repairCost ? "维修支出" : undefined}
+          amount={item.repairCost ? formatCurrency(item.repairCost) : undefined}
+          onOpen={() => setDetail(item)}
+        />
+      )}
+      ariaLabel="售后工单流水"
+      columns={columns}
+      data={pageRows}
+      getRowId={(row) => row.id}
+      loading={pending}
+      fetching={fetching}
+      error={error}
+      errorTitle="售后工单加载失败"
+      emptyTitle="暂无匹配售后工单"
+      emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击登记售后创建第一张工单。"}
+      onRetry={onRetry}
+      onRowClick={setDetail}
+      manualSorting
+      sorting={sorting}
+      onSortingChange={setSorting}
+      page={filters.page}
+      pageSize={filters.pageSize}
+      total={filtered.length}
+      onPageChange={(page) => onFiltersChange({...filters, page})}
+      onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})}
+      columnVisibility={columnVisibility}
+      onColumnVisibilityChange={setColumnVisibility}
+      enableColumnResizing
+      density={density}
+      stickyHeader
+    />
+  );
+
+  return <ErpWarehousePageFrame className="erp-customer-directory" data-phone-layout={phone ? "thumb" : undefined}>
+    <ErpPageHeader
+      title={phone ? <span className="erp-customer-phone-title">售后维护<small>{filtered.length} 件工单</small></span> : "售后维护"}
+      subtitle="按已售 SN 登记并追踪维修、检测争议、换货与补差价；退货退款统一走销售退货。"
+      quickStatus={quickStatus}
+      actions={phone ? (
+        <Button type="button" variant="secondary" onClick={() => setPhoneFiltersOpen(true)} aria-label="售后筛选与操作">
+          <SlidersHorizontal className="h-5 w-5" />筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
+        </Button>
+      ) : (
+        <>
+          <Button type="button" size="sm" variant="secondary" onClick={goToReturns}>办理销售退货</Button>
+          <Button type="button" size="sm" variant="secondary" onClick={onRetry} disabled={fetching}><RefreshCw className={`h-4 w-4 ${fetching ? "animate-spin" : ""}`} />刷新</Button>
+          <Button type="button" size="sm" variant="primary" onClick={() => {createMutation.reset(); setCreateOpen(true);}}><Plus className="h-4 w-4" />登记售后</Button>
+        </>
+      )}
+    />
+    {!phone && (
+      <>
+        <MetricsRegion>
+          <MetricCard label="售后工单" value={`${items.length} 件`} detail="当前账号可见整库" icon={<History className="h-4 w-4" />} />
+          <MetricCard label="待处理 / 检测中" value={`${activeCount} 件`} detail="需要继续跟进" icon={<AlertTriangle className="h-4 w-4" />} tone={activeCount ? "warning" : "success"} />
+          <MetricCard label="已完成" value={`${completeCount} 件`} detail="已记录处理结论" icon={<CheckCircle2 className="h-4 w-4" />} tone="success" />
+          <MetricCard label="累计维修支出" value={formatCurrency(repairCost)} detail="结案记录中的维修费用" icon={<Wrench className="h-4 w-4" />} tone={repairCost ? "warning" : "neutral"} />
+        </MetricsRegion>
+        <ErpPageToolbar>
+          <ErpFilterBar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultAftersalesFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" size="sm" variant="secondary" onClick={exportRows}><Download className="h-4 w-4" />导出</Button></>}>
+            <ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="工单、销售单、客户、SN、型号或问题描述" aria-label="搜索售后工单" />
+            <Select className="w-36" value={filters.status} onValueChange={(status) => onFiltersChange({...filters, status: status as AftersalesFilters["status"], page: 1})} options={[{value: "all", label: "全部状态"}, ...aftersalesStatuses.map((value) => ({value, label: value}))]} aria-label="售后状态" />
+            <Select className="w-36" value={filters.type} onValueChange={(type) => onFiltersChange({...filters, type: type as AftersalesFilters["type"], page: 1})} options={[{value: "all", label: "全部类型"}, ...aftersalesTypes.map((value) => ({value, label: value}))]} aria-label="售后类型" />
+          </ErpFilterBar>
+        </ErpPageToolbar>
+      </>
+    )}
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部工单"} tone={activeFilters ? "info" : "neutral"} /><span>筛选、排序和分页仅作用于已加载售后集合。</span></div><div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div></div>
-    <DashboardSection title="售后工单流水" description="点击行查看完整反馈、处理结论和费用；历史退货工单只读并引导到销售退货。" actions={<ErpStatusBadge label={`当前 ${items.length} 条`} tone="info" />}><ErpDataTable ariaLabel="售后工单流水" columns={columns} data={pageRows} getRowId={(row) => row.id} loading={pending} fetching={fetching} error={error} errorTitle="售后工单加载失败" emptyTitle="暂无匹配售后工单" emptyDescription={activeFilters ? "请调整搜索或筛选条件。" : "点击登记售后创建第一张工单。"} onRetry={onRetry} onRowClick={setDetail} manualSorting sorting={sorting} onSortingChange={setSorting} page={filters.page} pageSize={filters.pageSize} total={filtered.length} onPageChange={(page) => onFiltersChange({...filters, page})} onPageSizeChange={(pageSize) => onFiltersChange({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader /></DashboardSection>
-    <AftersalesDetailDrawer record={detail} onClose={() => setDetail(null)} onResolve={() => {if (detail) {resolveMutation.reset(); setResolving(detail);}}} onReturn={goToReturns} />
-    <AftersalesCreateDialog open={createOpen} candidates={candidates} pending={createMutation.isPending} error={createMutation.error instanceof Error ? createMutation.error.message : undefined} onOpenChange={setCreateOpen} onSubmit={async (values) => {await createMutation.mutateAsync(values);}} />
-    <AftersalesResolutionDialog record={resolving} pending={resolveMutation.isPending} error={resolveMutation.error instanceof Error ? resolveMutation.error.message : undefined} onClose={() => setResolving(null)} onSubmit={async (values) => {if (resolving) await resolveMutation.mutateAsync({record: resolving, values});}} />
+      {!phone && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部工单"} tone={activeFilters ? "info" : "neutral"} /><span>筛选、排序和分页仅作用于已加载售后集合。</span></div>
+          <div className="flex items-center gap-2"><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></div>
+        </div>
+      )}
+      {phone ? aftersalesTable : <DashboardSection title="售后工单流水" description="点击行查看完整反馈、处理结论和费用；历史退货工单只读并引导到销售退货。" actions={<ErpStatusBadge label={`当前 ${items.length} 条`} tone="info" />}>{aftersalesTable}</DashboardSection>}
+      <ErpMobileActionDock hidden={Boolean(detail || createOpen || resolving || phoneFiltersOpen)} ariaLabel="售后搜索与登记" primaryAction={<Button type="button" variant="primary" onClick={() => {createMutation.reset(); setCreateOpen(true);}}><Plus className="h-5 w-5" />登记售后</Button>}>
+        <ErpSearchInput className="w-full" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="搜索工单、客户、SN" aria-label="搜索售后工单" />
+      </ErpMobileActionDock>
+      {phone && (
+        <ErpDialogShell open={phoneFiltersOpen} onOpenChange={setPhoneFiltersOpen} title="售后筛选与操作" mobilePresentation="sheet" footer={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultAftersalesFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>查看结果</Button></>}>
+          <div className="space-y-4">
+            <div data-erp-region="phone-filter-fields" className="grid gap-3">
+              {filterFields}
+              <Select aria-label="每页条数" value={String(filters.pageSize)} onValueChange={(value) => onFiltersChange({...filters, page: 1, pageSize: Number(value)})} options={[20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}))} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={goToReturns}>办理销售退货</Button>
+              <Button type="button" variant="secondary" onClick={onRetry} disabled={fetching}>
+                <RefreshCw className={`h-4 w-4 ${fetching ? "animate-spin" : ""}`} />刷新
+              </Button>
+            </div>
+          </div>
+        </ErpDialogShell>
+      )}
+      <AftersalesDetailDrawer record={detail} onClose={() => setDetail(null)} onResolve={() => {if (detail) {resolveMutation.reset(); setResolving(detail);}}} onReturn={goToReturns} />
+      <AftersalesCreateDialog open={createOpen} candidates={candidates} pending={createMutation.isPending} error={createMutation.error instanceof Error ? createMutation.error.message : undefined} onOpenChange={setCreateOpen} onSubmit={async (values) => {await createMutation.mutateAsync(values);}} />
+      <AftersalesResolutionDialog record={resolving} pending={resolveMutation.isPending} error={resolveMutation.error instanceof Error ? resolveMutation.error.message : undefined} onClose={() => setResolving(null)} onSubmit={async (values) => {if (resolving) await resolveMutation.mutateAsync({record: resolving, values});}} />
     </ErpPageContent>
   </ErpWarehousePageFrame>;
 }
