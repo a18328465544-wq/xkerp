@@ -1,14 +1,13 @@
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState, VisibilityState} from "@tanstack/react-table";
-import {ErpListPage, type ErpFilterField} from "@/src/components/common";
+import {ErpListPage, ErpRecordDetail, type ErpFilterField} from "@/src/components/common";
 import {BadgeDollarSign, CircleDollarSign, Download, Plus, Star, Users} from "lucide-react";
 import {ErpEntityThumbnail} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card} from "@/src/components/ui";
-import {DashboardSection, ErpConfirmDialog, ErpDetailDrawer, ErpDetailFact, ErpLoadingState, ErpMetricCard, ErpPageError, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {ErpConfirmDialog, ErpDetailDrawer, ErpLoadingState, ErpMetricCard, ErpPageError, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, customersApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -124,14 +123,34 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
 }
 
 function CustomerDetailDrawer({customer, showProfit, canEdit, onClose, onEdit}: {customer: CustomerDirectoryItem | null; showProfit: boolean; canEdit: boolean; onClose: () => void; onEdit: () => void}) {
-  const phone = useErpPhone();
-  if (phone) return <ErpDetailDrawer modal={false} resizable drawerKey="customer-detail" defaultWidth={720} minWidth={560} maxWidth={920} open={Boolean(customer)} onOpenChange={(open) => {if (!open) onClose();}} title={customer?.name || "客户详情"} description={customer ? `${customer.id} · ${customer.type}` : undefined} footer={canEdit && customer ? <Button className="w-full" variant="primary" onClick={onEdit}>编辑客户档案</Button> : undefined}>
-    {customer && <div className="erp-phone-document" data-phone-detail="document"><section data-erp-region="detail-hero"><div className="erp-phone-customer-identity"><ErpEntityThumbnail kind="customer" name={customer.name} /><div><h2>{customer.name}</h2><ErpStatusBadge label={`${customer.level}${customer.isCoreCustomer ? " · 核心客户" : ""}`} tone={customerLevelTone(customer.level)} /></div></div><div className="erp-detail-hero-amount"><span>累计交易</span><strong className="erp-data-number">{formatCurrency(customer.totalAmount)}</strong></div></section>
-    <section><h2>往来概览</h2><Fact label="交易次数" value={`买 ${customer.buyCount} · 回收 ${customer.recycleCount}`} /><Fact label="应收余额" value={formatCurrency(customer.receivableBalance)} /><Fact label="应付余额" value={formatCurrency(customer.payableBalance)} />{showProfit && <Fact label="累计利润" value={formatCurrency(customer.totalProfit ?? 0)} />}<Fact label="最近交易" value={customer.lastDealTime?.slice(0, 10) || "暂无"} /></section>
-    <section><h2>联系与跟进</h2><Fact label="联系方式" value={customer.contact || "未记录"} /><Fact label="负责人" value={customer.owner || "未分配"} /><Fact label="CRM 状态" value={[customer.crmStatus, customer.crmStage].filter(Boolean).join(" · ")} /><Fact label="来源" value={customer.source} /></section>
-    <details><summary>档案与备注</summary><Fact label="意向" value={customer.intent || "未记录"} /><Fact label="售后次数" value={`${customer.aftersalesCount} 次`} />{customer.riskReason && <Fact label="风险原因" value={customer.riskReason} />}{customer.levelReason && <Fact label="等级说明" value={customer.levelReason} />}{customer.tags.length > 0 && <div className="flex flex-wrap gap-2">{customer.tags.map((tag) => <ErpStatusBadge key={tag} label={tag} tone="neutral" />)}</div>}<Fact label="备注" value={customer.remarks || "—"} /></details></div>}
+  return <ErpDetailDrawer modal={false} resizable drawerKey="customer-detail" defaultWidth={720} minWidth={560} maxWidth={920} open={Boolean(customer)} onOpenChange={(open) => {if (!open) onClose();}} title={customer?.name || "客户详情"} description={customer ? `${customer.id} · ${customer.type}` : undefined} footer={canEdit && customer ? <Button className="w-full" variant="primary" onClick={onEdit}>编辑客户档案</Button> : undefined}>
+    {customer && <ErpRecordDetail
+      hero={{title: customer.name, thumbnail: <ErpEntityThumbnail kind="customer" name={customer.name} />, status: <ErpStatusBadge label={`${customer.level}${customer.isCoreCustomer ? " · 核心客户" : ""}`} tone={customerLevelTone(customer.level)} />, amount: {label: "累计交易", value: formatCurrency(customer.totalAmount)}}}
+      sections={[
+        {title: "往来概览", facts: [
+          {label: "交易次数", value: `买 ${customer.buyCount} · 回收 ${customer.recycleCount}`},
+          {label: "应收余额", value: formatCurrency(customer.receivableBalance)},
+          {label: "应付余额", value: formatCurrency(customer.payableBalance)},
+          showProfit && {label: "累计利润", value: formatCurrency(customer.totalProfit ?? 0)},
+          {label: "最近交易", value: customer.lastDealTime?.slice(0, 10) || "暂无"},
+        ]},
+        {title: "联系与跟进", facts: [
+          {label: "客户等级", value: `${customer.level}${customer.isCoreCustomer ? " · 核心" : ""}`},
+          {label: "联系方式", value: customer.contact || "未记录"},
+          {label: "负责人", value: customer.owner || "未分配"},
+          {label: "CRM 状态", value: [customer.crmStatus, customer.crmStage].filter(Boolean).join(" · ")},
+          {label: "来源", value: customer.source},
+        ]},
+        {title: "档案与备注", collapsed: true, facts: [
+          {label: "意向", value: customer.intent || "未记录"},
+          {label: "售后次数", value: `${customer.aftersalesCount} 次`},
+          customer.riskReason && {label: "风险原因", value: customer.riskReason, tone: "danger"},
+          customer.levelReason && {label: "等级说明", value: customer.levelReason},
+          {label: "备注", value: customer.remarks || "—"},
+        ], extra: customer.tags.length > 0 ? <div className="flex flex-wrap gap-2">{customer.tags.map((tag) => <ErpStatusBadge key={tag} label={tag} tone="neutral" />)}</div> : undefined},
+      ]}
+    />}
   </ErpDetailDrawer>;
-  return <ErpDetailDrawer modal={false} resizable drawerKey="customer-detail" defaultWidth={720} minWidth={560} maxWidth={920} open={Boolean(customer)} onOpenChange={(open) => {if (!open) onClose();}} title={customer?.name || "客户详情"} description={customer ? `${customer.id} · ${customer.type}` : undefined} footer={canEdit && customer ? <Button className="w-full" variant="primary" onClick={onEdit}>编辑客户档案</Button> : undefined}><div className="space-y-5" data-phone-detail="customer">{customer && <><div className="erp-phone-only erp-phone-customer-identity"><Users className="h-8 w-8" /><div><h2>{customer.name}</h2><ErpStatusBadge label={`${customer.level}${customer.isCoreCustomer ? " · 核心客户" : ""}`} tone="info" /></div></div><div className="grid grid-cols-2 gap-3"><Fact label="客户等级" value={`${customer.level}${customer.isCoreCustomer ? " · 核心" : ""}`} /><Fact label="CRM 状态" value={[customer.crmStatus, customer.crmStage].filter(Boolean).join(" · ")} /><Fact label="联系方式" value={customer.contact || "未记录"} /><Fact label="来源" value={customer.source} /><Fact label="负责人" value={customer.owner || "未分配"} /><Fact label="意向" value={customer.intent || "未记录"} /><Fact label="累计交易" value={formatCurrency(customer.totalAmount)} /><Fact label="交易次数" value={`买 ${customer.buyCount} · 回收 ${customer.recycleCount}`} />{showProfit && <Fact label="累计利润" value={formatCurrency(customer.totalProfit || 0)} />}<Fact label="售后次数" value={`${customer.aftersalesCount} 次`} /><Fact label="应收余额" value={formatCurrency(customer.receivableBalance)} /><Fact label="应付余额" value={formatCurrency(customer.payableBalance)} /></div>{customer.riskReason && <DashboardSection title="风险原因"><p className="text-sm text-[var(--erp-color-danger)]">{customer.riskReason}</p></DashboardSection>}{customer.levelReason && <DashboardSection title="等级说明"><p className="text-sm text-[var(--erp-color-text-secondary)]">{customer.levelReason}</p></DashboardSection>}{customer.tags.length > 0 && <div className="flex flex-wrap gap-2">{customer.tags.map((tag) => <ErpStatusBadge key={tag} label={tag} tone="neutral" />)}</div>}{customer.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{customer.remarks}</p>}</>}</div></ErpDetailDrawer>;
 }
 
 function DeleteCustomerDialog({customer, pending, error, onClose, onConfirm}: {customer: CustomerDirectoryItem | null; pending: boolean; error?: string; onClose: () => void; onConfirm: () => void}) {
@@ -139,5 +158,4 @@ function DeleteCustomerDialog({customer, pending, error, onClose, onConfirm}: {c
 }
 
 function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "info" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;}
-const Fact = ErpDetailFact;
 function csvCell(value: string | number) {const text = String(value); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;}
