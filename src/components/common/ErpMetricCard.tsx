@@ -50,7 +50,7 @@ export function getErpMetricValueSize(value: string): ErpMetricValueSize {
 }
 
 /** Shared metric surface used by dashboards, analytics and finance pages. */
-export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant = "default", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName}: {
+export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant = "default", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName, supplementalContent}: {
   label: string;
   value: string;
   detail?: ReactNode;
@@ -66,6 +66,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   compareMeaning?: ErpMetricComparison;
   compareLabel?: ReactNode;
   compareLabelClassName?: string;
+  supplementalContent?: ReactNode;
 }) {
   const compact = variant === "compact";
   const resolvedValueSize = valueSize ?? getErpMetricValueSize(value);
@@ -82,6 +83,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
           {detail !== undefined ? <span data-erp-region="metric-detail" className="min-w-0 break-words text-[var(--erp-color-text-muted)]">{detail}</span> : null}
           {hasComparison ? (compare == null ? <span data-erp-region="metric-comparison" className="text-[var(--erp-color-text-muted)]">暂无对比</span> : <span data-erp-region="metric-comparison" className={`inline-flex items-center gap-0.5 font-medium ${valueToneClasses[metricComparisonTone(compare, compareMeaning)]}`}><span className="sr-only">{compare === 0 ? "持平" : compare > 0 ? "上升" : "下降"}</span>{compare >= 0 ? <ArrowUpRight className="h-3 w-3" aria-hidden="true" /> : <ArrowDownRight className="h-3 w-3" aria-hidden="true" />}{Math.abs(compare).toFixed(1)}%<span className={compareLabelClassName || "font-normal text-[var(--erp-color-text-muted)]"}>{compareLabel}</span></span>) : null}
         </div> : null}
+        {supplementalContent ? <div data-erp-region="metric-supplement" className="mt-2">{supplementalContent}</div> : null}
       </div>
       {icon ? <span data-erp-region="metric-icon" className={`absolute right-4 top-3 flex h-6 w-6 items-center justify-center rounded-full ${toneClasses[tone]}`} aria-hidden="true">{icon}</span> : null}
     </CardContent>
