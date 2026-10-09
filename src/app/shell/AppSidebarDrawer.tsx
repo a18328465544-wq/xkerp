@@ -1,79 +1,9 @@
-import {
-  ArrowDownLeft,
-  ArrowRightLeft,
-  ArrowUpRight,
-  BadgeCent,
-  Building2,
-  ChartNoAxesCombined,
-  ClipboardCheck,
-  ClipboardList,
-  Combine,
-  ContactRound,
-  Database,
-  FileText,
-  History,
-  Home,
-  Landmark,
-  PackageCheck,
-  PackageSearch,
-  Receipt,
-  ReceiptText,
-  RefreshCw,
-  ScanLine,
-  Settings,
-  ShieldCheck,
-  ShoppingCart,
-  Sparkles,
-  TrendingUp,
-  Undo2,
-  UsersRound,
-  WalletCards,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
+import {FileText, type LucideIcon} from "lucide-react";
 import {Link} from "@tanstack/react-router";
 import {useEffect, useRef} from "react";
-import {isNavigationItemActive, type NavigationItem} from "@/src/config/navigation";
+import {isNavigationItemActive, itemIcons, type NavigationItem} from "@/src/config/navigation";
 import {cn} from "@/src/lib/cn";
 import {searchForNavigation} from "./navigationSearch";
-
-const itemIcons: Record<string, LucideIcon> = {
-  dashboard: Home,
-  ai_insights: Sparkles,
-  quotes: TrendingUp,
-  inventory: PackageCheck,
-  products: PackageSearch,
-  assembly: Combine,
-  purchase_add: ClipboardList,
-  purchase_list: FileText,
-  inspections: Wrench,
-  return_purchase: RefreshCw,
-  sales_add: ShoppingCart,
-  sales_outbound: ScanLine,
-  sales_list: Receipt,
-  return_sales: Undo2,
-  return_orders: ClipboardCheck,
-  crm: UsersRound,
-  customers: ContactRound,
-  vendors: Building2,
-  aftersales: RefreshCw,
-  finance: Landmark,
-  finance_reports: ChartNoAxesCombined,
-  purchase_commission: BadgeCent,
-  sales_commission: BadgeCent,
-  settlement_accounts: WalletCards,
-  settlement_ledger: ReceiptText,
-  customer_funds: WalletCards,
-  payment_in: ArrowDownLeft,
-  payment_out: ArrowUpRight,
-  account_transfer: ArrowRightLeft,
-  finance_closing: ClipboardCheck,
-  return_reconcile: ReceiptText,
-  permissions: ShieldCheck,
-  logs: History,
-  backup: Database,
-  settings: Settings,
-};
 
 export interface AppSidebarDrawerModule {
   id: string;

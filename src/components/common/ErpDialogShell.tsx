@@ -44,7 +44,9 @@ const sizeClasses: Record<ErpDialogSize, string> = {
  */
 export function ErpDialogShell({open, title, description, toolbar, children, footer, size = "md", className, pending = false, modal = true, closeLabel = "关闭", showClose = true, mobilePresentation = size === "sm" ? "dialog" : ["xl", "wide", "full"].includes(size) ? "fullscreen" : "sheet", onOpenChange, onOpenChangeComplete}: ErpDialogShellProps) {
   const {active} = useWorkspaceTabActivity();
-  const phoneFullscreen = useErpPhone() && (mobilePresentation === "fullscreen" || mobilePresentation === "tab");
+  const phone = useErpPhone();
+  const phoneFullscreen = phone && mobilePresentation === "fullscreen";
+  const isPhoneTab = phone && mobilePresentation === "tab";
   return (
     <Dialog.Root modal={modal} open={active && open} onOpenChange={(nextOpen) => {if (!pending) onOpenChange(nextOpen);}} onOpenChangeComplete={onOpenChangeComplete}>
       <Dialog.Portal>
@@ -53,10 +55,10 @@ export function ErpDialogShell({open, title, description, toolbar, children, foo
           <Dialog.Popup data-erp-component="dialog-shell" data-mobile-presentation={mobilePresentation} data-erp-dialog-has-footer={footer ? "true" : "false"} className={cn("flex max-h-[var(--erp-overlay-mobile-height)] w-full flex-col overflow-hidden rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] shadow-[var(--erp-shadow-popover)]", sizeClasses[size], className)}>
             <div data-erp-region="dialog-header" data-phone-header={phoneFullscreen || undefined} className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--erp-color-border)] px-4 py-3 sm:px-5 sm:py-4">
               <div className="min-w-0">
-                <Dialog.Title className="text-base font-semibold text-[var(--erp-color-text)]">{title}</Dialog.Title>
+                <Dialog.Title className={cn("text-base font-semibold text-[var(--erp-color-text)]", isPhoneTab && "text-left text-[var(--erp-mobile-page-title)]")}>{title}</Dialog.Title>
                 {description ? <Dialog.Description className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{description}</Dialog.Description> : null}
               </div>
-              {showClose ? <Dialog.Close render={<Button type="button" size="icon" variant="ghost" aria-label={closeLabel} title={closeLabel} disabled={pending} onClick={() => onOpenChange(false)}>{phoneFullscreen ? <ArrowLeft className="h-5 w-5" /> : <X className="h-4 w-4" />}</Button>} /> : null}
+              {showClose && !isPhoneTab ? <Dialog.Close render={<Button type="button" size="icon" variant="ghost" aria-label={closeLabel} title={closeLabel} disabled={pending} onClick={() => onOpenChange(false)}>{phoneFullscreen ? <ArrowLeft className="h-5 w-5" /> : <X className="h-4 w-4" />}</Button>} /> : null}
             </div>
             {toolbar ? <div data-erp-region="dialog-toolbar" className="shrink-0 border-b border-[var(--erp-color-border-soft)] px-4 py-3 sm:px-5">{toolbar}</div> : null}
             <div data-erp-region="dialog-body" className="erp-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{children}</div>

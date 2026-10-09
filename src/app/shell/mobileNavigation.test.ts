@@ -11,9 +11,9 @@ test("phone destinations distinguish entry routes from document/detail routes", 
   for (const path of ["/crm", "/crm/customers", "/customers", "/customers/C-1"]) assert.equal(mobileDestinationForPath(path), "customers", path);
 });
 
-test("warehouse tasks and finance families never masquerade as personal settings", () => {
+test("warehouse tasks and finance families route to their canonical mobile destinations", () => {
   for (const path of ["/inspections?inventory=KC-1", "/inventory/", "/assembly", "/aftersales/A-1", "/products/P-1"]) assert.equal(mobileDestinationForPath(path), "inventory", path);
-  for (const path of ["/finance/accounts", "/finance/ledger/", "/quotes?keyword=4090", "/ai-insights"]) assert.equal(mobileDestinationForPath(path), "workbench", path);
+  for (const path of ["/finance/accounts", "/finance/ledger/", "/quotes?keyword=4090", "/ai-insights"]) assert.equal(mobileDestinationForPath(path), "more", path);
   for (const path of ["/sales/outbound", "/purchase/CG-1/edit", "/order-pool"]) assert.equal(mobileDestinationForPath(path), "documents", path);
   assert.equal(mobileDestinationForPath("/settings/users"), "more");
   assert.equal(mobileDestinationForPath("/inventory-other"), "more");
