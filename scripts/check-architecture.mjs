@@ -57,7 +57,7 @@ for (const required of [
   if (!fs.existsSync(path.join(root, required))) fail(`缺少架构边界文件：${required}`);
 }
 
-const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame|Finance(?:Entry|Detail)PageLayout/;
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame|Finance(?:Entry|Detail)PageLayout|ErpListPage\b/;
 for (const file of pageFiles) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);
