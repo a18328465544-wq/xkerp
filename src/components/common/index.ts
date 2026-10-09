@@ -50,3 +50,4 @@ export {ErpAnalyticsPageFrame, ErpCrmPageFrame, ErpDetailPageFrame, ErpFinancePa
 export {AnalyticsDetailRegion, AnalyticsFrame, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, type AnalyticsMainVariant, type AnalyticsVisualizationSize} from "./page-frames/AnalyticsFrame";
 export {AnalyticsInsightItem, type AnalyticsInsightItemProps, type AnalyticsInsightTone} from "./page-frames/AnalyticsInsightItem";
 export {GpuSnDateLookupButton} from "./GpuSnDateLookupButton";
+export {countActiveErpFilterFields, ErpFilterFields, isErpFilterFieldActive, type ErpFilterField, type ErpFilterOption} from "./filters/ErpFilterFields";
