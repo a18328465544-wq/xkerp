@@ -52,3 +52,4 @@ export {AnalyticsInsightItem, type AnalyticsInsightItemProps, type AnalyticsInsi
 export {GpuSnDateLookupButton} from "./GpuSnDateLookupButton";
 export {countActiveErpFilterFields, ErpFilterFields, isErpFilterFieldActive, type ErpFilterField, type ErpFilterOption} from "./filters/ErpFilterFields";
 export {ErpListPage, type ErpListColumnSettings, type ErpListPageAction, type ErpListPageProps, type ErpListQuickFilter, type ErpListTableProps} from "./page-templates/ErpListPage";
+export {ErpRecordDetail, type ErpRecordDetailProps, type ErpRecordFact, type ErpRecordSection} from "./ErpRecordDetail";

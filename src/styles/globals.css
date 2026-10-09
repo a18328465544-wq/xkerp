@@ -1511,9 +1511,9 @@ input[inputmode="numeric"] {
   [data-phone-detail="inventory"] > section { border: 0; border-radius: 0; padding: 0; }
   [data-phone-detail="inventory"] > section > div > .rounded-\[var\(--erp-radius-md\)\] { display: flex; justify-content: space-between; gap: var(--erp-space-4); padding: var(--erp-space-2) 0; background: transparent; border-bottom: 1px solid var(--erp-color-border-soft); }
   [data-phone-detail="inventory"] > section > div > .rounded-\[var\(--erp-radius-md\)\] > p { margin: 0; font-weight: var(--erp-font-regular); }
-  .erp-phone-customer-identity { display: flex; align-items: center; gap: var(--erp-space-3); padding-block: var(--erp-space-3); }
-  .erp-phone-customer-identity > svg { color: var(--erp-color-primary); }
-  .erp-phone-customer-identity h2 { margin-bottom: var(--erp-space-1); font-size: var(--erp-text-lg); font-weight: var(--erp-font-semibold); }
+  :is(.erp-phone-customer-identity, .erp-record-identity) { display: flex; align-items: center; gap: var(--erp-space-3); padding-block: var(--erp-space-3); }
+  :is(.erp-phone-customer-identity, .erp-record-identity) > svg { color: var(--erp-color-primary); }
+  :is(.erp-phone-customer-identity, .erp-record-identity) h2 { margin-bottom: var(--erp-space-1); font-size: var(--erp-text-lg); font-weight: var(--erp-font-semibold); }
   .erp-mobile-workflow-actions { flex-direction: row; align-items: center; flex-wrap: wrap; }
   .erp-mobile-workflow-actions > [role="status"] { flex-basis: 100%; order: -1; }
   .erp-mobile-workflow-actions > div:last-child { flex: 1; justify-content: flex-end; }
@@ -2170,10 +2170,10 @@ input[inputmode="numeric"] {
   [data-erp-region="detail-hero"] { padding-bottom: var(--erp-space-4); border-bottom: 1px solid var(--erp-color-border-soft); }
   [data-erp-region="detail-hero"] h2 { font-size: var(--erp-text-2xl); line-height: var(--erp-line-base); font-weight: var(--erp-font-semibold); overflow-wrap: anywhere; }
   .erp-phone-document > [data-erp-region="detail-hero"] { border-bottom: 0; }
-  .erp-phone-customer-identity { display: flex; align-items: center; gap: var(--erp-space-3); }
-  .erp-phone-customer-identity > .erp-entity-thumbnail { flex-basis: var(--erp-space-12); width: var(--erp-space-12); height: var(--erp-space-12); font-size: var(--erp-text-2xl); }
-  .erp-phone-customer-identity > div { min-width: 0; }
-  .erp-phone-customer-identity h2 { margin: 0 0 var(--erp-space-1); }
+  :is(.erp-phone-customer-identity, .erp-record-identity) { display: flex; align-items: center; gap: var(--erp-space-3); }
+  :is(.erp-phone-customer-identity, .erp-record-identity) > .erp-entity-thumbnail { flex-basis: var(--erp-space-12); width: var(--erp-space-12); height: var(--erp-space-12); font-size: var(--erp-text-2xl); }
+  :is(.erp-phone-customer-identity, .erp-record-identity) > div { min-width: 0; }
+  :is(.erp-phone-customer-identity, .erp-record-identity) h2 { margin: 0 0 var(--erp-space-1); }
   .erp-phone-detail-status { font-size: var(--erp-text-xs); line-height: var(--erp-line-xs); color: var(--erp-color-text-secondary); overflow-wrap: anywhere; }
   .erp-detail-hero-amount { display: flex; min-width: 0; flex-direction: column; gap: var(--erp-space-1); margin-top: var(--erp-space-4); }
   .erp-detail-hero-amount > span { font-size: var(--erp-text-xs); color: var(--erp-color-text-muted); }
