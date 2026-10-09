@@ -104,7 +104,7 @@ function TransferDetail({item, canEdit, canDelete, onClose, onEdit, onDelete}: {
 }
 
 function ConfirmDelete({item, pending, onClose, onConfirm}: {item: FinanceTransferItem | null; pending: boolean; onClose: () => void; onConfirm: () => void}) {
-  return <ErpDetailDrawer open={Boolean(item)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="冲销资金调拨" description="两边账户余额与关联流水会反向修正，并保留操作记录" footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={pending}>取消</Button><Button variant="danger" onClick={onConfirm} disabled={pending}>{pending ? "冲销中…" : "确认冲销"}</Button></div>}><p className="text-sm leading-6 text-[var(--erp-color-text-secondary)]">确认冲销调拨「{item?.id}」？转出 {item?.fromAccountName} 的 {formatCurrency(item?.amount || 0)}、转入 {item?.toAccountName} 的 {formatCurrency(item?.receivedAmount || 0)} 将由服务端反向修正。</p></ErpDetailDrawer>;
+  return <ErpDetailDrawer open={Boolean(item)} onOpenChange={(open) => {if (!open && !pending) onClose();}} title="冲销资金调拨" description="两边账户余额与关联流水会反向修正，并保留操作记录" footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={pending}>取消</Button><Button variant="danger" onClick={onConfirm} disabled={pending}>{pending ? "冲销中…" : "确认冲销"}</Button></div>}><p className="text-sm leading-6 text-[var(--erp-color-text-secondary)]">确认冲销调拨「{item?.id}」？转出 {item?.fromAccountName} 的 {formatCurrency(item?.amount || 0)}、转入 {item?.toAccountName} 的 {formatCurrency(item?.receivedAmount || 0)} 将反向修正。</p></ErpDetailDrawer>;
 }
 
 function Metric({label, value, detail, icon, tone}: {label: string; value: string; detail: string; icon: ReactNode; tone: "neutral" | "info" | "success" | "warning" | "danger"}) {

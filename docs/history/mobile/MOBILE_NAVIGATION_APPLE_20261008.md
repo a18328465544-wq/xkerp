@@ -1,3 +1,5 @@
+> **已归档**：本文是实施过程记录，规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)，两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 移动返回与 Apple Web App 兼容验收
 
 日期：2026-10-08。范围：本地前端；本轮未推送、未上线。
@@ -49,7 +51,7 @@
 - 1440px 桌面采购仍为原四行编辑表格，手机草稿值沿用同一表单。
 - 最终测试页控制台未捕获 warning/error。
 
-![采购返回后草稿保留](mobile-v2-evidence/20261008/navigation-apple/purchase-back-preserved-430.jpg)
+![采购返回后草稿保留](../../mobile-v2-evidence/20261008/navigation-apple/purchase-back-preserved-430.jpg)
 
 命令验收：
 

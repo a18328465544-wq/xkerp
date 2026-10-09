@@ -1,3 +1,5 @@
+> **已归档**：本文是实施过程记录，规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)，两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 移动 UI 四类视觉模板
 
 适用范围：宽度小于 768px 的手机界面。建立在现有 [移动控件规则](MOBILE_CONTROL_SYSTEM_20261009.md) 上，继续复用 `tokens.css`、`globals.css`、公共控件和领域选择器。本轮不调整桌面 / 平板布局、业务计算、权限、路由或接口。

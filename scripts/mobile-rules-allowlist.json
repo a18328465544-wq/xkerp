@@ -1,0 +1,15 @@
+{
+  "_comment": "docs/MOBILE_UI_RULES.md 的登记例外。每一项必须写 reason；能修就修，不要往这里堆。",
+  "copy": [
+    {
+      "file": "src/features/inspections/pages/InspectionWorkspacePage.tsx",
+      "text": "接口",
+      "reason": "显卡检测清单里的 DP/HDMI 等硬件接口，是业务用语"
+    }
+  ],
+  "brand": [],
+  "quickStatus": [],
+  "metrics": [],
+  "dock": [],
+  "browser": []
+}

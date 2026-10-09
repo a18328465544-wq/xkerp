@@ -1,3 +1,5 @@
+> **已归档**：本文是实施过程记录，规则已合并进 [docs/MOBILE_UI_RULES.md](../../MOBILE_UI_RULES.md)，两者冲突时以 MOBILE_UI_RULES.md 为准。
+
 # 手机销售、采购开单验收 — 2026-10-08
 
 ## 范围与边界
@@ -61,9 +63,9 @@
 
 以下为真实浏览器截图，使用标注 LOCAL-ONLY 的合成数据：
 
-- [销售商品清单 390](mobile-v2-evidence/20261008/order-entry/orders-sales-list-390.jpg)
-- [销售结算 390](mobile-v2-evidence/20261008/order-entry/orders-sales-checkout-390.jpg)
-- [采购商品清单 320](mobile-v2-evidence/20261008/order-entry/orders-purchase-list-320.jpg)
-- [采购结算 430](mobile-v2-evidence/20261008/order-entry/orders-purchase-checkout-430.jpg)
-- [销售桌面表格 1440](mobile-v2-evidence/20261008/order-entry/orders-sales-desktop-1440.jpg)
-- [采购桌面表格 1440](mobile-v2-evidence/20261008/order-entry/orders-purchase-desktop-1440.jpg)
+- [销售商品清单 390](../../mobile-v2-evidence/20261008/order-entry/orders-sales-list-390.jpg)
+- [销售结算 390](../../mobile-v2-evidence/20261008/order-entry/orders-sales-checkout-390.jpg)
+- [采购商品清单 320](../../mobile-v2-evidence/20261008/order-entry/orders-purchase-list-320.jpg)
+- [采购结算 430](../../mobile-v2-evidence/20261008/order-entry/orders-purchase-checkout-430.jpg)
+- [销售桌面表格 1440](../../mobile-v2-evidence/20261008/order-entry/orders-sales-desktop-1440.jpg)
+- [采购桌面表格 1440](../../mobile-v2-evidence/20261008/order-entry/orders-purchase-desktop-1440.jpg)

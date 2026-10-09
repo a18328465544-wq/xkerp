@@ -47,7 +47,7 @@ export function InspectionWorkspacePage() {
   const allowed = createCapabilities(session).menu("inspections");
   const workspaceQuery = useQuery({queryKey: queryKeys.inspections.workspace(session?.user.id || "anonymous"), queryFn: ({signal}) => inspectionApi.workspace(signal), enabled: active && Boolean(session && allowed), placeholderData: keepPreviousData, retry: false});
   if (!session) return <Card><ErpLoadingState title="正在验证检测质检权限" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有检测质检权限" description="服务器已拒绝 inspections 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有检测质检权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <InspectionWorkspaceContent session={session} query={workspaceQuery} onAuthExpired={logout} />;
 }
 

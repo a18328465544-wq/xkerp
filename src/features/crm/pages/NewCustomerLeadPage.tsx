@@ -46,7 +46,7 @@ function LeadForm({onSuccess}: {onSuccess: () => void | Promise<void>}) {
     confirmMutation.mutate({parseId: parsed.parseId, rawText: parsed.rawText, sourceType: parsed.sourceType, fields: parsed.fields, confidence: parsed.confidence, missingFields: parsed.missingFields, conflicts: parsed.conflicts, matchAction, matchedCustomerId: matchAction === "link_existing" ? matchedCustomerId : undefined, idempotencyKey: createIdempotencyKey()});
   };
   return <ErpCrmPageFrame className="max-w-[1450px]">
-    <ErpPageHeader density="default" title="新增客户线索" subtitle="粘贴一句话或聊天记录，自动识别客户信息，确认后写入客户、跟进和时间线。" actions={<Link to="/crm" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><Link2 className="h-4 w-4" />返回客户 CRM</Link>} />
+    <ErpPageHeader density="default" title="新增客户线索" subtitle="粘贴一句话或聊天记录，自动识别客户信息，确认后写入客户、跟进和时间线。" actions={<Link to="/crm" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold max-md:h-11 max-md:text-sm"><Link2 className="h-4 w-4" />返回客户 CRM</Link>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {success && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center gap-2 p-4 text-sm font-semibold text-[var(--erp-color-success)]"><Check className="h-4 w-4" />{success}</CardContent></Card>}
     {error && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="p-4 text-sm text-[var(--erp-color-danger)]">{error}</CardContent></Card>}

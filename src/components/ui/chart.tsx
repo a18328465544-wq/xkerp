@@ -158,6 +158,10 @@ export interface ChartTooltipContentProps extends Omit<React.ComponentProps<"div
   allowEscapeViewBox?: unknown;
   animationDuration?: unknown;
   animationEasing?: unknown;
+  labelStyle?: unknown;
+  itemStyle?: unknown;
+  contentStyle?: unknown;
+  wrapperStyle?: unknown;
   content?: unknown;
 }
 
@@ -195,6 +199,10 @@ export function ChartTooltipContent({
   animationDuration: _animationDuration,
   animationEasing: _animationEasing,
   content: _content,
+  labelStyle: _labelStyle,
+  itemStyle: _itemStyle,
+  contentStyle: _contentStyle,
+  wrapperStyle: _wrapperStyle,
   ...props
 }: ChartTooltipContentProps) {
   const {config} = useChart();
@@ -245,6 +253,9 @@ export interface ChartLegendContentProps extends Omit<React.ComponentProps<"div"
   iconSize?: unknown;
   chartWidth?: unknown;
   chartHeight?: unknown;
+  labelStyle?: unknown;
+  inactiveColor?: unknown;
+  itemSorter?: unknown;
   layout?: unknown;
   margin?: unknown;
   content?: unknown;
@@ -264,6 +275,9 @@ export function ChartLegendContent({
   layout: _layout,
   margin: _margin,
   content: _content,
+  inactiveColor: _inactiveColor,
+  itemSorter: _legendItemSorter,
+  labelStyle: _legendLabelStyle,
   ...props
 }: ChartLegendContentProps) {
   const {config} = useChart();

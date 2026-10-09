@@ -89,7 +89,7 @@ export function ErpOutstandingSettlementDialog({open, context, accounts, pending
           <ErpField label="备注（选填）" error={form.formState.errors.remarks?.message}><Textarea {...form.register("remarks")} className="min-h-20" maxLength={500} disabled={locked} placeholder="记录本次补录的核对说明" /></ErpField>
           {blockingReason && <p role="status" className="md:col-span-2 text-xs text-[var(--erp-color-risk)]">{blockingReason}</p>}
           {(submitError || error) && <p role="alert" className="md:col-span-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{submitError || error}</p>}
-          <p className="md:col-span-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-text-secondary)]">本次结算会直接关联 {context?.relatedDocNo || "该单据"}，服务端会重新核对未结金额并同步往来余额、结算账户和财务流水。</p>
+          <p className="md:col-span-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-text-secondary)]">本次结算会直接关联 {context?.relatedDocNo || "该单据"}，提交时会重新核对未结金额，并同步更新往来余额、结算账户和财务流水。</p>
         </div>
       </form>
     </ErpDialogShell>

@@ -42,7 +42,7 @@ export function FinanceSectionTabs({
             to={item.path}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "erp-focus-ring relative whitespace-nowrap px-0.5 pb-2 pt-1 text-xs font-semibold transition-colors after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
+              "erp-focus-ring relative inline-flex items-end whitespace-nowrap px-0.5 pb-2 pt-1 text-xs font-semibold max-md:min-h-11 max-md:text-sm transition-colors after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
               active
                 ? "text-[var(--erp-color-primary)] after:bg-[var(--erp-color-primary)]"
                 : "text-[var(--erp-color-text-secondary)] after:bg-transparent hover:text-[var(--erp-color-text)]",

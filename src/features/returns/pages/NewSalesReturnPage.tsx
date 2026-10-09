@@ -127,7 +127,7 @@ function SalesReturnForm({session, invoices, inventory, referenceUpdatedAt, refr
   const blocker = useWorkspaceTabBlocker(dirty);
 
   return <ErpTransactionPageFrame className="max-w-[1300px]">
-    <ErpPageHeader title="新建销售退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联已出库销售单和原库存卡片，退款沿用原路退款规则。</span><ErpStatusBadge label="原路退款" tone="info" /></span>} actions={<Link to="/sales/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold"><ArrowLeft className="h-4 w-4" />返回销售退货</Link>} />
+    <ErpPageHeader title="新建销售退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联已出库销售单和原库存卡片，退款沿用原路退款规则。</span><ErpStatusBadge label="原路退款" tone="info" /></span>} actions={<Link to="/sales/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold max-md:h-11 max-md:text-sm"><ArrowLeft className="h-4 w-4" />返回销售退货</Link>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {refreshError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm text-[var(--erp-color-warning)]"><span>基础数据刷新失败，当前表单和上次数据已保留。{refreshError}</span><Button type="button" variant="secondary" onClick={onRetry}>重试刷新</Button></CardContent></Card>}
     {success && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="p-4 text-sm font-semibold text-[var(--erp-color-success)]">{success}</CardContent></Card>}

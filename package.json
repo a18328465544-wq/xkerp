@@ -44,6 +44,8 @@
     "restore:drill": "bash scripts/pg_restore_drill.sh",
     "clean": "rm -rf dist server-dist server.js",
     "lint:ui": "node scripts/check-ui-contracts.mjs",
+    "lint:mobile": "node scripts/check-mobile-rules.mjs",
+    "test:mobile-rules": "python3 scripts/browser-mobile-rules.py",
     "lint:design-system": "node scripts/check-design-system.mjs",
     "lint:analytics": "node scripts/check-analytics-frame.mjs",
     "lint:reuse": "node scripts/check-component-reuse.mjs",
@@ -51,7 +53,7 @@
     "check:performance": "node scripts/check-frontend-performance.mjs",
     "components:inventory": "node scripts/component-inventory.mjs",
     "lint:components": "node scripts/component-inventory.mjs --check && node scripts/check-component-boundaries.mjs && node scripts/check-frontend-rules.mjs",
-    "lint": "npm run lint:components && npm run lint:ui && npm run lint:design-system && npm run lint:analytics && npm run lint:reuse && npm run lint:architecture && npm run typecheck && npm run check:unused",
+    "lint": "npm run lint:components && npm run lint:ui && npm run lint:mobile && npm run lint:design-system && npm run lint:analytics && npm run lint:reuse && npm run lint:architecture && npm run typecheck && npm run check:unused",
     "test": "node scripts/run-tests.mjs",
     "verify:ci": "npm run typecheck && npm run typecheck:server && npm run typecheck:server-tests && npm run lint && npm test && npm run test:production-scripts && npm run build && npm run check:performance && npm audit --omit=dev --audit-level=high"
   },
