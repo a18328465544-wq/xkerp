@@ -7,32 +7,20 @@
 
 ## 进度（2026-10-10）
 
-**第一阶段 T1–T5 已完成，T6 完成了客户页**，都在 `mobile-templates` 分支上：
+按现有 `mobile-templates` 分支继续完成；没有从 `pr3` 新开分支。第一阶段 T1–T5 与第二阶段 T6–T10 均已完成：
 
 - **T1**：`MetricsRegion` 会展开 Fragment；M18 检查能识别「卡片写在变量里」和 `ErpListPage metrics={[…]}`。员工提成页恢复成一行 4 列。
 - **T2**：`ErpDataTable` 支持 `mobileRow="columns"`，按列定义的 `meta.mobile` 角色生成手机行；`meta.mobileCell` 用来单独写手机上的显示（电脑端单元格太复杂时用）。类型声明在 `src/components/common/tableMeta.d.ts`。
 - **T3**：`ErpFilterFields` / `ErpFilterField[]`，`countActiveErpFilterFields` 计算生效筛选数量。**重置由页面传 `onResetFilters`**：逐个字段调用 `onChange` 会因为闭包里的旧状态互相覆盖，所以不这样做。
 - **T4**：`ErpListPage`（`src/components/common/page-templates/ErpListPage.tsx`）。手机主操作统一放进底部栏，符合 M13。
 - **T5**：`ErpRecordDetail`。电脑端是一张两列字段网格，手机端是单列文档，可以折叠分组。
-- **T6（客户页）**：`CustomerDirectoryPage` 的列表和详情抽屉都已迁移，页面里没有 `useErpPhone` 了。
-  - 电脑 1440 和 1024：迁移前后截图像素完全一致。
-  - 手机 390：列表行和原来一样；「新建客户」从右上角「⋯」移到了底部主按钮。
-  - 电脑端详情抽屉：字段顺序改成和手机分组一致；「风险原因」从单独的区块改成红色字段。
-- 验证结果：`verify:ci` 通过（单元测试 1624 个，0 失败）；手机规则浏览器检查 38 页 × 2 个宽度通过；控件浏览器检查通过。
+- **T6**：客户页与供应商/同行页使用 `ErpListPage`；客户和供应商详情沿用既有业务组件，未迁移业务逻辑。
+- **T7 单据列表**：采购、销售、采购退货、销售退货列表已迁移；保留桌面结果摘要、退货列表的分页选项，以及详情、结算、导出、删除、作废/完成和权限行为。
+- **T8 商品与库存**：商品库、订单池、库存中心迁移到 `ErpListPage`。商品库与订单池使用模板表格；库存保留单卡/SN与型号汇总的领域表格，通过专用插槽接入模板，搜索、筛选、扫码、选择、分页和权限路径保持原有控制器。
+- **T9 财务明细**：`FinanceDetailPageLayout` 与 `FinanceEntryPageLayout` 改为薄封装 `ErpListPage`；账务流水、退货对账、员工提成、往来账款及收支/调拨继续保留专用表格、分析区和业务操作。模板可保留财务、分析语义框架及既有区域顺序。
+- **T10 设置**：员工权限和操作日志使用 `ErpListPage`，详情抽屉、权限编辑、刷新和分页保留。
 
-**第二阶段进度：T7 单据列表已完成**（`mobile-templates`）：
-
-- `PurchaseListPage`、`SalesListPage`、`PurchaseReturnListPage`、`SalesReturnListPage` 已改用 `ErpListPage`；筛选字段只定义一次，列通过 `meta.mobile` 生成手机行。
-- 采购/销售原桌面结果摘要和无标题表格结构保留；退货列表保留其桌面结构及手机端 10/20/50 条选项。详情、结算、导出、删除、作废/完成、权限和查询逻辑未改。
-- 验证结果：前端类型检查、移动端规则、UI 契约通过；全量测试 1628 项，0 失败；移动端浏览器规则 38 页 × 320/390px 通过。
-- 开单工作台浏览器脚本在预填草稿断言处失败（该脚本未覆盖本次列表改动）；最终验收需单独修正/复核夹具，不计为本批通过证据。
-
-**T8–T10 待处理**：商品与库存、财务明细、设置页。
-
-**Codex 从这里接着做**：
-
-1. T6 剩下的供应商页 `VendorDirectoryPage`，写法照抄客户页。
-2. 然后按第二阶段的 T7–T10 顺序迁移。
+**验证**：当前 `mobile-templates` 工作树前端类型检查与全量 lint 通过；当前代码快照的全量测试为 1595 通过、37 跳过、0 失败；当前工作树隔离预览的手机浏览器规则检查为 38 个页面 × 320/390px 全部通过；本地前端构建通过。没有执行生产部署。
 
 迁移时可以直接参考两个文件：
 
