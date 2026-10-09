@@ -929,7 +929,7 @@ try {
             const form = tabPage.locator("form.erp-inspection-form");
             await field.fill(mode === "active-success" ? " SN-A " : "SN-A");
             if (mode === "active-success") await form.evaluate(form => {form.requestSubmit(); form.requestSubmit();});
-            else await tabPage.getByRole("button", {name: ${editing} ? "保存检测单修改" : "确认全新入库", exact: true}).click();
+            else await form.getByRole("button", {name: ${editing} ? "保存检测单修改" : /确认全新入库|入库并测下一件|提交检测入库|提交测试报告 · 录 SN 入库|提交配件检测 · 录 SN 入库/}).click();
             await tabPage.waitForFunction(() => document.querySelector('form.erp-inspection-form button[type="submit"]')?.textContent === "提交中…");
             if (held.length !== 1) throw new Error("inspection submitted duplicate commands");
             const discard = async () => {
