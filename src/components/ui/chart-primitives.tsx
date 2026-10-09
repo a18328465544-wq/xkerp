@@ -79,7 +79,18 @@ type SharedTrendChartProps = {
   xTickFormatter?: (value: unknown) => string;
   yTickFormatter?: (value: number) => string;
   tooltipFormatter?: ChartTooltipContentProps["formatter"];
+  curve?: TrendChartCurve;
 };
+
+export type TrendChartCurve = "linear" | "monotone";
+
+export function resolveTrendChartCurve(curve?: TrendChartCurve): TrendChartCurve {
+  return curve ?? "linear";
+}
+
+export function shouldShowTrendChartDots(dataPointCount: number): boolean {
+  return dataPointCount <= 14;
+}
 
 function resolvedChartConfig(series: readonly ChartSeries[], config?: ChartConfig): ChartConfig {
   const next: ChartConfig = {...config};
@@ -147,9 +158,12 @@ export function TrendLineChart({
   xTickFormatter,
   yTickFormatter,
   tooltipFormatter,
+  curve,
 }: SharedTrendChartProps) {
   const activeSeries = visibleSeries(series);
   const chartConfig = resolvedChartConfig(activeSeries, config);
+  const curveType = resolveTrendChartCurve(curve);
+  const showDots = shouldShowTrendChartDots(data.length);
   return <ChartContainer config={chartConfig} className={cn("h-full", className)} role="img" aria-label={ariaLabel}>
     <LineChart data={data} margin={{top: 12, right: 10, left: -12, bottom: 0}}>
       <CartesianGrid stroke={chartTokens.chartGrid} strokeDasharray="4 4" vertical={false} />
@@ -160,13 +174,13 @@ export function TrendLineChart({
       {showZeroLine && <ReferenceLine y={0} stroke={chartTokens.chartGrid} strokeDasharray="3 3" />}
       {activeSeries.map((item) => <Line
         key={item.dataKey}
-        type="monotone"
+        type={curveType}
         dataKey={item.dataKey}
         name={item.dataKey}
         stroke={seriesColor(item)}
         strokeWidth={CHART_STROKE_WIDTH}
         strokeDasharray={item.strokeDasharray}
-        dot={false}
+        dot={showDots ? {r: 3, fill: chartTokens.chartTooltipBg, stroke: seriesColor(item), strokeWidth: 1} : false}
         activeDot={{r: CHART_ACTIVE_DOT_RADIUS, fill: chartTokens.chartTooltipBg, stroke: seriesColor(item), strokeWidth: CHART_STROKE_WIDTH}}
         connectNulls
         isAnimationActive
@@ -191,9 +205,12 @@ export function AreaTrendChart({
   xTickFormatter,
   yTickFormatter,
   tooltipFormatter,
+  curve,
 }: SharedTrendChartProps) {
   const activeSeries = visibleSeries(series);
   const chartConfig = resolvedChartConfig(activeSeries, config);
+  const curveType = resolveTrendChartCurve(curve);
+  const showDots = shouldShowTrendChartDots(data.length);
   // A unique pattern id prevents two charts rendered on the same page from
   // accidentally sharing a fill definition. The pattern is intentionally
   // faint: it adds the reference visual language without turning the area
@@ -223,7 +240,7 @@ export function AreaTrendChart({
         if (kind === "area") {
           return <Area
             key={item.dataKey}
-            type="monotone"
+            type={curveType}
             dataKey={item.dataKey}
             name={item.dataKey}
             stroke={color}
@@ -231,7 +248,7 @@ export function AreaTrendChart({
             fillOpacity={1}
             strokeWidth={CHART_STROKE_WIDTH}
             strokeDasharray={item.strokeDasharray}
-            dot={false}
+            dot={showDots ? {r: 3, fill: chartTokens.chartTooltipBg, stroke: color, strokeWidth: 1} : false}
             activeDot={{r: CHART_ACTIVE_DOT_RADIUS, fill: chartTokens.chartTooltipBg, stroke: color, strokeWidth: CHART_STROKE_WIDTH}}
             connectNulls
             isAnimationActive
@@ -241,13 +258,13 @@ export function AreaTrendChart({
         }
         return <Line
           key={item.dataKey}
-          type="monotone"
+          type={curveType}
           dataKey={item.dataKey}
           name={item.dataKey}
           stroke={color}
           strokeWidth={CHART_STROKE_WIDTH}
           strokeDasharray={item.strokeDasharray}
-          dot={false}
+          dot={showDots ? {r: 3, fill: chartTokens.chartTooltipBg, stroke: color, strokeWidth: 1} : false}
           activeDot={{r: CHART_ACTIVE_DOT_RADIUS, fill: chartTokens.chartTooltipBg, stroke: color, strokeWidth: CHART_STROKE_WIDTH}}
           connectNulls
           isAnimationActive

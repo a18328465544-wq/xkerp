@@ -7,7 +7,7 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
     const held = [], requests = [], errors = [];
     tabPage.on("pageerror", error => errors.push(String(error)));
     let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWWQAAAAASUVORK5CYII=";
-    const cards = ["A", "B"].map(name => ({id: "KC-MEDIA-" + name, productId: "P-" + name, productName: "本地上传商品 " + name, category: "显卡", brand: "本地", model: "RTX5070", vram: "12G", condition: "95新", status: "待检测", sn: "", warehouseLocation: "A区货架-01", entryTime: "2026-10-04"}));
+    const cards = ["A", "B"].map(name => ({id: "KC-MEDIA-" + name, productId: "P-" + name, productName: "本地上传商品 " + name, category: "CPU", brand: "本地", model: "Core i9", vram: "", condition: "95新", status: "待检测", sn: "", warehouseLocation: "A区货架-01", entryTime: "2026-10-04"}));
     const record = {id: "JC-MEDIA-EDIT", inventoryId: cards[0].id, recordVersion: 7, sn: "OLD-SN-A", condition: "95新", resultStatus: "通过", inspectTime: "2026-10-04 09:00:00", inspector: "本地检测员", images: ["/api/media/assets/IMG-EXISTING"]};
     const empty = Object.fromEntries(["products", "inventory", "inspections", "salesInvoices", "purchaseInvoices", "customers", "vendors", "systemUsers", "customPermissions"].map(key => [key, []]));
     const discard = async () => {
@@ -19,6 +19,10 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
         await tabPage.locator('button[aria-label^="切换页面，当前为"]').click();
         await tabPage.locator("a:visible").filter({hasText: name}).click();
       } else await tabPage.locator('nav[aria-label="已打开页面"] a').filter({hasText: name}).click();
+    };
+    const ensureSectionOpen = async title => {
+      const summary = tabPage.locator("summary").filter({hasText: title});
+      if (!(await summary.evaluate(element => element.parentElement?.open))) await summary.click();
     };
     try {
       if (mode === "compression-close") await tabPage.addInitScript(() => {
@@ -44,19 +48,18 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
       const form = tabPage.locator("form.erp-inspection-form");
       const chooseB = async () => {
         if (width < 768) {
-          await tabPage.getByRole("button", {name: "返回列表", exact: true}).click();
-          const pending = tabPage.getByRole("button", {name: /^待检 \\d+$/});
-          if (await pending.isVisible()) await pending.click();
+          await tabPage.getByRole("button", {name: "返回入库待办", exact: true}).click();
+          await tabPage.getByRole("group", {name: "检测记录范围"}).getByRole("button").first().click();
         }
         await tabPage.getByRole("button").filter({hasText: cards[1].productName}).click();
         await discard();
-        await form.locator("h3").filter({hasText: cards[1].productName}).waitFor({state: "visible"});
+        await form.locator('h3, [aria-label="本次入库商品"]').filter({hasText: cards[1].productName}).waitFor({state: "visible"});
       };
       if (mode === "delete-failure-switch") {
         if (width < 768) {
           await tabPage.getByRole("button", {name: "已完成 1", exact: true}).click();
           await tabPage.getByRole("button", {name: "编辑检测单", exact: true}).click();
-          await tabPage.locator("summary").filter({hasText: "结论与附件"}).click();
+          await ensureSectionOpen("结论与附件");
         } else await tabPage.getByRole("button", {name: "编辑检测单 JC-MEDIA-EDIT", exact: true}).click();
         await tabPage.getByRole("button", {name: "删除检测图片 1", exact: true}).click();
         await tabPage.waitForTimeout(150);
@@ -66,7 +69,7 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
         await tabPage.waitForTimeout(150);
         if (await tabPage.getByRole("alert").filter({hasText: "图片引用删除同步失败"}).count()) throw new Error("A deletion error contaminated B");
       } else {
-        if (width < 768) await tabPage.locator("summary").filter({hasText: "结论与附件"}).click();
+        if (width < 768) await ensureSectionOpen("结论与附件");
         await form.locator('input[type="file"]').setInputFiles({name: "A.png", mimeType: "image/png", buffer: Buffer.from(png, "base64")});
         if (mode === "compression-close") {
           await tabPage.waitForFunction(() => window.releaseReads.length === 1);
@@ -92,7 +95,7 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
             if (!(await form.innerText()).includes("已上传") || requests.length !== 1) throw new Error("kept-alive draft lost/restarted its upload");
           } else {
             await chooseB();
-            if (width < 768) await tabPage.locator("summary").filter({hasText: "结论与附件"}).click();
+            if (width < 768) await ensureSectionOpen("结论与附件");
             await form.locator('input[type="file"]').setInputFiles({name: "B.png", mimeType: "image/png", buffer: Buffer.from(png, "base64")});
             await tabPage.waitForTimeout(500);
             if (requests.length !== 2 || requests[0].entityId === requests[1].entityId) throw new Error("B did not get an independent draft/queue");
