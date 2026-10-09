@@ -179,6 +179,7 @@
   --erp-safe-left: env(safe-area-inset-left, 0px);
   --erp-mobile-bottom-offset: 0px;
   --erp-mobile-action-offset: 0px;
+  --erp-phone-dock-height: 0px;
   --erp-page-max-width: 1720px;
   --erp-page-gap-compact: 12px;
   --erp-page-gap: 16px;
