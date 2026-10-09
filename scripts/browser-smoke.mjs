@@ -1010,12 +1010,17 @@ try {
   }
 
   for (const width of [1440, 1024, 390]) {
-    for (const mode of ["delete-failure-switch", "compression-close", "independent-upload", "hidden-completion"]) {
+    // Full-screen phone workflows intentionally hide Workspace Tab controls;
+    // tab-close cancellation is covered where the shell controls are available.
+    const modes = width < 768
+      ? ["delete-failure-switch", "independent-upload", "hidden-completion"]
+      : ["delete-failure-switch", "compression-close", "independent-upload", "hidden-completion"];
+    for (const mode of modes) {
       runCode(mediaOwnershipSmokeCode(baseUrl, width, mode));
       console.log(`PASS: media ownership ${width}px ${mode}`);
     }
   }
-  console.log(`PASS: browser smoke passed at 1440px, 1024px, 768px and 390px; media ownership 12 cases (${artifactDir})`);
+  console.log(`PASS: browser smoke passed at 1440px, 1024px, 768px and 390px; media ownership 11 cases (${artifactDir})`);
 } finally {
   try {
     cli(["close"]);
