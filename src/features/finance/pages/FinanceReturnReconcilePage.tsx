@@ -40,6 +40,7 @@ import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
 import { FinanceTableRegion } from "../components/FinanceTableRegion";
 import { isAnyMenuAllowed, isMenuAllowed } from "@/src/utils/menu";
 import {matchesReturnReconcileType} from "../finance-return-reconcile.filters";
+import {FinanceDetailPageLayout} from "../components/FinanceDetailPageLayout";
 
 const defaultFilters: SalesReturnListFilters & {
   type: "all" | "销售退货" | "进货退货";
@@ -300,8 +301,7 @@ function FinanceReturnReconcileContent({
       tone: "info",
     },
   ];
-  return (
-    <ErpFinancePageFrame>
+  const header = (
       <ErpPageHeader
         title="财务核对"
         subtitle="集中处理日结异常与退货对账，保留原有权限和业务边界。"
@@ -323,6 +323,8 @@ function FinanceReturnReconcileContent({
           ) : undefined
         }
       />
+  );
+  const tabs = (
       <FinanceSectionTabs
         label="财务核对分类"
         items={[
@@ -330,6 +332,8 @@ function FinanceReturnReconcileContent({
           {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)},
         ]}
       />
+  );
+  const metrics = (
       <MetricsRegion>
         <Metric
           label="退货记录"
@@ -356,7 +360,9 @@ function FinanceReturnReconcileContent({
           tone="success"
         />
       </MetricsRegion>
-      <ErpPageToolbar>
+  );
+  const filterBar = (
+    <ErpPageToolbar>
       <ErpFilterBar
         compact
         actions={
@@ -402,8 +408,9 @@ function FinanceReturnReconcileContent({
           aria-label="退货状态"
         />
       </ErpFilterBar>
-      </ErpPageToolbar>
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+    </ErpPageToolbar>
+  );
+  const table = (
       <FinanceTableRegion
         title="对账记录"
         description="集中查看销售退货与进货退货的结算状态。"
@@ -442,6 +449,8 @@ function FinanceReturnReconcileContent({
           virtualized: pageRows.length >= 50,
         }}
       />
+  );
+  const detailDrawer = (
       <ErpDetailDrawer
         open={Boolean(detail)}
         modal={false}
@@ -490,6 +499,19 @@ function FinanceReturnReconcileContent({
           </div>
         )}
       </ErpDetailDrawer>
+  );
+
+  if (!phone) return <FinanceDetailPageLayout header={header} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} metrics={metrics} table={table}>{detailDrawer}</FinanceDetailPageLayout>;
+
+  return (
+    <ErpFinancePageFrame>
+      {header}
+      {tabs}
+      {metrics}
+      {filterBar}
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+        {table}
+        {detailDrawer}
       </ErpPageContent>
     </ErpFinancePageFrame>
   );

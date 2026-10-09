@@ -234,6 +234,10 @@ function FinanceIncomeContent({
   ).sort((a, b) => b[1] - a[1])[0];
   const quickStatus: QuickStatusItemData[] = [];
   const exportRows = () => {
+    if (!collection.items.length) {
+      notify.info("当前筛选暂无可导出收入");
+      return;
+    }
     const table = [
       [
         "编号",
@@ -294,11 +298,11 @@ function FinanceIncomeContent({
             <Button
               size="sm"
               variant="secondary"
-              disabled={!collection.items.length}
+              disabled={phone && !collection.items.length}
               onClick={exportRows}
             >
               <Download className="h-4 w-4" />
-              导出当前页
+              {phone ? "导出当前页" : "导出"}
             </Button>
             <Button
               size="sm"
@@ -337,13 +341,13 @@ function FinanceIncomeContent({
           icon={<CalendarRange className="h-4 w-4" />}
           tone="success"
         />
-        <FinanceEntryMetric
+        {(topCategory || phone) && <FinanceEntryMetric
           label="主要来源类型"
           value={topCategory?.[0] || "暂无"}
           detail={topCategory ? formatCurrency(topCategory[1]) : "本月暂无登记"}
           icon={<Landmark className="h-4 w-4" />}
           tone="neutral"
-        />
+        />}
       </MetricsRegion>}
       filters={<ErpFilterBar
         compact

@@ -40,8 +40,8 @@ export function FinanceEntryPageLayout<TData>({header, tabs, metrics, filters, t
     <ErpFinancePageFrame>
       <ErpPageHeader {...header} />
       {tabs && <FinanceSectionTabs label={tabs.label} items={tabs.items} />}
-      {metrics}
       <ErpPageToolbar>{filters}</ErpPageToolbar>
+      {metrics}
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
         <FinanceTableRegion {...table} />
         {children}

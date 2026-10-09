@@ -235,6 +235,10 @@ function FinanceExpenseContent({
   ).sort((a, b) => b[1] - a[1])[0];
   const quickStatus: QuickStatusItemData[] = [];
   const exportRows = () => {
+    if (!collection.items.length) {
+      notify.info("当前筛选暂无可导出支出");
+      return;
+    }
     const table = [
       [
         "编号",
@@ -295,11 +299,11 @@ function FinanceExpenseContent({
             <Button
               size="sm"
               variant="secondary"
-              disabled={!collection.items.length}
+              disabled={phone && !collection.items.length}
               onClick={exportRows}
             >
               <Download className="h-4 w-4" />
-              导出当前页
+              {phone ? "导出当前页" : "导出"}
             </Button>
             <Button
               size="sm"
@@ -338,13 +342,13 @@ function FinanceExpenseContent({
           icon={<CalendarRange className="h-4 w-4" />}
           tone="danger"
         />
-        <FinanceEntryMetric
+        {(topCategory || phone) && <FinanceEntryMetric
           label="主要支出类型"
           value={topCategory?.[0] || "暂无"}
           detail={topCategory ? formatCurrency(topCategory[1]) : "本月暂无登记"}
           icon={<Landmark className="h-4 w-4" />}
           tone="neutral"
-        />
+        />}
         {collection.items.some((item) => !item.editable) && <FinanceEntryMetric
           label="受限历史记录"
           value={`${collection.items.filter((item) => !item.editable).length} 笔`}
