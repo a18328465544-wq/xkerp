@@ -988,7 +988,7 @@ try {
                   await oldError.waitFor({state: "visible"});
                 }
               }
-            } else if (mode === "active-success") await field.waitFor({state: "detached"});
+            } else if (mode === "active-success") {\n                if (${width} < 768) {\n                  await form.locator("h3").filter({hasText: cards[1].productName}).waitFor({state: "visible"});\n                  if (await field.inputValue() !== "") throw new Error("mobile next-item workflow inherited the completed SN");\n                } else await field.waitFor({state: "detached"});\n              }
             else if (mode === "cross-url-success") {
               if (tabPage.url() !== otherUrl) throw new Error("inspection completion removed a newer inventory deep link");
               await form.locator("h3").filter({hasText: cards[1].productName}).waitFor({state: "visible"});
