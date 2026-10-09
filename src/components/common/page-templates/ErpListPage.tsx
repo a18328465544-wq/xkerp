@@ -71,8 +71,14 @@ export interface ErpListPageProps<TData> {
   refreshing?: boolean;
   /** Desktop results label when no filter is active, e.g. 「全部客户」. */
   resultsLabel?: string;
+  /** Keep the existing desktop result bar wording; undefined uses the template default, null hides its summary. */
+  desktopResultsSummary?: ReactNode;
   tableTitle: string;
   tableDescription?: string;
+  /** Set false when the legacy desktop table had no titled DashboardSection wrapper. */
+  desktopTableSection?: boolean;
+  /** Preserve page-specific phone page-size choices where they differ from the default. */
+  phonePageSizeOptions?: readonly number[];
   columnSettings?: ErpListColumnSettings<TData>;
   table: ErpListTableProps<TData>;
   /** Extra read-only content at the end of the phone filter sheet. */
@@ -86,7 +92,9 @@ export interface ErpListPageProps<TData> {
   phone?: boolean;
 }
 
-const pageSizeOptions = [20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}));
+export function createErpPageSizeOptions(values: readonly number[]) {
+  return values.map((value) => ({value: String(value), label: `${value} 条/页`}));
+}
 
 /**
  * List page template (MOBILE_UI_RULES M13). Pages describe what the list has;
@@ -112,8 +120,11 @@ export function ErpListPage<TData>({
   onRefresh,
   refreshing = false,
   resultsLabel = "全部记录",
+  desktopResultsSummary,
   tableTitle,
   tableDescription,
+  desktopTableSection = true,
+  phonePageSizeOptions = [20, 50, 100],
   columnSettings,
   table,
   sheetExtra,
@@ -141,10 +152,10 @@ export function ErpListPage<TData>({
       <ErpPageToolbar><ErpFilterBar actions={resetButton || actionButtons.length ? <>{resetButton}{actionButtons}</> : undefined}>{searchInput}<ErpFilterFields fields={filters} layout="bar" /></ErpFilterBar></ErpPageToolbar>
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
         {columnSettings && <ErpTableResultsBar
-          summary={<span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : resultsLabel} tone={activeFilters ? "info" : "neutral"} /></span>}
+          summary={desktopResultsSummary === undefined ? <span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><Filter className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : resultsLabel} tone={activeFilters ? "info" : "neutral"} /></span> : desktopResultsSummary}
           actions={<><ErpColumnVisibilityMenu columns={columnSettings.columns} visibility={columnSettings.visibility} onVisibilityChange={columnSettings.onVisibilityChange} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={columnSettings.density === "comfortable" ? "secondary" : "ghost"} onClick={() => columnSettings.onDensityChange("comfortable")}>舒适</Button><Button type="button" size="sm" variant={columnSettings.density === "compact" ? "secondary" : "ghost"} onClick={() => columnSettings.onDensityChange("compact")}>紧凑</Button></div></>}
         />}
-        <DashboardSection title={tableTitle} description={tableDescription} actions={<ErpStatusBadge label={`共 ${total} 条`} tone="info" />}>{dataTable}</DashboardSection>
+        {desktopTableSection ? <DashboardSection title={tableTitle} description={tableDescription} actions={<ErpStatusBadge label={`共 ${total} 条`} tone="info" />}>{dataTable}</DashboardSection> : dataTable}
         {overlays}
       </ErpPageContent>
     </ErpListPageFrame>;
@@ -167,7 +178,7 @@ export function ErpListPage<TData>({
       {hasSheet && <ErpDialogShell open={sheetOpen} onOpenChange={setSheetOpen} title={`${phoneTitle}筛选与操作`} mobilePresentation="sheet" footer={<>{resetButton}<Button type="button" variant="primary" onClick={() => setSheetOpen(false)}>查看结果</Button></>}>
         <div className="space-y-4">
           <ErpFilterFields fields={filters} layout="sheet" />
-          {table.onPageSizeChange && <Select aria-label="每页条数" value={String(table.pageSize ?? 20)} onValueChange={(value) => table.onPageSizeChange?.(Number(value))} options={pageSizeOptions} />}
+          {table.onPageSizeChange && <Select aria-label="每页条数" value={String(table.pageSize ?? 20)} onValueChange={(value) => table.onPageSizeChange?.(Number(value))} options={createErpPageSizeOptions(phonePageSizeOptions)} />}
           {(actionButtons.length > 0 || refreshButton) && <div className="flex flex-wrap gap-2">{actionButtons}{refreshButton}</div>}
           {sheetExtra}
         </div>

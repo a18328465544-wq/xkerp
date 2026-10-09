@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import type {ColumnDef} from "@tanstack/react-table";
-import {ErpListPage, type ErpListPageProps} from "./ErpListPage";
+import {createErpPageSizeOptions, ErpListPage, type ErpListPageProps} from "./ErpListPage";
 
 type Row = {id: string; name: string; balance: number};
 const columns: ColumnDef<Row, unknown>[] = [
@@ -36,6 +36,21 @@ test("desktop keeps header, metrics, filter bar, then the table card", () => {
   assert.match(markup, /新建客户/);
   assert.match(markup, /共 37 条/);
   assert.doesNotMatch(markup, /erp-list-phone-title|data-phone-layout/);
+});
+
+test("desktop can preserve a legacy plain table and its result summary", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone={false} desktopTableSection={false} desktopResultsSummary={<span>共 37 条</span>} />);
+  assert.match(markup, /共 37 条/);
+  assert.doesNotMatch(markup, /data-erp-component="dashboard-section"/);
+  assert.doesNotMatch(markup, /个人客户明细/);
+});
+
+test("phone page-size choices can preserve a page-specific set", () => {
+  assert.deepEqual(createErpPageSizeOptions([10, 20, 50]), [
+    {value: "10", label: "10 条/页"},
+    {value: "20", label: "20 条/页"},
+    {value: "50", label: "50 条/页"},
+  ]);
 });
 
 test("phone shows the count once, a filter button with its badge and column-built rows", () => {
