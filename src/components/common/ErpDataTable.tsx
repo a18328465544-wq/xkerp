@@ -376,7 +376,10 @@ export function ErpDataTable<TData>({
 function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; entity: "product" | "customer"; onOpen?: () => void}) {
   const cells = row.getVisibleCells().filter((cell) => cell.column.columnDef.meta?.mobile);
   const byRole = (role: string) => cells.filter((cell) => cell.column.columnDef.meta?.mobile === role);
-  const render = (cell: Cell<TData, unknown>) => <span key={cell.id} className="contents">{flexRender(cell.column.columnDef.cell, cell.getContext())}</span>;
+  const render = (cell: Cell<TData, unknown>) => {
+    const mobileCell = cell.column.columnDef.meta?.mobileCell;
+    return <span key={cell.id} className="contents">{mobileCell ? mobileCell(row.original) : flexRender(cell.column.columnDef.cell, cell.getContext())}</span>;
+  };
   const titleCell = byRole("title")[0];
   const titleValue = titleCell?.getValue();
   const title = typeof titleValue === "string" || typeof titleValue === "number" ? String(titleValue) : row.id;

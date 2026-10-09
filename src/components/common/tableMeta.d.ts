@@ -1,5 +1,6 @@
 import "@tanstack/react-table";
 import type {RowData} from "@tanstack/react-table";
+import type {ReactNode} from "react";
 
 /** Where a column's value goes in the phone list row built by ErpDataTable.
  * Columns without a role are not shown on phones. */
@@ -14,5 +15,8 @@ declare module "@tanstack/react-table" {
     mobileLabel?: string;
     /** Document numbers and SN read better in tabular figures. */
     mobileMono?: boolean;
+    /** Phone rendering when the desktop cell is too rich (two lines, hints).
+     * Defaults to the column's own cell. */
+    mobileCell?: (row: TData) => ReactNode;
   }
 }

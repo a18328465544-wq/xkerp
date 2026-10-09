@@ -125,3 +125,15 @@ test("hidden columns stay hidden in column-built phone rows", () => {
   assert.doesNotMatch(markup, /¥0/);
   assert.match(markup, /张三/);
 });
+
+test("mobileCell replaces a rich desktop cell on phones only", () => {
+  const rich: ColumnDef<Customer, unknown>[] = [
+    customerColumns[0],
+    {accessorKey: "balance", header: "应收", meta: {mobile: "amount", mobileCell: (row) => `¥${row.balance}`}, cell: () => <div>桌面两行<p>附加说明</p></div>},
+  ];
+  const phone = renderToStaticMarkup(<ErpDataTable columns={rich} data={customers} getRowId={(row) => row.id} mobileRow="columns" phone compactViewport />);
+  const desktop = renderToStaticMarkup(<ErpDataTable columns={rich} data={customers} getRowId={(row) => row.id} mobileRow="columns" phone={false} compactViewport={false} />);
+  assert.match(phone, /¥0/);
+  assert.doesNotMatch(phone, /附加说明/);
+  assert.match(desktop, /附加说明/);
+});
