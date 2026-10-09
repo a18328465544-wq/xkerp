@@ -74,6 +74,29 @@ for (const file of UI_ROOTS.flatMap(walkFiles)) {
   const source = fs.readFileSync(path.join(projectRoot, file), "utf8");
   const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const isFeature = file.startsWith("src/features/");
+  // Cards are often built in a variable (`const cards = <>…</>`) and passed in
+  // as `{cards}`; resolve same-file identifiers so they are still counted.
+  const declarations = new Map();
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) declarations.set(node.name.text, node.initializer);
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+  const countMetricCards = (root, seen = new Set()) => {
+    let count = 0;
+    const walk = (inner) => {
+      const name = jsxName(inner);
+      if (name === "details") return;
+      if (name && METRIC_TAG.test(name)) count += 1;
+      if (ts.isIdentifier(inner) && declarations.has(inner.text) && !seen.has(inner.text) && (ts.isJsxExpression(inner.parent) || ts.isArrayLiteralExpression(inner.parent) || ts.isSpreadElement(inner.parent))) {
+        seen.add(inner.text);
+        count += countMetricCards(declarations.get(inner.text), seen);
+      }
+      ts.forEachChild(inner, walk);
+    };
+    walk(root);
+    return count;
+  };
 
   const visit = (node) => {
     const text = textOf(node);
@@ -97,13 +120,12 @@ for (const file of UI_ROOTS.flatMap(walkFiles)) {
     }
 
     if (isFeature && jsxName(node) === "MetricsRegion" && ts.isJsxElement(node) && !isInsideFoldedMetricRegion(node)) {
-      let count = 0;
-      const countCards = (inner) => {
-        const name = jsxName(inner);
-        if (name && METRIC_TAG.test(name)) count += 1;
-        ts.forEachChild(inner, countCards);
-      };
-      node.children.forEach(countCards);
+      const count = node.children.reduce((total, child) => total + countMetricCards(child), 0);
+      if (count > 4 && !allowed("metrics", file)) report("M18", file, sourceFile, node, `一行数据卡 ${count} 张，最多 4 张`);
+    }
+    // Templates take metrics as a prop; the same limit applies there.
+    if (isFeature && ts.isJsxAttribute(node) && node.name.getText() === "metrics" && node.initializer && /^(ErpListPage)$/.test(node.parent.parent.tagName.getText())) {
+      const count = countMetricCards(node.initializer);
       if (count > 4 && !allowed("metrics", file)) report("M18", file, sourceFile, node, `一行数据卡 ${count} 张，最多 4 张`);
     }
     ts.forEachChild(node, visit);

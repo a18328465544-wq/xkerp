@@ -1,7 +1,8 @@
-import {Children, useState, type HTMLAttributes, type ReactNode} from "react";
+import {useState, type HTMLAttributes, type ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {ErpPageFrame} from "./ErpPageFrame";
 import {useBalancedMetricGrid} from "@/src/hooks/useBalancedMetricGrid";
+import {flattenChildren} from "@/src/lib/flattenChildren";
 
 export function ErpDashboardPageFrame({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
   return <ErpPageFrame {...props} density="comfortable" className={className}>{children}</ErpPageFrame>;
@@ -9,7 +10,7 @@ export function ErpDashboardPageFrame({className, children, ...props}: HTMLAttri
 
 export function MetricsRegion({className, style, children, mobileCollapseAfter, mobilePrimaryFullWidth = false, mobileScroll, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode; mobileCollapseAfter?: number; mobilePrimaryFullWidth?: boolean; mobileScroll?: "grid" | "snap"}) {
   const [expanded, setExpanded] = useState(false);
-  const items = Children.toArray(children);
+  const items = flattenChildren(children);
   const shouldCollapse = Boolean(mobileCollapseAfter && items.length > mobileCollapseAfter);
   const visibleItems = shouldCollapse && !expanded ? items.slice(0, mobileCollapseAfter) : items;
   const grid = useBalancedMetricGrid(visibleItems.length);
