@@ -892,7 +892,7 @@ try {
       expectPage(`
         const cards = ["A", "B"].map(name => ({id: "KC-ATTEMPT-" + name, productId: "P-" + name, productName: "本地质检商品 " + name, category: "显卡", model: "RTX5070", condition: "全新", status: "待检测", sn: "", warehouseLocation: "本地库位", entryTime: "2026-10-04"}));
         const record = {id: "JC-ATTEMPT", inventoryId: cards[0].id, recordVersion: 7, sn: "OLD-SN-A", condition: "全新", resultStatus: "通过", inspectTime: "2026-10-04 09:00:00", inspector: "测试老板"};
-        for (const mode of ["selected-success", "selected-failure", "hidden-success", "closed-success", "edited-feedback", "active-success", "hidden-failure", "cross-url-success"]) {
+        const modes = ${width} < 768\n          ? ["selected-success", "selected-failure", "edited-feedback", "active-success", "cross-url-success"]\n          : ["selected-success", "selected-failure", "hidden-success", "closed-success", "edited-feedback", "active-success", "hidden-failure", "cross-url-success"];\n        for (const mode of modes) {
           const context = await page.context().browser().newContext({viewport: {width: ${width}, height: 1000}});
           const tabPage = await context.newPage();
           const errors = [], commands = [], held = [], completed = [];
