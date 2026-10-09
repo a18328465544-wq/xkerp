@@ -20,6 +20,10 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
         await tabPage.locator("a:visible").filter({hasText: name}).click();
       } else await tabPage.locator('nav[aria-label="已打开页面"] a').filter({hasText: name}).click();
     };
+    const ensureSectionOpen = async title => {
+      const summary = tabPage.locator("summary").filter({hasText: title});
+      if (!(await summary.evaluate(element => element.parentElement?.open))) await summary.click();
+    };
     try {
       if (mode === "compression-close") await tabPage.addInitScript(() => {
         window.releaseReads = [];
@@ -55,7 +59,7 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
         if (width < 768) {
           await tabPage.getByRole("button", {name: "已完成 1", exact: true}).click();
           await tabPage.getByRole("button", {name: "编辑检测单", exact: true}).click();
-          await tabPage.locator("summary").filter({hasText: "结论与附件"}).click();
+          await ensureSectionOpen("结论与附件");
         } else await tabPage.getByRole("button", {name: "编辑检测单 JC-MEDIA-EDIT", exact: true}).click();
         await tabPage.getByRole("button", {name: "删除检测图片 1", exact: true}).click();
         await tabPage.waitForTimeout(150);
@@ -65,7 +69,7 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
         await tabPage.waitForTimeout(150);
         if (await tabPage.getByRole("alert").filter({hasText: "图片引用删除同步失败"}).count()) throw new Error("A deletion error contaminated B");
       } else {
-        if (width < 768) await tabPage.locator("summary").filter({hasText: "结论与附件"}).click();
+        if (width < 768) await ensureSectionOpen("结论与附件");
         await form.locator('input[type="file"]').setInputFiles({name: "A.png", mimeType: "image/png", buffer: Buffer.from(png, "base64")});
         if (mode === "compression-close") {
           await tabPage.waitForFunction(() => window.releaseReads.length === 1);
@@ -91,7 +95,7 @@ export function mediaOwnershipSmokeCode(baseUrl, width, mode) {
             if (!(await form.innerText()).includes("已上传") || requests.length !== 1) throw new Error("kept-alive draft lost/restarted its upload");
           } else {
             await chooseB();
-            if (width < 768) await tabPage.locator("summary").filter({hasText: "结论与附件"}).click();
+            if (width < 768) await ensureSectionOpen("结论与附件");
             await form.locator('input[type="file"]').setInputFiles({name: "B.png", mimeType: "image/png", buffer: Buffer.from(png, "base64")});
             await tabPage.waitForTimeout(500);
             if (requests.length !== 2 || requests[0].entityId === requests[1].entityId) throw new Error("B did not get an independent draft/queue");
