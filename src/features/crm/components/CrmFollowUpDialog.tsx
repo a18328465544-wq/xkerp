@@ -25,7 +25,7 @@ export function CrmFollowUpDialog({account, pending, error, onOpenChange, onSubm
     pending={pending}
     size="lg"
     title="新增客户跟进"
-    description={account ? `${account.displayName} · 跟进成功后由现有服务端同步客户阶段和时间线。` : "选择客户后录入跟进"}
+    description={account ? `${account.displayName} · 跟进成功后会自动更新客户阶段和时间线。` : "选择客户后录入跟进"}
     footer={<><Button type="button" variant="secondary" disabled={pending} onClick={() => onOpenChange(false)}>取消</Button><Button form={formId} type="submit" variant="primary" disabled={pending || !account?.legacyCustomerId}>{pending ? "保存中…" : "保存跟进"}</Button></>}
   >
     <form id={formId} onSubmit={form.handleSubmit(onSubmit)}>

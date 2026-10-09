@@ -42,7 +42,7 @@ export function AftersalesCreateDialog({open, candidates, pending, error, onOpen
         <ErpField label="客户反馈" error={form.formState.errors.description?.message}>
           <Textarea {...form.register("description")} maxLength={500} disabled={pending} className="min-h-28" placeholder="描述故障现象、客户诉求和收到实物情况" />
         </ErpField>
-        {candidates.some((item) => item.activeClaimId) && <div className="flex items-center gap-2 text-xs text-[var(--erp-color-warning)]"><ErpStatusBadge label="防重复" tone="warning" /><span>已有处理中工单的 SN 已禁用；服务端尚无重复工单约束。</span></div>}
+        {candidates.some((item) => item.activeClaimId) && <div className="flex items-center gap-2 text-xs text-[var(--erp-color-warning)]"><ErpStatusBadge label="防重复" tone="warning" /><span>已有处理中工单的 SN 已禁用，避免重复登记。</span></div>}
         {error && <p role="alert" className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-danger-soft)] px-3 py-2 text-xs text-[var(--erp-color-danger)]">{error}</p>}
       </div>
     </form>

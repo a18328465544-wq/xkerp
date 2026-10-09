@@ -2,7 +2,7 @@ import {ErpMobileRecordRow} from "@/src/components/common/ErpMobileRecordRow";
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {OnChangeFn, SortingState, VisibilityState} from "@tanstack/react-table";
-import {ArrowDown, ArrowUp, Banknote, CheckCircle2, ChevronDown, ClipboardCheck, Download, Filter, ListFilter, LockKeyhole, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Undo2} from "lucide-react";
+import {ArrowDown, ArrowUp, Banknote, CheckCircle2, ChevronDown, ClipboardCheck, Download, Filter, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Undo2} from "lucide-react";
 import {ErpDialogShell, ErpMobileActionDock, ErpMobileSummary, ErpSearchInput, ErpStatusBadge} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -48,7 +48,7 @@ export function PurchaseReturnListPage() {
   const listQuery = useQuery({queryKey: queryKeys.returns.purchaseList(filters), queryFn: ({signal}) => returnsApi.listPurchase(filters, signal), enabled: active && Boolean(session && allowed), placeholderData: keepPreviousData, retry: false});
   useEffect(() => {if (listQuery.error instanceof ApiError && listQuery.error.isUnauthorized) logout();}, [listQuery.error, logout]);
   if (!session) return <Card><ErpLoadingState title="正在验证采购退货权限" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有采购退货权限" description="服务器已拒绝 return_purchase / return_orders 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有采购退货权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <PurchaseReturnContent session={session} filters={filters} commitFilters={commitFilters} detailId={detailId} commitDetail={commitDetail} query={listQuery} onAuthExpired={logout} />;
 }
 
@@ -99,7 +99,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
     const first = next[0];
     update({sortKey: first?.id || undefined, sortDirection: first ? (first.desc ? "desc" : "asc") : undefined});
   };
-  const quickStatus: QuickStatusItemData[] = [{icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: active ? `${active} 项` : "全部", description: "已同步到当前 URL", tone: active ? "info" : "neutral"}, {icon: <ClipboardCheck className="h-4 w-4" />, label: "待处理（本页）", value: `${pending} 单`, description: "完成后才改变库存与账款", tone: pending ? "warning" : "success"}, {icon: <LockKeyhole className="h-4 w-4" />, label: "财务边界", value: "已保护", description: "完成前不会变更账款", tone: "neutral"}];
+  const quickStatus: QuickStatusItemData[] = [ {icon: <ClipboardCheck className="h-4 w-4" />, label: "待处理（本页）", value: `${pending} 单`, description: "完成后才改变库存与账款", tone: pending ? "warning" : "success"}];
   const exportCurrentPage = () => {const rows = [["退货单号", "状态", "关联采购单", "供应商 / 来源", "商品", "SN / 库存卡片", "退货金额", "结算方式", "冲减应付", "供应商抵扣", "释放现金", "库存处理", "经办人", "退货日期", "原因", "备注"], ...items.map((item) => [item.returnNo, item.status, item.relatedDocNo, item.partyName, returnDisplayLabel(item), item.returnItems?.map((line) => `${line.sourceInventoryId}${line.sn ? ` · ${line.sn}` : ""}`).join("；") || item.sn, item.amount, item.settlementMode, item.creditAmount, item.vendorCreditAmount, item.cashReleasedAmount, item.inventoryAction, item.handler, item.date, item.reason, item.remarks])]; const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\n")}`; const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"})); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `采购退货-第${filters.page}页.csv`; anchor.click(); URL.revokeObjectURL(url);};
 
   const phoneSearch = (
@@ -182,7 +182,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
       error={query.error as Error | null}
       errorTitle="采购退货加载失败"
       emptyTitle="暂无采购退货"
-      emptyDescription={active ? "当前筛选没有匹配记录。" : "服务器当前没有采购退货记录。"}
+      emptyDescription={active ? "当前筛选没有匹配记录。" : "暂无采购退货记录。"}
       onRetry={() => void query.refetch()}
       onRowClick={openDetail}
       mobileShowDetailAction={false}
@@ -210,7 +210,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
             采购退货<small>{query.isPending ? "正在加载…" : query.error && !query.data ? "加载失败" : `${query.data?.meta.total || 0} 单`}</small>
           </span>
         ) : "采购退货"}
-        subtitle="管理原路退款、供应商抵扣与误录付款冲销；最终账款和库存变化由服务端完成。"
+        subtitle="管理原路退款、供应商抵扣与误录付款冲销。"
         quickStatus={quickStatus}
         actions={phone ? (
           <Button
@@ -242,9 +242,9 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
         <>
           <ErpMobileSummary>
             <MetricsRegion>
-              <Metric label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail="服务端筛选总数" icon={<Undo2 className="h-4 w-4" />} />
-              <Metric label="退货金额（本页）" value={formatCurrency(pageAmount)} detail="当前页真实记录" icon={<Banknote className="h-4 w-4" />} />
-              <Metric label="账款抵扣（本页）" value={formatCurrency(pageCredit)} detail="完成后由服务端返回" icon={<ClipboardCheck className="h-4 w-4" />} />
+              <Metric label="当前结果" value={`${query.data?.meta.total || 0} 单`} icon={<Undo2 className="h-4 w-4" />} />
+              <Metric label="退货金额（本页）" value={formatCurrency(pageAmount)} detail="当前页" icon={<Banknote className="h-4 w-4" />} />
+              <Metric label="账款抵扣（本页）" value={formatCurrency(pageCredit)} detail="完成后显示" icon={<ClipboardCheck className="h-4 w-4" />} />
               <Metric label="待处理（本页）" value={`${pending} 单`} detail="尚未改变采购和库存" icon={<CheckCircle2 className="h-4 w-4" />} tone={pending ? "warning" : "neutral"} />
             </MetricsRegion>
           </ErpMobileSummary>
@@ -332,7 +332,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
             </div>
           </ErpDialogShell>
         )}
-        <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="purchase-return-detail" defaultWidth={860} minWidth={680} maxWidth={1080} title={detail?.returnNo || detailId || "采购退货详情"} description="来自真实采购退货列表响应；财务变化以完成后的服务端字段为准。" footer={detail && <ReturnDetailActions item={detail} canDelete={canDelete} canEdit={canEdit} onVoid={openVoid} onReverse={openDelete} onEdit={openEdit} onComplete={setCompleteTarget} completeLabel="完成采购退货" />}>
+        <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="purchase-return-detail" defaultWidth={860} minWidth={680} maxWidth={1080} title={detail?.returnNo || detailId || "采购退货详情"} description="财务变化以退货完成后的结果为准。" footer={detail && <ReturnDetailActions item={detail} canDelete={canDelete} canEdit={canEdit} onVoid={openVoid} onReverse={openDelete} onEdit={openEdit} onComplete={setCompleteTarget} completeLabel="完成采购退货" />}>
           {detail ? <PurchaseReturnDetail item={detail} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位采购退货单" description="正在跨页查找完整退货明细。" /> : detailQuery.error ? <ErpEmptyState title="采购退货详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该退货单，可能已删除或当前账号无权查看。</div>}
         </ErpDetailDrawer>
         <CompleteDialog target={completeTarget} pending={mutation.isPending} error={mutation.error instanceof Error ? mutation.error.message : ""} onClose={() => {if (!mutation.isPending) setCompleteTarget(null);}} onConfirm={() => {if (completeTarget) mutation.mutate(completeTarget);}} />
@@ -346,7 +346,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
 
 function PurchaseReturnDetail({item}: {item: PurchaseReturnListItem}) { return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><Fact label="状态" value={item.status} /><Fact label="原采购单" value={item.relatedDocNo || "—"} /><Fact label="供应商 / 来源" value={item.partyName || "—"} /><Fact label="退货范围" value={returnDisplayLabel(item)} /><Fact label="商品" value={`${item.productName}${item.sn ? ` · ${item.sn}` : ""}`} /><Fact label="退货金额" value={formatCurrency(item.amount)} /><Fact label="结算方式" value={item.settlementMode || "—"} /><Fact label="冲减应付款" value={formatCurrency(item.creditAmount)} /><Fact label="供应商抵扣变化" value={formatCurrency(item.vendorCreditAmount)} /><Fact label="释放现金付款" value={formatCurrency(item.cashReleasedAmount)} /><Fact label="库存处理" value={item.inventoryAction || "—"} /><Fact label="经办人" value={item.handler || "—"} /><Fact label="完成时间" value={item.completedAt || "尚未完成"} /></div><ReturnItemsSummary item={item} /><Card><CardContent className="grid gap-3 p-4"><Fact label="退货原因" value={item.reason || "—"} /><Fact label="备注" value={item.remarks || "—"} /></CardContent></Card></div>; }
 function CompleteDialog({target, pending, error, onClose, onConfirm}: {target: PurchaseReturnListItem | null; pending: boolean; error: string; onClose: () => void; onConfirm: () => void}) {
-  return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open) onClose();}} title="确认完成采购退货" description="服务端将冲减采购单、处理现金或供应商抵扣，并把库存标记为退回或报废。" documentName={target ? `${target.returnNo} · ${target.productName} · ${formatCurrency(target.amount)} · ${target.settlementMode} · ${target.inventoryAction}` : undefined} confirmLabel="确认完成" pendingLabel="处理中…" pending={pending} error={error} onConfirm={onConfirm} />;
+  return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open) onClose();}} title="确认完成采购退货" description="将冲减采购单、处理现金或供应商抵扣，并把库存标记为退回或报废。" documentName={target ? `${target.returnNo} · ${target.productName} · ${formatCurrency(target.amount)} · ${target.settlementMode} · ${target.inventoryAction}` : undefined} confirmLabel="确认完成" pendingLabel="处理中…" pending={pending} error={error} onConfirm={onConfirm} />;
 }
 const Fact = ErpDetailFact;
-function Metric({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "neutral" | "warning"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />; }
+function Metric({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />; }

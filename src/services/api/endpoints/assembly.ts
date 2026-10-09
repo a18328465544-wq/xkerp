@@ -23,7 +23,7 @@ export const assemblyApi = {
   async create(values: AssemblyFormValues, permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
     const response = await apiRequest<AssemblyResponseDto>("/api/assembly-operations", {method: "POST", body: JSON.stringify(toAssemblyCreateRequest(values, permissions)), signal});
     const operation = adaptAssemblyOperation(response.data, permissions);
-    if (!operation.id) throw new Error("组装拆卸接口没有返回有效操作单");
+    if (!operation.id) throw new Error("暂时无法读取组装拆卸记录，请稍后重试");
     return operation;
   },
   async remove(id: string, permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {

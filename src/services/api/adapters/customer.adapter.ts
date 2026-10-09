@@ -100,7 +100,7 @@ export function adaptCustomerDirectory(response: CustomerDirectoryResponseDto, p
 }
 
 export function adaptCustomerMutation(response: CustomerMutationResponseDto, permissions: {showProfit: boolean}) {
-  if (!response.data) throw new Error("客户接口未返回档案数据");
+  if (!response.data) throw new Error("暂时无法读取客户档案，请稍后重试");
   return adaptCustomer(response.data, permissions);
 }
 

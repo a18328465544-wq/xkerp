@@ -59,7 +59,7 @@ export function FinanceCustomerFundsPage() {
   useEffect(() => {if (query.error instanceof ApiError && query.error.isUnauthorized) logout();}, [logout, query.error]);
   if (status === "loading") return <Card><p className="p-5 text-sm">正在验证往来账款权限…</p></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
-  if (!session || !canRead) return <ErpPageError title="当前账号没有往来账款权限" description="服务端不会返回资金往来快照。" />;
+  if (!session || !canRead) return <ErpPageError title="当前账号没有往来账款权限" description="当前账号没有查看往来账款的权限。" />;
   if (query.error && !query.data) return <ErpPageError title="往来账款加载失败" description={query.error.message} onRetry={() => void query.refetch()} />;
   return <FinanceCustomerFundsContent dateFilters={value.dateFilters} setDateFilters={(dateFilters) => commit({...value, dateFilters})} keyword={value.keyword} setKeyword={(keyword) => commit({...value, keyword})} balance={value.balance} setBalance={(balance) => commit({...value, balance: balance as CustomerFundsUrlState["balance"]})} query={query} />;
 }

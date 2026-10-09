@@ -40,7 +40,7 @@ export function FinanceCommissionPage({mode}: {mode: "purchase" | "sales"}) {
 
   if (status === "loading") return <Card><p className="p-5 text-sm">正在验证提成权限…</p></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
-  if (!session || !allowed) return <ErpPageError title={`当前账号没有${mode === "purchase" ? "进货" : "销售"}提成权限`} description="服务端不会为未授权账号加载提成数据。" />;
+  if (!session || !allowed) return <ErpPageError title={`当前账号没有${mode === "purchase" ? "进货" : "销售"}提成权限`} description="当前账号没有查看提成的权限。" />;
   if (query.error && !query.data) return <ErpPageError title="提成记录加载失败" description={query.error.message} onRetry={() => void query.refetch()} />;
   const rulesError = rulesMutation.error instanceof Error ? rulesMutation.error.message : rulesQuery.error instanceof Error ? rulesQuery.error.message : undefined;
   return <><FinanceCommissionContent mode={mode} session={session} filters={filters} onFiltersChange={updateFilters} items={query.data?.items || []} summary={query.data?.summary || defaultSummary} total={query.data?.meta.total || 0} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} onRetry={() => void query.refetch()} canManageRules={canManageRules} onOpenRules={openRules} /><CommissionRulesDialog open={rulesOpen} initialMode={mode} rules={rulesQuery.data || null} loading={rulesQuery.isPending} pending={rulesMutation.isPending} error={rulesError} onOpenChange={setRulesOpen} onRetry={() => void rulesQuery.refetch()} onSave={async (rules) => {await rulesMutation.mutateAsync(rules);}} /></>;

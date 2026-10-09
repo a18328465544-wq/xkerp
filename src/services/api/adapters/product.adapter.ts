@@ -77,7 +77,7 @@ export function adaptProductLibrary(response: ProductLibraryResponseDto, permiss
 
 export function adaptProductMutation(response: ProductLibraryResponseDto, permissions: Pick<PermissionModel, "showCost" | "showProfit">): ProductLibraryItem {
   const product = adaptProduct(response.data, permissions);
-  if (!product.id) throw new Error("商品接口没有返回有效商品模板");
+  if (!product.id) throw new Error("暂时无法读取商品模板，请稍后重试");
   return product;
 }
 

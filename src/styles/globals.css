@@ -1190,8 +1190,10 @@ input[inputmode="numeric"] {
 .erp-mobile-workflow-actions,
 .erp-mobile-summary-trigger { display: none; }
 [data-erp-component="mobile-workflow"],
-[data-erp-region="mobile-workflow-content"],
-[data-erp-component="mobile-summary"] { display: contents; }
+[data-erp-region="mobile-workflow-content"] { display: contents; }
+/* Must stay a real box: page frames space siblings with margins, which a
+   display:contents wrapper silently drops (metrics touched the toolbar). */
+[data-erp-component="mobile-summary"] { display: block; }
 [data-erp-region="mobile-workflow-section"][hidden] { display: none !important; }
 @media (min-width: 768px) {
   [data-erp-region="mobile-workflow-section"] { display: contents; }

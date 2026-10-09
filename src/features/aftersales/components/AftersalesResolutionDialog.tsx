@@ -34,7 +34,7 @@ export function AftersalesResolutionDialog({record, pending, error, onClose, onS
         <ErpField label="实际维修费用" error={form.formState.errors.repairCost?.message}>
           <Controller control={form.control} name="repairCost" render={({field}) => <ErpAmountInput value={field.value} onBlur={field.onBlur} onValueChange={(value) => field.onChange(value.floatValue || 0)} disabled={pending || action === "拒绝售后"} aria-label="实际维修费用" />} />
         </ErpField>
-        {repairCost > 0 && action !== "拒绝售后" && <div className="flex gap-2 rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-warning-soft)] p-3 text-xs leading-relaxed text-[var(--erp-color-warning)]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>确认结案后，后端会按原销售单关联账户或第一个启用账户自动生成维修费支出。当前接口无法在提交前预览或选择该账户。</p></div>}
+        {repairCost > 0 && action !== "拒绝售后" && <div className="flex gap-2 rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-warning-soft)] p-3 text-xs leading-relaxed text-[var(--erp-color-warning)]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>确认结案后，会按原销售单关联的账户（没有时使用第一个启用账户）自动生成维修费支出，提交前无法更换账户。</p></div>}
         <ErpField label="检测与处理备注" error={form.formState.errors.note?.message}>
           <Textarea {...form.register("note")} maxLength={500} disabled={pending} className="min-h-28" placeholder="例如：SN 核对无误；完成烤机与风扇检测；更换风扇后稳定运行，原卡寄回客户。" />
         </ErpField>

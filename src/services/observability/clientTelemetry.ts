@@ -63,7 +63,7 @@ function safeContext(context: ClientErrorContext): ClientErrorContext {
     status: context.status,
     code: context.code,
     // Keep accidental payloads out of the event and storage boundary.
-    message: context.kind === "runtime" ? "浏览器运行异常" : "接口请求失败",
+    message: context.kind === "runtime" ? "浏览器运行异常" : "加载失败",
   };
 }
 

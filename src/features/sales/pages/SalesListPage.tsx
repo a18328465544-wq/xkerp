@@ -3,7 +3,7 @@ import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-table";
-import {ArrowDown, ArrowUp, Banknote, ChevronDown, CircleDollarSign, FileText, Filter, ListFilter, LockKeyhole, PackageCheck, Plus, RefreshCw, RotateCcw, ShoppingCart, SlidersHorizontal, Truck} from "lucide-react";
+import {ArrowDown, ArrowUp, Banknote, ChevronDown, CircleDollarSign, Filter, Plus, RefreshCw, RotateCcw, ShoppingCart, SlidersHorizontal, Truck} from "lucide-react";
 import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpSearchInput, ErpStatusBadge} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -65,7 +65,7 @@ export function SalesListPage() {
   });
 
   if (!session) return <Card><ErpLoadingState title="正在验证登录状态" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有销售单据权限" description="服务器已拒绝 sales_list 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有销售单据权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
 
   return <SalesListContent
     filters={filters}
@@ -93,6 +93,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   onRefresh: () => void;
   onAuthExpired: () => void;
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const [deleting, setDeleting] = useState<SalesListItem | null>(null);
@@ -117,7 +118,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   const openDetail = useCallback((item: SalesListItem) => commitDetail(item.id), [commitDetail]);
   const invalidate = () => invalidateErpDomains(queryClient, ["sales", "inventory", "finance", "customers", "crm", "state"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} notify.error(error.message);};
-  const deleteMutation = useMutation({mutationFn: (id: string) => salesApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); commitDetail(null); notify.success(`销售单 ${result.invoiceNo || id} 已删除`, {description: "关联待出库占用、收款流水和财务关联已由服务端同步清理。"}); await invalidate();}, onError: handleMutationError});
+  const deleteMutation = useMutation({mutationFn: (id: string) => salesApi.remove(id), onSuccess: async (result, id) => {setDeleting(null); commitDetail(null); notify.success(`销售单 ${result.invoiceNo || id} 已删除`, {description: "关联的待出库占用、收款流水和财务记录已同步清理。"}); await invalidate();}, onError: handleMutationError});
   const settlementContext: LinkedSettlementContext | null = settling && settling.unpaidAmount > 0 ? {kind: "income", relatedDocType: "销售单", relatedDocNo: settling.invoiceNo || settling.id, partyName: settling.customerName, partyId: settling.customerId, partnerType: settling.customerPartnerType, defaultAccountId: settling.settlementAccountId, remainingAmount: settling.unpaidAmount} : null;
   const settlementMutation = useMutation({
     mutationFn: (values: Parameters<typeof financeSettlementApi.createIncome>[0]) => {
@@ -140,9 +141,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
     commitFilters({...filters, sortKey, sortDirection: first?.desc ? "desc" : "asc", page: 1});
   };
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", tone: activeFilterCount ? "info" : "neutral"},
-    {icon: <Truck className="h-4 w-4" />, label: "待出库", value: metricValue(`${selection.summary.pendingOutboundCount} 单`), description: "等待仓库绑定 SN", tone: selection.summary.pendingOutboundCount ? "warning" : "success"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "按账号权限裁剪", tone: session.permissions.showProfit ? "success" : "neutral"},
+    {icon: <Truck className="h-4 w-4" />, label: "待出库", value: metricValue(`${selection.summary.pendingOutboundCount} 单`), description: "去扫码出库", tone: selection.summary.pendingOutboundCount ? "warning" : "neutral", action: session.permissions.allowedMenus.includes("all") || session.permissions.allowedMenus.includes("sales_outbound") ? () => void navigate({to: "/sales/outbound"}) : undefined},
   ];
 
   const phoneSearch = (
@@ -242,7 +241,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
       error={query.error as Error | null}
       errorTitle="销售单据加载失败"
       emptyTitle="暂无销售单据"
-      emptyDescription={activeFilterCount ? "当前筛选条件没有匹配的销售单。" : "服务器当前没有返回销售单据。"}
+      emptyDescription={activeFilterCount ? "当前筛选条件没有匹配的销售单。" : "暂无销售单据。"}
       onRetry={() => void query.refetch()}
       onRowClick={openDetail}
       mobileShowDetailAction={false}
@@ -297,12 +296,9 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
       />
       {!phone && <>
         <ErpMobileSummary label="销售统计" summary={metricValue(`${selection.summary.orderCount} 单 · 待出库 ${selection.summary.pendingOutboundCount}`)}><MetricsRegion>
-          <MetricCard label="销售单数" value={metricValue(`${selection.summary.orderCount} 单`)} detail="按当前筛选" icon={<FileText className="h-4 w-4" />} />
-          <MetricCard label="销售金额" value={metricValue(formatCurrency(selection.summary.totalAmount))} detail="当前筛选汇总" icon={<ShoppingCart className="h-4 w-4" />} />
-          <MetricCard label="销售件数" value={metricValue(`${selection.summary.unitCount} 件`)} detail="销售单实物数量" icon={<PackageCheck className="h-4 w-4" />} />
+          <MetricCard label="销售金额" value={metricValue(formatCurrency(selection.summary.totalAmount))} icon={<ShoppingCart className="h-4 w-4" />} />
           <MetricCard label="待收款" value={metricValue(`${selection.summary.pendingPaymentCount} 单`)} detail="未收款 / 部分收款" tone={selection.summary.pendingPaymentCount ? "warning" : "neutral"} icon={<Banknote className="h-4 w-4" />} />
-          <MetricCard label="待出库" value={metricValue(`${selection.summary.pendingOutboundCount} 单`)} detail="等待仓库处理" tone={selection.summary.pendingOutboundCount ? "warning" : "neutral"} icon={<Truck className="h-4 w-4" />} />
-          {session.permissions.showProfit && <MetricCard label="销售利润" value={metricValue(selection.summary.totalProfit === undefined ? "—" : formatCurrency(selection.summary.totalProfit))} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} />}
+          {session.permissions.showProfit && <MetricCard label="销售利润" value={metricValue(selection.summary.totalProfit === undefined ? "—" : formatCurrency(selection.summary.totalProfit))} icon={<CircleDollarSign className="h-4 w-4" />} />}
         </MetricsRegion></ErpMobileSummary>
 
         <ErpPageToolbar>
@@ -380,7 +376,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
       open={Boolean(deleting)}
       title="删除销售单"
       documentName={deleting?.invoiceNo || "当前销售单"}
-      description="仅待出库销售单允许删除；服务端会再次检查出库状态，并同步恢复关联库存、收款流水和财务记录。"
+      description="仅待出库销售单允许删除；删除后会同步恢复关联库存、收款流水和财务记录。"
       pending={deleteMutation.isPending}
       error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
       onOpenChange={(open) => {if (!open) {setDeleting(null); deleteMutation.reset();}}}
@@ -417,6 +413,6 @@ export function SalesSnapshotDetail({item, showCost, showProfit}: {item: SalesLi
 
 const DetailFact = ErpDetailFact;
 
-function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "neutral" | "warning"}) {
+function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) {
   return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />;
 }

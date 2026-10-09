@@ -1,6 +1,6 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
-import {Activity, ArrowDown, ArrowUp, CalendarClock, ChevronDown, ListFilter, LockKeyhole, MessageSquarePlus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Target, UserPlus, Users} from "lucide-react";
+import {ArrowDown, ArrowUp, CalendarClock, ChevronDown, MessageSquarePlus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Target, UserPlus, Users} from "lucide-react";
 import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpMobileRecordRow, ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -27,7 +27,7 @@ export function CrmWorkspacePage() {
   const {session, logout} = useAuth();
   const canAccess = createCapabilities(session).menu("crm");
   if (!session) return <Card><ErpLoadingState title="正在验证客户 CRM 权限" />;</Card>;
-  if (!canAccess) return <ErpPageError title="当前账号没有客户 CRM 权限" description="服务器已拒绝 crm 菜单访问（403），请联系管理员授权。" />;
+  if (!canAccess) return <ErpPageError title="当前账号没有客户 CRM 权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <CrmWorkspaceContent session={session} onAuthExpired={logout} />;
 }
 
@@ -54,9 +54,6 @@ function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; on
   const totals = summaryQuery.data?.totals;
   const quickStatus: QuickStatusItemData[] = [
     {icon: <Users className="h-4 w-4" />, label: "客户主体", value: `${accountQuery.data?.total || 0} 位`, description: "可直接打开客户档案", tone: "success"},
-    {icon: <Activity className="h-4 w-4" />, label: "客户轨迹", value: "可查看", description: "点击客户加载时间线", tone: "info"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "等级规则", value: "核心客户", description: "核心客户固定 S 级", tone: "success"},
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选能力", value: "关键词 / 负责人", description: "快速定位目标客户", tone: "info"},
   ];
   const refresh = async () => {await Promise.all([accountQuery.refetch(), summaryQuery.refetch(), detail ? timelineQuery.refetch() : Promise.resolve()]);};
   const activeFilters = Number(Boolean(filters.keyword.trim())) + Number(Boolean(filters.owner));
@@ -137,7 +134,7 @@ function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; on
       <>
         <ErpMobileSummary>
           <MetricsRegion>
-            <MetricCard label="客户档案统计" value={totals ? `${totals.customers} 位` : "—"} detail="客户档案口径；与去重后的客户主体列表不同" icon={<Users className="h-4 w-4" />} />
+            <MetricCard label="客户档案统计" value={totals ? `${totals.customers} 位` : "—"} detail="按客户档案统计，可能与客户列表数量不同" icon={<Users className="h-4 w-4" />} />
             <MetricCard label="到期跟进" value={totals ? `${totals.pendingFollowUps} 项` : "—"} detail="下次跟进时间不晚于今日" icon={<CalendarClock className="h-4 w-4" />} tone={totals?.pendingFollowUps ? "warning" : "normal"} />
             <MetricCard label="高意向客户" value={totals ? `${totals.highIntent} 位` : "—"} detail="沿用原 CRM 意向字段" icon={<Target className="h-4 w-4" />} />
             <MetricCard label="已成交客户" value={totals ? `${totals.deals} 位` : "—"} detail={totals ? `跟进中 ${totals.following} · 线索 ${totals.leads}` : "真实汇总加载中"} icon={<Sparkles className="h-4 w-4" />} tone="success" />
@@ -186,5 +183,5 @@ function formatDateTime(value: string | undefined) {
   return formatStoreDateTime(value);
 }
 
-function MetricCard({label, value, detail, icon, tone = "normal"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "normal" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "normal" ? "neutral" : tone} />;}
+function MetricCard({label, value, detail, icon, tone = "normal"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "normal" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "normal" ? "neutral" : tone} />;}
 const Fact = ErpDetailFact;

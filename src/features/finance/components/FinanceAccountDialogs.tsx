@@ -36,7 +36,7 @@ export function FinanceAccountReconcileDialog({account, pending, error, onOpenCh
 }
 
 export function FinanceAccountDeleteDialog({account, pending, onOpenChange, onConfirm}: {account: FinanceAccountItem | null; pending: boolean; onOpenChange: (open: boolean) => void; onConfirm: () => void}) {
-  return <ErpConfirmDialog open={Boolean(account)} onOpenChange={(open) => {if (!open && !pending) onOpenChange(false);}} title="删除资金账户" description="已有流水、收付款、调拨或业务单据关联时，服务端会拒绝删除。" documentName={account?.name} confirmLabel="确认删除" pendingLabel="删除中…" confirmVariant="danger" pending={pending} onConfirm={onConfirm} />;
+  return <ErpConfirmDialog open={Boolean(account)} onOpenChange={(open) => {if (!open && !pending) onOpenChange(false);}} title="删除资金账户" description="已有流水、收付款、调拨或业务单据关联的账户无法删除。" documentName={account?.name} confirmLabel="确认删除" pendingLabel="删除中…" confirmVariant="danger" pending={pending} onConfirm={onConfirm} />;
 }
 
 function Summary({label, value, tone}: {label: string; value: number; tone?: "warning" | "success"}) {

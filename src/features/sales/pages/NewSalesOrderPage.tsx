@@ -60,7 +60,7 @@ function customerQuickCreateError(error: unknown) {
 export function NewSalesOrderPage() {
   const {session, logout} = useAuth();
   if (!session) return <Card><ErpLoadingState title="正在验证登录状态" description="正在读取当前账号的销售开单权限。" /></Card>;
-  if (!createCapabilities(session).menu("sales_add")) return <ErpPageError title="当前账号没有销售开单权限" description="服务器已拒绝 sales_add 菜单访问（403），请联系管理员授权。" />;
+  if (!createCapabilities(session).menu("sales_add")) return <ErpPageError title="当前账号没有销售开单权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <SalesOrderForm session={session} onAuthExpired={logout} />;
 }
 
@@ -285,7 +285,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">库存未在开单阶段改为已售出，出库时再完成物理卡绑定。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
     {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">库存可能已被其他订单占用；刷新候选不会清空当前表单。</p>}</div><div className="flex shrink-0 items-center gap-2">{conflictError && <Button type="button" size="sm" variant="secondary" onClick={refreshInventoryCandidates}><RefreshCw className="h-3.5 w-3.5" />刷新库存候选</Button>}<Button type="button" size="icon" variant="ghost" onClick={() => { submission.clearFeedback(); setServerError(null); setConflictError(false); }} aria-label="关闭错误提示">×</Button></div></CardContent></Card>}
     {!canReadCustomers && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有 CRM 客户读取权限，客户选择已禁用；请联系管理员授权后再开单。</CardContent></Card>}
-    {!canReadInventory && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有库存读取权限，商品选择已禁用；服务端仍会校验销售库存。</CardContent></Card>}
+    {!canReadInventory && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有查看库存的权限，暂时无法选择商品。</CardContent></Card>}
     <ErpMobileWorkflow resetKey={editorScope.current} pending={createMutation.isPending || submission.validating} steps={[
       {label: "客户与商品", ready: !hasWorkflowErrors(issues, ["customerId", "customerName", "customerPartnerType", "items"]), blockedReason: workflowBlockedReason(issues, ["customerId", "customerName", "customerPartnerType", "items"], "请完善商品价格与数量")},
       {label: "结算"},

@@ -8,7 +8,7 @@ import type {PermissionModel} from "./auth";
 import type {ProductLibraryFilters, ProductLibraryItem, ProductLibrarySnapshot, ProductTemplateFormValues} from "@/src/types/product";
 
 function createdData(response: EntityCreateResponseDto) {
-  if (response.data === undefined || response.data === null) throw new Error("商品模板接口未返回新建规格");
+  if (response.data === undefined || response.data === null) throw new Error("新建规格未成功返回，请刷新后确认");
   return response.data;
 }
 

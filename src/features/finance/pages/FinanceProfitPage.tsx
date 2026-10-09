@@ -51,7 +51,7 @@ export function FinanceProfitPage() {
   });
   useEffect(() => {if (salesQuery.error instanceof ApiError && salesQuery.error.isUnauthorized) logout();}, [logout, salesQuery.error]);
   if (!session) return <Card><ErpLoadingState title="正在验证销售利润权限" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有销售利润权限" description="服务端权限未包含 finance_reports；页面不会请求或展示销售利润数据。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有销售利润权限" description="当前账号没有查看销售利润数据的权限，请联系管理员开通。" />;
   return <FinanceProfitContent session={session} filters={filters} onFiltersChange={commit} query={salesQuery} />;
 }
 
@@ -83,24 +83,23 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
     const link = document.createElement("a"); link.href = url; link.download = `销售毛利-${filters.dimension}-${filters.dateStart || "全部"}-${filters.dateEnd || ""}.csv`; link.click(); URL.revokeObjectURL(url);
   };
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "利润权限", value: session.permissions.showProfit ? "可查看" : "已隐藏", description: "跟随当前账号权限", tone: session.permissions.showProfit ? "success" : "neutral"},
-    {icon: <FileText className="h-4 w-4" />, label: "分析单据", value: metricValue(`${report.summary.orderCount} 单`), description: "当前筛选结果", tone: "info"},
+    {icon: <FileText className="h-4 w-4" />, label: "分析单据", value: metricValue(`${report.summary.orderCount} 单`), tone: "info"},
   ];
   return <ErpAnalyticsPageFrame>
     <ErpPageHeader title="销售毛利" subtitle="按商品、客户、渠道或经办人查看销售额、成本与销售毛利表现。" quickStatus={quickStatus} actions={<>{!phone && <Button type="button" size="sm" variant="secondary" disabled={query.isFetching} onClick={() => {void query.refetch(); }}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>}<Button type="button" size="sm" variant="secondary" disabled={query.isFetching || query.isPending || !report.rows.length} onClick={() => void exportReport()}><Download className="h-4 w-4" />导出结果</Button></>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <AnalyticsKpiRegion
       primary={<>
-        <ErpMetricCard label="销售额" value={metricValue(formatCurrency(report.summary.revenue))} detail="当前筛选汇总" icon={<CircleDollarSign className="h-4 w-4" />} tone="info" />
+        <ErpMetricCard label="销售额" value={metricValue(formatCurrency(report.summary.revenue))} icon={<CircleDollarSign className="h-4 w-4" />} tone="info" />
         <ErpMetricCard label="销售毛利" value={metricValue(session.permissions.showProfit && report.summary.profit !== undefined ? formatCurrency(report.summary.profit) : "—")} detail={session.permissions.showProfit ? "销售额 − 商品成本" : "当前账号无利润权限"} icon={<TrendingUp className="h-4 w-4" />} tone={report.summary.profit !== undefined && report.summary.profit < 0 ? "danger" : "success"} />
         <ErpMetricCard label="净利润" value={metricValue(session.permissions.showProfit && report.summary.netProfit !== undefined ? formatCurrency(report.summary.netProfit) : "—")} detail={session.permissions.showProfit ? "销售毛利 + 其他收入 − 其他支出" : "当前账号无利润权限"} icon={<BarChart3 className="h-4 w-4" />} tone={session.permissions.showProfit && report.summary.netProfit !== undefined ? financeNetTone(report.summary.netProfit) : "neutral"} />
       </>}
       secondary={<>
-        {session.permissions.showCost && <ErpMetricCard label="销售成本" value={metricValue(report.summary.cost === undefined ? "—" : formatCurrency(report.summary.cost))} detail="当前筛选汇总" icon={<WalletCards className="h-4 w-4" />} tone="danger" variant="compact" />}
+        {session.permissions.showCost && <ErpMetricCard label="销售成本" value={metricValue(report.summary.cost === undefined ? "—" : formatCurrency(report.summary.cost))} icon={<WalletCards className="h-4 w-4" />} tone="danger" variant="compact" />}
         {session.permissions.showProfit && <ErpMetricCard label="毛利率" value={metricValue(report.summary.margin === undefined ? "—" : `${(report.summary.margin * 100).toFixed(2)}%`)} detail="销售毛利 ÷ 销售额" icon={<BarChart3 className="h-4 w-4" />} tone="success" variant="compact" />}
         {session.permissions.showProfit && <ErpMetricCard label="其他收入" value={metricValue(report.summary.otherIncome === undefined ? "—" : formatCurrency(report.summary.otherIncome))} detail="按日期范围，不分摊到明细" icon={<CircleDollarSign className="h-4 w-4" />} tone="success" variant="compact" />}
         {session.permissions.showProfit && <ErpMetricCard label="其他支出" value={metricValue(report.summary.otherExpense === undefined ? "—" : formatCurrency(report.summary.otherExpense))} detail="按日期范围，不分摊到明细" icon={<WalletCards className="h-4 w-4" />} tone="danger" variant="compact" />}
-        <ErpMetricCard label="分析订单" value={metricValue(`${report.summary.orderCount} 单`)} detail="当前筛选结果" icon={<FileText className="h-4 w-4" />} tone="neutral" variant="compact" />
+        <ErpMetricCard label="分析订单" value={metricValue(`${report.summary.orderCount} 单`)} icon={<FileText className="h-4 w-4" />} tone="neutral" variant="compact" />
         <ErpMetricCard label="销售数量" value={metricValue(`${report.summary.quantity} 件`)} detail="销售单实物数量" icon={<Layers3 className="h-4 w-4" />} tone="neutral" variant="compact" />
         {session.permissions.showProfit && <ErpMetricCard label="盈利分组" value={metricValue(`${report.summary.profitableGroups} 组`)} detail="当前维度有利润" icon={<TrendingUp className="h-4 w-4" />} tone="success" variant="compact" />}
         {session.permissions.showProfit && <ErpMetricCard label="亏损分组" value={metricValue(`${report.summary.lossGroups} 组`)} detail="需要重点关注" icon={<BarChart3 className="h-4 w-4" />} tone={report.summary.lossGroups ? "danger" : "neutral"} variant="compact" />}

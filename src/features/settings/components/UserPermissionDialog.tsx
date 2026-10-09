@@ -32,7 +32,7 @@ const roles: Array<{value: StoreRole; label: string}> = [
 const permissionFields: Array<{key: PermissionField; label: string; description: string}> = [
   {key: "showCost", label: "查看成本", description: "采购成本、库存成本和成本相关信息"},
   {key: "showProfit", label: "查看利润", description: "预计利润、销售利润和利润分析"},
-  {key: "canDelete", label: "删除业务记录", description: "在后端允许的范围内删除业务记录"},
+  {key: "canDelete", label: "删除业务记录", description: "在允许的范围内删除业务记录"},
   {key: "canEditHistory", label: "修改历史记录", description: "修改已保存的历史业务数据"},
   {key: "canManualOutbound", label: "手工出库", description: "不经过扫码流程手工完成出库"},
 ];
@@ -113,7 +113,7 @@ export function UserPermissionDialog({open, mode, user, pending, error, onOpenCh
     pending={pending}
     size="xl"
     title={title}
-    description="账号信息、角色默认权限与账号级覆盖统一在此管理；最终权限仍由服务端校验。"
+    description="账号信息、角色默认权限与账号级权限统一在此管理。"
     footer={footer}
   >
     <div className="space-y-4">
@@ -125,13 +125,13 @@ export function UserPermissionDialog({open, mode, user, pending, error, onOpenCh
           <ErpField label="角色"><Select value={draft.role} options={roles} onValueChange={(value) => update("role", roleOf(value))} disabled={pending} aria-label="成员角色" /></ErpField>
           <ErpField label={mode === "create" ? "初始密码" : "重置密码（可选）"} required={mode === "create"}><Input type="password" value={draft.password} onChange={(event) => update("password", event.target.value)} disabled={pending} placeholder={mode === "create" ? "请输入初始密码" : "留空表示不修改"} autoComplete="new-password" /></ErpField>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 py-2"><div><p className="text-sm font-semibold">账号状态</p><p className="text-xs text-[var(--erp-color-text-muted)]">停用后服务端会拒绝登录</p></div><Button type="button" size="sm" variant={draft.enabled ? "primary" : "secondary"} aria-pressed={draft.enabled} onClick={() => update("enabled", !draft.enabled)} disabled={pending}>{draft.enabled ? "启用" : "停用"}</Button></div>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 py-2"><div><p className="text-sm font-semibold">账号状态</p><p className="text-xs text-[var(--erp-color-text-muted)]">停用后该账号将无法登录</p></div><Button type="button" size="sm" variant={draft.enabled ? "primary" : "secondary"} aria-pressed={draft.enabled} onClick={() => update("enabled", !draft.enabled)} disabled={pending}>{draft.enabled ? "启用" : "停用"}</Button></div>
         <div className="mt-3"><ErpField label="备注"><Textarea className="min-h-20" value={draft.remarks} onChange={(event) => update("remarks", event.target.value)} disabled={pending} maxLength={300} placeholder="记录岗位、门店或账号用途" /></ErpField></div>
       </section>
 
       <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] p-4">
         <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-[var(--erp-color-primary)]" />模块访问权限</h3><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">默认跟随“{draft.role}”角色；需要例外时再切换为账号自定义。</p></div><Select className="w-36" value={draft.menuMode} options={[{value: "default", label: "角色默认"}, {value: "custom", label: "账号自定义"}]} onValueChange={(value) => update("menuMode", value === "custom" ? "custom" : "default")} disabled={pending || draft.role === "老板"} aria-label="模块权限模式" /></div>
-        {draft.role === "老板" ? <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary-soft)] px-3 py-2 text-xs text-[var(--erp-color-primary)]">老板账号由服务端始终拥有全部模块权限，页面不允许用前端覆盖制造“部分老板权限”。</p> : null}
+        {draft.role === "老板" ? <p className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary-soft)] px-3 py-2 text-xs text-[var(--erp-color-primary)]">老板账号始终拥有全部模块权限，无法单独调整。</p> : null}
         {draft.menuMode === "custom" && draft.role !== "老板" ? <div className="mt-4 grid gap-3 md:grid-cols-2">{APP_MENU_MODULES.map((module) => <div key={module.name} className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">{module.name}</p><div className="mt-2 flex flex-wrap gap-2">{module.items.map((item) => <Button key={item.id} type="button" size="sm" variant={draft.allowedMenus.includes(item.id) ? "primary" : "secondary"} className="h-8 px-2.5 text-xs" aria-pressed={draft.allowedMenus.includes(item.id)} onClick={() => toggleMenu(item.id)} disabled={pending}>{item.name}{item.badge ? <span className="opacity-70">·{item.badge}</span> : null}</Button>)}</div></div>)}</div> : <p className="mt-3 text-xs text-[var(--erp-color-text-muted)]">当前角色默认可访问 {roleDefault.allowedMenus.includes("all") ? "全部模块" : `${roleDefault.allowedMenus.length} 个模块`}。</p>}
       </section>
 

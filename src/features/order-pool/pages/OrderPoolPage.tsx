@@ -54,7 +54,7 @@ export function OrderPoolPage() {
   });
   useEffect(() => {if (query.error instanceof ApiError && query.error.isUnauthorized) logout();}, [logout, query.error]);
   if (!session) return <Card><ErpLoadingState title="正在验证订单池权限" /></Card>;
-  if (!allowed) return <ErpPageError title="当前账号没有订单池权限" description="服务器权限未包含 order_pool 菜单，请联系管理员授权。" />;
+  if (!allowed) return <ErpPageError title="当前账号没有订单池权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <OrderPoolContent session={session} filters={filters} commitFilters={commit} query={query} onAuthExpired={logout} />;
 }
 

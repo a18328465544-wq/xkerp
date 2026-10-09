@@ -2,7 +2,7 @@ import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
 import type {OnChangeFn, VisibilityState} from "@tanstack/react-table";
-import {CheckCircle2, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
+import {ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
 import {ErpDialogShell, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, Input, Select} from "@/src/components/ui";
@@ -45,7 +45,7 @@ export function FinanceLedgerPage() {
   }, [ledgerQuery.error, logout]);
 
   if (!session) return <Card><ErpLoadingState title="正在验证账户流水权限" /></Card>;
-  if (!allowed) return <ErpPageError title="当前账号没有账户流水权限" description="服务端权限未包含 settlement_ledger；页面不会请求或展示任何资金流水。" />;
+  if (!allowed) return <ErpPageError title="当前账号没有账户流水权限" description="当前账号没有查看资金流水的权限，请联系管理员开通。" />;
   return <FinanceLedgerContent session={session} filters={filters} onFiltersChange={commit} ledgerQuery={ledgerQuery} accounts={accountsQuery.data?.accounts || []} accountOptionsAvailable={canViewAccounts && !accountsQuery.isPending && !accountsQuery.error} />;
 }
 
@@ -274,7 +274,7 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
             <LedgerAside account={account} accounts={accounts} accountDistribution={accountDistribution} navigate={navigate} onAccountChange={(accountId) => update({accountId})} />
           </div>
         )}
-        <p className="px-1 text-xs text-[var(--erp-color-text-muted)]">注：概览、趋势与分类统计均按当前筛选结果计算；账户余额以服务端账户账面余额为准。</p>
+        
         <LedgerDetailDrawer item={detail} onClose={() => setDetail(null)} />
       </ErpPageContent>
     </ErpFinancePageFrame>
@@ -283,7 +283,6 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
 
 function FinanceLedgerHeader({reconciliation, loading, onRefresh, onExport, hasRows, phone, total, activeFilters, onOpenFilters}: {reconciliation: ReconciliationState; loading: boolean; onRefresh: () => void; onExport: () => void; hasRows: boolean; phone?: boolean; total?: number; activeFilters?: number; onOpenFilters?: () => void}) {
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <CheckCircle2 className="h-4 w-4" />, label: "数据连接", value: loading ? "连接中" : "已连接", tone: loading ? "info" : "success", description: "真实账户流水接口"},
     {icon: <FileCheck2 className="h-4 w-4" />, label: "对账状态", value: reconciliation.label, tone: reconciliation.tone, description: "当前账户对账状态"},
   ];
   return (
@@ -317,8 +316,8 @@ function SummaryCards({openingBalance, income, expense, closingBalance, phone}: 
   return (
     <div className={cn("grid gap-3 sm:grid-cols-2 xl:grid-cols-4", phone ? "grid-cols-2" : "grid-cols-1")}>
       <SummaryCard label="期初余额" value={openingBalance} icon={<WalletCards className="h-4 w-4" />} tone="info" phone={phone} />
-      <SummaryCard label="收入金额" value={income} detail={phone ? undefined : "较上期按筛选结果"} icon={<ArrowIcon direction="in" />} tone="success" phone={phone} />
-      <SummaryCard label="支出金额" value={expense} detail={phone ? undefined : "较上期按筛选结果"} icon={<ArrowIcon direction="out" />} tone="danger" phone={phone} />
+      <SummaryCard label="收入金额" value={income}  icon={<ArrowIcon direction="in" />} tone="success" phone={phone} />
+      <SummaryCard label="支出金额" value={expense}  icon={<ArrowIcon direction="out" />} tone="danger" phone={phone} />
       <SummaryCard label="期末余额" value={closingBalance} icon={<CircleDollarSign className="h-4 w-4" />} tone="info" phone={phone} />
     </div>
   );
@@ -364,7 +363,7 @@ function ExpenseShareCard({rows}: {rows: ExpenseRow[]}) {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   return <Card>
     <div className="flex items-center justify-between border-b border-[var(--erp-color-border)] px-4 py-3">
-      <div><h2 className="text-sm font-semibold">支出分类占比</h2><p className="mt-0.5 text-xs text-[var(--erp-color-text-muted)]">当前筛选结果 · 最多展示 5 类</p></div>
+      <div><h2 className="text-sm font-semibold">支出分类占比</h2><p className="mt-0.5 text-xs text-[var(--erp-color-text-muted)]">最多展示 5 类</p></div>
       <span className="text-xs text-[var(--erp-color-text-muted)]">{formatMoney(total)}</span>
     </div>
     <div className="grid min-h-64 grid-cols-[160px_minmax(0,1fr)] items-center gap-3 p-3">
@@ -427,7 +426,7 @@ function LedgerTableCard({rows, summary, total, page, pageSize, query, columns, 
       density={density}
       stickyHeader
       virtualized={rows.length >= 50}
-      footer={<div className="flex flex-wrap items-center gap-4"><span>合计（当前筛选结果）</span><span className="text-[var(--erp-color-income)]">收入：{formatMoney(summary.income)}</span><span className="text-[var(--erp-color-expense)]">支出：{formatMoney(summary.expense)}</span><span style={{color: financeNetColor(summary.net)}}>净额：{formatMoney(summary.net)}</span></div>}
+      footer={<div className="flex flex-wrap items-center gap-4"><span>合计</span><span className="text-[var(--erp-color-income)]">收入：{formatMoney(summary.income)}</span><span className="text-[var(--erp-color-expense)]">支出：{formatMoney(summary.expense)}</span><span style={{color: financeNetColor(summary.net)}}>净额：{formatMoney(summary.net)}</span></div>}
     />
   );
 

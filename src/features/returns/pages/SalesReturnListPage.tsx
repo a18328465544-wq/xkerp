@@ -2,7 +2,7 @@ import {ErpMobileRecordRow} from "@/src/components/common/ErpMobileRecordRow";
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
 import type {OnChangeFn, SortingState, VisibilityState} from "@tanstack/react-table";
-import {ArrowDown, ArrowUp, Banknote, CheckCircle2, ChevronDown, ClipboardCheck, Download, Filter, ListFilter, LockKeyhole, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Undo2} from "lucide-react";
+import {ArrowDown, ArrowUp, Banknote, CheckCircle2, ChevronDown, ClipboardCheck, Download, Filter, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Undo2} from "lucide-react";
 import {ErpDialogShell, ErpMobileActionDock, ErpMobileSummary, ErpSearchInput, ErpStatusBadge} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -55,7 +55,7 @@ export function SalesReturnListPage() {
   });
   useEffect(() => {if (listQuery.error instanceof ApiError && listQuery.error.isUnauthorized) logout();}, [listQuery.error, logout]);
   if (!session) return <Card><ErpLoadingState title="正在验证销售退货权限" /></Card>;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有销售退货权限" description="服务器已拒绝 return_sales / return_orders 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有销售退货权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   return <SalesReturnListContent session={session} filters={filters} commitFilters={commitFilters} detailId={detailId} commitDetail={commitDetail} query={listQuery} onAuthExpired={logout} />;
 }
 
@@ -167,9 +167,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
     updateFilters({sortKey: first?.id || undefined, sortDirection: first ? (first.desc ? "desc" : "asc") : undefined});
   };
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <ListFilter className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "已同步到当前 URL", tone: activeFilterCount ? "info" : "neutral"},
     {icon: <ClipboardCheck className="h-4 w-4" />, label: "待处理（本页）", value: `${pendingOnPage} 单`, description: "完成后才变更退款与库存", tone: pendingOnPage ? "warning" : "success"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "权限边界", value: "服务端校验", description: "按退货类型裁剪数据", tone: "neutral"},
   ];
   const exportCurrentPage = () => {
     const rows = [
@@ -266,7 +264,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
       error={query.error as Error | null}
       errorTitle="销售退货加载失败"
       emptyTitle="暂无销售退货"
-      emptyDescription={activeFilterCount ? "当前筛选没有匹配的销售退货记录。" : "服务器当前没有销售退货记录。"}
+      emptyDescription={activeFilterCount ? "当前筛选没有匹配的销售退货记录。" : "暂无销售退货记录。"}
       onRetry={() => void query.refetch()}
       onRowClick={openDetail}
       mobileShowDetailAction={false}
@@ -294,7 +292,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
             销售退货<small>{query.isPending ? "正在加载…" : query.error && !query.data ? "加载失败" : `${query.data?.meta.total || 0} 单`}</small>
           </span>
         ) : "销售退货"}
-        subtitle="查看退货单，完成原路退款与库存处理；编辑和删除由现有权限及服务端冲销规则控制。"
+        subtitle="查看退货单，完成原路退款与库存处理。"
         quickStatus={quickStatus}
         actions={phone ? (
           <Button
@@ -324,10 +322,10 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
         <>
           <ErpMobileSummary>
             <MetricsRegion>
-              <MetricCard label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail={filters.status ? `${filters.status}筛选结果` : "服务端返回总数"} icon={<Undo2 className="h-4 w-4" />} />
-              <MetricCard label="退款金额（本页）" value={formatCurrency(pageAmount)} detail="仅汇总当前页真实记录" icon={<Banknote className="h-4 w-4" />} />
+              <MetricCard label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail={filters.status ? `${filters.status}筛选结果` : ""} icon={<Undo2 className="h-4 w-4" />} />
+              <MetricCard label="退款金额（本页）" value={formatCurrency(pageAmount)} detail="仅汇总当前页" icon={<Banknote className="h-4 w-4" />} />
               <MetricCard label="待处理（本页）" value={`${pendingOnPage} 单`} detail="完成动作会触发业务变更" icon={<ClipboardCheck className="h-4 w-4" />} tone={pendingOnPage ? "warning" : "neutral"} />
-              <MetricCard label="已完成（本页）" value={`${completedOnPage} 单`} detail="退款与库存已由服务端处理" icon={<CheckCircle2 className="h-4 w-4" />} />
+              <MetricCard label="已完成（本页）" value={`${completedOnPage} 单`} detail="退款与库存已处理" icon={<CheckCircle2 className="h-4 w-4" />} />
             </MetricsRegion>
           </ErpMobileSummary>
           <ErpPageToolbar>
@@ -414,7 +412,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
             </div>
           </ErpDialogShell>
         )}
-        <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-return-detail" defaultWidth={860} minWidth={680} maxWidth={1080} title={selectedDetail?.returnNo || detailId || "销售退货详情"} description="详情来自真实退货列表响应；退款、库存和冲销均由现有服务端动作处理。" footer={selectedDetail && <ReturnDetailActions item={selectedDetail} canDelete={canDelete} canEdit={canEdit} onVoid={openVoid} onReverse={openDelete} onEdit={openEdit} onComplete={setCompleteTarget} completeLabel="完成退货处理" />}>
+        <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-return-detail" defaultWidth={860} minWidth={680} maxWidth={1080} title={selectedDetail?.returnNo || detailId || "销售退货详情"} footer={selectedDetail && <ReturnDetailActions item={selectedDetail} canDelete={canDelete} canEdit={canEdit} onVoid={openVoid} onReverse={openDelete} onEdit={openEdit} onComplete={setCompleteTarget} completeLabel="完成退货处理" />}>
           {selectedDetail ? <SalesReturnDetail item={selectedDetail} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位销售退货单" description="正在跨页查找完整退货明细。" /> : detailQuery.error ? <ErpEmptyState title="销售退货详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该退货单，可能已删除或当前账号无权查看。</div>}
         </ErpDetailDrawer>
         <CompleteReturnDialog target={completeTarget} pending={completeMutation.isPending} error={completeMutation.error instanceof Error ? completeMutation.error.message : ""} onClose={() => {if (!completeMutation.isPending) setCompleteTarget(null);}} onConfirm={() => {if (completeTarget) completeMutation.mutate(completeTarget);}} />
@@ -435,9 +433,9 @@ function SalesReturnDetail({item}: {item: SalesReturnListItem}) {
 }
 
 function CompleteReturnDialog({target, pending, error, onClose, onConfirm}: {target: SalesReturnListItem | null; pending: boolean; error: string; onClose: () => void; onConfirm: () => void}) {
-  return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open) onClose();}} title="确认完成销售退货" description="服务端将按退货单处理退款、库存状态和原销售单金额。这不是只修改页面状态的操作。" documentName={target ? `${target.returnNo} · ${target.productName} · ${target.partyName || "未命名客户"} · 退款 ${formatCurrency(target.amount)} · ${target.inventoryAction || "未记录库存处理"}` : undefined} confirmLabel="确认完成" pendingLabel="处理中…" pending={pending} error={error} onConfirm={onConfirm} />;
+  return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open) onClose();}} title="确认完成销售退货" description="将按退货单处理退款、库存状态和原销售单金额，操作后无法撤销。" documentName={target ? `${target.returnNo} · ${target.productName} · ${target.partyName || "未命名客户"} · 退款 ${formatCurrency(target.amount)} · ${target.inventoryAction || "未记录库存处理"}` : undefined} confirmLabel="确认完成" pendingLabel="处理中…" pending={pending} error={error} onConfirm={onConfirm} />;
 }
 
 const DetailFact = ErpDetailFact;
 
-function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "neutral" | "warning"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />; }
+function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />; }

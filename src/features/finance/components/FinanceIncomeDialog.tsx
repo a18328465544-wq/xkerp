@@ -55,7 +55,7 @@ export function FinanceIncomeDialog({open, item, accounts, pending, error, onOpe
       open={open}
       pending={pending}
       title={item ? "编辑非经营收入" : "新增非经营收入"}
-      description="只登记非销售、非采购单自动生成的临时收入；保存后由后端同步账户和财务流水。"
+      description="只登记销售、采购以外的临时收入；保存后会同步更新账户和财务流水。"
       submitLabel={pending ? "保存中…" : submission.validating ? "校验中…" : media.blocking ? "请处理图片状态" : item ? "保存修改" : "登记收入"}
       submitDisabled={media.blocking || submission.validating}
       error={submission.feedback || error}

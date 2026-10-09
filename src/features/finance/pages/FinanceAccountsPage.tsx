@@ -2,7 +2,7 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryRe
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ColumnDef} from "@tanstack/react-table";
 import {useNavigate} from "@tanstack/react-router";
-import {AlertCircle, AlertTriangle, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Banknote, Building2, CheckCircle2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
+import {AlertCircle, AlertTriangle, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Banknote, Building2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -41,7 +41,7 @@ export function FinanceAccountsPage() {
   }, [accountsQuery.error, logout]);
 
   if (!session) return <Card><ErpLoadingState title="正在验证登录状态" description="正在读取当前账号的资金账户权限。" /></Card>;
-  if (!allowed) return <ErpPageError title="当前账号没有资金账户权限" description="服务器权限未包含 settlement_accounts 菜单；页面不会加载或展示账户余额。" />;
+  if (!allowed) return <ErpPageError title="当前账号没有资金账户权限" description="当前账号没有查看账户余额的权限，请联系管理员开通。" />;
   if (accountsQuery.isPending) return <ErpFinancePageFrame><FinanceAccountsHeader loading /><Card><ErpLoadingState title="正在加载真实资金账户" /></Card></ErpFinancePageFrame>;
   if (accountsQuery.error && !accountsQuery.data) return <ErpFinancePageFrame><FinanceAccountsHeader /><ErpPageError title="资金账户加载失败" description={accountsQuery.error.message} onRetry={() => void accountsQuery.refetch()} /></ErpFinancePageFrame>;
   return <FinanceAccountsContent session={session} query={accountsQuery} filters={filters} onFiltersChange={commit} onAuthExpired={logout} />;
@@ -134,7 +134,7 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
       </section>
       <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start"><DistributionCard {...distribution} /><AccountStatusCard rows={statusRows} /><ExceptionsCard exceptions={exceptions} pendingCount={statusRows.find((row) => row.key === "pending")?.value || 0} onViewPending={() => updateFilters({status: "pending"})} /><QuickActionsCard onTransfer={canTransfer ? () => void navigate({to: "/finance/transfers"}) : undefined} onCollect={canCollect ? () => void navigate({to: "/finance/income"}) : undefined} onLedger={canViewLedger ? () => void navigate({to: "/finance/ledger"}) : undefined} onReports={exportAccounts} onCreate={openCreate} /></aside>
     </div>
-    <p className="px-1 text-xs text-[var(--erp-color-text-muted)]">注：以上余额和流水均来自真实账户接口；账户卡片快捷操作不会绕过服务端权限。</p>
+    
     <FinanceAccountDetailDrawer account={detail} canViewLedger={canViewLedger} canDelete={canDelete} ledgerQuery={accountLedgerQuery} onClose={() => setDetailId(null)} onOpenLedger={() => void navigate({to: "/finance/ledger"})} onReconcile={() => {if (detail) {reconcileMutation.reset(); setReconcileId(detail.id);}}} onDelete={() => {if (detail) setDeleteId(detail.id);}} />
     <FinanceAccountCreateDialog open={createOpen} pending={createMutation.isPending} error={createMutation.error?.message} onOpenChange={setCreateOpen} onSubmit={async (values) => {await createMutation.mutateAsync(values);}} />
     <FinanceAccountReconcileDialog account={reconciling} pending={reconcileMutation.isPending} error={reconcileMutation.error?.message} onOpenChange={(open) => {if (!open) setReconcileId(null);}} onSubmit={async (values) => {if (reconciling) await reconcileMutation.mutateAsync({id: reconciling.id, values});}} />
@@ -156,7 +156,6 @@ function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCre
       ? {label: "已平衡", tone: "success" as const, description: `最近 ${formatStoreDateTime(reconciled.lastReconciledAt).slice(0, 10)}`}
       : {label: "待对账", tone: "info" as const, description: "尚未记录实盘余额"};
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <CheckCircle2 className="h-4 w-4" />, label: "数据连接", value: loading ? "连接中" : "已连接", tone: loading ? "info" : "success", description: "真实账户接口"},
     {icon: <FileCheck2 className="h-4 w-4" />, label: "对账状态", value: reconciliation.label, tone: reconciliation.tone, description: reconciliation.description},
   ];
   return <ErpPageHeader title="资金账户" quickStatus={quickStatus} actions={<>{!phone && <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>}<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
@@ -194,7 +193,7 @@ const recentLedgerColumns: ColumnDef<FinanceAccountLedgerItem, unknown>[] = [
 ];
 
 function RecentChangesCard({available = true, rows, loading, error, onRetry, onRowClick, onViewAll}: {available?: boolean; rows: FinanceAccountLedgerItem[]; loading: boolean; error: Error | null; onRetry: () => void; onRowClick: (row: FinanceAccountLedgerItem) => void; onViewAll: () => void}) {
-  return <DashboardSection title={<span>最近资金变动 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {rows.length} 笔</span></span>} actions={<Button type="button" size="sm" variant="ghost" onClick={onViewAll} disabled={!available}>查看全部</Button>} className="overflow-hidden p-0">{available ? <ErpDataTable surface="plain" mobilePagination="compact" columns={recentLedgerColumns} data={rows} getRowId={(row) => row.id} loading={loading} fetching={loading} error={error} errorTitle="资金变动加载失败" emptyTitle="暂无资金变动" emptyDescription="创建收入、支出或调拨后，最近变动会显示在这里。" onRetry={onRetry} onRowClick={onRowClick} ariaLabel="最近资金变动" mobileRow={(row) => <ErpMobileRecordRow title={row.businessType || row.accountName} subtitle={row.accountName} meta={`${formatLedgerDateTime(row.time)} · ${row.party || row.customerName || row.supplierName || row.remarks || "—"}`} statusPlacement="title" status={<ErpStatusBadge label={row.changeAmount >= 0 ? "收入" : "支出"} tone={row.changeAmount >= 0 ? "success" : "danger"} />} amount={`${row.changeAmount >= 0 ? "+" : "−"}${formatMoney(Math.abs(row.changeAmount))}`} amountLabel={row.changeAmount >= 0 ? "收入" : "支出"} onOpen={() => onRowClick(row)} />} density="compact" stickyHeader total={rows.length} /> : <ErpEmptyState title="资金变动需要权限" description="当前账号没有 settlement_ledger 权限，服务器不会返回流水数据。" />}</DashboardSection>;
+  return <DashboardSection title={<span>最近资金变动 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {rows.length} 笔</span></span>} actions={<Button type="button" size="sm" variant="ghost" onClick={onViewAll} disabled={!available}>查看全部</Button>} className="overflow-hidden p-0">{available ? <ErpDataTable surface="plain" mobilePagination="compact" columns={recentLedgerColumns} data={rows} getRowId={(row) => row.id} loading={loading} fetching={loading} error={error} errorTitle="资金变动加载失败" emptyTitle="暂无资金变动" emptyDescription="创建收入、支出或调拨后，最近变动会显示在这里。" onRetry={onRetry} onRowClick={onRowClick} ariaLabel="最近资金变动" mobileRow={(row) => <ErpMobileRecordRow title={row.businessType || row.accountName} subtitle={row.accountName} meta={`${formatLedgerDateTime(row.time)} · ${row.party || row.customerName || row.supplierName || row.remarks || "—"}`} statusPlacement="title" status={<ErpStatusBadge label={row.changeAmount >= 0 ? "收入" : "支出"} tone={row.changeAmount >= 0 ? "success" : "danger"} />} amount={`${row.changeAmount >= 0 ? "+" : "−"}${formatMoney(Math.abs(row.changeAmount))}`} amountLabel={row.changeAmount >= 0 ? "收入" : "支出"} onOpen={() => onRowClick(row)} />} density="compact" stickyHeader total={rows.length} /> : <ErpEmptyState title="资金变动需要权限" description="当前账号没有查看账户流水的权限。" />}</DashboardSection>;
 }
 
 function DistributionCard({rows, positiveTotal, netBalance}: ReturnType<typeof buildDistribution>) {

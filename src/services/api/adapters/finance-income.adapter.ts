@@ -62,6 +62,6 @@ export function toFinanceIncomeRequest(values: FinanceIncomeFormValues, handler:
 }
 
 export function adaptFinanceIncomeMutation(response: FinanceIncomeMutationResponseDto) {
-  if (!response.data) throw new Error("收入登记接口未返回记录数据");
+  if (!response.data) throw new Error("收入记录未成功返回，请刷新后确认");
   return adaptFinanceIncome(response.data);
 }

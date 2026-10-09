@@ -41,7 +41,7 @@ export function deriveSalesEditPolicy(
   if (!access.canEditHistory) reasons.push("当前账号没有历史销售单编辑权限。");
   if (access.canEditHistory && !access.hasFullRecordAccess) reasons.push("当前账号缺少销售开单、库存、收款账户或成本利润查看权限，只开放低风险字段。");
   if (inventoryStage === "completed") reasons.push("销售单已绑定或已出库实物库存，商品、数量和结算结构不能由销售页直接改写。");
-  reasons.push("保存时服务端会重新校验可售库存、退货和关联收款，冲突不会清空表单。");
+  reasons.push("保存时会重新核对可售库存、退货和关联收款，有冲突也不会清空表单。");
   return {
     mode,
     inventoryStage,

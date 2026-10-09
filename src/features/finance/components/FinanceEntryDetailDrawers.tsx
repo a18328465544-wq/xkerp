@@ -109,7 +109,7 @@ export function FinanceEntryDeleteDrawer({item, kind, subject, pending, onClose,
         if (!open && !pending) onClose();
       }}
       title={`冲销${noun}记录`}
-      description="服务端将同时回滚账户余额和关联流水"
+      description="账户余额和关联流水会同步回滚"
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={pending}>取消</Button>

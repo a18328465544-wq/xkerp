@@ -37,7 +37,7 @@ function DailySalesSummaryCard({data, pending, fetching, error, onRetry}: {
   onRetry: () => void;
 }) {
   if (pending) return <Card><CardContent className="space-y-4 p-5"><div className="h-5 w-48 animate-pulse rounded-[var(--erp-radius-sm)] bg-[var(--erp-color-surface-muted)]" /><div className="h-14 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /><div className="h-28 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /></CardContent></Card>;
-  if (error || !data) return <Card><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--erp-color-danger)]" /><div><h2 className="font-semibold text-[var(--erp-color-text)]">今日销售总结暂时不可用</h2><p className="mt-1 text-sm text-[var(--erp-color-text-secondary)]">{error?.message || "服务器没有返回有效的销售汇总。"}</p></div></div><Button variant="secondary" size="sm" onClick={onRetry} disabled={fetching}><RefreshCw className={fetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />重试</Button></CardContent></Card>;
+  if (error || !data) return <Card><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--erp-color-danger)]" /><div><h2 className="font-semibold text-[var(--erp-color-text)]">今日销售总结暂时不可用</h2><p className="mt-1 text-sm text-[var(--erp-color-text-secondary)]">{error?.message || "暂时无法生成销售汇总，请稍后重试。"}</p></div></div><Button variant="secondary" size="sm" onClick={onRetry} disabled={fetching}><RefreshCw className={fetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />重试</Button></CardContent></Card>;
 
   const {summary, narrative} = data;
   const quantityDelta = summary.comparison.quantityDelta;
@@ -81,7 +81,6 @@ export function AiInsightsPage() {
   const quickStatus: QuickStatusItemData[] = [
     {icon: <Sparkles className="h-4 w-4" />, label: "建议数量", value: `${insights.length} 条`, description: "当前有效建议", tone: insights.length ? "info" : "neutral"},
     {icon: <TriangleAlert className="h-4 w-4" />, label: "高优先级", value: `${highCount} 条`, description: "需要优先处理", tone: highCount ? "danger" : "success"},
-    {icon: query.data?.source === "ai" ? <Sparkles className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />, label: "建议来源", value: query.data?.source === "ai" ? "AI" : "规则", description: "当前建议来源", tone: query.data?.source === "ai" ? "info" : "neutral"},
     {icon: <Clock3 className="h-4 w-4" />, label: "生成时间", value: formatStoreDateTime(query.data?.generatedAt), description: query.data?.expiresAt ? `有效至 ${formatStoreDateTime(query.data.expiresAt)}` : "暂无过期时间", tone: "neutral"},
   ];
 

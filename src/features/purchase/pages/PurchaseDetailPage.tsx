@@ -162,7 +162,7 @@ function PurchaseDetailContent({detail, session, onRefresh, refreshing, onDelete
 
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-5">
-        <Card><CardHeader><div><h2 className="text-sm font-semibold">商品明细</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">展示后端已存储的实物行；不在详情页反向猜测原始数量分组。</p></div></CardHeader><CardContent className="p-0"><PurchaseLineTable invoice={invoice} showCost={showCost} showProfit={showProfit} /></CardContent></Card>
+        <Card><CardHeader><div><h2 className="text-sm font-semibold">商品明细</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">按实物逐件展示。</p></div></CardHeader><CardContent className="p-0"><PurchaseLineTable invoice={invoice} showCost={showCost} showProfit={showProfit} /></CardContent></Card>
         <Card><CardHeader><div><h2 className="text-sm font-semibold">关联库存</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">库存和检测状态只做事实展示，不由采购详情页修改。</p></div></CardHeader><CardContent><PurchaseInventoryFacts items={detail.inventory} /></CardContent></Card>
         <Card><CardHeader><div><h2 className="text-sm font-semibold">采购图片</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">通过带鉴权的媒体请求打开，不重新上传已绑定的正式图片。</p></div></CardHeader><CardContent><PurchaseImages images={invoice.images || []} /></CardContent></Card>
       </div>
@@ -225,7 +225,7 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
     },
     onError: (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) logout(); else notify.error(error.message);},
   });
-  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleteOpen(false); notify.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已由服务端同步清理。"}); await Promise.all([
+  const deleteMutation = useMutation({mutationFn: (id: string) => purchaseApi.remove(id), onSuccess: async (result, id) => {setDeleteOpen(false); notify.success(`采购单 ${result.invoice.invoiceNo || id} 已删除`, {description: "待检测库存、付款流水和财务关联已同步清理。"}); await Promise.all([
     queryClient.invalidateQueries({queryKey: queryKeys.purchase.all()}),
     queryClient.invalidateQueries({queryKey: queryKeys.inventory.all()}),
     queryClient.invalidateQueries({queryKey: queryKeys.finance.all()}),
@@ -237,7 +237,7 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
   useEffect(() => {if (detailQuery.error instanceof ApiError && detailQuery.error.isUnauthorized) logout();}, [detailQuery.error, logout]);
   if (status === "loading") return <Card><ErpLoadingState title="正在验证采购权限" /></Card>;
   if (status === "error") return <ErpPageError title="无法读取登录状态" description={authError?.message || "请重新登录后继续。"} onRetry={() => void refresh()} />;
-  if (!session || !allowed) return <ErpPageError title="当前账号没有采购单据权限" description="服务器已拒绝 purchase_list 菜单访问，请联系管理员授权。" />;
+  if (!session || !allowed) return <ErpPageError title="当前账号没有采购单据权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
   if (detailQuery.isPending) return <Card><ErpLoadingState title="正在加载采购详情" description="正在匹配单据、库存、检测和可见付款事实。" /></Card>;
   if (detailQuery.error) return <ErpPageError title="采购详情加载失败" description={errorText(detailQuery.error)} onRetry={() => void detailQuery.refetch()} />;
   if (!detailQuery.data) return <ErpPageError title="采购单不存在" description="该单据可能已删除，或当前账号无权查看。" />;
@@ -250,7 +250,7 @@ export function PurchaseDetailPage({purchaseId}: {purchaseId: string}) {
       open={deleteOpen}
       title="删除采购单"
       documentName={detailQuery.data.invoice.invoiceNo || purchaseId}
-      description="仅尚未入库且未开始检测的采购单允许删除；删除会清理待检测库存、付款流水和财务关联，服务端会再次核验业务状态。"
+      description="仅尚未入库且未开始检测的采购单允许删除；删除会同时清理待检测库存、付款流水和财务关联。"
       pending={deleteMutation.isPending}
       error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
       onOpenChange={(open) => {if (!open) {setDeleteOpen(false); deleteMutation.reset();}}}

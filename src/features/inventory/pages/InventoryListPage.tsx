@@ -5,7 +5,7 @@ import {keepPreviousData, useQuery, type UseQueryResult} from "@tanstack/react-q
 import {ArrowDown, ArrowRight, ArrowUp, Boxes, ChevronDown, ImageOff, LockKeyhole, Plus, RefreshCw, RotateCcw, ScanLine, ShieldAlert, SlidersHorizontal, Warehouse} from "lucide-react";
 import {ErpCheckboxField, ErpEntityThumbnail, ErpSearchInput, ErpSegmentedControl} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
-import {Button, Card, CardContent, Input, Select} from "@/src/components/ui";
+import {Button, Card, Input, Select} from "@/src/components/ui";
 import {ErpBarcodeScannerDialog, ErpDialogShell, ErpMobileSummary, ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpProductLedgerDrawer, ErpStatusBadge, ErpTableResultsBar, ErpWarehousePageFrame, MetricsRegion, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
@@ -105,7 +105,7 @@ export function InventoryListPage() {
     retry: false,
   });
 
-  if (!accessGranted) return <ErpPageError title="当前账号没有库存入口权限" description="服务器已拒绝库存菜单访问（403）。请联系管理员授权后再试。" />;
+  if (!accessGranted) return <ErpPageError title="当前账号没有库存入口权限" description="当前账号没有此页面的访问权限，请联系管理员开通。" />;
 
   const rows = listQuery.data?.data || [];
   const ledgerSubjects = useMemo(() => (modelSummaryQuery.data || []).map(toProductLedgerSubject), [modelSummaryQuery.data]);
@@ -203,16 +203,17 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   const modelRows = modelSummaryQuery.data || [];
   const summary = useMemo(() => summarizeInventoryModelRows(modelRows, permissions.showCost), [modelRows, permissions.showCost]);
   const summaryReady = Boolean(modelSummaryQuery.data) && !searchPending && !modelSummaryQuery.isPlaceholderData && !modelSummaryQuery.isFetching && !modelSummaryQuery.isError;
-  const summaryDetail = summaryReady ? "按当前筛选" : modelSummaryQuery.isError ? "加载失败" : "更新中";
+  const summaryDetail = summaryReady ? undefined : modelSummaryQuery.isError ? "加载失败" : "更新中";
   const modelPageStart = (filters.page - 1) * filters.pageSize;
   const modelPageRows = modelRows.slice(modelPageStart, modelPageStart + filters.pageSize);
   const selectedCount = Object.values(rowSelection).filter(Boolean).length;
   const activeFilterCount = countActiveInventoryFilters(filters);
+  // Header chips are work to do, each linking to where it is done; stock state
+  // lives in the metric row so no number is shown twice.
+  const canOpen = (menu: string) => permissions.allowedMenus.includes("all") || permissions.allowedMenus.includes(menu);
   const quickStatus: QuickStatusItemData[] = [
-    {icon: <Warehouse className="h-4 w-4" />, label: "库存状态", value: "已连接", description: "库存与库位可查询", tone: "success"},
-    {icon: <ShieldAlert className="h-4 w-4" />, label: "待检测", value: summaryReady ? `${summary.pendingCount} 件` : "—", description: summaryReady ? "检测前库存" : summaryDetail, tone: summaryReady && summary.pendingCount ? "warning" : "success"},
-    {icon: <SlidersHorizontal className="h-4 w-4" />, label: "筛选状态", value: activeFilterCount ? `${activeFilterCount} 项` : "全部", description: "筛选状态已同步 URL", tone: activeFilterCount ? "info" : "neutral"},
-    {icon: <LockKeyhole className="h-4 w-4" />, label: "成本权限", value: permissions.showCost ? "可查看" : "已隐藏", description: permissions.showCost ? "按账号权限展示" : "服务器已隐藏", tone: permissions.showCost ? "success" : "neutral"},
+    {icon: <ShieldAlert className="h-4 w-4" />, label: "待检测", value: summaryReady ? `${summary.pendingCount} 件` : "—", description: "去质检入库", tone: summaryReady && summary.pendingCount ? "warning" : "neutral", action: canOpen("inspections") ? () => void navigate({to: "/inspections"}) : undefined},
+    {icon: <LockKeyhole className="h-4 w-4" />, label: "已预订", value: summaryReady ? `${summary.lockedCount} 件` : "—", description: "去扫码出库", tone: summaryReady && summary.lockedCount ? "info" : "neutral", action: canOpen("sales_outbound") ? () => void navigate({to: "/sales/outbound"}) : undefined},
   ];
   const columns = useMemo(() => createInventoryColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onDetail}), [onDetail, permissions.showCost, permissions.showProfit]);
   const modelColumns = useMemo(() => createInventoryModelColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onOpenCards, onOpenLedger}), [onOpenCards, onOpenLedger, permissions.showCost, permissions.showProfit]);
@@ -253,10 +254,8 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   const detailItem = journeyQuery.data?.card ?? detailQuery.data?.item ?? null;
   const inventoryMetrics = <MetricsRegion>
         <MetricCard label="库存总数" value={summaryReady ? `${summary.totalCount} 件` : "—"} detail={summaryDetail} icon={<Boxes className="h-4 w-4" />} />
-        <MetricCard label="在库数量" value={summaryReady ? `${summary.availableCount} 件` : "—"} detail={summaryReady ? "已入库 / 已上架" : summaryDetail} icon={<Warehouse className="h-4 w-4" />} />
-        <MetricCard label="待检测" value={summaryReady ? `${summary.pendingCount} 件` : "—"} detail={summaryReady ? "待检测 / 检测中" : summaryDetail} tone="warning" icon={<ShieldAlert className="h-4 w-4" />} />
-        <MetricCard label="已预订" value={summaryReady ? `${summary.lockedCount} 件` : "—"} detail={summaryReady ? "已锁定库存" : summaryDetail} icon={<LockKeyhole className="h-4 w-4" />} />
-        {permissions.showCost ? <MetricCard label="库存总成本" value={summaryReady && summary.totalCost !== undefined ? formatCurrency(summary.totalCost) : "—"} detail={summaryReady ? "按接口摘要汇总" : summaryDetail} icon={<Boxes className="h-4 w-4" />} /> : <MetricCard label="成本信息" value="无权限" detail="服务器已隐藏成本字段" tone="muted" icon={<LockKeyhole className="h-4 w-4" />} />}
+        <MetricCard label="在库数量" value={summaryReady ? `${summary.availableCount} 件` : "—"} detail={summaryDetail} icon={<Warehouse className="h-4 w-4" />} />
+        {permissions.showCost ? <MetricCard label="库存总成本" value={summaryReady && summary.totalCost !== undefined ? formatCurrency(summary.totalCost) : "—"} detail={summaryDetail} icon={<Boxes className="h-4 w-4" />} /> : null}
       </MetricsRegion>;
 
   const warehouseTasks = navigationItems.filter((item) => ["inspections", "sales_outbound"].includes(item.id) && isPathAllowed(permissions.allowedMenus, item.path));
@@ -277,7 +276,6 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
       <ErpPageHeader title={phone ? <span className="erp-inventory-phone-title">库存<small>{filters.status || (filters.includeSold ? "含已售出" : "当前库存")} · {mobileCount}</small></span> : "库存中心"} subtitle="按 SN、型号、库位和状态快速定位库存；默认只展示当前库存，已退货等历史记录请通过状态筛选查看。" quickStatus={phone ? undefined : quickStatus} actions={phone ? <div className="flex items-center gap-2"><Button type="button" variant="secondary" size="sm" onClick={() => setFiltersOpen(true)} aria-label={`库存筛选${activeFilterCount ? `，已启用 ${activeFilterCount} 项` : ""}`}><SlidersHorizontal className="h-4 w-4" />筛选{activeFilterCount > 0 && <span className="tabular-nums">{activeFilterCount}</span>}</Button>{warehouseTasks.length > 0 && <Button type="button" variant="secondary" size="icon" aria-label="库存作业与快捷操作" onClick={() => setActionsOpen(true)}><Plus className="h-4 w-4" /></Button>}</div> : <><InventoryViewSwitcher view={view} onChange={onChangeView} /><Button variant="secondary" onClick={onRefresh} disabled={listQuery.isFetching || modelSummaryQuery.isFetching}><RefreshCw className={listQuery.isFetching || modelSummaryQuery.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button></>} />
       {phone && <div className="erp-inventory-phone-views"><InventoryViewSwitcher view={view} onChange={onChangeView} /></div>}
       {!phone && <ErpMobileSummary label="库存统计">{inventoryMetrics}</ErpMobileSummary>}
-      {!phone && summaryReady && (summary.pendingCount > 0 || summary.lockedCount > 0) && <Card data-erp-region="inventory-next-step" className="border-[var(--erp-color-border)] bg-[var(--erp-color-surface)]"><CardContent className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]"><ShieldAlert className="h-4 w-4" /></span><div className="min-w-0"><p className="text-sm font-semibold text-[var(--erp-color-text)]">库存下一步</p><p className="truncate text-xs text-[var(--erp-color-text-secondary)]">待检测库存去质检，已预订库存去出库。</p></div></div><div className="flex flex-wrap items-center gap-2">{summary.pendingCount > 0 && <Link to={permissions.allowedMenus.includes("all") || permissions.allowedMenus.includes("inspections") ? "/inspections" : "/inventory"} className="inline-flex items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-warning)] bg-[var(--erp-color-warning-soft)] px-3 py-2 text-xs font-semibold text-[var(--erp-color-warning)]">待检测 {summary.pendingCount}<ArrowRight className="h-3.5 w-3.5" /></Link>}{summary.lockedCount > 0 && <Link to="/sales/outbound" className="inline-flex items-center gap-1 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-info)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs font-semibold text-[var(--erp-color-primary)]">已预订 {summary.lockedCount}<ArrowRight className="h-3.5 w-3.5" /></Link>}</div></CardContent></Card>}
       {!phone && <ErpPageToolbar>
       <ErpFilterBar mobileActiveCount={activeFilterCount - Number(Boolean(filters.keyword))} mobilePrimary={phone ? <div className="flex w-full min-w-0 items-center gap-2"><ErpSearchInput className="min-w-0 flex-1" value={filters.keyword} onChange={(event) => updateFilter({keyword: event.target.value})} placeholder="型号 / SN" aria-label="搜索库存" /><Button type="button" variant="secondary" size="icon" aria-label="扫码搜索库存" onClick={() => setScanOpen(true)}><ScanLine className="h-5 w-5" /></Button></div> : <ErpSearchInput className="min-w-[240px] flex-1" value={filters.keyword} onChange={(event) => updateFilter({keyword: event.target.value})} placeholder="搜索 SN、商品、品牌、型号" aria-label="搜索库存" />} actions={<Button variant="ghost" size="sm" onClick={() => commitFilters(defaultInventoryFilters)}><RotateCcw className="h-4 w-4" />重置筛选</Button>}>
         {filterFields}
@@ -396,7 +394,7 @@ function InventoryDetail({item, journey, journeyLoading, journeyError, onRetryJo
   ];
   return <div className="space-y-6" data-phone-detail="inventory">
     <section className="space-y-3" data-erp-region={phone ? "detail-hero" : undefined}>
-      {phone ? <ErpEntityThumbnail name={item.productName} category={item.category} imageUrl={item.imageUrl} className="erp-inventory-hero-thumbnail" /> : <div className="flex h-36 items-center justify-center overflow-hidden rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-surface-muted)]">{item.imageUrl ? <img src={item.imageUrl} alt={item.productName} className="h-full max-w-full object-contain" /> : <div className="flex flex-col items-center gap-2 text-xs text-[var(--erp-color-text-muted)]"><ImageOff className="h-7 w-7" />接口未返回商品图片</div>}</div>}
+      {phone ? <ErpEntityThumbnail name={item.productName} category={item.category} imageUrl={item.imageUrl} className="erp-inventory-hero-thumbnail" /> : <div className="flex h-36 items-center justify-center overflow-hidden rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-surface-muted)]">{item.imageUrl ? <img src={item.imageUrl} alt={item.productName} className="h-full max-w-full object-contain" /> : <div className="flex flex-col items-center gap-2 text-xs text-[var(--erp-color-text-muted)]"><ImageOff className="h-7 w-7" />暂无商品图片</div>}</div>}
       <div className="erp-inventory-detail-identity flex items-start justify-between gap-3"><div className="min-w-0"><p className="erp-inventory-detail-title truncate text-lg font-semibold text-[var(--erp-color-text)]">{item.productName}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{item.category}</p></div><InventoryStatus status={item.inventoryStatus} /></div>
       <div className="erp-phone-only"><span className="erp-phone-detail-price erp-data-number">{phonePrice === undefined ? "未设置售价" : formatCurrency(phonePrice)}</span><p className="text-xs text-[var(--erp-color-text-muted)]">{sold ? "实际成交价" : "预计售价"} · {item.condition} · {item.vram}</p></div>
     </section>
@@ -411,7 +409,7 @@ function InventoryDetailSection({title, children}: {title: string; children: Rea
 function DetailField({label, value}: {label: string; value: string | undefined}) { return <ErpDetailFact label={label} value={value || "—"} />; }
 function DetailAmount({label, value}: {label: string; value: number | undefined}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className="mt-1 erp-data-number text-base font-semibold">{value === undefined ? "—" : formatCurrency(value)}</p></div>; }
 
-function MetricCard({label, value, detail, icon, tone = "normal"}: {label: string; value: string; detail: string; icon: ReactNode; tone?: "normal" | "warning" | "muted"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "normal" || tone === "muted" ? "neutral" : "warning"} valueTone={tone === "muted" ? "muted" : tone === "warning" ? "warning" : "neutral"} />; }
+function MetricCard({label, value, detail, icon, tone = "normal"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "normal" | "warning" | "muted"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "normal" || tone === "muted" ? "neutral" : "warning"} valueTone={tone === "muted" ? "muted" : tone === "warning" ? "warning" : "neutral"} />; }
 
 function summarizeInventoryModelRows(rows: InventoryModelSummary[], showCost: boolean): InventorySummary {
   const summary = rows.reduce<InventorySummary>((result, row) => ({

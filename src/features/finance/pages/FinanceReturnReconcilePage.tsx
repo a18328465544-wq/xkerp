@@ -96,7 +96,7 @@ export function FinanceReturnReconcilePage() {
     return (
       <ErpPageError
         title="当前账号没有退货对账权限"
-        description="页面不会加载退货明细。"
+        description="当前账号没有查看退货明细的权限。"
       />
     );
   const error = salesQuery.error || purchaseQuery.error;
@@ -104,7 +104,7 @@ export function FinanceReturnReconcilePage() {
     return (
       <ErpPageError
         title="退货对账加载失败"
-        description={error instanceof Error ? error.message : "接口返回错误"}
+        description={error instanceof Error ? error.message : "加载失败"}
         onRetry={() => {
           void salesQuery.refetch();
           void purchaseQuery.refetch();
@@ -352,7 +352,7 @@ function FinanceReturnReconcileContent({
         <Metric
           label="已完成"
           value={`${filtered.filter((item) => item.status === "已完成").length} 单`}
-          detail="服务端已记录结果"
+          detail="已记录"
           tone="success"
         />
       </MetricsRegion>
