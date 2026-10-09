@@ -1380,6 +1380,10 @@ input[inputmode="numeric"] {
   .erp-dialog-viewport:has([data-mobile-presentation="dialog"]) { align-items: center; padding: var(--erp-space-4); }
   .erp-dialog-viewport > .erp-dialog-popup[data-mobile-presentation="dialog"] { width: 100%; max-width: 28rem; border-radius: var(--erp-radius-xl); margin-bottom: 0; }
   .erp-dialog-viewport:not(.erp-drawer-viewport) { bottom: var(--erp-phone-keyboard-inset); }
+  /* iOS can pan the visual viewport when the keyboard opens. Keep modal
+     surfaces anchored to that visible origin as well as its resized bottom,
+     so headers and pinned search fields remain inside the usable screen. */
+  .erp-dialog-viewport:not(.erp-drawer-viewport):not(:has([data-mobile-presentation="tab"])) { top: var(--erp-phone-viewport-offset-top, 0px); }
   .erp-dialog-popup[data-mobile-presentation="fullscreen"] { height: calc(var(--erp-phone-visible-height) - var(--erp-workspace-bar-height)); max-height: calc(var(--erp-phone-visible-height) - var(--erp-workspace-bar-height)); border-radius: 0; margin-bottom: 0; }
   .erp-dialog-popup[data-mobile-presentation="sheet"] { max-height: calc(var(--erp-phone-visible-height) - var(--erp-workspace-bar-height) - var(--erp-space-4)); }
   .erp-option-positioner, .erp-popover-positioner, .erp-picker-listbox { bottom: max(var(--erp-space-3), env(safe-area-inset-bottom)) !important; }
@@ -1415,7 +1419,9 @@ input[inputmode="numeric"] {
   background: var(--erp-scanner-camera-bg);
   color: var(--erp-scanner-camera-text);
 }
-.erp-barcode-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Camera streams may be portrait even when landscape dimensions are requested.
+   Fill the aiming surface; decoding still reads the uncropped source video. */
+.erp-barcode-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .erp-barcode-guide {
   position: absolute;
   top: 50%;
@@ -1916,6 +1922,9 @@ input[inputmode="numeric"] {
    table dimensions, global controls or inventory rules are changed. */
 @media (max-width: 767px) {
   .erp-inventory-directory { margin-inline: calc(0px - var(--erp-space-4)); width: calc(100% + var(--erp-space-8)); max-width: none; }
+  /* The scroll container already reserves the fixed search dock and bottom
+     navigation. Do not add the legacy in-flow spacer a second time here. */
+  .erp-inventory-directory > [data-erp-region="mobile-action-spacer"] { display: none; }
   .erp-inventory-directory > [data-erp-component="page-header"] { padding-inline: var(--erp-space-4); align-items: center; }
   .erp-inventory-phone-title { display: block; font-size: var(--erp-mobile-page-title); font-weight: var(--erp-font-semibold); }
   .erp-inventory-phone-title small { display: block; margin-top: var(--erp-space-1); font-size: var(--erp-text-sm); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); }

@@ -76,6 +76,7 @@ function AppShellContent({children}: {children: ReactNode}) {
     const root = document.documentElement;
     const previousInset = root.style.getPropertyValue("--erp-phone-keyboard-inset");
     const previousHeight = root.style.getPropertyValue("--erp-phone-visible-height");
+    const previousOffsetTop = root.style.getPropertyValue("--erp-phone-viewport-offset-top");
     const update = () => {
       const focused = document.activeElement;
       const editing = focused instanceof HTMLElement && focused.matches("textarea, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='file']):not([readonly]):not([disabled])");
@@ -84,6 +85,7 @@ function AppShellContent({children}: {children: ReactNode}) {
       setKeyboard((previous) => previous.open === next.open && previous.inset === next.inset ? previous : next);
       root.style.setProperty("--erp-phone-keyboard-inset", `${next.inset}px`);
       root.style.setProperty("--erp-phone-visible-height", `${viewport.height}px`);
+      root.style.setProperty("--erp-phone-viewport-offset-top", `${Math.max(0, viewport.offsetTop)}px`);
     };
     viewport.addEventListener("resize", update);
     viewport.addEventListener("scroll", update);
@@ -94,7 +96,7 @@ function AppShellContent({children}: {children: ReactNode}) {
     window.addEventListener("focusin", update);
     window.addEventListener("focusout", update);
     update();
-    return () => {viewport.removeEventListener("resize", update); viewport.removeEventListener("scroll", update); window.removeEventListener("resize", update); window.removeEventListener("orientationchange", update); window.removeEventListener("pageshow", update); document.removeEventListener("visibilitychange", update); window.removeEventListener("focusin", update); window.removeEventListener("focusout", update); if (previousInset) root.style.setProperty("--erp-phone-keyboard-inset", previousInset); else root.style.removeProperty("--erp-phone-keyboard-inset"); if (previousHeight) root.style.setProperty("--erp-phone-visible-height", previousHeight); else root.style.removeProperty("--erp-phone-visible-height");};
+    return () => {viewport.removeEventListener("resize", update); viewport.removeEventListener("scroll", update); window.removeEventListener("resize", update); window.removeEventListener("orientationchange", update); window.removeEventListener("pageshow", update); document.removeEventListener("visibilitychange", update); window.removeEventListener("focusin", update); window.removeEventListener("focusout", update); if (previousInset) root.style.setProperty("--erp-phone-keyboard-inset", previousInset); else root.style.removeProperty("--erp-phone-keyboard-inset"); if (previousHeight) root.style.setProperty("--erp-phone-visible-height", previousHeight); else root.style.removeProperty("--erp-phone-visible-height"); if (previousOffsetTop) root.style.setProperty("--erp-phone-viewport-offset-top", previousOffsetTop); else root.style.removeProperty("--erp-phone-viewport-offset-top");};
   }, [phone]);
 
   // Give keyboard and screen-reader users a predictable reading position after

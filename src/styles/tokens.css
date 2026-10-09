@@ -182,6 +182,7 @@
   --erp-mobile-row-inset: var(--erp-space-3);
   --erp-phone-keyboard-inset: 0px;
   --erp-phone-visible-height: 100dvh;
+  --erp-phone-viewport-offset-top: 0px;
   --erp-safe-top: env(safe-area-inset-top, 0px);
   --erp-safe-right: env(safe-area-inset-right, 0px);
   --erp-safe-bottom: env(safe-area-inset-bottom, 0px);

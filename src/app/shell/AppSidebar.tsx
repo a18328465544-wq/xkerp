@@ -38,7 +38,10 @@ export function AppSidebar() {
     module.items.some((item) => isNavigationItemActive(item, pathname)),
   )?.id;
   const visualCollapsed = sidebarCollapsed && !mobileSidebarOpen;
-  const [mobileOpenModuleId, setMobileOpenModuleId] = useState<string | undefined>(activeModuleId);
+  // undefined follows the active route; null means the user explicitly
+  // collapsed every module. Keeping those states distinct lets the active
+  // module be collapsed with a second tap on touch devices.
+  const [mobileOpenModuleId, setMobileOpenModuleId] = useState<string | null | undefined>(undefined);
   const [openModuleId, setOpenModuleId] = useState<string | undefined>();
   const [drawerPosition, setDrawerPosition] = useState<DrawerPosition | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,7 +86,7 @@ export function AppSidebar() {
   }, [cancelCloseDrawer]);
 
   useEffect(() => {
-    if (mobileSidebarOpen && activeModuleId) setMobileOpenModuleId(activeModuleId);
+    if (mobileSidebarOpen) setMobileOpenModuleId(activeModuleId ?? null);
   }, [activeModuleId, mobileSidebarOpen]);
 
   useEffect(() => {
@@ -143,7 +146,10 @@ export function AppSidebar() {
           {visibleModules.map((module) => {
             const ModuleIcon = module.icon;
             const active = module.items.some((item) => isNavigationItemActive(item, pathname));
-            const mobileExpanded = mobileSidebarOpen && (mobileOpenModuleId === module.id || active);
+            const mobileExpanded = mobileSidebarOpen && (
+              mobileOpenModuleId === module.id ||
+              (mobileOpenModuleId === undefined && active)
+            );
             const flyoutOpen = openModuleId === module.id;
             return (
               <section key={module.id} className="space-y-1">
@@ -162,7 +168,7 @@ export function AppSidebar() {
                   onFocus={(event) => { if (!mobileSidebarOpen) openDrawer(module.id, event.currentTarget); }}
                   onClick={(event) => {
                     if (mobileSidebarOpen) {
-                      setMobileOpenModuleId((value) => value === module.id ? undefined : module.id);
+                      setMobileOpenModuleId((value) => value === module.id ? null : module.id);
                     } else {
                       openDrawer(module.id, event.currentTarget);
                     }

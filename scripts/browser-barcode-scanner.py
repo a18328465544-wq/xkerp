@@ -56,9 +56,11 @@ SETUP = """async ({mode, png, text}) => {
     if (mode === 'denied') throw new DOMException('Permission denied', 'NotAllowedError');
     const image = new Image(); image.src = 'data:image/png;base64,' + png; await image.decode();
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(800, image.width); canvas.height = Math.max(480, image.height);
+    canvas.width = mode === 'wasm-portrait' ? 720 : Math.max(800, image.width); canvas.height = mode === 'wasm-portrait' ? 1280 : Math.max(480, image.height);
     const ctx = canvas.getContext('2d'); ctx.fillStyle='white'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.drawImage(image,(canvas.width-image.width)/2,(canvas.height-image.height)/2);
+    const scale = Math.min(1, canvas.width * .85 / image.width, canvas.height * .85 / image.height);
+    const w = image.width * scale, h = image.height * scale;
+    ctx.drawImage(image,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
     const stream = canvas.captureStream(10); stats.media++;
     stream.getTracks().forEach(track => {const stop=track.stop.bind(track); track.stop=()=>{stats.stops++; stop();};});
     return stream;
@@ -69,8 +71,49 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     passed = 0
     try:
+        if not PRODUCTION:
+            # Actual portrait/landscape MediaStreams reproduce iPhone letterboxing;
+            # a 16:9-only mocked camera would miss this regression.
+            for width, height in [(320, 844), (390, 844), (430, 844), (768, 844), (1024, 844), (1440, 900), (844, 390), (390, 420)]:
+                for orientation in ['frame', 'portrait']:
+                    context = browser.new_context(viewport={"width": width, "height": height})
+                    page = context.new_page()
+                    try:
+                        page.goto(BASE + '/scripts/fixtures/barcode-scanner.html?preview=' + orientation)
+                        page.wait_for_load_state('networkidle')
+                        page.get_by_role('button', name='打开扫码', exact=True).click()
+                        video = page.get_by_label('扫码相机预览')
+                        expect(video).to_be_visible()
+                        page.wait_for_function('document.querySelector(".erp-barcode-video")?.videoWidth > 0')
+                        geometry = video.evaluate('''video => {
+                          const camera = video.parentElement.getBoundingClientRect();
+                          const guide = video.parentElement.querySelector('[data-erp-region="barcode-guide"]').getBoundingClientRect();
+                          const style = getComputedStyle(video);
+                          const scale = Math.max(camera.width / video.videoWidth, camera.height / video.videoHeight);
+                          return {fit: style.objectFit, position: style.objectPosition, sourceWidth:video.videoWidth, sourceHeight:video.videoHeight,
+                            frameWidth:camera.width, frameHeight:camera.height, renderedWidth:video.videoWidth*scale, renderedHeight:video.videoHeight*scale,
+                            guideInside:guide.left>=camera.left && guide.right<=camera.right && guide.top>=camera.top && guide.bottom<=camera.bottom};
+                        }''')
+                        assert geometry['fit'] == 'cover' and geometry['position'] == '50% 50%', geometry
+                        assert geometry['sourceWidth'] == (720 if orientation == 'portrait' else 1280), geometry
+                        assert geometry['sourceHeight'] == (1280 if orientation == 'portrait' else 720), geometry
+                        assert geometry['renderedWidth'] >= geometry['frameWidth'] - 1 and geometry['renderedHeight'] >= geometry['frameHeight'] - 1, geometry
+                        assert geometry['guideInside'], geometry
+                        assert abs(geometry['frameWidth'] / geometry['frameHeight'] - 16/9) < .01, geometry
+                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+                        close = page.get_by_role('dialog').get_by_role('button', name='关闭', exact=True).last
+                        expect(close).to_be_in_viewport()
+                        if width == 390 and height == 844:
+                            page.screenshot(path=str(ARTIFACTS / f'scanner-preview-{orientation}-{width}.png'))
+                        close.click()
+                        expect(page.get_by_role('dialog')).to_have_count(0)
+                        assert page.evaluate('window.__previewCameraStops') == 1
+                        passed += 1
+                        print(f'PASS {width}x{height} {orientation} preview fills guide and releases camera', flush=True)
+                    finally:
+                        context.close()
         for width in ([390] if PRODUCTION else [390, 1440]):
-            for mode in (['wasm', 'denied'] if PRODUCTION else ['native', 'wasm', 'native-partial', 'native-empty', 'denied', 'close-loading', 'retry-load']):
+            for mode in (['wasm', 'wasm-portrait', 'denied'] if PRODUCTION else ['native', 'wasm', 'wasm-portrait', 'native-partial', 'native-empty', 'denied', 'close-loading', 'retry-load']):
                 context = browser.new_context(viewport={"width": width, "height": 844})
                 page = context.new_page()
                 errors, requests = [], []

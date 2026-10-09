@@ -9,7 +9,7 @@ import "../../src/styles/globals.css";
 // Explicit local-only geometry fixtures avoid requesting the user's camera.
 // No real barcode is returned; hardware recognition still needs device QA.
 const preview = new URLSearchParams(location.search).get("preview");
-if (preview === "frame" || preview === "denied") {
+if (preview === "frame" || preview === "portrait" || preview === "denied") {
   class PreviewDetector {
     static async getSupportedFormats() {return ["qr_code", "code_128", "code_39", "code_93", "ean_13", "ean_8", "data_matrix"];}
     async detect() {return [];}
@@ -18,12 +18,19 @@ if (preview === "frame" || preview === "denied") {
   navigator.mediaDevices.getUserMedia = async () => {
     if (preview === "denied") throw new DOMException("Local camera denial fixture", "NotAllowedError");
     const canvas = document.createElement("canvas");
-    canvas.width = 1280;
-    canvas.height = 720;
+    canvas.width = preview === "portrait" ? 720 : 1280;
+    canvas.height = preview === "portrait" ? 1280 : 720;
     const context = canvas.getContext("2d")!;
-    context.fillStyle = "#374151";
+    context.fillStyle = "#cee4ea";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    return canvas.captureStream(8);
+    const stream = canvas.captureStream(8);
+    const previewState = window as Window & {__previewCameraStops: number};
+    previewState.__previewCameraStops = 0;
+    stream.getTracks().forEach((track) => {
+      const stop = track.stop.bind(track);
+      track.stop = () => {previewState.__previewCameraStops++; stop();};
+    });
+    return stream;
   };
 }
 

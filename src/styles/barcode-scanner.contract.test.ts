@@ -28,12 +28,20 @@ test("barcode aiming guide is wide, centered and does not intercept camera inter
 });
 
 test("full-frame video, QR compatibility, fallback input and session cleanup stay intact", () => {
-  assert.match(css, /\.erp-barcode-video\s*\{[^}]*object-fit: contain/);
+  assert.match(css, /\.erp-barcode-video\s*\{[^}]*object-fit: cover;[^}]*object-position: center/);
+  assert.doesNotMatch(css, /\.erp-barcode-video\s*\{[^}]*object-fit: contain/);
   assert.match(scanner, /deliverActiveBarcode\(video, \(source\) => decoder!\.detect\(source\)/);
   assert.match(scanner, /"qr_code", "code_128"/);
   assert.match(scanner, /photoScanRef\.current\?\.\(file\)/);
   assert.match(scanner, /deliverCodeRef\.current\?\.\(manualCode\.trim\(\)\)/);
   assert.match(scanner, /ownedStream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+});
+
+test("portrait preview fitting never crops the decoder input", () => {
+  const frames = readFileSync(new URL("../components/common/barcodeScannerFrames.ts", import.meta.url), "utf8");
+  assert.match(frames, /barcodeFrameSize\(video.videoWidth, video.videoHeight\)/);
+  assert.match(frames, /context.drawImage\(video, 0, 0, size.width, size.height\)/);
+  assert.doesNotMatch(scanner, /detect\([^)]*getBoundingClientRect/);
 });
 
 test("unavailable camera cannot display a misleading active aiming guide", () => {
