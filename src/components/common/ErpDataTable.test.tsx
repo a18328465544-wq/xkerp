@@ -128,7 +128,7 @@ test("hidden columns stay hidden in column-built phone rows", () => {
 
 test("mobileCell replaces a rich desktop cell on phones only", () => {
   const rich: ColumnDef<Customer, unknown>[] = [
-    customerColumns[0],
+    ...customerColumns.slice(0, 1),
     {accessorKey: "balance", header: "应收", meta: {mobile: "amount", mobileCell: (row) => `¥${row.balance}`}, cell: () => <div>桌面两行<p>附加说明</p></div>},
   ];
   const phone = renderToStaticMarkup(<ErpDataTable columns={rich} data={customers} getRowId={(row) => row.id} mobileRow="columns" phone compactViewport />);

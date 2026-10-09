@@ -39,7 +39,8 @@ const targets = [
   {
     name: "客户档案页",
     file: "src/features/customers/pages/CustomerDirectoryPage.tsx",
-    required: ["ErpPageHeader", "ErpFilterBar", "ErpDataTable", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError", "MetricsRegion"],
+    // Header, filters, table and metrics come from the ErpListPage template.
+    required: ["ErpListPage", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError"],
     forbidden: [
       [/<table\b/, "不得在客户档案页重复实现 DataTable 外壳"],
       [/<Sheet\b|<Sheet\./, "详情必须使用 ErpDetailDrawer，不能直接使用基础 Sheet"],
