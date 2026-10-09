@@ -6,9 +6,6 @@ export function defaultFinanceRange(): FinanceDateRange {
   return {startDate: storeDateAfterDays(-6), endDate: storeDate()};
 }
 
-export function financeRangeForDays(days: 7 | 30 | 90): FinanceDateRange {
-  return {startDate: storeDateAfterDays(-(days - 1)), endDate: storeDate()};
-}
 
 export function parseFinanceRange(search: string): FinanceDateRange {
   const fallback = defaultFinanceRange();

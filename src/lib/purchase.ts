@@ -1,4 +1,4 @@
-import type {PurchaseFormValues, PurchaseLineFormValue, PurchaseSettlement, PurchaseSummary} from "@/src/types/purchase";
+import type {PurchaseLineFormValue, PurchaseSettlement, PurchaseSummary} from "@/src/types/purchase";
 import {purchaseQuantity, purchaseQuantityError} from "@/src/utils/purchaseQuantity";
 
 export {purchaseQuantity} from "@/src/utils/purchaseQuantity";
@@ -65,8 +65,4 @@ export function calculatePurchaseSettlement(totalCost: number, paidAmount: numbe
     paymentStatus: isPaid ? "已付款" : paid > 0 || credit > 0 ? "部分付款" : "未付款",
     overpaid,
   };
-}
-
-export function purchaseTotalCost(values: Pick<PurchaseFormValues, "items">): number {
-  return calculatePurchaseSummary(values.items).totalCost;
 }

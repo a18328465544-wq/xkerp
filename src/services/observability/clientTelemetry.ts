@@ -99,18 +99,5 @@ export function reportClientRequest(context: ClientRequestContext) {
   }
 }
 
-export function getLastClientError(): ClientErrorContext | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const value = window.sessionStorage.getItem(LAST_ERROR_KEY);
-    if (!value) return null;
-    const parsed = JSON.parse(value) as Partial<ClientErrorContext>;
-    return typeof parsed.message === "string" && (parsed.kind === "api" || parsed.kind === "runtime")
-      ? safeContext(parsed as ClientErrorContext)
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 export {CLIENT_ERROR_EVENT, CLIENT_REQUEST_EVENT};

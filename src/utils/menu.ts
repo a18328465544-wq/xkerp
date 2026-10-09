@@ -140,18 +140,10 @@ export const APP_MENU_ITEMS: AppMenuItem[] = APP_MENU_MODULES.flatMap(
   (module) => module.items,
 );
 
-export const APP_MENU_SECTIONS = APP_MENU_MODULES.map((module) => ({
-  name: module.name,
-}));
 
-export const APP_MENU_GROUPS: AppMenuGroup[] = APP_MENU_SECTIONS.map(
-  (section) => section.name,
-);
 
 export const APP_MENU_IDS = APP_MENU_ITEMS.map((item) => item.id);
 
-export const getMenuGroupForId = (menuId: string) =>
-  APP_MENU_ITEMS.find((item) => item.id === menuId)?.group;
 
 export const ROLE_DEFAULT_MENU_IDS: Record<StoreRole, string[]> = {
   老板: ["all"],
@@ -249,10 +241,6 @@ export function normalizeAllowedMenus(
   return APP_MENU_IDS.filter((id) => normalized.has(id));
 }
 
-export function expandAllowedMenus(allowedMenus: string[] | undefined) {
-  if (allowedMenus?.includes("all")) return APP_MENU_IDS;
-  return normalizeAllowedMenus(allowedMenus);
-}
 
 export function isMenuAllowed(allowedMenus: string[], menuId: string) {
   const normalized = normalizeAllowedMenus(allowedMenus);
@@ -261,14 +249,4 @@ export function isMenuAllowed(allowedMenus: string[], menuId: string) {
 
 export function isAnyMenuAllowed(allowedMenus: string[], menuIds: readonly string[]) {
   return menuIds.some((menuId) => isMenuAllowed(allowedMenus, menuId));
-}
-
-export function filterMenuModulesByPermissions(allowedMenus: string[]) {
-  return APP_MENU_MODULES.map((module) => ({
-    ...module,
-    items: module.items.filter(
-      (item) =>
-        !item.hiddenInNavigation && isMenuAllowed(allowedMenus, item.id),
-    ),
-  })).filter((module) => module.items.length > 0);
 }

@@ -1,4 +1,3 @@
-import type {SortingState} from "@tanstack/react-table";
 import type {CustomerDirectoryFilters, CustomerDirectoryItem} from "@/src/types/customer";
 
 export const defaultCustomerFilters: CustomerDirectoryFilters = {keyword: "", type: "all", channel: "all", level: "all", page: 1, pageSize: 20};
@@ -40,17 +39,5 @@ export function filterCustomers(customers: CustomerDirectoryItem[], filters: Cus
     if (filters.level !== "all" && customer.level !== filters.level) return false;
     if (!keyword) return true;
     return normalized([customer.id, customer.name, customer.contact, customer.phone || "", customer.wechat || "", customer.source, customer.type, customer.owner || "", customer.remarks || "", ...customer.tags].join(" ")).includes(keyword);
-  });
-}
-
-export function sortCustomers(customers: CustomerDirectoryItem[], sorting: SortingState) {
-  const rule = sorting[0];
-  if (!rule) return [...customers].sort((left, right) => String(right.lastDealTime || "").localeCompare(String(left.lastDealTime || ""), "zh-CN", {numeric: true}));
-  const direction = rule.desc ? -1 : 1;
-  return [...customers].sort((left, right) => {
-    const leftValue = left[rule.id as keyof CustomerDirectoryItem];
-    const rightValue = right[rule.id as keyof CustomerDirectoryItem];
-    if (typeof leftValue === "number" || typeof rightValue === "number") return (Number(leftValue || 0) - Number(rightValue || 0)) * direction;
-    return String(leftValue || "").localeCompare(String(rightValue || ""), "zh-CN", {numeric: true}) * direction;
   });
 }

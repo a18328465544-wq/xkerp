@@ -120,6 +120,7 @@ function getPostReadReloadKeys(method: string, path: string): StateCollectionKey
   if (/^\/api\/sales-invoices\/[^/]+\/outbound\/preflight$/.test(pathname)) return ["salesInvoices", "inventory", "products"];
   if (pathname === "/api/gpu_erp/crm/quick-capture/parse") return ["customers", "products"];
   if (pathname === "/api/gpu_erp/crm/customer/lead-preview") return [];
+  if (pathname === "/api/gpu-sn/parse") return [];
   return null;
 }
 
@@ -143,6 +144,8 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   if (startsWithAny(path, ["/api/order-pool"])) return ["customerOrders", "logs"];
   if (startsWithAny(path, ["/api/market-quotes"])) return ["marketQuotes", "inventory", "logs"];
   if (startsWithAny(path, ["/api/inventory"])) return ["inventory", "products", "purchaseInvoices", "salesInvoices", "purchaseCommissions", "logs"];
+  if (path === "/api/gpu-sn/estimate/save") return ["inventory", "logs"];
+  if (path === "/api/gpu-sn/parse") return null;
   if (startsWithAny(path, ["/api/customers"])) return ["customers", "logs"];
   if (startsWithAny(path, ["/api/vendors"])) return ["vendors", "logs"];
   if (startsWithAny(path, ["/api/users"])) return ["systemUsers", "logs"];

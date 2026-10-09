@@ -16,6 +16,7 @@ import {inventoryInspectionPendingStatusValues, inventoryRepairStatusValues} fro
 import {buildPendingSalesNeedByProduct, productIdentityKey} from "./storeInventoryPlanning.ts";
 import {ValidationError} from "./errors.ts";
 import {advancePurchaseVersionsForInventory} from "./purchaseRecordVersion.ts";
+import {gpuSnBrandIdFromName, parseGpuSnDate} from "./gpuSnDate.ts";
 
 export type InventoryOperationsState = {
   inventory: CardInventory[];
@@ -354,5 +355,19 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
     return {results, updatedCount, missingCount: results.filter((item) => !item.matched).length};
   };
 
-  return {batchUpdateInventory, getInventorySummary, importInventoryRows, scanInventoryFlow};
+  const saveGpuFactoryDateEstimate = (inventoryId: string) => {
+    const card = state.inventory.find((item) => item.id === inventoryId);
+    if (!card) throw new ValidationError("库存档案不存在");
+    if (card.gpuFactoryDateEstimate) return {saved: false, inventory: card, estimate: card.gpuFactoryDateEstimate};
+    const brandId = gpuSnBrandIdFromName(card.brand);
+    if (!brandId) throw new ValidationError("该库存卡品牌未纳入 SN 日期规则");
+    const estimate = parseGpuSnDate({brandId, sn: card.sn, productModel: card.model});
+    if (estimate.status !== "parsed" || !estimate.dateRange) throw new ValidationError("当前 SN 无法可靠推算出完整日期，请先使用官方入口确认");
+    const updated = {...card, gpuFactoryDateEstimate: {...estimate, savedAt: nowStamp()}};
+    state.inventory = state.inventory.map((item) => item.id === card.id ? updated : item);
+    addLog(getActiveRole(), "库存管理", "保存 SN 出厂日期推算", `${card.id} · ${card.sn}`, undefined, `${estimate.dateRange.start} 至 ${estimate.dateRange.end}；规则 ${estimate.ruleId}；可信度 ${estimate.confidence}`);
+    return {saved: true, inventory: updated, estimate: updated.gpuFactoryDateEstimate};
+  };
+
+  return {batchUpdateInventory, getInventorySummary, importInventoryRows, scanInventoryFlow, saveGpuFactoryDateEstimate};
 }

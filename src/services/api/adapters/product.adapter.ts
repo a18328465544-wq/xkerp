@@ -1,5 +1,5 @@
 import type {PermissionModel} from "../endpoints/auth";
-import type {ProductImportRequestDto, ProductLibraryResponseDto, ProductTemplateRequestDto} from "../dto/product.dto";
+import type {ProductLibraryResponseDto, ProductTemplateRequestDto} from "../dto/product.dto";
 import type {ProductLibraryItem, ProductLibrarySnapshot, ProductTemplateFormValues} from "@/src/types/product";
 import {productCategoryValues} from "@/src/types/core";
 import type {ProductCategory} from "@/src/types/core";
@@ -98,8 +98,4 @@ export function toProductTemplateRequest(values: ProductTemplateFormValues): Pro
     ...(values.remarks.trim() ? {remarks: values.remarks.trim()} : {}),
     ...(values.imageUrls.length ? {imageUrls: values.imageUrls.filter(Boolean)} : {}),
   };
-}
-
-export function toProductImportRequest(values: ProductTemplateFormValues, id?: string): ProductImportRequestDto {
-  return {...toProductTemplateRequest(values), ...(id?.trim() ? {id: id.trim()} : {})};
 }

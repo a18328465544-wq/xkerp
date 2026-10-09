@@ -101,6 +101,7 @@ import { registerUserManagementRoutes } from "./routes/userManagement.ts";
 import { registerCrmQuickCaptureRoutes } from "./routes/crmQuickCaptureRoutes.ts";
 import { registerOrderPoolRoutes } from "./routes/orderPool.ts";
 import { registerOpenApiRoutes } from "./routes/openApi.ts";
+import {registerGpuSnDateRoutes} from "./routes/gpuSnDate.ts";
 import { registerLoginRoute, registerLogoutRoute, registerResetRoute } from "./routes/auth.ts";
 import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
 import { createStateProxy, getCurrentState, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
@@ -890,6 +891,14 @@ registerOpenApiRoutes(app, {
   paginated,
   defaultTenantId: DEFAULT_TENANT_ID,
   defaultStoreId: DEFAULT_STORE_ID,
+});
+
+registerGpuSnDateRoutes(app, {
+  requireMenu,
+  requireAnyMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
 });
 
 // Background clients poll this lightweight revision endpoint first. Keeping it ahead of the

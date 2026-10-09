@@ -26,6 +26,7 @@ const stateMutationRoutePatterns = [
   /^\/api\/aftersales(?:\/[^/]+)?$/,
   /^\/api\/market-quotes(?:\/(?:import|[^/]+))?$/,
   /^\/api\/inventory\/(?:batch|import|scan-flow)$/,
+  /^\/api\/gpu-sn\/estimate\/save$/,
   /^\/api\/customers(?:\/[^/]+)?$/,
   /^\/api\/vendors(?:\/[^/]+)?$/,
   /^\/api\/order-pool(?:\/[^/]+)?(?:\/(?:events|links))?$/,

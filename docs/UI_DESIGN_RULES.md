@@ -59,7 +59,7 @@
 
 复杂表单、可编辑明细和扫码/日期网格可以组合底层 `Dialog`、原生 checkbox/radio/button，但必须保留统一的遮罩、焦点、类型、错误和移动端行为，并在代码中说明例外原因。图片预览统一使用 `ErpImagePreviewDialog`；底层 `Dialog` 仅允许出现在 `ErpDialogShell`、全局命令搜索和持续工作抽屉等已登记的复杂交互中。Sonner 只可在 `NotificationToaster` 和 `notification.ts` 适配层出现。
 
-- 图表运行时统一通过 `src/components/ui/lazyChartPrimitives.tsx` 延迟加载；`src/components/ui/recharts.tsx` 是唯一允许运行时导入 `recharts` 的边界。页面可以静态导入轻量图表适配器，但只有真正渲染图表时才请求图表 vendor chunk。图表必须在 `ChartContainer` 的 Suspense 边界内提供可读的加载态和空态。
+- 图表统一复用 `src/components/ui/chart-primitives.tsx`；`src/components/ui/recharts.tsx` 是唯一允许运行时导入 `recharts` 的边界，图表库拆分为独立可缓存的 vendor chunk。底层 Recharts 组件必须同步导出，不得用 `React.lazy` 包裹 forwardRef 图表组件；按需加载发生在页面模块边界。`ChartContainer` 统一提供图表外壳，页面负责可读的加载、错误和空态。
 
 ## 4. 页面、工具栏和表格
 
@@ -109,7 +109,7 @@ ErpPageFrame
 - 工作区切页保留录单草稿，不等于允许关闭时静默清理草稿。活动和后台未保存 Tab 的关闭都由同一确认框保护；只有明确确认本次关闭后才跳过重复路由确认，导航结束/失败后立即清理确认意图。关闭成功前保留当前草稿。
 - 响应式统一为手机 <768px、平板 768–1023px、电脑 >=1024px。至少检查 320/390/768/1024/1440px；手机优先保证搜索、当前任务、主操作和关闭入口，次要统计折叠、高级筛选进面板、列表投影为卡片。
 - 复杂手机录入使用 ErpMobileWorkflow 分步展示同一张表单，非当前步骤保持挂载。禁止复制独立手机业务表单或改变原金额/库存/退货规则。桌面不显示步骤和手机导航。
-- 所有图标按钮必须有无障碍名称；焦点环可见；颜色不是唯一状态提示；手机主要触控目标不小于 44px。键盘、安全区及固定操作栏遵守共享手机令牌，详情见 MOBILE_WORKBENCH_V1.md。
+- 所有图标按钮必须有无障碍名称；焦点环可见；颜色不是唯一状态提示；手机主要触控目标不小于 44px。键盘、安全区及固定操作栏遵守共享手机令牌，按钮尺寸与交互规范见 MOBILE_BUTTON_RULES_20261009.md，工作台规范见 MOBILE_WORKBENCH_V1.md。
 
 ## 7. 质量门禁和例外
 

@@ -92,6 +92,8 @@ export interface CardInventory {
   condition: InventoryCondition;
   inWarranty: boolean;
   warrantyDate?: string;
+  /** Separate estimate; never replaces the manually maintained warranty date. */
+  gpuFactoryDateEstimate?: import("./gpuSn").GpuFactoryDateEstimate;
   repaired: boolean;
   gpuRisk: boolean;
   fullBox: boolean;

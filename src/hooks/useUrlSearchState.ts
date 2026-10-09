@@ -109,7 +109,3 @@ export function useUrlSearchState<T>({defaultValue, parse, serialize, preserveKe
 
   return {value: visibleValue, setValue, commit};
 }
-
-export function replaceUrlSearch(params: URLSearchParams) {
-  writeSearch(params);
-}

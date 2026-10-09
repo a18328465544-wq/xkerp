@@ -31,6 +31,7 @@ const protectedPatterns = [
   /^\/api\/aftersales(?:\/[^/]+)?$/,
   /^\/api\/market-quotes(?:\/(?:import|[^/]+))?$/,
   /^\/api\/inventory\/(?:batch|import|scan-flow)$/,
+  /^\/api\/gpu-sn\/estimate\/save$/,
   /^\/api\/customers(?:\/[^/]+)?$/,
   /^\/api\/vendors(?:\/[^/]+)?$/,
   /^\/api\/order-pool(?:\/[^/]+)?(?:\/(?:events|links))?$/,
@@ -47,6 +48,7 @@ const exemptions = new Map([
   ["/api/ai/copilot", "stateless AI/SSE request; no ERP state write"],
   ["/api/gpu_erp/crm/quick-capture/parse", "parse/audit preparation endpoint; confirmation is the protected mutation"],
   ["/api/gpu_erp/crm/customer/lead-preview", "pure preview endpoint; no persisted business mutation"],
+  ["/api/gpu-sn/parse", "parse/audit preparation endpoint; save is the protected mutation"],
   ["/api/sales-invoices/:id/outbound/preflight", "authoritative read-only outbound validation; confirmation is the protected mutation"],
 ]);
 

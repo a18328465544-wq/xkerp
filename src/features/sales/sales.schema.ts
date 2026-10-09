@@ -1,5 +1,4 @@
 import {z} from "zod";
-import type {SalesFormValues} from "@/src/types/sales";
 import {salesChannelValues, salesPaymentMethodValues} from "@/src/types/sales";
 import {customerPartnerTypes} from "@/src/types/customer";
 import {isSalesLineFilled} from "./sales.calculations";
@@ -80,7 +79,3 @@ export const salesOrderSchema = z.object({
 });
 
 export type SalesOrderSchemaValues = z.infer<typeof salesOrderSchema>;
-
-export function parseSalesOrderValues(value: SalesFormValues) {
-  return salesOrderSchema.safeParse(value);
-}

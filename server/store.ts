@@ -481,6 +481,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     getInventorySummary,
     importInventoryRows,
     scanInventoryFlow,
+    saveGpuFactoryDateEstimate,
   } = createInventoryOperationHelpers({
     state,
     nowStamp,
@@ -662,6 +663,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     getInventorySummary,
     importInventoryRows,
     scanInventoryFlow,
+    saveGpuFactoryDateEstimate,
     createMarketQuote,
     importMarketQuotes,
     deleteMarketQuote,

@@ -42,7 +42,7 @@ import {
 
 ### 基础控件（`ui`）
 
-- `Button`：`variant` 表达语义，`size` 只使用实现支持的尺寸；图标按钮必须提供 `aria-label`/`title`。`loading` 保留原内容占宽、显示轻量进度并禁用重复操作。
+- `Button`：`variant` 表达语义，`size` 只使用实现支持的尺寸；图标按钮必须提供 `aria-label`/`title`。`loading` 保留原内容占宽、显示轻量进度并禁用重复操作。移动端（$\le 767\text{px}$）强制执行 44px 触控底线与 48px 主操作阶梯，详见 `docs/MOBILE_BUTTON_RULES_20261009.md`。
 - `Input`、`Textarea`、`Select`：统一高度、边框、焦点环和禁用态，不在页面复制基础视觉。`SearchInput` 是基础层搜索实现，ERP 页面仍使用兼容出口 `ErpSearchInput`，两者不是两套控件。
 - `Card`、`Badge`、`Separator`、`Skeleton`：只负责基础表面和状态。
 - `Dialog`、`Popover`：第三方能力的唯一适配入口。新页面优先使用 `ErpDialogShell`；复杂表单可以组合 `Dialog`，但必须遵守遮罩、层级、内部滚动和关闭规则。业务图片预览统一使用 `ErpImagePreviewDialog`；底层 `Dialog` 仅保留在 `ErpDialogShell`、全局命令搜索和持续工作抽屉等已登记的复杂交互中。

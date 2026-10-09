@@ -186,25 +186,6 @@ input[inputmode="numeric"] {
   background: var(--erp-color-surface);
   box-shadow: var(--erp-shadow-card);
 }
-.erp-card-action {
-  display: inline-flex;
-  min-height: var(--erp-control-height-filter);
-  align-items: center;
-  gap: var(--erp-space-2);
-  border: 1px solid var(--erp-color-border);
-  border-radius: var(--erp-radius-pill);
-  padding: 0 var(--erp-space-3);
-  color: var(--erp-color-text-secondary);
-  font-size: var(--erp-font-caption);
-  font-weight: var(--erp-font-medium);
-  transition: border-color var(--erp-motion-fast) ease, background-color var(--erp-motion-fast) ease, color var(--erp-motion-fast) ease;
-}
-.erp-card-action:hover {
-  border-color: var(--erp-color-border-strong);
-  background: var(--erp-color-surface-muted);
-  color: var(--erp-color-text);
-}
-.erp-card-action:focus-visible { outline: 3px solid var(--erp-color-focus-ring-soft); outline-offset: 2px; }
 .erp-annotation-slot {
   display: block;
   height: var(--erp-annotation-height);
@@ -1195,8 +1176,6 @@ input[inputmode="numeric"] {
     border-radius: var(--erp-radius-md);
   }
   .erp-mobile-bottom-nav .erp-mobile-nav-active { color: var(--erp-color-primary); background: var(--erp-color-info-soft); }
-  .erp-mobile-bottom-nav .erp-mobile-nav-create { color: var(--erp-color-primary); }
-  .erp-mobile-create-icon { display: flex; align-items: center; justify-content: center; width: var(--erp-space-8); height: var(--erp-space-6); border-radius: var(--erp-radius-md); color: white; background: var(--erp-color-primary); }
   [data-phone-keyboard="open"] .erp-mobile-bottom-nav,
   body:has([data-erp-component="mobile-workflow"], [data-phone-task="true"]) .erp-mobile-bottom-nav,
   body:has([role="dialog"][data-open]:not([data-mobile-presentation="tab"]), .erp-option-popup[data-open], .erp-popover-surface[data-open]) .erp-mobile-bottom-nav { display: none; }
@@ -1804,7 +1783,7 @@ input[inputmode="numeric"] {
   .erp-calendar .erp-calendar-day { height: var(--erp-mobile-touch-size); }
   .erp-calendar .erp-calendar-day-button { width: 100%; min-width: 0; height: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
   .erp-calendar nav button { width: var(--erp-mobile-touch-size); height: var(--erp-mobile-touch-size); }
-  :is(.erp-dialog-popup, .erp-drawer-popup, .erp-date-popover, .erp-phone-selector) button { min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
+  :is(.erp-dialog-popup, .erp-date-popover, .erp-phone-selector) button { min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
   button[data-erp-button-size^="icon"] { min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
   [data-erp-component="page-header"] [data-erp-region="page-actions"] > button[data-erp-button-size^="icon"] { width: var(--erp-mobile-touch-size); min-width: var(--erp-mobile-touch-size); }
   button[data-erp-button-size^="icon"] > svg { width: var(--erp-mobile-icon-size); height: var(--erp-mobile-icon-size); }
@@ -1824,8 +1803,8 @@ input[inputmode="numeric"] {
   :is(.erp-mobile-workflow-actions, .erp-phone-detail-actions, .erp-inspection-submit, [data-phone-order-submit="true"], [data-erp-region="dialog-footer"], [data-erp-region="drawer-footer"]) [data-erp-button-variant="primary"] { min-height: var(--erp-mobile-primary-height); font-size: var(--erp-text-base); }
   :is(.erp-mobile-workflow-actions, .erp-phone-detail-actions, .erp-inspection-submit, [data-erp-region="dialog-footer"]) button { white-space: normal; line-height: var(--erp-line-sm); }
   .erp-segmented-control button { min-width: 0; padding-inline: var(--erp-space-2); font-size: var(--erp-text-base); white-space: normal; }
-  :is(.erp-main-content, .erp-dialog-popup, .erp-drawer-popup) label:has(> input:is([type="checkbox"], [type="radio"])) { min-height: var(--erp-mobile-touch-size); }
-  :is(.erp-main-content, .erp-dialog-popup, .erp-drawer-popup) label > input:is([type="checkbox"], [type="radio"]) { width: var(--erp-mobile-choice-size); height: var(--erp-mobile-choice-size); flex-shrink: 0; }
+  :is(.erp-main-content, .erp-dialog-popup) label:has(> input:is([type="checkbox"], [type="radio"])) { min-height: var(--erp-mobile-touch-size); }
+  :is(.erp-main-content, .erp-dialog-popup) label > input:is([type="checkbox"], [type="radio"]) { width: var(--erp-mobile-choice-size); height: var(--erp-mobile-choice-size); flex-shrink: 0; }
   [data-erp-region="mobile-assembly-parts"] .truncate { white-space: normal; overflow-wrap: anywhere; }
 }
 
@@ -2042,8 +2021,7 @@ input[inputmode="numeric"] {
     max-height: calc(var(--erp-phone-visible-height) - var(--erp-safe-top));
   }
   .erp-dialog-popup > .erp-scrollbar:last-child,
-  .erp-drawer-popup > .erp-scrollbar:last-child { padding-bottom: max(var(--erp-space-4), var(--erp-safe-bottom)); }
-  :is(.erp-main-content, .erp-dialog-popup, .erp-drawer-popup, .erp-phone-selector, .erp-option-popup, .erp-popover-surface) :is(input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]) {
+  :is(.erp-main-content, .erp-dialog-popup, .erp-phone-selector, .erp-option-popup, .erp-popover-surface) :is(input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]) {
     font-size: var(--erp-mobile-input-text);
   }
   [data-workspace-tab-panel][data-active="true"] { animation: erp-phone-page-enter var(--erp-motion-fast) ease-out; }

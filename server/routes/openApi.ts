@@ -10,6 +10,7 @@ import {stateMergeRecords} from "../statePatch.ts";
 import {scanFlowMerge} from "./inventoryMutations.ts";
 import type {AppState, createStoreActions, StoreActionContext} from "../store.ts";
 import {productPriceSyncMerge} from "../productStateMerges.ts";
+import {GPU_SN_BRANDS, listGpuSnRules, parseGpuSnDate} from "../gpuSnDate.ts";
 import {inventoryListQueryDto, inventoryScanFlowDto, openMarketQuoteQueryDto, openPriceSyncDto, parseHttpDto} from "../httpDto.ts";
 
 type OpenApiDependencies = {
@@ -52,6 +53,7 @@ function openInventoryItem(card: CardInventory) {
     condition: card.condition,
     inWarranty: card.inWarranty,
     warrantyDate: card.warrantyDate,
+    gpuFactoryDateEstimate: card.gpuFactoryDateEstimate,
     repaired: card.repaired,
     gpuRisk: card.gpuRisk,
     fullBox: card.fullBox,
@@ -230,6 +232,21 @@ export function registerOpenApiRoutes(app: Express, dependencies: OpenApiDepende
   }));
 
   app.use("/api/open/prices", openPricesRouter);
+
+  const openGpuSnRouter = express.Router();
+  openGpuSnRouter.use(dependencies.openApiRateLimiter, dependencies.requireOpenApiToken);
+  openGpuSnRouter.get("/rules", (_req, res) => res.json({data: listGpuSnRules()}));
+  openGpuSnRouter.post("/parse", dependencies.asyncRoute(async (req, res) => {
+    const brandId = typeof req.body?.brandId === "string" ? req.body.brandId.trim() : "";
+    const sn = typeof req.body?.sn === "string" ? req.body.sn.trim() : "";
+    const productModel = typeof req.body?.productModel === "string" ? req.body.productModel.trim() : undefined;
+    if (!GPU_SN_BRANDS.some((item) => item.id === brandId) || !sn) {
+      dependencies.sendApiError(req, res, 400, "GPU_SN_INPUT_INVALID", "品牌或 SN 输入无效");
+      return;
+    }
+    res.json({data: parseGpuSnDate({brandId: brandId as Parameters<typeof parseGpuSnDate>[0]["brandId"], sn, productModel})});
+  }));
+  app.use("/api/open/gpu-sn", openGpuSnRouter);
 }
 
 export {openInventoryItem};

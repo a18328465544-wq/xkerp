@@ -80,6 +80,7 @@ export function adaptInventoryItem(dto: InventoryItemDto, permissions: {showCost
     inventoryDays: entryTime ? storeDateDiffDays(entryTime) : Math.max(0, Math.floor(numberValue(dto.storageDays))),
     inWarranty: booleanValue(dto.inWarranty),
     warrantyDate: text(dto.warrantyDate) || undefined,
+    gpuFactoryDateEstimate: dto.gpuFactoryDateEstimate && typeof dto.gpuFactoryDateEstimate === "object" ? dto.gpuFactoryDateEstimate as InventoryListItem["gpuFactoryDateEstimate"] : undefined,
     repaired: booleanValue(dto.repaired),
     gpuRisk: booleanValue(dto.gpuRisk),
     fullBox: booleanValue(dto.fullBox),

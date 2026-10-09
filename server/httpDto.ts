@@ -123,7 +123,6 @@ const customerMutationFields = {
   tags: z.array(requiredText("客户标签", 40)).max(50).default([]),
 };
 export const customerCreateDto = z.object(customerMutationFields).strict();
-export const customerUpdateDto = z.object(customerMutationFields).partial().strict();
 
 const vendorMutationFields = {
   name: requiredText("同行名称", 120),

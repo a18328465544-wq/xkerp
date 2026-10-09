@@ -1,6 +1,4 @@
-import {useMemo} from "react";
 import type {AuthSession, PermissionModel} from "@/src/services/api/endpoints/auth";
-import {useAuth} from "./AuthProvider";
 
 export type CapabilityMenu =
   | "dashboard"
@@ -75,9 +73,4 @@ export function createCapabilities(session: AuthSession | null | undefined) {
     canEditHistory: permissions?.canEditHistory === true,
     canManualOutbound: permissions?.canManualOutbound === true,
   };
-}
-
-export function useCapabilities() {
-  const {session} = useAuth();
-  return useMemo(() => createCapabilities(session), [session]);
 }

@@ -21,6 +21,7 @@ export interface InventoryItemDto {
   condition?: unknown;
   inWarranty?: unknown;
   warrantyDate?: unknown;
+  gpuFactoryDateEstimate?: unknown;
   repaired?: unknown;
   gpuRisk?: unknown;
   fullBox?: unknown;

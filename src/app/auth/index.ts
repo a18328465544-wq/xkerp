@@ -4,7 +4,6 @@ export {
   canUseCapability,
   createCapabilities,
   hasMenuPermission,
-  useCapabilities,
   type CapabilityAction,
   type CapabilityMenu,
 } from "./capabilities";

@@ -385,8 +385,6 @@ const financeControlsOperations = createFinanceControlsOperations({
 });
 
 export const saveFinanceDailySnapshotInTransaction = financeControlsOperations.saveDailySnapshotInTransaction;
-export const saveFinanceDailySnapshot = financeControlsOperations.saveDailySnapshot;
-export const listFinanceDailySnapshots = financeControlsOperations.listDailySnapshots;
 export const syncFinanceIntegrityAlertsInTransaction = financeControlsOperations.syncFinanceIntegrityAlertsInTransaction;
 export const listFinanceIntegrityAlerts = financeControlsOperations.listFinanceIntegrityAlerts;
 
@@ -432,7 +430,6 @@ const databaseBackups = createDatabaseBackups({
 
 export const createManualBackup = databaseBackups.createManualBackup;
 export const listBackups = databaseBackups.listBackups;
-export const writeDownloadedBackup = databaseBackups.writeDownloadedBackup;
 
 const dailyOperations = createDailyOperations({
   initializePostgres,
@@ -446,7 +443,6 @@ export const markDailyNotificationSent = dailyOperations.markDailyNotificationSe
 export const markDailyNotificationFailed = dailyOperations.markDailyNotificationFailed;
 export const getDailyClosing = dailyOperations.getDailyClosing;
 export const listDailyClosings = dailyOperations.listDailyClosings;
-export const saveDailyClosing = dailyOperations.saveDailyClosing;
 export const saveDailyClosingInTransaction = dailyOperations.saveDailyClosingInTransaction;
 
 const accountingPeriodOperations = createAccountingPeriodOperations({
@@ -459,12 +455,8 @@ const accountingPeriodOperations = createAccountingPeriodOperations({
 export const getAccountingPeriod = accountingPeriodOperations.getAccountingPeriod;
 export const listAccountingPeriods = accountingPeriodOperations.listAccountingPeriods;
 export const isAccountingPeriodClosed = accountingPeriodOperations.isAccountingPeriodClosed;
-export const closeAccountingPeriod = accountingPeriodOperations.closeAccountingPeriod;
 export const closeAccountingPeriodInTransaction = accountingPeriodOperations.closeAccountingPeriodInTransaction;
-export const reopenAccountingPeriod = accountingPeriodOperations.reopenAccountingPeriod;
 export const reopenAccountingPeriodInTransaction = accountingPeriodOperations.reopenAccountingPeriodInTransaction;
-export const accountingPeriodFromDate = accountingPeriodOperations.periodFromDate;
-export const normalizeAccountingPeriod = accountingPeriodOperations.normalizePeriod;
 
 const financeReconciliationActionOperations = createFinanceReconciliationActionOperations({
   initializePostgres,
@@ -475,7 +467,6 @@ const financeReconciliationActionOperations = createFinanceReconciliationActionO
 });
 
 export const listFinanceReconciliationActions = financeReconciliationActionOperations.listActions;
-export const createFinanceReconciliationAction = financeReconciliationActionOperations.createAction;
 export const createFinanceReconciliationActionInTransaction = financeReconciliationActionOperations.createActionInTransaction;
 
 export const dataFilePath = "postgresql:DATABASE_URL";

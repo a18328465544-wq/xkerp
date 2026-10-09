@@ -17,11 +17,6 @@ export type DateRangePreset =
   | "thisYear"
   | "custom";
 
-export type CalendarCell = {
-  date: string;
-  day: number;
-  outsideMonth: boolean;
-};
 
 const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH_KEY_PATTERN = /^(\d{4})-(\d{2})$/;
@@ -98,19 +93,12 @@ export function startOfQuarter(value: string): string {
   return `${year}-${pad(quarterStartMonth)}-01`;
 }
 
-export function endOfQuarter(value: string): string {
-  return endOfMonth(shiftMonth(startOfQuarter(value), 2));
-}
 
 export function startOfYear(value: string): string {
   const { year } = parseMonthKey(value);
   return `${year}-01-01`;
 }
 
-export function endOfYear(value: string): string {
-  const { year } = parseMonthKey(value);
-  return `${year}-12-31`;
-}
 
 export function startOfWeek(value: string): string {
   const date = parseDateKey(value);
@@ -125,27 +113,7 @@ export function endOfWeek(value: string): string {
   return start ? addDateDays(start, 6) : "";
 }
 
-export function daysInMonth(value: string): number {
-  const { year, month } = parseMonthKey(value);
-  return new Date(year, month, 0, 12).getDate();
-}
 
-export function getCalendarCells(value: string): CalendarCell[] {
-  const month = monthKey(value);
-  const { year, month: monthNumber } = parseMonthKey(month);
-  const firstDay = new Date(year, monthNumber - 1, 1, 12).getDay();
-  const offset = firstDay === 0 ? 0 : firstDay;
-  const firstCell = new Date(year, monthNumber - 1, 1 - offset, 12);
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(firstCell);
-    date.setDate(firstCell.getDate() + index);
-    return {
-      date: formatDateKey(date),
-      day: date.getDate(),
-      outsideMonth: date.getMonth() !== monthNumber - 1 || date.getFullYear() !== year,
-    };
-  });
-}
 
 export function daysBetweenInclusive(startDate: string, endDate: string): number {
   const start = parseDateKey(startDate);
@@ -226,14 +194,6 @@ export function getDateRangePreset(preset: DateRangePreset, today = storeDate())
   }
 }
 
-export function getPresetForRange(value: DateRangeValue, today = storeDate()): DateRangePreset | null {
-  const normalized = normalizeRange(value);
-  const presets: DateRangePreset[] = ["today", "yesterday", "last7", "last30", "last90", "thisMonth", "lastMonth", "thisQuarter", "thisYear"];
-  return presets.find(preset => {
-    const candidate = getDateRangePreset(preset, today);
-    return candidate.startDate === normalized.startDate && candidate.endDate === normalized.endDate;
-  }) || null;
-}
 
 const chineseMonthNumbers: Record<string, number> = {
   一: 1,

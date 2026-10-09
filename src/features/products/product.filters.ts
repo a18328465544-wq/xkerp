@@ -1,4 +1,3 @@
-import type {SortingState} from "@tanstack/react-table";
 import type {ProductLibraryFilters, ProductLibraryItem} from "@/src/types/product";
 import {productSearchMatches} from "@/src/utils/productSearch";
 
@@ -32,17 +31,5 @@ export function filterProducts(products: ProductLibraryItem[], filters: ProductL
     if (filters.category !== "all" && product.category !== filters.category) return false;
     if (filters.brand !== "all" && product.brand !== filters.brand) return false;
     return productSearchMatches(product, filters.keyword);
-  });
-}
-
-export function sortProducts(products: ProductLibraryItem[], sorting: SortingState) {
-  const rule = sorting[0];
-  if (!rule) return products;
-  const direction = rule.desc ? -1 : 1;
-  return [...products].sort((left, right) => {
-    const leftValue = left[rule.id as keyof ProductLibraryItem];
-    const rightValue = right[rule.id as keyof ProductLibraryItem];
-    if (typeof leftValue === "number" || typeof rightValue === "number") return (Number(leftValue || 0) - Number(rightValue || 0)) * direction;
-    return String(leftValue || "").localeCompare(String(rightValue || ""), "zh-CN", {numeric: true}) * direction;
   });
 }

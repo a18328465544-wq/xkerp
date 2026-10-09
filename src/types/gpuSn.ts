@@ -1,0 +1,25 @@
+export type GpuSnBrandId = "asus" | "msi" | "gigabyte" | "colorful" | "galax" | "zotac" | "gainward" | "maxsun" | "sapphire" | "powercolor" | "xfx" | "nvidia";
+export type GpuSnConfidence = "high" | "medium" | "low";
+export type GpuSnParseStatus = "parsed" | "partial" | "invalid" | "unsupported";
+export type GpuSnSource = {title: string; url: string; evidence: "official" | "community"};
+export type GpuSnDateResult = {
+  status: GpuSnParseStatus;
+  brandId: GpuSnBrandId;
+  brandName: string;
+  sn: string;
+  productModel?: string;
+  year: number | null;
+  month: number | null;
+  week: number | null;
+  dateRange: {start: string; end: string} | null;
+  elapsedDays: number | null;
+  confidence: GpuSnConfidence;
+  confidenceScore: number;
+  ruleId: string;
+  ruleSummary: string;
+  explanation: string;
+  sources: GpuSnSource[];
+  officialUrl: string;
+  officialConfirmed: false;
+};
+export type GpuFactoryDateEstimate = GpuSnDateResult & {savedAt: string};

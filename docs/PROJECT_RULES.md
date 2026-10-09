@@ -60,7 +60,7 @@ UI 的颜色、字号、间距、组件、响应式和验收细则见 docs/UI_DE
 - 工作区标签以页面身份去重；dashboard 是唯一的固定“首页”，恢复历史标签时同名/同路由别名只保留 canonical 首页，不能出现两个首页标签。
 - 页面切换使用 currentTab/onNavigate；不要绕过权限直接使用 window.location 跳到业务页。
 - 需要保留未提交内容的页面使用现有 KeepAlive 机制；关闭页签时必须清理无法恢复的临时状态。
-- 正式 V2 页面统一遵循 `ErpPageFrame → ErpPageHeader（QuickStatus 在 Header 内）→ ErpPageToolbar（可选）→ ErpPageContent`；`DashboardShell` 仅为兼容别名，禁止新页面使用。
+- 正式 V2 页面统一遵循 `ErpPageFrame → ErpPageHeader（QuickStatus 在 Header 内）→ ErpPageToolbar（可选）→ ErpPageContent`；旧 `DashboardShell` 导出别名已移除，禁止恢复或使用。
 
 ### 4.2 UI 规范
 

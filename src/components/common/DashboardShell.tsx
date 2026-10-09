@@ -7,9 +7,6 @@ export function ErpDashboardPageFrame({className, children, ...props}: HTMLAttri
   return <ErpPageFrame {...props} density="comfortable" className={className}>{children}</ErpPageFrame>;
 }
 
-/** @deprecated Use ErpDashboardPageFrame; kept as a compatibility alias. */
-export const DashboardShell = ErpDashboardPageFrame;
-
 export function MetricsRegion({className, style, children, mobileCollapseAfter, mobilePrimaryFullWidth = false, mobileScroll, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode; mobileCollapseAfter?: number; mobilePrimaryFullWidth?: boolean; mobileScroll?: "grid" | "snap"}) {
   const [expanded, setExpanded] = useState(false);
   const items = Children.toArray(children);

@@ -100,11 +100,6 @@ export function closeOtherWorkspaceTabs(state: WorkspaceTabState, id: string): W
   return normalizeState({openIds, pinnedIds: state.pinnedIds, recentIds: [WORKSPACE_HOME_ID, id], activeId}, [WORKSPACE_HOME_ID, ...openIds]);
 }
 
-export function closeClosableWorkspaceTabs(state: WorkspaceTabState): WorkspaceTabState {
-  const openIds = state.openIds.filter((id) => state.pinnedIds.includes(id) || id === WORKSPACE_HOME_ID);
-  const activeId = openIds.includes(state.activeId) ? state.activeId : WORKSPACE_HOME_ID;
-  return normalizeState({openIds, pinnedIds: state.pinnedIds, recentIds: openIds, activeId}, [WORKSPACE_HOME_ID, ...openIds]);
-}
 
 export function toggleWorkspaceTabPin(state: WorkspaceTabState, id: string): WorkspaceTabState {
   if (id === WORKSPACE_HOME_ID || !state.openIds.includes(id)) return state;

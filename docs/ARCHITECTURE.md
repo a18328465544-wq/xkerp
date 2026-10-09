@@ -155,7 +155,7 @@ Query Key 统一从 `src/services/api/query-keys/index.ts` 获取。
 ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageToolbar（可选）→ ErpPageContent
 ```
 
-列表筛选必须位于 `ErpPageToolbar`，业务主体必须位于 `ErpPageContent`。`DashboardShell` 仅保留为 `ErpDashboardPageFrame` 的兼容别名，架构检查不把它视为合法的新页面外壳；检测工作台是已登记的独立流程例外。
+列表筛选必须位于 `ErpPageToolbar`，业务主体必须位于 `ErpPageContent`。旧 `DashboardShell` 导出别名已移除；`ErpDashboardPageFrame`、`MetricsRegion` 等现用组件仍保留在原文件中，正式页面不得恢复旧别名。检测工作台是已登记的独立流程例外。
 
 ## 6. 后端架构
 
@@ -685,7 +685,7 @@ sudo nginx -t
 
 ### 13.3 架构迁移约束
 
-- 新页面使用 `useAuth` / `useCapabilities`，不得创建页面级登录表单或重复请求 auth session。
+- 新页面使用 `useAuth` 和现有 capability 工具，不得创建页面级登录表单或重复请求 auth session；不恢复无人使用的 `useCapabilities` 包装 hook。
 - URL 筛选使用 `useUrlSearchState` 或 TanStack Router search schema，不直接调用 `window.history.replaceState`。
 - 表格偏好使用 `useTablePreferences`，键名必须包含 Feature 和账号作用域，并带版本号。
 - `/api/state?mode=full` 对正式 V2 前端是禁止边界；只有登录/首页可通过 `fetchInitialStateCompat` 读取裁剪后的 `mode=initial`，其余读取必须登记在 [API_READ_MIGRATION.md](./API_READ_MIGRATION.md) 的领域接口中。

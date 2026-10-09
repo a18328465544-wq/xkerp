@@ -2,6 +2,7 @@ export {cardStatusValues, inventoryConditionValues, productCategoryValues, sourc
 export {accountingDocumentStatusValues, canTransitionAccountingDocument, normalizeAccountingDocumentStatus} from "./accounting";
 export type {AccountingDocumentStatus} from "./accounting";
 export type {CardInventory, CardStatus, InventoryCondition, ProductCategory, SourceType} from "./core";
+export type {GpuFactoryDateEstimate, GpuSnBrandId, GpuSnConfidence, GpuSnDateResult, GpuSnParseStatus, GpuSnSource} from "./gpuSn";
 export type {AccountPermissionOverrides, PermissionSettings, SafeSystemUserAccount, StoreRole, SystemUserAccount} from "./auth";
 export {customerLevels, customerPartnerTypes, customerTypeValues} from "./customer";
 export type {CustomerDirectoryFilters, CustomerDirectoryItem, CustomerDirectorySnapshot, CustomerLevel, CustomerPartnerType, CustomerPickerOption, CustomerRecordFormValues, CustomerType} from "./customer";

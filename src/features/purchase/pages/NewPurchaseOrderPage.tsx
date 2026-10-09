@@ -35,6 +35,7 @@ import {hasWorkflowErrors, workflowBlockedReason} from "@/src/components/common/
 import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWorkflow";
 import {formatCurrency} from "@/src/lib/format";
+import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 
@@ -293,7 +294,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           </ErpFormSection></>;
   const backAction = <Button type="button" variant={phone ? "ghost" : "secondary"} size={phone ? "iconTouch" : "md"} aria-label="返回采购单据" disabled={createMutation.isPending} onClick={leave}><ArrowLeft className="h-4 w-4" />{!phone && "返回采购单据"}</Button>;
   return <ErpTransactionPageFrame className="erp-order-entry-page">
-    <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader density="default" title={phone ? "采购开单" : "进货与回收"} subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" leading={phone ? backAction : undefined} actions={!phone ? <>{backAction}<Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></> : <span className="erp-order-draft-label">草稿 · 切页保留</span>} /></CardContent></Card>
+    <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader density="default" title={phone ? "采购开单" : "进货与回收"} subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" leading={phone ? backAction : undefined} actions={!phone ? <>{backAction}<GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></> : <div className="flex items-center gap-2"><span className="erp-order-draft-label">草稿 · 切页保留</span><GpuSnDateLookupButton label="SN 查询" /></div>} /></CardContent></Card>
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">表单已重置为下一张采购单；如需处理 SN、成色或库位，请从检测质检入口进入。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
     {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">余额、来源或服务端状态可能已变化；表单内容保留，请重新核对后重试。</p>}</div><Button type="button" size="icon" variant="ghost" onClick={() => {submission.clearFeedback(); setServerError(null); setConflictError(false);}} aria-label="关闭错误提示">×</Button></CardContent></Card>}

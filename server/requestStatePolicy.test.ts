@@ -51,6 +51,20 @@ test("POST previews load their explicit read dependencies, not the command-only 
   }
 });
 
+test("GPU SN parse is a read-only POST while saving an estimate is an inventory mutation", () => {
+  const parsePath = "/api/gpu-sn/parse";
+  assert.equal(requiresStateSerialization("POST", parsePath), false);
+  assert.deepEqual(getAuthenticationReloadKeys("POST", parsePath), ["systemUsers"]);
+  assert.deepEqual(getReloadKeysForRequest("POST", parsePath), []);
+  assert.equal(getPersistenceKeysForRequest("POST", parsePath), null);
+  assert.equal(getStatePatchKeysForRequest("POST", parsePath), null);
+
+  const savePath = "/api/gpu-sn/estimate/save";
+  assert.equal(requiresStateSerialization("POST", savePath), true);
+  assert.deepEqual(getPersistenceKeysForRequest("POST", savePath), ["inventory", "logs"]);
+  assert.deepEqual(getReloadKeysForRequest("POST", savePath), ["inventory"]);
+});
+
 test("outbound preview stays a scoped read across middleware policies and URL variants", () => {
   for (const method of ["POST", "post"]) {
     for (const suffix of ["", "/"]) {

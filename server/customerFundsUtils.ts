@@ -353,17 +353,6 @@ export function getCustomerFundsCounts(rows: CustomerFundsRow[]): FundsCounts {
   }, { all: 0, payable: 0, receivable: 0, balanced: 0 });
 }
 
-export function filterCustomerFundsRows(rows: CustomerFundsRow[], filter: FundsBalanceFilter, keyword: string, partnerKey?: string) {
-  const query = keyword.trim().toLocaleLowerCase("zh-CN");
-  return rows.filter(row => {
-    if (partnerKey && row.partnerKey !== partnerKey) return false;
-    if (query && ![row.name, row.partnerType, row.sourceType || "", row.contactPerson || "", row.phone || ""].some(value => value.toLocaleLowerCase("zh-CN").includes(query))) return false;
-    if (filter === "payable" && row.payable <= EPSILON) return false;
-    if (filter === "receivable" && row.receivable <= EPSILON) return false;
-    if (filter === "balanced" && (row.payable > EPSILON || row.receivable > EPSILON)) return false;
-    return true;
-  });
-}
 
 export function getFundsBalanceAtDate(rows: CustomerFundsRow[], endDate: string) {
   // Start from the authoritative current archive balance and reverse events after the requested

@@ -3,6 +3,7 @@ import {ErpFormSection} from "@/src/components/common";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {CustomerPicker} from "@/src/components/domain";
 import type {PurchasePartnerType, PurchaseSourceOption} from "@/src/types/purchase";
+import {selectPurchaseSourceCandidates} from "@/src/utils/purchaseSources";
 
 export function PurchaseSourcePicker({selected, options, disabled, loading, canReadCustomers, canReadVendors, canCreateCustomer, canCreateVendor, compact = false, onKeywordChange, onSelect, onClear, onOpenCreateCustomer, onOpenCreateVendor}: {
   selected: PurchaseSourceOption | null;
@@ -27,20 +28,7 @@ export function PurchaseSourcePicker({selected, options, disabled, loading, canR
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const allowed = canReadCustomers || canReadVendors;
   const normalizedKeyword = keyword.trim().toLocaleLowerCase();
-  const candidates = useMemo(() => options.filter((option) => {
-    if (option.partnerType === "customer" && !canReadCustomers) return false;
-    if (option.partnerType === "vendor" && !canReadVendors) return false;
-    if (!normalizedKeyword) return true;
-    return [option.name, option.contact, option.phone, option.wechat, option.level].filter(Boolean).some((value) => String(value).toLocaleLowerCase().includes(normalizedKeyword));
-  }).sort((left, right) => {
-    if (normalizedKeyword) return 0;
-    const leftIndex = recentIds.indexOf(left.id);
-    const rightIndex = recentIds.indexOf(right.id);
-    if (leftIndex === -1 && rightIndex === -1) return 0;
-    if (leftIndex === -1) return 1;
-    if (rightIndex === -1) return -1;
-    return leftIndex - rightIndex;
-  }).slice(0, 20), [canReadCustomers, canReadVendors, normalizedKeyword, options, recentIds]);
+  const candidates = useMemo(() => selectPurchaseSourceCandidates(options, {canReadCustomers, canReadVendors, keyword: normalizedKeyword, recentIds}), [canReadCustomers, canReadVendors, normalizedKeyword, options, recentIds]);
   const permissionMessage = "当前账号没有客户或供应商读取权限，不能关联采购来源。";
   const quickCreateActions = [
     canReadCustomers && canCreateCustomer && onOpenCreateCustomer ? {label: "新建客户", onClick: onOpenCreateCustomer} : null,

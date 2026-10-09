@@ -1,7 +1,6 @@
 import {imageMimeTypeValues, type ImageMimeType} from "@/src/types/media";
 
 export const IMAGE_MAX_INPUT_BYTES = 12 * 1024 * 1024;
-export const IMAGE_TARGET_BYTES = 100_000;
 export const IMAGE_MAX_STORED_BYTES = 110_000;
 export const IMAGE_MAX_COUNT = 6;
 export const IMAGE_MAX_DIMENSION = 1_440;

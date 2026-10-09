@@ -42,7 +42,8 @@ export {ErpPartnerQuickCreateDialog, type ErpPartnerQuickCreateDialogProps, type
 export {ErpProductTemplateDialog, type ErpProductTemplateDialogProps} from "./ErpProductTemplateDialog";
 export {QuickStatusGroup, QuickStatusItem, type QuickStatusGroupProps, type QuickStatusItemData, type QuickStatusTone, type QuickStatusVariant} from "./ErpQuickStatus";
 export {ErpPageActions, ErpPageContent, ErpPageContext, ErpPageFrame, ErpPageIdentity, ErpPageTabs, ErpPageToolbar, ErpPageTopbar, ErpTableResultsBar, type ErpPageFrameDensity, type ErpPageFrameProps, type ErpPageIdentityProps, type ErpPageTopbarProps} from "./ErpPageFrame";
-export {BottomRegion, DashboardSection, DashboardShell, ErpDashboardPageFrame, MainRegion, MetricsRegion} from "./DashboardShell";
+export {BottomRegion, DashboardSection, ErpDashboardPageFrame, MainRegion, MetricsRegion} from "./DashboardShell";
 export {ErpAnalyticsPageFrame, ErpCrmPageFrame, ErpDetailPageFrame, ErpFinancePageFrame, ErpListPageFrame, ErpSettingsPageFrame, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpWarehousePageFrame} from "./ErpPageFrames";
 export {AnalyticsDetailRegion, AnalyticsFrame, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, type AnalyticsMainVariant, type AnalyticsVisualizationSize} from "./page-frames/AnalyticsFrame";
 export {AnalyticsInsightItem, type AnalyticsInsightItemProps, type AnalyticsInsightTone} from "./page-frames/AnalyticsInsightItem";
+export {GpuSnDateLookupButton} from "./GpuSnDateLookupButton";

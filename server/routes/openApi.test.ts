@@ -4,7 +4,7 @@ import type {Express, RequestHandler} from "express";
 import {storeDateDiffDays} from "../../src/utils/storeTime.ts";
 import {registerOpenApiRoutes, openInventoryItem} from "./openApi.ts";
 
-test("open API routes mount inventory and price routers behind token middleware", () => {
+test("open API routes mount inventory, price and GPU SN routers behind token middleware", () => {
   const mounted: string[] = [];
   const app = {
     use(path: string, ..._handlers: RequestHandler[]) {
@@ -27,7 +27,7 @@ test("open API routes mount inventory and price routers behind token middleware"
     defaultStoreId: "store-default",
   });
 
-  assert.deepEqual(mounted, ["/api/open/inventory", "/api/open/prices"]);
+  assert.deepEqual(mounted, ["/api/open/inventory", "/api/open/prices", "/api/open/gpu-sn"]);
 });
 
 test("openInventoryItem returns a stable public inventory projection", () => {

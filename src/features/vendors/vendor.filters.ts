@@ -1,4 +1,3 @@
-import type {SortingState} from "@tanstack/react-table";
 import type {VendorDirectoryFilters, VendorDirectoryItem} from "@/src/types/vendor";
 
 export const defaultVendorFilters: VendorDirectoryFilters = {keyword: "", type: "all", level: "all", balance: "all", page: 1, pageSize: 20};
@@ -43,17 +42,5 @@ export function filterVendors(vendors: VendorDirectoryItem[], filters: VendorDir
     if (filters.balance === "credit" && vendor.returnCreditBalance <= 0) return false;
     if (!keyword) return true;
     return normalized([vendor.id, vendor.name, vendor.contact, vendor.contactPerson, vendor.phone, vendor.type, vendor.level, vendor.remarks || "", vendor.riskReason || ""].join(" ")).includes(keyword);
-  });
-}
-
-export function sortVendors(vendors: VendorDirectoryItem[], sorting: SortingState) {
-  const rule = sorting[0];
-  if (!rule) return [...vendors].sort((left, right) => String(right.lastDealTime || "").localeCompare(String(left.lastDealTime || ""), "zh-CN", {numeric: true}));
-  const direction = rule.desc ? -1 : 1;
-  return [...vendors].sort((left, right) => {
-    const leftValue = left[rule.id as keyof VendorDirectoryItem];
-    const rightValue = right[rule.id as keyof VendorDirectoryItem];
-    if (typeof leftValue === "number" || typeof rightValue === "number") return (Number(leftValue || 0) - Number(rightValue || 0)) * direction;
-    return String(leftValue || "").localeCompare(String(rightValue || ""), "zh-CN", {numeric: true}) * direction;
   });
 }

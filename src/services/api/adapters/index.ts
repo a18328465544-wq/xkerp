@@ -13,7 +13,7 @@ export {adaptPurchaseReturnList, adaptSalesReturnComplete, adaptSalesReturnList,
 export {adaptInspectionCreateResult, adaptInspectionWorkspace, toInspectionCreateRequestDto, toInspectionUpdateRequestDto} from "./inspection.adapter";
 export {toCustomerCreateRequest, toProductTemplateCreateRequest, toVendorCreateRequest} from "./entity-create.adapter";
 export type {CustomerQuickCreateInput, ProductQuickCreateInput, VendorQuickCreateInput} from "./entity-create.adapter";
-export {adaptProduct, adaptProductLibrary, adaptProductMutation, toProductImportRequest, toProductTemplateRequest} from "./product.adapter";
+export {adaptProduct, adaptProductLibrary, adaptProductMutation, toProductTemplateRequest} from "./product.adapter";
 export {adaptMarketQuote, adaptMarketQuoteImportResult, adaptMarketQuoteMutation, adaptMarketQuoteSnapshot, toMarketQuoteCreateRequest, toMarketQuoteUpdateRequest} from "./quote.adapter";
 export {adaptAssemblyList, adaptAssemblyOperation, adaptAssemblyReferenceData, toAssemblyCreateRequest} from "./assembly.adapter";
 export {adaptCrmAccount, adaptCrmAccountPage, adaptCrmSummary, adaptCrmTimelinePage, toCrmFollowUpRequest} from "./crm.adapter";

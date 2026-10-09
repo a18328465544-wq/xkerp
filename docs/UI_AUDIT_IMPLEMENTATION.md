@@ -16,7 +16,7 @@
 
 ## P1–P3 全量落地（2026-09-08）
 
-- P1：图表通过 `lazyChartPrimitives` / `recharts` 单一边界按需加载，入口 HTML 不再预加载图表 chunk；指标区使用最小宽度 Token 防止孤立卡片，图表空态统一为紧凑密度，采购与销售交易页去除多余的 Header 卡片。
+- P1：图表通过 `chart-primitives` / `recharts` 单一边界复用，底层组件同步导出，图表 vendor chunk 独立缓存、页面模块按需加载；指标区使用最小宽度 Token 防止孤立卡片，图表空态统一为紧凑密度，采购与销售交易页去除多余的 Header 卡片。
 - P2：补齐信息色、浅色品牌色、紧凑圆角、指标宽度和内容吸顶层级 Token；DataTable 自动生成或接收业务级 `aria-label`，财务表格统一注入列表名称；筛选栏、日期范围控件、移动端副标题共享宽度与换行规则；设计系统门禁会拦截未定义 Token 和 Feature 裸圆角。
 - P3：新增浏览器视觉回归 manifest（`scripts/visual-baseline.json`）与 `npm run check:visual`，浏览器烟测覆盖桌面、平板、手机的导航、录单、抽屉、日期自然语言、确认弹窗和扫码错误态；设计系统文档同步了基线更新规则。
 

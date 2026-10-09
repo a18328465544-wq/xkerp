@@ -84,6 +84,7 @@ export interface InventoryListItem {
   inventoryDays: number;
   inWarranty: boolean;
   warrantyDate?: string;
+  gpuFactoryDateEstimate?: import("./gpuSn").GpuFactoryDateEstimate;
   repaired: boolean;
   gpuRisk: boolean;
   fullBox: boolean;

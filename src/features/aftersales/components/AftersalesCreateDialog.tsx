@@ -5,6 +5,7 @@ import {Button, Select, Textarea} from "@/src/components/ui";
 import {ErpDetailFact, ErpDialogShell, ErpField, ErpStatusBadge} from "@/src/components/common";
 import {creatableAftersalesTypes, type AftersalesCandidate, type AftersalesCreateFormValues, type CreatableAftersalesType} from "@/src/types/aftersales";
 import {aftersalesCreateSchema} from "../aftersales.schema";
+import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
 
 const emptyValues: AftersalesCreateFormValues = {candidateId: "", type: "维修", description: ""};
 
@@ -35,6 +36,7 @@ export function AftersalesCreateDialog({open, candidates, pending, error, onOpen
           <ErpDetailFact label="客户" value={`${selected.customerName} · ${selected.contact || "未记录联系"}`} />
           <ErpDetailFact label="商品" value={selected.model || selected.productName} />
           <ErpDetailFact label="SN" value={selected.serialNumber} />
+          <div className="col-span-2"><GpuSnDateLookupButton sn={selected.serialNumber} model={selected.model} label="查询该卡 SN 出厂日期" /></div>
         </div>}
         <ErpField label="售后类型" error={form.formState.errors.type?.message}>
           <Controller control={form.control} name="type" render={({field}) => <Select value={field.value} onValueChange={(value) => field.onChange(value as CreatableAftersalesType)} options={creatableAftersalesTypes.map((value) => ({value, label: value === "换货" ? "换货咨询" : value === "补差价" ? "补差价咨询" : value}))} disabled={pending} aria-label="售后类型" />} />

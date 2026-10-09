@@ -1,0 +1,14 @@
+{
+  "exports": [
+    {
+      "file": "src/types/accounting.ts",
+      "name": "canTransitionAccountingDocument",
+      "reason": "保留共享账务状态转换契约；本次冗余清理不收缩前后端账务状态 API。"
+    },
+    {
+      "file": "src/types/accounting.ts",
+      "name": "accountingEventStatusValues",
+      "reason": "保留共享账务事件状态枚举；不能因为当前页面未直接读取而删除领域公共契约。"
+    }
+  ]
+}

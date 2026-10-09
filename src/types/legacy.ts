@@ -5,6 +5,7 @@
 
 import type {CardStatus as CoreCardStatus, InventoryCondition as CoreInventoryCondition, ProductCategory as CoreProductCategory, SourceType as CoreSourceType} from "./core";
 import type {AccountingDocumentStatus} from "./accounting";
+import type {GpuFactoryDateEstimate} from "./gpuSn";
 
 export type ProductCategory = CoreProductCategory;
 
@@ -58,6 +59,8 @@ export interface CardInventory {
   condition: CoreInventoryCondition;
   inWarranty: boolean;
   warrantyDate?: string;
+  /** Separate estimate; never replaces the manually maintained warranty date. */
+  gpuFactoryDateEstimate?: GpuFactoryDateEstimate;
   repaired: boolean;
   gpuRisk: boolean; // Is it a high mining card risk or high failure risk
   fullBox: boolean; // Original box and booklet included

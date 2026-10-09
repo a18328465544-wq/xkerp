@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createPurchaseLineDefaults} from "@/src/features/purchase/purchase.defaults";
-import {expandPurchaseLines} from "@/src/features/purchase/purchase.calculations";
+import {expandPurchaseLines} from "@/src/lib/purchase";
 import type {PurchaseProductOption} from "@/src/types/purchase";
 import {
   parsePurchasePaste,

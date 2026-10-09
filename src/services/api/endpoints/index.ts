@@ -1,6 +1,8 @@
 export {authApi, adaptPermissions} from "./auth";
 export type {AuthSession, AuthUser, PermissionModel} from "./auth";
 export {inventoryApi, toInventoryQueryParams, toProductLedgerQueryParams} from "./inventory";
+export {gpuSnDateApi} from "./gpu-sn-date";
+export type {GpuSnRulesResponse} from "./gpu-sn-date";
 export type {InventoryPermissions} from "./inventory";
 export {salesApi, toSalesCustomerQueryParams, toSalesInventoryQueryParams} from "./sales";
 export type {SalesApiPermissions} from "./sales";

@@ -120,9 +120,6 @@ export const navigationModules = APP_MENU_MODULES.map((module) => ({
   items: module.items.map(toNavigationItem),
 }));
 
-export function navigationItemById(id: string) {
-  return navigationItems.find((item) => item.id === id);
-}
 
 export function navigationPathById(id: string) {
   return pathById[id] || `/${id}`;

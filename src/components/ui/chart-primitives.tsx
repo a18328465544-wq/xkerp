@@ -294,46 +294,7 @@ export function Sparkline({
   </ChartContainer>;
 }
 
-export interface RoundedColumnDatum extends ChartDatum {
-  [key: string]: unknown;
-}
 
-export function RoundedColumnChart({
-  data,
-  xKey,
-  series,
-  config,
-  className,
-  ariaLabel,
-  showLegend = visibleSeries(series).length > 1,
-  showYAxis = true,
-  yTickFormatter,
-  tooltipFormatter,
-}: SharedTrendChartProps) {
-  const activeSeries = visibleSeries(series);
-  const chartConfig = resolvedChartConfig(activeSeries, config);
-  return <ChartContainer config={chartConfig} className={cn("h-full", className)} role="img" aria-label={ariaLabel}>
-    <BarChart data={data} margin={{top: 12, right: 10, left: -12, bottom: 0}} barCategoryGap={CHART_BAR_GAP} barGap={CHART_BAR_GAP}>
-      <CartesianGrid stroke={chartTokens.chartGrid} strokeDasharray="4 4" vertical={false} />
-      {showLegend && <ChartLegend />}
-      {xAxis(xKey)}
-      {yAxis(showYAxis, yTickFormatter)}
-      {chartTooltip(tooltipFormatter)}
-      {activeSeries.map((item) => <Bar
-        key={item.dataKey}
-        dataKey={item.dataKey}
-        name={item.dataKey}
-        fill={item.color || chartTokens.chartMuted}
-        radius={[CHART_BAR_RADIUS, CHART_BAR_RADIUS, 0, 0]}
-        barSize={CHART_BAR_SIZE}
-        activeBar={{fill: chartTokens.chartPrimary}}
-        isAnimationActive
-        animationDuration={CHART_ANIMATION_DURATION}
-        animationEasing="ease-out"
-      />)}
-    </BarChart>
-  </ChartContainer>;
-}
 
 export interface HorizontalBarDatum {
   id?: string;

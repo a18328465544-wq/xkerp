@@ -62,7 +62,7 @@
 - 财务收入/支出页面共用 `FinanceEntryPageLayout` 的稳定页面壳、指标区、筛选工具栏和表格区域，收入/支出字段、列和详情仍由各 Feature 自己负责。
 - 移除确认无引用的配置/组件/工具模块，并从直接依赖中移除未使用的拖拽、扫码、动画和命令面板包；传递依赖仍由包管理器维护。
 - 增加 `npm run smoke:browser`：使用 Playwright CLI 在 1440px 与 390px 覆盖导航浮层、移动菜单、详情抽屉、销售/采购四行默认表单、日期自然语言解析和扫码错误态。接口在浏览器边界 mock，避免把本地数据库凭据混入烟测。
-- 图表运行时已从 Feature 的静态 `recharts` 依赖中移出：`lazyChartPrimitives` 负责按需请求唯一 chart vendor chunk，`ChartContainer` 提供统一 Suspense 加载态；列表、表单和移动端首屏不再为未显示的图表提前下载该依赖。
+- 图表运行时已从 Feature 的直接 `recharts` 依赖中移出：`chart-primitives` 复用唯一 `recharts` 适配边界，底层组件保持同步、vendor chunk 独立缓存；按需加载发生在页面模块边界，不得重新引入包装 Recharts forwardRef 组件的懒加载兼容层。
 - 演示数据已按商品、库存、单据、CRM、伙伴和审计领域拆到 `src/data/demo/`，`src/data/demoData.ts` 仅保留兼容导出；`legacy.ts` 已先拆出提成、装配和认证契约，后续继续按稳定边界渐进迁移。
 - 财务总览现金流、财务核对列/详情以及收入/支出详情、删除和指标原语已提取到 Feature 组件；页面保留查询、权限和业务字段，避免一次性重构。
 

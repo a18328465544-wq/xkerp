@@ -26,17 +26,6 @@ export const orderPoolQueueOptions: Array<{value: OrderPoolQueue; label: string}
   {value: "exceptions", label: "异常"},
 ];
 
-export const mainStageLabels: Record<OrderPoolStage, string> = {
-  待接单: "待接单",
-  跟进中: "跟进中",
-  待客户: "待客户",
-  待执行: "待执行",
-  已完成: "已完成",
-  暂停: "暂停",
-  丢单: "丢单",
-  取消: "取消",
-  售后中: "售后中",
-};
 
 export function orderPoolStageTone(stage: OrderPoolStage) {
   if (stage === "已完成") return "success" as const;
@@ -52,9 +41,6 @@ export function orderPoolTypeTone(type: OrderPoolOrderType) {
   return "success" as const;
 }
 
-export function isOrderPoolException(stage: OrderPoolStage) {
-  return orderPoolExceptionStages.includes(stage as (typeof orderPoolExceptionStages)[number]);
-}
 
 export function isOrderPoolOverdue(order: Pick<CustomerOrder, "mainStage" | "nextFollowUpAt">, now = new Date()) {
   if (!order.nextFollowUpAt || orderPoolInactiveStageValues.includes(order.mainStage as (typeof orderPoolInactiveStageValues)[number])) return false;

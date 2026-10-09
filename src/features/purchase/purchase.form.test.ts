@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createPurchaseDefaults} from "./purchase.defaults";
-import {calculatePurchaseSettlement, calculatePurchaseSummary, expandPurchaseLines} from "./purchase.calculations";
+import {calculatePurchaseSettlement, calculatePurchaseSummary, expandPurchaseLines} from "@/src/lib/purchase";
 import {parsePurchaseOrderValues, purchaseOrderSchema} from "./purchase.schema";
-import {filterPurchaseSources, purchasePartnerTypeForSource} from "./purchase.sources";
+import {isPersonalPurchaseSource, selectPurchaseSourceCandidates} from "@/src/utils/purchaseSources";
 
 function validPurchaseValues() {
   const values = createPurchaseDefaults("测试员");
@@ -130,13 +130,21 @@ test("purchase schema requires a filled line and validates settlement cross-fiel
   assert.equal(parsePurchaseOrderValues(values).success, true);
 });
 
-test("purchase source switching filters the correct partner type", () => {
-  assert.equal(purchasePartnerTypeForSource("个人回收"), "customer");
-  assert.equal(purchasePartnerTypeForSource("同行拿货"), "vendor");
+test("purchase sources use the canonical personal source classification", () => {
+  for (const source of ["个人回收", "客户置换"]) assert.equal(isPersonalPurchaseSource(source), true);
+  for (const source of ["同行拿货", "批量采购", "门店自采", "门市自采", "未知"]) assert.equal(isPersonalPurchaseSource(source), false);
+});
+
+test("purchase source picker filters the permitted partner types and actual search fields", () => {
   const options = [
     {id: "C-1", name: "张三", partnerType: "customer" as const, contact: "138", selectable: true},
     {id: "V-1", name: "同行供应商", partnerType: "vendor" as const, contact: "139", selectable: true},
   ];
-  assert.deepEqual(filterPurchaseSources(options, "个人回收").map((option) => option.id), ["C-1"]);
-  assert.deepEqual(filterPurchaseSources(options, "同行拿货", "供应").map((option) => option.id), ["V-1"]);
+  const permissions = {canReadCustomers: true, canReadVendors: true};
+  assert.deepEqual(selectPurchaseSourceCandidates(options, {...permissions, canReadVendors: false}).map((option) => option.id), ["C-1"]);
+  assert.deepEqual(selectPurchaseSourceCandidates(options, {...permissions, canReadCustomers: false, keyword: "供应"}).map((option) => option.id), ["V-1"]);
+  assert.deepEqual(selectPurchaseSourceCandidates(options, {...permissions, keyword: " 139 "}).map((option) => option.id), ["V-1"]);
+  assert.deepEqual(selectPurchaseSourceCandidates(options, {canReadCustomers: false, canReadVendors: false}), []);
+  assert.deepEqual(selectPurchaseSourceCandidates(options, {...permissions, recentIds: ["V-1"]}).map((option) => option.id), ["V-1", "C-1"]);
+  assert.deepEqual(options.map((option) => option.id), ["C-1", "V-1"]);
 });

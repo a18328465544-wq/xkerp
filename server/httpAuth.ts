@@ -154,20 +154,3 @@ export function createRequireMenu<TUser>(
     next();
   };
 }
-
-export function createRequireAnyMenu<TUser>(
-  menuIds: string[],
-  getPermissions: (user: TUser) => MenuPermission,
-  options?: AuthMiddlewareOptions,
-): express.RequestHandler {
-  return (req, res, next) => {
-    const authRequest = req as AuthenticatedRequest<TUser>;
-    if (!requireAuthenticated(authRequest, res, options)) return;
-    const allowedMenus = getPermissions(authRequest.authUser as TUser).allowedMenus || [];
-    if (allowedMenus.includes("all") || menuIds.some((menuId) => allowedMenus.includes(menuId))) {
-      next();
-      return;
-    }
-    deny(req, res, { status: 403, code: "FORBIDDEN" }, "当前账号没有该窗口入口权限", options);
-  };
-}
