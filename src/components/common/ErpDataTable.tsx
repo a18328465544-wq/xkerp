@@ -68,7 +68,7 @@ export interface ErpDataTableProps<TData> {
    * `"columns"` builds the row from each column's `meta.mobile` role instead of a hand-written row. */
   mobileRow?: ((row: TData) => ReactNode) | "columns";
   /** Placeholder kind for column-built rows without an image column. */
-  mobileEntity?: "product" | "customer";
+  mobileEntity?: "product" | "customer" | "vendor";
   /** Domain-specific phone summary priorities, referencing existing columns.
    * Rendering, permissions, sort and pagination still use this one table. */
   mobileFieldOrder?: string[];
@@ -373,7 +373,7 @@ export function ErpDataTable<TData>({
 
 /** Phone row assembled from column roles. Cells render through their own
  * column renderers, so formatting and permission handling stay in one place. */
-function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; entity: "product" | "customer"; onOpen?: () => void}) {
+function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; entity: "product" | "customer" | "vendor"; onOpen?: () => void}) {
   const cells = row.getVisibleCells().filter((cell) => cell.column.columnDef.meta?.mobile);
   const byRole = (role: string) => cells.filter((cell) => cell.column.columnDef.meta?.mobile === role);
   const render = (cell: Cell<TData, unknown>) => {
@@ -389,7 +389,7 @@ function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; enti
   const statusCell = byRole("status")[0];
   const imageValue = byRole("image")[0]?.getValue();
   const thumbnailCell = byRole("thumbnail")[0];
-  const thumbnail = thumbnailCell ? render(thumbnailCell) : entity === "customer" ? <ErpEntityThumbnail kind="customer" name={title} /> : undefined;
+  const thumbnail = thumbnailCell ? render(thumbnailCell) : entity === "customer" || entity === "vendor" ? <ErpEntityThumbnail kind={entity} name={title} /> : undefined;
   return <ErpMobileRecordRow
     title={title}
     titleMono={Boolean(titleCell?.column.columnDef.meta?.mobileMono)}

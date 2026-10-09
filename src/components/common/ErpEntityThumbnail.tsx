@@ -15,12 +15,14 @@ export function customerAvatarIdentity(name: string) {
 }
 
 /** Real images or honest visual fallbacks; no queries, invented photos or business state. */
-export function ErpEntityThumbnail({name = "", kind = "product", category, imageUrl, fallbackIcon, className}: {name?: string; kind?: "customer" | "product"; category?: string; imageUrl?: string; fallbackIcon?: ReactNode; className?: string}) {
+export function ErpEntityThumbnail({name = "", kind = "product", category, imageUrl, fallbackIcon, className}: {name?: string; kind?: "customer" | "vendor" | "product"; category?: string; imageUrl?: string; fallbackIcon?: ReactNode; className?: string}) {
   const [failedImage, setFailedImage] = useState<string>();
   const avatar = customerAvatarIdentity(name);
   const Icon = categoryIcons[category as keyof typeof categoryIcons] || Package;
   const showImage = Boolean(imageUrl && failedImage !== imageUrl);
-  return <span className={cn("erp-entity-thumbnail", className)} data-erp-component="entity-thumbnail" data-kind={kind} data-avatar-tone={kind === "customer" ? avatar.tone : undefined} data-has-image={showImage || undefined} role="img" aria-label={kind === "customer" ? `${name || "客户"}的姓名头像` : showImage ? `${name || "商品"}图片` : `暂无商品图片${category ? ` · ${category}` : ""}`}>
-    {showImage ? <img src={imageUrl} alt="" loading="lazy" onError={() => setFailedImage(imageUrl)} /> : kind === "customer" ? <span aria-hidden="true">{avatar.initial}</span> : fallbackIcon || <Icon aria-hidden="true" />}
+  const isPartner = kind === "customer" || kind === "vendor";
+  const partnerLabel = kind === "vendor" ? `${name || "同行"}的档案头像` : `${name || "客户"}的姓名头像`;
+  return <span className={cn("erp-entity-thumbnail", className)} data-erp-component="entity-thumbnail" data-kind={kind} data-avatar-tone={isPartner ? avatar.tone : undefined} data-has-image={showImage || undefined} role="img" aria-label={isPartner ? partnerLabel : showImage ? `${name || "商品"}图片` : `暂无商品图片${category ? ` · ${category}` : ""}`}>
+    {showImage ? <img src={imageUrl} alt="" loading="lazy" onError={() => setFailedImage(imageUrl)} /> : isPartner ? <span aria-hidden="true">{avatar.initial}</span> : fallbackIcon || <Icon aria-hidden="true" />}
   </span>;
 }

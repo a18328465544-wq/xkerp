@@ -107,6 +107,12 @@ test("column roles build the phone row without a hand-written mobileRow", () => 
   assert.doesNotMatch(markup, /data-erp-region="mobile-card-header"/);
 });
 
+test("column-built vendor rows use vendor identity thumbnails", () => {
+  const markup = renderToStaticMarkup(<ErpDataTable columns={customerColumns} data={customers} getRowId={(row) => row.id} mobileRow="columns" mobileEntity="vendor" phone compactViewport />);
+  assert.match(markup, /data-kind="vendor"/);
+  assert.match(markup, /张三的档案头像/);
+});
+
 test("column-built rows keep desktop tables unchanged", () => {
   const markup = renderToStaticMarkup(<ErpDataTable columns={customerColumns} data={customers} getRowId={(row) => row.id} mobileRow="columns" phone={false} compactViewport={false} />);
   assert.match(markup, /<table/);

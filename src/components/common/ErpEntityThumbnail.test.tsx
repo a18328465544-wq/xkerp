@@ -19,6 +19,13 @@ test("customer initials are name-derived, Unicode-safe and independent of custom
   assert.doesNotMatch(html, /<img|S级|A级/);
 });
 
+test("vendor thumbnails identify supplier archives accessibly", () => {
+  const html = renderToStaticMarkup(<ErpEntityThumbnail kind="vendor" name="星河供应链" />);
+  assert.match(html, /data-kind="vendor"/);
+  assert.match(html, /星河供应链的档案头像/);
+  assert.match(html, /aria-hidden="true">星/);
+});
+
 test("all twelve ERP product categories use honest icon fallbacks", () => {
   const categories = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
   for (const category of categories) {
