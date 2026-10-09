@@ -1395,7 +1395,7 @@ input[inputmode="numeric"] {
   [data-erp-region="page-content"]:has([data-mobile-projection="list"]) > [data-erp-region="table-results"] { display: none; }
   [data-mobile-projection="list"] [data-erp-region="mobile-table-sorting"] { margin: 0; border-bottom: 1px solid var(--erp-color-border); }
   .erp-phone-record-end { max-width: 38%; }
-  .erp-phone-record-end > :not(svg) { white-space: normal; text-align: right; }
+  .erp-phone-record-end > :not(svg) { white-space: nowrap; text-align: right; }
   .erp-mobile-summary-trigger { padding: 0; }
 }
 /* Phone-first presentation. Domain state and desktop geometry stay shared. */
@@ -1513,8 +1513,9 @@ input[inputmode="numeric"] {
   .erp-phone-record-image { display: flex; align-items: center; justify-content: center; flex: 0 0 var(--erp-mobile-record-image-size); height: var(--erp-mobile-record-image-size); border-radius: var(--erp-radius-md); background: var(--erp-color-surface-muted); color: var(--erp-color-text-muted); border: 1px solid var(--erp-color-border-soft); overflow: hidden; }
   .erp-phone-record-image img { width: 100%; height: 100%; object-fit: contain; }
   .erp-phone-record-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: var(--erp-space-1); }
-  .erp-phone-record-title { font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); overflow-wrap: anywhere; }
-  .erp-phone-record-subtitle, .erp-phone-record-meta { font-size: var(--erp-text-xs); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); overflow-wrap: anywhere; }
+  .erp-phone-record-title { font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .erp-phone-record-title-mono { font-variant-numeric: tabular-nums; font-family: var(--erp-font-mono, monospace); }
+  .erp-phone-record-subtitle, .erp-phone-record-meta { font-size: var(--erp-text-xs); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .erp-phone-record-end { display: flex; flex-direction: column; align-items: end; gap: var(--erp-space-1); flex-shrink: 0; font-size: var(--erp-text-base); }
   .erp-phone-record-end .erp-data-number { display: inline-block; font-weight: var(--erp-font-medium); }
   .erp-phone-record-end .erp-data-number::first-letter { font-size: 0.82em; margin-right: 1px; font-weight: var(--erp-font-regular); }

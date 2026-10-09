@@ -37,3 +37,10 @@ test("quantity controls respect the same lower and upper bounds", () => {
   assert.match(min, /disabled=""[^>]*aria-label="减少商品数量"|aria-label="减少商品数量"[^>]*disabled=""/);
   assert.match(max, /disabled=""[^>]*aria-label="增加商品数量"|aria-label="增加商品数量"[^>]*disabled=""/);
 });
+
+test("record row titleMono applies tabular numbers and mono classes", () => {
+  const markup = renderToStaticMarkup(<ErpMobileRecordRow title="XS-20261009-001" titleMono amount="¥1,200" />);
+  assert.match(markup, /erp-phone-record-title-mono/);
+  assert.match(markup, /tabular-nums/);
+});
+
