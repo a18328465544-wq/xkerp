@@ -945,7 +945,7 @@ try {
             let otherUrl;
             if (mode.startsWith("selected")) {
               if (${width} < 768) {
-                await tabPage.getByRole("button", {name: "返回列表", exact: true}).click();
+                await tabPage.getByRole("button", {name: "返回入库待办", exact: true}).click();
                 if (${editing}) await tabPage.getByRole("button", {name: "待检 1", exact: true}).click();
               }
               await tabPage.getByRole("button").filter({hasText: cards[1].productName}).click();
