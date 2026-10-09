@@ -3,6 +3,7 @@ no production data/session/database is accessed. Use against local Vite only.
 """
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
@@ -104,6 +105,9 @@ def check_layout(page, width):
     assert page.locator("#main-content").evaluate("el => el.scrollWidth <= el.clientWidth + 1"), page.url
     nav = page.get_by_role("navigation", name="手机主导航", exact=True)
     if width < 768:
+        if page.locator('[data-workspace-tab-panel][data-active="true"] [data-erp-component="mobile-workflow"]').count():
+            expect(nav).to_be_hidden()
+            return
         expect(nav).to_be_visible()
         for item in nav.locator("a,button").all():
             box = item.bounding_box()
@@ -129,10 +133,11 @@ with sync_playwright() as p:
                     page.screenshot(path=str(ARTIFACTS / f"workbench-{width}.png"), full_page=True)
                     page.get_by_role("button", name="我的", exact=True).click()
                     expect(page.get_by_role("dialog")).to_be_visible()
-                    expect(page.get_by_role("link", name="员工管理", exact=True)).to_have_count(0)
-                    expect(page.get_by_role("link", name="月结与财务体检", exact=True)).to_have_count(0)
+                    expect(page.get_by_role("link", name="员工管理", exact=True)).to_be_visible()
+                    page.get_by_role("searchbox", name="查找手机功能").fill("财务")
+                    expect(page.locator('a[href="/finance/closing"]')).to_be_visible()
                     page.get_by_role("searchbox", name="查找手机功能").fill("质检")
-                    page.get_by_role("link", name="检测质检", exact=True).click()
+                    page.get_by_role("link", name="质检入库", exact=True).click()
                     expect(page.get_by_role("dialog")).to_have_count(0)
                     expect(page.get_by_role("button").filter(has_text="技嘉 RTX4090 AERO OC 雪鹰 24G").first).to_be_visible()
                 visit(page, "/inventory")
@@ -156,12 +161,12 @@ with sync_playwright() as p:
                     assert page.evaluate("window.__cameraStops") > 0
                     page.get_by_role("searchbox", name="搜索库存", exact=True).fill("")
                     expect(cards).to_have_count(1)
-                    page.get_by_role("button", name="筛选", exact=True).click()
+                    page.get_by_role("button", name="库存筛选", exact=False).click()
                     expect(page.get_by_role("dialog")).to_be_visible()
                     page.get_by_role("textbox", name="品牌", exact=True).fill("技嘉")
                     page.get_by_role("button", name="查看结果", exact=True).click()
                     expect(page.get_by_role("dialog")).to_have_count(0)
-                    page.get_by_role("button", name="筛选", exact=False).click()
+                    page.get_by_role("button", name="库存筛选", exact=False).click()
                     expect(page.get_by_role("textbox", name="品牌", exact=True)).to_have_value("技嘉")
                     page.get_by_role("button", name="查看结果", exact=True).click()
                     expect(page.locator('[data-erp-region="mobile-table-cards"] article')).to_have_count(1)
@@ -178,13 +183,20 @@ with sync_playwright() as p:
                         workflow.get_by_text("物流、质保与备注（可选）" if editor == "sales" else "物流、备注与图片（可选）", exact=True).click()
                         remarks = workflow.locator('textarea[name="remarks"]')
                         remarks.fill("手机切换保留草稿")
-                        submit = workflow.get_by_role("button", name="确认开单 · 待出库" if editor == "sales" else "确认提交 · 等待检测入库", exact=True)
+                        submit = workflow.get_by_role("button", name="提交销售单" if editor == "sales" else "提交采购单", exact=True)
                         expect(submit).to_be_enabled()
-                        assert submit.bounding_box()["y"] + submit.bounding_box()["height"] <= 784, submit.bounding_box()
+                        assert submit.bounding_box()["y"] + submit.bounding_box()["height"] <= page.viewport_size["height"], submit.bounding_box()
                         page.screenshot(path=str(ARTIFACTS / f"{editor}-settlement-{width}.png"), full_page=True)
+                        page.get_by_role("button", name="返回销售管理" if editor == "sales" else "返回采购单据", exact=True).click()
+                        expect(workflow).to_have_attribute("data-mobile-step", "0")
+                        page.get_by_role("button", name="返回销售管理" if editor == "sales" else "返回采购单据", exact=True).click()
                         page.get_by_role("navigation", name="手机主导航", exact=True).get_by_role("link", name="库存", exact=True).click()
+                        check_layout(page, width)
                         page.get_by_role("navigation", name="手机主导航", exact=True).get_by_role("button", name="开单", exact=True).click()
                         page.get_by_role("link", name="销售开单" if editor == "sales" else "采购开单", exact=False).click()
+                        expect(workflow).to_have_attribute("data-mobile-step", "0")
+                        workflow.get_by_role("button", name="下一步：结算", exact=True).click()
+                        workflow.get_by_text("物流、质保与备注（可选）" if editor == "sales" else "物流、备注与图片（可选）", exact=True).click()
                         expect(remarks).to_have_value("手机切换保留草稿")
                         expect(workflow).to_have_attribute("data-mobile-step", "1")
                         submit.click()
@@ -213,12 +225,12 @@ with sync_playwright() as p:
                 if width < 768:
                     visit(page, "/inspections")
                     page.get_by_role("button").filter(has_text="全新 技嘉").click()
-                    expect(page.get_by_role("button", name="确认全新入库", exact=True)).to_be_disabled()
+                    expect(page.get_by_role("button", name=re.compile(r"^(确认全新入库|入库并测下一件)"))).to_be_disabled()
                     page.locator('input[name="serialNumber"]').fill("NEW-MOBILE-UNIQUE")
-                    expect(page.get_by_role("button", name="确认全新入库", exact=True)).to_be_enabled()
+                    expect(page.get_by_role("button", name=re.compile(r"^(确认全新入库|入库并测下一件)"))).to_be_enabled()
                     expect(page.get_by_role("button", name="下一步：检测", exact=True)).to_have_count(0)
                     page.screenshot(path=str(ARTIFACTS / f"inspection-new-{width}.png"), full_page=True)
-                    page.get_by_role("button", name="返回列表", exact=True).click()
+                    page.get_by_role("button", name="返回入库待办", exact=True).click()
                     page.get_by_role("button").filter(has_text="经办人：手机测试员").filter(has_not_text="全新").first.click()
                     page.get_by_role("dialog", name="当前内容尚未保存", exact=True).get_by_role("button", name="放弃并离开", exact=True).click()
                     inspect = page.locator('[data-erp-component="mobile-workflow"]:visible')
@@ -233,7 +245,7 @@ with sync_playwright() as p:
                     inspect.locator('input[name="wattage"]').fill("300")
                     inspect.get_by_role("button", name="下一步：确认", exact=True).click()
                     expect(inspect).to_have_attribute("data-mobile-step", "2")
-                    expect(inspect.get_by_role("button", name="提交检测入库", exact=True)).to_be_enabled()
+                    expect(inspect.get_by_role("button", name=re.compile(r"^(提交检测入库|入库并测下一件)"))).to_be_enabled()
                     expect(inspect.get_by_role("region", name="待确认检测信息").get_by_text("SN：USED-MOBILE-UNIQUE", exact=True)).to_be_visible()
                     page.screenshot(path=str(ARTIFACTS / f"inspection-used-{width}.png"), full_page=True)
                     visit(page, "/sales/outbound")
@@ -296,10 +308,12 @@ with sync_playwright() as p:
         attach(page, ["inventory", "sales_outbound"])
         visit(page, "/inventory")
         nav = page.get_by_role("navigation", name="手机主导航", exact=True)
-        expect(nav.get_by_role("button", name="开单", exact=True)).to_have_count(0)
+        nav.get_by_role("button", name="开单", exact=True).click()
+        expect(page.get_by_role("link", name="扫码出库", exact=True)).to_be_visible()
+        expect(page.get_by_role("link", name="采购开单", exact=True)).to_have_count(0)
         page.get_by_role("button", name="我的", exact=True).click()
         expect(page.get_by_role("link", name="员工管理", exact=True)).to_have_count(0)
-        expect(page.get_by_role("link", name="销售出库", exact=True)).to_be_visible()
+        expect(page.get_by_role("link", name="扫码出库", exact=True)).to_be_visible()
         context.close()
         print("permission-filtered phone navigation passed", flush=True)
     finally:

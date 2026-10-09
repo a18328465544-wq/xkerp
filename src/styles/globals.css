@@ -1206,7 +1206,7 @@ input[inputmode="numeric"] {
     --erp-phone-dock-height: 0px;
   }
   [data-erp-shell][data-phone-keyboard="open"] { --erp-mobile-bottom-offset: 0px; }
-  body:has([data-erp-component="mobile-workflow"], [data-phone-task="true"]) [data-erp-shell] {
+  body:has([data-workspace-tab-panel][data-active="true"] :is([data-erp-component="mobile-workflow"], [data-phone-task="true"])) [data-erp-shell] {
     --erp-mobile-bottom-offset: env(safe-area-inset-bottom, 0px);
   }
   [data-sidebar-navigation] { display: none; }
@@ -1252,7 +1252,7 @@ input[inputmode="numeric"] {
   }
   .erp-mobile-bottom-nav .erp-mobile-nav-active { color: var(--erp-color-primary); background: var(--erp-color-info-soft); }
   [data-phone-keyboard="open"] .erp-mobile-bottom-nav,
-  body:has([data-erp-component="mobile-workflow"], [data-phone-task="true"]) .erp-mobile-bottom-nav,
+  body:has([data-workspace-tab-panel][data-active="true"] :is([data-erp-component="mobile-workflow"], [data-phone-task="true"])) .erp-mobile-bottom-nav,
   body:has([role="dialog"][data-open]:not([data-mobile-presentation="tab"]), .erp-option-popup[data-open], .erp-popover-surface[data-open]) .erp-mobile-bottom-nav { display: none; }
   [data-erp-component="page-frame"] { padding-bottom: var(--erp-space-3); }
   [data-erp-region="page-identity"] .erp-annotation-slot { display: none; }
@@ -1296,7 +1296,7 @@ input[inputmode="numeric"] {
     background: var(--erp-color-surface);
     box-shadow: none;
   }
-  body:has([data-erp-component="mobile-workflow"], [data-phone-task="true"]) :is(.erp-mobile-workflow-actions, [data-erp-component="mobile-workflow"][data-mobile-final="true"] [data-erp-component="submit-bar"], [data-erp-component="mobile-workflow"][data-mobile-final="true"] .erp-inspection-submit) {
+  body:has([data-workspace-tab-panel][data-active="true"] :is([data-erp-component="mobile-workflow"], [data-phone-task="true"])) :is(.erp-mobile-workflow-actions, [data-erp-component="mobile-workflow"][data-mobile-final="true"] [data-erp-component="submit-bar"], [data-erp-component="mobile-workflow"][data-mobile-final="true"] .erp-inspection-submit) {
     bottom: var(--erp-phone-keyboard-inset, 0px);
     padding-bottom: max(var(--erp-space-3), env(safe-area-inset-bottom));
   }

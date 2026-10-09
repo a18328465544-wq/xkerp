@@ -47,8 +47,8 @@ test("phone feedback leaves the back header and persistent action controls reach
 
 test("task mode and mobile workflow hide bottom navigation and position action bar at bottom", () => {
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
-  assert.match(css, /body:has\(\[data-erp-component="mobile-workflow"\], \[data-phone-task="true"\]\) \.erp-mobile-bottom-nav/);
-  assert.match(css, /body:has\(\[data-erp-component="mobile-workflow"\], \[data-phone-task="true"\]\) \[data-erp-shell\]/);
+  assert.match(css, /body:has\(\[data-workspace-tab-panel\]\[data-active="true"\] :is\(\[data-erp-component="mobile-workflow"\], \[data-phone-task="true"\]\)\) \.erp-mobile-bottom-nav/);
+  assert.match(css, /body:has\(\[data-workspace-tab-panel\]\[data-active="true"\] :is\(\[data-erp-component="mobile-workflow"\], \[data-phone-task="true"\]\)\) \[data-erp-shell\]/);
 });
 
 test("customer and inventory pickers do not force autofocus on phone viewports", () => {
