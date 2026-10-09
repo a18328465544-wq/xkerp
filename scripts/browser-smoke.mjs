@@ -946,7 +946,7 @@ try {
             if (mode.startsWith("selected")) {
               if (${width} < 768) {
                 await tabPage.getByRole("button", {name: "返回入库待办", exact: true}).click();
-                if (${editing}) await tabPage.getByRole("button", {name: "待检 1", exact: true}).click();
+                if (${editing}) await tabPage.getByRole("group", {name: "检测记录范围"}).getByRole("button").first().click();
               }
               await tabPage.getByRole("button").filter({hasText: cards[1].productName}).click();
               await discard();
