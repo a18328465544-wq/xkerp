@@ -1,4 +1,4 @@
-import {flexRender, getCoreRowModel, getSortedRowModel, type Cell, type ColumnDef, type OnChangeFn, type RowSelectionState, type SortingState, type Updater, type VisibilityState, useReactTable} from "@tanstack/react-table";
+import {flexRender, getCoreRowModel, getSortedRowModel, type Cell, type Row, type ColumnDef, type OnChangeFn, type RowSelectionState, type SortingState, type Updater, type VisibilityState, useReactTable} from "@tanstack/react-table";
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, GripVertical, MoreHorizontal} from "lucide-react";
 import {useEffect, useId, useRef, useState, type ReactNode} from "react";
@@ -6,6 +6,8 @@ import {Button, Card, Select} from "@/src/components/ui";
 import {ErpDialogShell} from "./ErpDialogShell";
 import {ErpEmptyState} from "./ErpEmptyState";
 import {ErpLoadingState} from "./ErpLoadingState";
+import {ErpMobileRecordRow} from "./ErpMobileRecordRow";
+import {ErpEntityThumbnail} from "./ErpEntityThumbnail";
 import {cn} from "@/src/lib/cn";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 
@@ -62,8 +64,11 @@ export interface ErpDataTableProps<TData> {
   mobileMode?: "cards" | "table";
   /** Number of non-title fields shown before the mobile card offers the rest. */
   mobileFields?: number;
-  /** Compact domain row for phones; shared sorting, selection and paging remain authoritative. */
-  mobileRow?: (row: TData) => ReactNode;
+  /** Compact domain row for phones; shared sorting, selection and paging remain authoritative.
+   * `"columns"` builds the row from each column's `meta.mobile` role instead of a hand-written row. */
+  mobileRow?: ((row: TData) => ReactNode) | "columns";
+  /** Placeholder kind for column-built rows without an image column. */
+  mobileEntity?: "product" | "customer";
   /** Domain-specific phone summary priorities, referencing existing columns.
    * Rendering, permissions, sort and pagination still use this one table. */
   mobileFieldOrder?: string[];
@@ -121,6 +126,7 @@ export function ErpDataTable<TData>({
   mobileMode = "cards",
   mobileFields = 4,
   mobileRow,
+  mobileEntity = "product",
   mobileFieldOrder = [],
   mobileShowDetailAction = true,
   mobileSorting = true,
@@ -233,12 +239,17 @@ export function ErpDataTable<TData>({
     const header = cell.column.columnDef.header;
     return typeof header === "string" ? header : cell.column.id;
   };
+  const phoneList = Boolean(phone && mobileRow);
+  const renderPhoneRow = (row: Row<TData>) => {
+    if (typeof mobileRow === "function") return mobileRow(row.original);
+    return <ErpColumnMobileRow row={row} entity={mobileEntity} onOpen={onRowClick ? () => onRowClick(row.original) : undefined} />;
+  };
   return wrapSurface(<>
     {phoneToolbar}
     {fetching && <div className="erp-refresh-indicator-layer absolute inset-x-0 top-0 h-0.5 animate-pulse bg-[var(--erp-color-primary)]" role="status" aria-live="polite" aria-label="刷新中" />}
-    {showMobileCards && <div data-erp-region="mobile-table-cards" data-mobile-projection={phone && mobileRow ? "list" : "cards"} className="erp-table-cards-view space-y-2 p-2">
+    {showMobileCards && <div data-erp-region="mobile-table-cards" data-mobile-projection={phoneList ? "list" : "cards"} className="erp-table-cards-view space-y-2 p-2">
       {sortableColumns.length > 0 && (!phone || mobileSorting) && !phoneToolbar && <div role="group" aria-label={`${resolvedAriaLabel}排序`} data-erp-region="mobile-table-sorting" className="flex min-w-0 items-center gap-2">
-        {phone && mobileRow ? <><span className="mr-auto text-xs text-[var(--erp-color-text-muted)]">{total ?? data.length} 条记录</span><Button type="button" size="sm" variant="ghost" onClick={() => setSortOpen(true)}><ChevronsUpDown className="h-4 w-4" />排序</Button>{sortDialog}</> : <>
+        {phoneList ? <><span className="mr-auto text-xs text-[var(--erp-color-text-muted)]">{total ?? data.length} 条记录</span><Button type="button" size="sm" variant="ghost" onClick={() => setSortOpen(true)}><ChevronsUpDown className="h-4 w-4" />排序</Button>{sortDialog}</> : <>
         <Select size="sm" className="min-w-0 flex-1" aria-label="排序字段" placeholder="选择排序字段" value={activeSort?.id ?? ""} options={[...(!manualSorting ? [{value: "", label: "默认顺序"}] : []), ...sortableColumns.map((column) => ({value: column.id, label: typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}))]} onValueChange={(id) => {if (!id) {if (!manualSorting) table.setSorting([]); return;} const column = table.getColumn(id); if (column?.getCanSort()) table.setSorting([{id, desc: column.getFirstSortDir() === "desc"}]);}} />
         <Button type="button" size="sm" variant="secondary" className="shrink-0" disabled={!activeSort} aria-label={activeSort ? `切换为${activeSort.desc ? "升序" : "降序"}` : "排序方向"} onClick={() => {if (activeSort) table.setSorting([{...activeSort, desc: !activeSort.desc}]);}}>{activeSort?.desc ? <ArrowDown className="h-4 w-4" aria-hidden="true" /> : <ArrowUp className="h-4 w-4" aria-hidden="true" />}{activeSort?.desc ? "降序" : "升序"}</Button>
         </>}
@@ -248,7 +259,7 @@ export function ErpDataTable<TData>({
         const selectionCell = cells.find((cell) => cell.column.id === "select");
         const actionCell = cells.find((cell) => isUtilityColumn(cell.column.id) && cell.column.id !== "select");
         const contentCells = cells.filter((cell) => !isUtilityColumn(cell.column.id));
-        if (phone && mobileRow) return <article key={row.id} data-erp-selected={row.getIsSelected() ? "true" : undefined} className="erp-phone-record-wrapper">{mobileRow(row.original)}{selectionCell && <label className="erp-phone-record-select" onClick={(event) => event.stopPropagation()}>{flexRender(selectionCell.column.columnDef.cell, selectionCell.getContext())}</label>}</article>;
+        if (phoneList) return <article key={row.id} data-erp-selected={row.getIsSelected() ? "true" : undefined} className="erp-phone-record-wrapper">{renderPhoneRow(row)}{selectionCell && <label className="erp-phone-record-select" onClick={(event) => event.stopPropagation()}>{flexRender(selectionCell.column.columnDef.cell, selectionCell.getContext())}</label>}</article>;
         const titleCell = contentCells[0];
         const otherCells = contentCells.slice(1);
         const priority = mobileFieldOrder.length ? mobileFieldOrder : phoneRecordFieldPriority;
@@ -358,6 +369,37 @@ export function ErpDataTable<TData>({
       ))}
     </div>}
   </>, "relative overflow-hidden");
+}
+
+/** Phone row assembled from column roles. Cells render through their own
+ * column renderers, so formatting and permission handling stay in one place. */
+function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; entity: "product" | "customer"; onOpen?: () => void}) {
+  const cells = row.getVisibleCells().filter((cell) => cell.column.columnDef.meta?.mobile);
+  const byRole = (role: string) => cells.filter((cell) => cell.column.columnDef.meta?.mobile === role);
+  const render = (cell: Cell<TData, unknown>) => <span key={cell.id} className="contents">{flexRender(cell.column.columnDef.cell, cell.getContext())}</span>;
+  const titleCell = byRole("title")[0];
+  const titleValue = titleCell?.getValue();
+  const title = typeof titleValue === "string" || typeof titleValue === "number" ? String(titleValue) : row.id;
+  const subtitleCell = byRole("subtitle")[0];
+  const metaCells = byRole("meta");
+  const amountCell = byRole("amount")[0];
+  const statusCell = byRole("status")[0];
+  const imageValue = byRole("image")[0]?.getValue();
+  const thumbnailCell = byRole("thumbnail")[0];
+  const thumbnail = thumbnailCell ? render(thumbnailCell) : entity === "customer" ? <ErpEntityThumbnail kind="customer" name={title} /> : undefined;
+  return <ErpMobileRecordRow
+    title={title}
+    titleMono={Boolean(titleCell?.column.columnDef.meta?.mobileMono)}
+    subtitle={subtitleCell ? render(subtitleCell) : undefined}
+    meta={metaCells.length ? metaCells.map((cell, index) => <span key={cell.id} className="contents">{index > 0 && " · "}{render(cell)}</span>) : undefined}
+    amount={amountCell ? render(amountCell) : undefined}
+    amountLabel={amountCell?.column.columnDef.meta?.mobileLabel}
+    status={statusCell ? render(statusCell) : undefined}
+    statusPlacement={amountCell ? "title" : "end"}
+    imageUrl={typeof imageValue === "string" && imageValue ? imageValue : undefined}
+    thumbnail={thumbnail}
+    onOpen={onOpen}
+  />;
 }
 
 export {resolveState};
