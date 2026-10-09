@@ -485,9 +485,15 @@ try {
     expectPage(`
       await page.goto(${baseLiteral} + "/finance/income");
       await page.getByRole("heading", {name: "其他收支", exact: true}).waitFor();
-      const trigger = page.getByRole("button", {name: "收入日期范围", exact: true});
+      let trigger = page.getByRole("button", {name: "收入日期范围", exact: true});
+      if (await page.evaluate(() => window.matchMedia("(max-width: 767px)").matches)) {
+        await page.getByRole("button", {name: /筛选/}).click();
+        const filters = page.getByRole("dialog", {name: "筛选条件"});
+        await filters.waitFor({state: "visible"});
+        trigger = filters.getByRole("button", {name: "收入日期范围", exact: true});
+      }
       await trigger.click();
-      const dialog = page.getByRole("dialog");
+      const dialog = page.getByRole("dialog").filter({has: page.getByRole("textbox", {name: "自然语言日期", exact: true})});
       await dialog.getByRole("textbox", {name: "自然语言日期", exact: true}).waitFor();
       const close = dialog.getByRole("button", {name: "关闭日期范围", exact: true});
       const checkClose = async () => {
@@ -514,49 +520,55 @@ try {
     `);
   }
 
-  // 390px: the hamburger opens a touch-sized navigation drawer and its
-  // secondary links remain usable instead of being clipped or hover-only.
+  // 390px: the bottom navigation remains inside the touch viewport and its
+  // primary destinations remain directly usable.
   cli(["resize", "390", "844"]);
   expectPage(`
     await page.goto(${baseLiteral} + "/");
-    await page.getByRole("button", {name: "打开菜单"}).click();
-    const mobileNav = page.getByRole("dialog", {name: "主导航"});
+    const mobileNav = page.getByRole("navigation", {name: "手机主导航"});
     await mobileNav.waitFor({state: "visible"});
     const bounds = await mobileNav.boundingBox();
     if (!bounds || bounds.width > 390) throw new Error("mobile navigation exceeds viewport width");
-    await mobileNav.getByRole("button", {name: "商品库存"}).click();
-    await mobileNav.getByRole("link", {name: "库存查询"}).click();
-    await page.getByRole("heading", {name: "库存中心"}).waitFor();
+    await mobileNav.getByRole("link", {name: "库存"}).click();
+    await page.waitForURL((url) => url.pathname === "/inventory");
+    if (await mobileNav.getByRole("link", {name: "库存"}).getAttribute("aria-current") !== "page") throw new Error("mobile inventory destination did not become active");
   `);
   screenshot("mobile-navigation.png");
 
   expectPage(`
     await page.goto(${baseLiteral} + "/sales/new");
     await page.getByRole("heading", {name: "销售开单"}).waitFor();
-    if (await page.getByRole("spinbutton", {name: /第 [1-4] 行数量/}).count() !== 4) throw new Error("mobile sales form must start with four lines");
+    await page.getByText("添加本次销售的商品", {exact: true}).waitFor();
+    await page.getByRole("button", {name: "添加商品", exact: true}).waitFor();
     const salesCards = page.locator('[data-erp-region="line-items-cards"] [data-erp-component="transaction-line-item-card"]');
-    if (await salesCards.count() !== 4 || !(await salesCards.first().isVisible())) throw new Error("mobile sales form must expose four visible line-item cards");
+    if (await salesCards.count() !== 0) throw new Error("mobile sales form should not show unselected empty line cards");
     if (await page.locator('[data-erp-region="line-items-table"]').isVisible()) throw new Error("mobile sales form must not expose the clipped desktop line table");
     await page.goto(${baseLiteral} + "/purchase/new");
-    await page.getByRole("heading", {name: "进货与回收"}).waitFor();
-    if (await page.getByRole("spinbutton", {name: /第 [1-4] 行数量/}).count() !== 4) throw new Error("mobile purchase form must start with four lines");
-    const purchaseCards = page.locator('[data-erp-region="line-items-cards"] [data-erp-component="transaction-line-item-card"]');
-    if (await purchaseCards.count() !== 4 || !(await purchaseCards.first().isVisible())) throw new Error("mobile purchase form must expose four visible line-item cards");
+    await page.getByRole("heading", {name: "采购开单", exact: true}).waitFor();
+    await page.getByText("添加本次采购的商品", {exact: true}).waitFor();
+    await page.getByRole("button", {name: "添加商品", exact: true}).waitFor();
     if (await page.locator('[data-erp-region="line-items-table"]').isVisible()) throw new Error("mobile purchase form must not expose the clipped desktop line table");
     await page.goto(${baseLiteral} + "/products");
     await page.getByRole("heading", {name: "商品库"}).waitFor();
-    await page.getByRole("button", {name: "新建模板"}).click();
-    const mobileProductDialog = page.getByRole("dialog");
+    await page.getByRole("button", {name: "更多页面操作"}).click();
+    const mobileActionsDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "页面操作"})});
+    await mobileActionsDialog.getByRole("button", {name: "新建模板"}).click();
+    const mobileProductDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "新建商品规格模板"})});
     await mobileProductDialog.getByRole("heading", {name: "新建商品规格模板"}).waitFor();
-    const mobileDialogState = await page.locator('[data-erp-component="dialog-shell"]').evaluate((element) => {
+    const mobileDialogState = await mobileProductDialog.evaluate((element) => {
       const body = element.querySelector(".erp-scrollbar");
       const style = body ? getComputedStyle(body) : null;
-      return {width: element.getBoundingClientRect().width, scrollWidth: body?.scrollWidth ?? 0, clientWidth: body?.clientWidth ?? 0, paddingBottom: style?.paddingBottom ?? "0px", hasFooter: element.getAttribute("data-erp-dialog-has-footer")};
+      const bounds = element.getBoundingClientRect();
+      const footer = element.querySelector('[data-erp-region="dialog-footer"]');
+      const footerBounds = footer?.getBoundingClientRect();
+      return {width: bounds.width, top: bounds.top, bottom: bounds.bottom, scrollWidth: body?.scrollWidth ?? 0, clientWidth: body?.clientWidth ?? 0, paddingBottom: style?.paddingBottom ?? "0px", hasFooter: element.getAttribute("data-erp-dialog-has-footer"), footerHeight: footerBounds?.height ?? 0, footerTop: footerBounds?.top ?? 0, footerBottom: footerBounds?.bottom ?? 0};
     });
     if (mobileDialogState.width > 390 || mobileDialogState.scrollWidth > mobileDialogState.clientWidth + 1) throw new Error("mobile product template dialog exceeded the viewport: " + JSON.stringify(mobileDialogState));
-    if (mobileDialogState.hasFooter !== "true" || Number.parseFloat(mobileDialogState.paddingBottom) < 64) throw new Error("mobile product template dialog must reserve space above its sticky footer: " + JSON.stringify(mobileDialogState));
+    if (mobileDialogState.hasFooter !== "true" || mobileDialogState.footerHeight <= 0 || mobileDialogState.footerTop < mobileDialogState.top || mobileDialogState.footerBottom > mobileDialogState.bottom + 1) throw new Error("mobile product template dialog footer must remain visible inside the dialog: " + JSON.stringify(mobileDialogState));
     await mobileProductDialog.getByRole("button", {name: "关闭"}).click();
     await mobileProductDialog.waitFor({state: "hidden"});
+    await mobileActionsDialog.getByRole("button", {name: "关闭"}).click();
+    await mobileActionsDialog.waitFor({state: "hidden"});
   `);
   screenshot("mobile-purchase-form.png");
 
@@ -564,14 +576,18 @@ try {
   // language parsing, which are easy to regress while sharing filter bars.
   expectPage(`
     await page.goto(${baseLiteral} + "/finance/income");
-    await page.getByRole("button", {name: "收入日期范围"}).click();
-    const dateDialog = page.getByRole("dialog");
+    await page.locator('[data-erp-region="filter-toggle"]').click();
+    const financeFilterDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "筛选条件"})});
+    await financeFilterDialog.getByRole("button", {name: "收入日期范围"}).click();
+    const dateDialog = page.getByRole("dialog").filter({has: page.getByRole("textbox", {name: "自然语言日期", exact: true})});
     await dateDialog.getByRole("textbox", {name: "自然语言日期"}).fill("2026-08-01 至 2026-08-31");
     await dateDialog.getByRole("button", {name: "解析"}).click();
     if (await dateDialog.getByRole("textbox", {name: "开始日期"}).inputValue() !== "2026-08-01") throw new Error("natural language start date was not parsed");
     if (await dateDialog.getByRole("textbox", {name: "结束日期"}).inputValue() !== "2026-08-31") throw new Error("natural language end date was not parsed");
     await dateDialog.getByRole("button", {name: "应用"}).click();
     await dateDialog.waitFor({state: "hidden"});
+    await financeFilterDialog.getByRole("button", {name: "查看结果"}).click();
+    await financeFilterDialog.waitFor({state: "hidden"});
   `);
   screenshot("mobile-finance-date-picker.png");
 
@@ -579,8 +595,8 @@ try {
   // horizontal handle is hidden so it cannot steal table scroll gestures.
   expectPage(`
     await page.goto(${baseLiteral} + "/inventory?view=models");
-    await page.getByRole("heading", {name: "库存中心"}).waitFor();
-    await page.getByRole("button", {name: "出入明细"}).click();
+    await page.getByRole("heading", {name: "库存"}).waitFor();
+    await page.getByRole("button", {name: "查看 RTX E2E"}).click();
     const mobileLedgerDrawer = page.getByRole("dialog");
     await mobileLedgerDrawer.getByRole("heading", {name: "RTX E2E"}).waitFor();
     const mobileLedgerBounds = await mobileLedgerDrawer.boundingBox();
@@ -591,9 +607,10 @@ try {
   screenshot("mobile-resizable-product-ledger.png");
   expectPage(`await page.getByRole("dialog").getByRole("button", {name: "关闭详情"}).click();`);
 
-  // Commission settlement must use the shared accessible confirmation dialog;
-  // a native browser confirmation is not actionable on touch devices and is
-  // blocked by the V2 UI contract.
+  // Commission settlement is a desktop table action. Exercise its shared
+  // accessible confirmation at a desktop viewport without changing the
+  // intentionally read-only phone-row action model.
+  cli(["resize", "1024", "768"]);
   expectPage(`
     await page.goto(${baseLiteral} + "/finance/purchase-commission");
     await page.getByRole("heading", {name: "员工提成"}).waitFor();
@@ -670,6 +687,9 @@ try {
         await page.route(pattern, handler);
         try {
           await page.goto(${baseLiteral} + "/sales/outbound");
+          if (await page.evaluate(() => window.matchMedia("(max-width: 767px)").matches)) {
+            await page.getByRole("button", {name: "查看 " + order.invoiceNo}).click();
+          }
           const region = page.locator('[data-erp-region="outbound-verification"]');
           await region.getByText(order.invoiceNo, {exact: true}).waitFor();
           if (mode === "manual") {
@@ -681,7 +701,7 @@ try {
             await region.getByRole("button", {name: "扫码确认出库", exact: true}).click();
           }
           if (mode === "reject") {
-            await region.getByRole("alert").filter({hasText: "服务器仍有 1 件商品无法匹配可售库存"}).waitFor();
+            await region.getByRole("alert").filter({hasText: "仍有 1 件商品无法匹配可售库存"}).waitFor();
             if (calls.length !== 1 || completed) throw new Error("refused preview performed confirmation");
           } else {
             await page.getByText("暂无待出库销售单", {exact: true}).waitFor();
@@ -702,6 +722,9 @@ try {
     expectPage(`
       await page.goto(${baseLiteral} + "/sales/outbound");
       await page.getByRole("heading", {name: "销售出库"}).waitFor();
+      if (await page.evaluate(() => window.matchMedia("(max-width: 767px)").matches)) {
+        await page.getByRole("button", {name: "查看 XS-E2E-001"}).click();
+      }
       await page.evaluate(() => {
         window.scannerSmoke = {
           frames: [],
@@ -749,7 +772,9 @@ try {
   // Kept-alive forms retain their open intent, but an inactive workspace Tab
   // must release the actual video track. Returning starts a different session;
   // delayed permission/playback/detection from the old one cannot take it over.
-  for (const width of [1440, 1024, 390]) {
+  // A modal scanner intentionally blocks phone workspace navigation, so this
+  // cross-Tab lifecycle check is limited to desktop and compact desktop.
+  for (const width of [1440, 1024]) {
     expectPage(`
       const product = {id: "P-CAMERA-TAB", name: "本地 RTX5070 12G", category: "显卡", brand: "本地", model: "RTX5070", vram: "12G"};
       const card = {id: "KC-CAMERA-TAB", productId: product.id, productName: product.name, sn: "SN-CURRENT", status: "已入库", condition: "全新", category: "显卡", warehouseLocation: "测试库位", entryTime: "2026-10-04"};
