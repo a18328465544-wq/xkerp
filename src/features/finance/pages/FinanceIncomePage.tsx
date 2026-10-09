@@ -29,6 +29,7 @@ import {
   ErpDateRangePicker,
   ErpFilterBar,
   ErpLoadingState,
+  ErpMobileRecordRow,
   ErpPageError,
   ErpStatusBadge,
   MetricsRegion,
@@ -444,6 +445,16 @@ function FinanceIncomeContent({
           total: collection.total,
           onPageChange: (page) => update({ page }),
           onPageSizeChange: (pageSize) => update({ page: 1, pageSize }),
+          mobileRow: (item) => (
+            <ErpMobileRecordRow
+              title={item.businessType}
+              subtitle={item.source}
+              meta={`${item.time?.slice(0, 10)} · ${item.accountName}${item.handler ? ` · 经办: ${item.handler}` : ""}`}
+              amount={`+${formatCurrency(item.amount)}`}
+              amountLabel="收入金额"
+              onOpen={() => setDetail(item)}
+            />
+          ),
           enableColumnResizing: true,
           stickyHeader: true,
           virtualized: collection.items.length >= 50,

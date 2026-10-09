@@ -14,7 +14,9 @@ interface FinanceEntryTable<TData> {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
-  table: ErpDataTableProps<TData>;
+  table: ErpDataTableProps<TData> & {
+    mobileRow: NonNullable<ErpDataTableProps<TData>["mobileRow"]>;
+  };
 }
 
 export interface FinanceEntryPageLayoutProps<TData> {

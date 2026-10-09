@@ -33,6 +33,7 @@ import {
   ErpEmptyState,
   ErpFilterBar,
   ErpLoadingState,
+  ErpMobileRecordRow,
   ErpPageContent,
   ErpPageError,
   ErpPageHeader,
@@ -468,6 +469,18 @@ function FinanceClosingContent({
               total: report.meta.total,
               onPageChange: (page) => update({ page }),
               onPageSizeChange: (pageSize) => update({ page: 1, pageSize }),
+              mobileRow: (item) => (
+                <ErpMobileRecordRow
+                  title={item.date}
+                  subtitle={`关闭人: ${item.closedBy}`}
+                  meta={`收 ${formatCurrency(item.snapshot.income)} · 支 ${formatCurrency(item.snapshot.expense)}`}
+                  amount={formatCurrency(item.snapshot.netCash)}
+                  amountLabel="净现金"
+                  status={<ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />}
+                  statusPlacement="title"
+                  onOpen={() => setDetail(item)}
+                />
+              ),
               columnVisibility,
               onColumnVisibilityChange: setColumnVisibility,
               enableColumnResizing: true,

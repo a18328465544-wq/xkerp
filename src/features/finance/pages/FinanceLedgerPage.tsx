@@ -3,7 +3,7 @@ import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
 import type {OnChangeFn, VisibilityState} from "@tanstack/react-table";
 import {CheckCircle2, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
-import {ErpDialogShell, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput, ErpStatusBadge} from "@/src/components/common";
+import {ErpDialogShell, ErpMobileActionDock, ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, Input, Select} from "@/src/components/ui";
 import {HorizontalBarChart, TrendLineChart} from "@/src/components/ui/chart-primitives";
@@ -16,7 +16,7 @@ import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {financeLedgerBusinessTypes, financeLedgerDirections, type FinanceLedgerFilters, type FinanceLedgerItem} from "@/src/types/finance-ledger";
 import type {FinanceAccountItem} from "@/src/types/finance-account";
-import {createFinanceLedgerColumns} from "../finance-ledger.columns";
+import {createFinanceLedgerColumns, formatLedgerChangeAmount} from "../finance-ledger.columns";
 import {defaultFinanceLedgerFilters, financeLedgerFiltersToSearch, parseFinanceLedgerFilters} from "../finance-ledger.filters";
 import {summarizeFinanceLedgerPage} from "../finance-ledger.summary";
 import {financeChartCategoryColor, financeNetColor} from "../finance-chart.utils";
@@ -386,17 +386,17 @@ function LedgerTableCard({rows, summary, total, page, pageSize, query, columns, 
       surface={phone ? "plain" : "card"}
       mobilePagination="compact"
       mobileRow={(item) => {
-        const isIncome = item.direction === "收入";
-        const amountStr = `${isIncome ? "+" : "-"}${formatMoney(item.changeAmount)}`;
+        const {isIncome, formatted, colorClass} = formatLedgerChangeAmount(item.changeAmount);
         const title = item.party || item.customerName || item.supplierName || item.businessType;
         const subtitle = item.party || item.customerName || item.supplierName ? item.businessType : undefined;
+        const docInfo = item.relatedDocNo ? ` · 单号: ${item.relatedDocNo}` : "";
         return (
           <ErpMobileRecordRow
             title={title}
             subtitle={subtitle}
-            meta={`${shortDate(item.time)} · ${item.accountName}`}
-            amount={<span className={isIncome ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)] font-medium"}>{amountStr}</span>}
-            status={item.relatedDocNo ? <ErpStatusBadge label={item.relatedDocNo} tone="neutral" /> : undefined}
+            meta={`${shortDate(item.time)} · ${item.accountName}${docInfo}`}
+            amount={<span className={`erp-data-number font-semibold ${colorClass}`}>{formatted}</span>}
+            amountLabel={isIncome ? "收入" : "支出"}
             onOpen={() => onRowClick(item)}
           />
         );

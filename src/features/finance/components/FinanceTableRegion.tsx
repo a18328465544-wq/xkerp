@@ -12,12 +12,15 @@ export function FinanceTableRegion<TData>({
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
-  table: ErpDataTableProps<TData>;
+  table: ErpDataTableProps<TData> & {
+    mobileRow: NonNullable<ErpDataTableProps<TData>["mobileRow"]>;
+  };
 }) {
   const phone = useErpPhone();
   const content = (
     <ErpDataTable
       {...table}
+      mobileRow={table.mobileRow}
       surface={table.surface ?? (phone ? "plain" : "card")}
       mobilePagination={table.mobilePagination ?? "compact"}
       ariaLabel={table.ariaLabel || (typeof title === "string" ? `${title}列表` : "财务数据列表")}

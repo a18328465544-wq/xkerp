@@ -143,7 +143,6 @@ for (const file of collectComponentFiles(componentsDir).sort()) inspectFile(file
 
 const tableWhitelist = new Set([
   "src/features/design-system/pages/DesignSystemPage.tsx",
-  "src/features/finance/components/FinanceTableRegion.tsx",
   "src/components/common/ErpProductLedgerDrawer.tsx",
 ]);
 
@@ -176,8 +175,7 @@ function inspectFeatureDataTable(file) {
         const hasMobileRow = Boolean(findAttribute(jsxNode, "mobileRow"));
         const mobileMode = literalAttributeValue(findAttribute(jsxNode, "mobileMode"));
         const hasMobileModeTable = mobileMode === "table";
-        const hasSpread = attributesOf(jsxNode).some((attr) => ts.isJsxSpreadAttribute(attr));
-        if (!hasMobileRow && !hasMobileModeTable && !hasSpread) {
+        if (!hasMobileRow && !hasMobileModeTable) {
           fail(file, sourceFile, jsxNode, "Feature 页面使用 <ErpDataTable> 必须提供 mobileRow，或者显式传 mobileMode=\"table\"。");
         }
       }

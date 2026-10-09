@@ -13,6 +13,7 @@ import {
   ErpDetailDrawer,
   ErpFilterBar,
   ErpMetricCard,
+  ErpMobileRecordRow,
   ErpPageContent,
   ErpPageError,
   ErpPageHeader,
@@ -420,6 +421,18 @@ function FinanceReturnReconcileContent({
           onPageChange: (page) => setFilters({ ...filters, page }),
           onPageSizeChange: (pageSize) =>
             setFilters({ ...filters, page: 1, pageSize }),
+          mobileRow: (item) => (
+            <ErpMobileRecordRow
+              title={item.returnNo}
+              subtitle={`${item.reconcileType} · ${item.partyName || "—"}`}
+              meta={`${item.date?.slice(0, 10) || "—"}${item.relatedDocNo ? ` · 原单: ${item.relatedDocNo}` : ""}`}
+              amount={formatCurrency(item.amount)}
+              amountLabel="退款金额"
+              status={<ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : "warning"} />}
+              statusPlacement="title"
+              onOpen={() => setDetail(item)}
+            />
+          ),
           stickyHeader: true,
           density: "compact",
           virtualized: pageRows.length >= 50,
