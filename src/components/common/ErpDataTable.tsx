@@ -77,7 +77,9 @@ export interface ErpDataTableProps<TData> {
   /** Opt-in windowing for large client-side pages. Server pagination remains the primary guard. */
   virtualized?: boolean;
   virtualRowHeight?: number;
+  /** @internal 仅测试用 */
   phone?: boolean;
+  /** @internal 仅测试用 */
   compactViewport?: boolean;
 }
 
@@ -146,14 +148,16 @@ export function ErpDataTable<TData>({
   const scrollRef = useRef<HTMLDivElement>(null);
   // Keep the server and first client render identical; the media listener
   // applies the compact presentation immediately after hydration.
-  const [compactViewport, setCompactViewport] = useState(compactViewportProp ?? false);
+  const [internalCompactViewport, setInternalCompactViewport] = useState(false);
+  const compactViewport = compactViewportProp ?? internalCompactViewport;
 
   useEffect(() => {
+    if (compactViewportProp !== undefined) return;
     // Keep desktop windows from 1024px on the table view (the table may scroll
     // horizontally inside its own region); compact desktop and below use the
     // complete card projection so the sidebar never squeezes fields away.
     const media = window.matchMedia("(max-width: 1023px)");
-    const update = () => setCompactViewport(media.matches);
+    const update = () => setInternalCompactViewport(media.matches);
     update();
     if (media.addEventListener) {
       media.addEventListener("change", update);
@@ -161,7 +165,7 @@ export function ErpDataTable<TData>({
     }
     media.addListener(update);
     return () => media.removeListener(update);
-  }, []);
+  }, [compactViewportProp]);
 
   const table = useReactTable({
     data,

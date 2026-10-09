@@ -275,7 +275,6 @@ function PurchaseListContent({filters, commitFilters, session, query, filterPend
       )}
     />
 
-    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {!phone && <>
       <ErpMobileSummary label="采购统计" summary={metricValue(`${selection.summary.orderCount} 单 · 待付款 ${selection.summary.pendingPaymentCount}`)}><MetricsRegion>
         <MetricCard label="采购单数" value={metricValue(`${selection.summary.orderCount} 单`)} detail="按当前筛选" icon={<ClipboardList className="h-4 w-4" />} />
@@ -299,6 +298,8 @@ function PurchaseListContent({filters, commitFilters, session, query, filterPend
         <div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div>
       </>} />
     </>}
+
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
 
     {purchaseTable}
 

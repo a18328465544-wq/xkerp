@@ -175,8 +175,9 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
           <ErpMobileRecordRow
             title={productDisplayName(item)}
             subtitle={subtitle}
-            meta={`当前库存 ${item.currentStock} 件${item.version ? ` · ${item.version}` : ""}`}
+            meta={`当前库存 ${item.currentStock} 件${item.version && item.version !== item.model ? ` · ${item.version}` : ""}`}
             amount={price}
+            amountLabel={price ? "参考回收价" : undefined}
             thumbnail={<ErpEntityThumbnail name={productDisplayName(item)} imageUrl={item.imageUrls?.[0]} category={item.category} />}
             onOpen={fullPriceAccess ? () => openEdit(item) : undefined}
           />
@@ -241,10 +242,9 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
           </>
         )}
       />
-      <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
-        {!phone && (
-          <>
-            <ErpMobileSummary>
+      {!phone && (
+        <>
+          <ErpMobileSummary>
               <MetricsRegion>
                 <MetricCard label="商品模板" value={`${total} 款`} detail="按当前筛选" icon={<Boxes className="h-4 w-4" />} />
                 <MetricCard label="有库存规格" value={`${stockedTemplates} 款`} detail={`${stockUnits} 件物理库存`} icon={<PackageCheck className="h-4 w-4" />} tone="success" />
@@ -261,7 +261,8 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
             </ErpPageToolbar>
           </>
         )}
-        {!fullPriceAccess && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div>}
+        <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+          {!fullPriceAccess && <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div>}
         {phone ? productTable : <DashboardSection title="商品规格列表">{productTable}</DashboardSection>}
         <ErpMobileActionDock
           hidden={Boolean(dialogOpen || confirmState || ledgerSubject || phoneFiltersOpen)}

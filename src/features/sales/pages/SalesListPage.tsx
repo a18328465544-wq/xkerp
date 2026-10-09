@@ -295,7 +295,6 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
           </>
         )}
       />
-      <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
       {!phone && <>
         <ErpMobileSummary label="销售统计" summary={metricValue(`${selection.summary.orderCount} 单 · 待出库 ${selection.summary.pendingOutboundCount}`)}><MetricsRegion>
           <MetricCard label="销售单数" value={metricValue(`${selection.summary.orderCount} 单`)} detail="按当前筛选" icon={<FileText className="h-4 w-4" />} />
@@ -319,7 +318,8 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
         <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Filter className="h-4 w-4 text-[var(--erp-color-primary)]" />共 {selection.meta.total} 条</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={emptyVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
       </>}
 
-      {salesTable}
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+        {salesTable}
 
       <ErpMobileActionDock
         hidden={Boolean(detailId || deleting || settling || phoneFiltersOpen)}

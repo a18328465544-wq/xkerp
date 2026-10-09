@@ -320,26 +320,26 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
           </>
         )}
       />
-      <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
-        {!phone && (
-          <>
-            <ErpMobileSummary>
-              <MetricsRegion>
-                <MetricCard label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail={filters.status ? `${filters.status}筛选结果` : "服务端返回总数"} icon={<Undo2 className="h-4 w-4" />} />
-                <MetricCard label="退款金额（本页）" value={formatCurrency(pageAmount)} detail="仅汇总当前页真实记录" icon={<Banknote className="h-4 w-4" />} />
-                <MetricCard label="待处理（本页）" value={`${pendingOnPage} 单`} detail="完成动作会触发业务变更" icon={<ClipboardCheck className="h-4 w-4" />} tone={pendingOnPage ? "warning" : "neutral"} />
-                <MetricCard label="已完成（本页）" value={`${completedOnPage} 单`} detail="退款与库存已由服务端处理" icon={<CheckCircle2 className="h-4 w-4" />} />
-              </MetricsRegion>
-            </ErpMobileSummary>
-            <ErpPageToolbar>
-              <ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesReturnListFilters)} disabled={!activeFilterCount}><Filter className="h-4 w-4" />重置筛选</Button>}>
-                {phoneSearch}
-                <Select className="w-40" value={filters.status} options={statusOptions} onValueChange={(value) => updateFilters({status: value as SalesReturnListFilters["status"]})} aria-label="退货处理状态筛选" />
-              </ErpFilterBar>
-            </ErpPageToolbar>
-            <ErpTableResultsBar actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
-          </>
-        )}
+      {!phone && (
+        <>
+          <ErpMobileSummary>
+            <MetricsRegion>
+              <MetricCard label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail={filters.status ? `${filters.status}筛选结果` : "服务端返回总数"} icon={<Undo2 className="h-4 w-4" />} />
+              <MetricCard label="退款金额（本页）" value={formatCurrency(pageAmount)} detail="仅汇总当前页真实记录" icon={<Banknote className="h-4 w-4" />} />
+              <MetricCard label="待处理（本页）" value={`${pendingOnPage} 单`} detail="完成动作会触发业务变更" icon={<ClipboardCheck className="h-4 w-4" />} tone={pendingOnPage ? "warning" : "neutral"} />
+              <MetricCard label="已完成（本页）" value={`${completedOnPage} 单`} detail="退款与库存已由服务端处理" icon={<CheckCircle2 className="h-4 w-4" />} />
+            </MetricsRegion>
+          </ErpMobileSummary>
+          <ErpPageToolbar>
+            <ErpFilterBar actions={<Button type="button" variant="ghost" size="sm" onClick={() => commitFilters(defaultSalesReturnListFilters)} disabled={!activeFilterCount}><Filter className="h-4 w-4" />重置筛选</Button>}>
+              {phoneSearch}
+              <Select className="w-40" value={filters.status} options={statusOptions} onValueChange={(value) => updateFilters({status: value as SalesReturnListFilters["status"]})} aria-label="退货处理状态筛选" />
+            </ErpFilterBar>
+          </ErpPageToolbar>
+          <ErpTableResultsBar actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
+        </>
+      )}
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
         {salesReturnTable}
         <ErpMobileActionDock
           hidden={Boolean(detailId || completeTarget || voidTarget || editTarget || deleteTarget || phoneFiltersOpen)}

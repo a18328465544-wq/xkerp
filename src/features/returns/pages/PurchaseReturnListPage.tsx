@@ -238,26 +238,26 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
           </>
         )}
       />
-      <ErpPageContent mobileSearchFirst className="space-y-[var(--erp-page-gap)]">
-        {!phone && (
-          <>
-            <ErpMobileSummary>
-              <MetricsRegion>
-                <Metric label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail="服务端筛选总数" icon={<Undo2 className="h-4 w-4" />} />
-                <Metric label="退货金额（本页）" value={formatCurrency(pageAmount)} detail="当前页真实记录" icon={<Banknote className="h-4 w-4" />} />
-                <Metric label="账款抵扣（本页）" value={formatCurrency(pageCredit)} detail="完成后由服务端返回" icon={<ClipboardCheck className="h-4 w-4" />} />
-                <Metric label="待处理（本页）" value={`${pending} 单`} detail="尚未改变采购和库存" icon={<CheckCircle2 className="h-4 w-4" />} tone={pending ? "warning" : "neutral"} />
-              </MetricsRegion>
-            </ErpMobileSummary>
-            <ErpPageToolbar>
-              <ErpFilterBar actions={<Button size="sm" variant="ghost" disabled={!active} onClick={() => commitFilters(defaultSalesReturnListFilters)}><Filter className="h-4 w-4" />重置筛选</Button>}>
-                {phoneSearch}
-                <Select className="w-40" value={filters.status} options={statusOptions} onValueChange={(value) => update({status: value as PurchaseReturnListFilters["status"]})} aria-label="采购退货状态" />
-              </ErpFilterBar>
-            </ErpPageToolbar>
-            <ErpTableResultsBar actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
-          </>
-        )}
+      {!phone && (
+        <>
+          <ErpMobileSummary>
+            <MetricsRegion>
+              <Metric label="当前结果" value={`${query.data?.meta.total || 0} 单`} detail="服务端筛选总数" icon={<Undo2 className="h-4 w-4" />} />
+              <Metric label="退货金额（本页）" value={formatCurrency(pageAmount)} detail="当前页真实记录" icon={<Banknote className="h-4 w-4" />} />
+              <Metric label="账款抵扣（本页）" value={formatCurrency(pageCredit)} detail="完成后由服务端返回" icon={<ClipboardCheck className="h-4 w-4" />} />
+              <Metric label="待处理（本页）" value={`${pending} 单`} detail="尚未改变采购和库存" icon={<CheckCircle2 className="h-4 w-4" />} tone={pending ? "warning" : "neutral"} />
+            </MetricsRegion>
+          </ErpMobileSummary>
+          <ErpPageToolbar>
+            <ErpFilterBar actions={<Button size="sm" variant="ghost" disabled={!active} onClick={() => commitFilters(defaultSalesReturnListFilters)}><Filter className="h-4 w-4" />重置筛选</Button>}>
+              {phoneSearch}
+              <Select className="w-40" value={filters.status} options={statusOptions} onValueChange={(value) => update({status: value as PurchaseReturnListFilters["status"]})} aria-label="采购退货状态" />
+            </ErpFilterBar>
+          </ErpPageToolbar>
+          <ErpTableResultsBar actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
+        </>
+      )}
+      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
         {purchaseReturnTable}
         <ErpMobileActionDock
           hidden={Boolean(detailId || completeTarget || voidTarget || editTarget || deleteTarget || phoneFiltersOpen)}
