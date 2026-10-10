@@ -36,7 +36,8 @@ export function countActiveErpFilterFields(fields: readonly ErpFilterField[]) {
 }
 
 function FilterControl({field, layout}: {field: ErpFilterField; layout: "bar" | "sheet"}) {
-  const width = layout === "sheet" ? "w-full" : field.width;
+  // A bar control without a width would stretch across the whole filter row.
+  const width = layout === "sheet" ? "w-full" : field.width ?? "w-36";
   if (field.kind === "checkbox") return <ErpCheckboxField className={layout === "bar" ? "min-h-9 px-2 py-1.5 text-xs" : undefined} variant={layout === "sheet" ? "card" : "inline"} label={field.label} checked={field.checked} onChange={(event) => field.onChange(event.target.checked)} />;
   if (field.kind === "select") return <Select className={width} value={field.value} options={field.options} onValueChange={field.onChange} aria-label={field.label} />;
   if (field.kind === "dateRange") return <ErpDateRangePicker value={field.value} onChange={field.onChange} density={layout === "bar" ? "compact" : "default"} triggerClassName={layout === "bar" ? field.width ?? "sm:w-36" : "w-full"} ariaLabel={field.label} startAriaLabel={`${field.label}开始`} endAriaLabel={`${field.label}结束`} />;

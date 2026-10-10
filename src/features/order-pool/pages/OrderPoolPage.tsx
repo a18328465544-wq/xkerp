@@ -211,7 +211,8 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
       {label: "待认领", active: filters.queue === "unassigned", onSelect: () => updateFilters({queue: "unassigned"})},
     ]}
     defaultSortLabel="最近更新"
-    primaryAction={{label: "新建订单", icon: <Plus className="h-4 w-4" />, onClick: openCreateOrder}}
+    primaryAction={{label: "新建协同订单", icon: <Plus className="h-4 w-4" />, onClick: openCreateOrder}}
+    phonePrimaryAction={{label: "新建订单", icon: <Plus className="h-4 w-4" />, onClick: openCreateOrder}}
     onRefresh={() => void query.refetch()}
     refreshing={query.isFetching}
     tableTitle="协同订单列表"

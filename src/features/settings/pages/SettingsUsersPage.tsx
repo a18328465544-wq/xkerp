@@ -72,8 +72,8 @@ function SettingsUsersContent({users, loading, fetching, error, onRetry, onAuthE
   ], []);
   const reset = () => {setKeyword(""); setRole(""); setStatus("");};
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "role", label: "角色", value: role, defaultValue: "", options: [{value: "", label: "全部角色"}, ...roles], onChange: setRole},
-    {kind: "select", key: "status", label: "账号状态", value: status, defaultValue: "", options: [{value: "", label: "全部状态"}, {value: "enabled", label: "启用"}, {value: "disabled", label: "停用"}], onChange: setStatus},
+    {kind: "select", key: "role", label: "角色", width: "w-32", value: role, defaultValue: "", options: [{value: "", label: "全部角色"}, ...roles], onChange: setRole},
+    {kind: "select", key: "status", label: "账号状态", width: "w-32", value: status, defaultValue: "", options: [{value: "", label: "全部状态"}, {value: "enabled", label: "启用"}, {value: "disabled", label: "停用"}], onChange: setStatus},
   ];
   const createMember = () => {setMutationError(""); setEditor({mode: "create", user: null});};
   return <ErpListPage

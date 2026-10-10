@@ -30,3 +30,8 @@ test("desktop bar and phone sheet render the same fields", () => {
   assert.match(sheet, /data-erp-region="phone-filter-fields"/);
   assert.match(sheet, />客户等级<\/span>/);
 });
+
+test("bar controls without an explicit width keep a compact default", () => {
+  const bar = renderToStaticMarkup(<ErpFilterFields fields={[fields[1]!]} layout="bar" />);
+  assert.match(bar, /w-36/);
+});
