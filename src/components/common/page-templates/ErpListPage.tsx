@@ -87,6 +87,8 @@ export interface ErpListPageProps<TData> {
   phonePrimaryAction?: ErpListPageAction;
   /** Secondary actions: desktop filter bar, phone filter sheet. */
   actions?: readonly ErpListPageAction[];
+  /** Page-level secondary actions (e.g. 办理销售退货): desktop header, phone filter sheet. */
+  pageActions?: readonly ErpListPageAction[];
   onRefresh?: () => void;
   refreshing?: boolean;
   /** Desktop results label when no filter is active, e.g. 「全部客户」. */
@@ -150,6 +152,7 @@ export function ErpListPage<TData>({
   phoneHeaderActions,
   phonePrimaryAction,
   actions = [],
+  pageActions = [],
   onRefresh,
   refreshing = false,
   resultsLabel = "全部记录",
@@ -181,6 +184,7 @@ export function ErpListPage<TData>({
   const onPageSizeChange = table?.onPageSizeChange ?? pagination?.onPageSizeChange;
   const activeFilters = countActiveErpFilterFields(filters) + (search?.value ? 1 : 0) + additionalActiveFilterCount;
   const resetButton = onResetFilters ? <Button type="button" size="sm" variant="ghost" onClick={onResetFilters}><RotateCcw className="h-4 w-4" />重置</Button> : null;
+  const pageActionButtons = pageActions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={() => {setSheetOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>);
   const actionButtons = actions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={() => {setSheetOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>);
   const refreshButton = onRefresh ? <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />刷新</Button> : null;
   const searchInput = search ? <ErpSearchInput className={phone ? "w-full" : "min-w-64 flex-1"} value={search.value} onChange={(event) => search.onChange(event.target.value)} placeholder={phone ? search.phonePlaceholder ?? search.placeholder : search.placeholder} aria-label={search.label} /> : null;
@@ -189,7 +193,7 @@ export function ErpListPage<TData>({
   if (!phone) {
     const dataTable = table ? <ErpDataTable {...table} surface="card" mobilePagination="compact" density={columnSettings?.density ?? tableDensity} columnVisibility={columnSettings?.visibility} onColumnVisibilityChange={columnSettings?.onVisibilityChange} phone={phoneProp} /> : null;
     return <PageFrame className={cn("erp-list-page", className)}>
-      <ErpPageHeader title={title} subtitle={subtitle} quickStatus={quickStatus} actions={desktopHeaderActions || refreshButton || primaryAction ? <>{desktopHeaderActions}{refreshButton}{primaryAction && <Button type="button" size="sm" variant="primary" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</Button>}</> : undefined} />
+      <ErpPageHeader title={title} subtitle={subtitle} quickStatus={quickStatus} actions={desktopHeaderActions || pageActionButtons.length || refreshButton || primaryAction ? <>{desktopHeaderActions}{pageActionButtons}{refreshButton}{primaryAction && <Button type="button" size="sm" variant="primary" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</Button>}</> : undefined} />
       {tabs}
       {metricsRegion}
       <ErpPageToolbar><ErpFilterBar actions={resetButton || actionButtons.length ? <>{resetButton}{actionButtons}</> : undefined}>{searchInput}<ErpFilterFields fields={filters} layout="bar" /></ErpFilterBar></ErpPageToolbar>
@@ -208,7 +212,7 @@ export function ErpListPage<TData>({
   const sheetFilterCount = countActiveErpFilterFields(filters) + additionalActiveFilterCount;
   const phoneCount = loading ? "正在加载…" : loadError ? "加载失败" : countLabel?.(total);
   const phoneTitleNode = <span className="erp-list-phone-title">{phoneTitle}{phoneCount ? <small>{phoneCount}</small> : null}</span>;
-  const hasSheet = filters.length > 0 || actions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange);
+  const hasSheet = filters.length > 0 || actions.length > 0 || pageActions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange);
   const filterButton = hasSheet ? <Button type="button" variant="secondary" size="sm" onClick={() => setSheetOpen(true)} aria-label={`${phoneTitle}筛选与操作`}><SlidersHorizontal className="h-4 w-4" />筛选{sheetFilterCount > 0 && <span className="tabular-nums">{sheetFilterCount}</span>}</Button> : undefined;
   const mobileToolbar: ErpDataTableProps<TData>["mobileToolbar"] = ({openSorting, sortLabel, descending}) => <div className="erp-list-toolbar">
     {quickFilters.length > 0 && <div className="erp-list-quick-filters" role="group" aria-label={`${phoneTitle}快捷筛选`}>{quickFilters.slice(0, 4).map((item) => <Button key={item.label} type="button" variant={item.active ? "primary" : "ghost"} aria-pressed={item.active} onClick={item.onSelect}>{item.label}</Button>)}</div>}
@@ -226,7 +230,7 @@ export function ErpListPage<TData>({
         <div className="space-y-4">
           <ErpFilterFields fields={filters} layout="sheet" />
           {onPageSizeChange && <Select aria-label="每页条数" value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))} options={createErpPageSizeOptions(phonePageSizeOptions)} />}
-          {(actionButtons.length > 0 || refreshButton) && <div className="flex flex-wrap gap-2">{actionButtons}{refreshButton}</div>}
+          {(pageActionButtons.length > 0 || actionButtons.length > 0 || refreshButton) && <div className="flex flex-wrap gap-2">{pageActionButtons}{actionButtons}{refreshButton}</div>}
           {sheetExtra}
         </div>
       </ErpDialogShell>}
