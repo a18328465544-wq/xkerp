@@ -12,8 +12,8 @@ export function toSalesCustomerQueryParams(keyword: string, page = 1, pageSize =
   return params;
 }
 
-export function toSalesInventoryQueryParams(keyword: string, page = 1, pageSize = 20) {
-  const params = new URLSearchParams({page: String(page), pageSize: String(pageSize), activeOnly: "true", includeSold: "false", sortKey: "entryTime", sortDirection: "desc"});
+export function toSalesInventoryQueryParams(keyword: string, page = 1, pageSize = 20, sortDirection: "asc" | "desc" = "desc") {
+  const params = new URLSearchParams({page: String(page), pageSize: String(pageSize), activeOnly: "true", includeSold: "false", sortKey: "entryTime", sortDirection});
   if (keyword.trim()) params.set("keyword", keyword.trim());
   return params;
 }
@@ -71,8 +71,8 @@ export const salesApi = {
     return adaptSalesCustomers(response);
   },
 
-  async searchInventory(keyword: string, permissions: SalesApiPermissions, signal?: AbortSignal): Promise<SalesInventoryCandidate[]> {
-    const params = toSalesInventoryQueryParams(keyword);
+  async searchInventory(keyword: string, permissions: SalesApiPermissions, signal?: AbortSignal, options: {pageSize?: number; sortDirection?: "asc" | "desc"} = {}): Promise<SalesInventoryCandidate[]> {
+    const params = toSalesInventoryQueryParams(keyword, 1, options.pageSize ?? 20, options.sortDirection ?? "desc");
     const response = await apiRequest<SalesInventoryListResponseDto>(`/api/inventory/items?${params.toString()}`, {signal});
     return adaptSalesInventoryCandidates(response, permissions);
   },

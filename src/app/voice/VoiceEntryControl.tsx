@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useRef, useState, type ReactNode} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {FileText, Loader2, Mic} from "lucide-react";
 import {Button} from "@/src/components/ui";
@@ -23,12 +23,14 @@ export interface VoiceEntryControlProps {
   label?: string;
   onTranscript?: (transcript: string) => void | Promise<void>;
   onTextFallback?: () => void;
-  onParsed?: (result: VoiceParseResult) => void;
+  onParsed?: (result: VoiceParseResult) => void | Promise<void>;
   onApply?: (result: VoiceParseResult, transcript: string) => void | Promise<void>;
+  renderPreview?: (result: VoiceParseResult) => ReactNode;
+  applyDisabled?: boolean;
   className?: string;
 }
 
-export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, onTextFallback, onParsed, onApply, className}: VoiceEntryControlProps) {
+export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, onTextFallback, onParsed, onApply, renderPreview, applyDisabled = false, className}: VoiceEntryControlProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const status = useVoiceStatus();
   const [open, setOpen] = useState(false);
@@ -46,8 +48,9 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
     setError(null);
     try {
       const result = await voiceApi.parse({text, scene});
+      if (onParsed) setStatusText("正在匹配表单候选…");
+      await onParsed?.(result);
       setParsed(result);
-      onParsed?.(result);
       setStatusText("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "解析失败，请改用文字输入后重试。");
@@ -148,8 +151,8 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
       statusText={statusText}
       error={error}
     >
-      {parsed && <VoiceParsePreview result={parsed} />}
-      {parsed && onApply && <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={() => void applyParsedDraft()} disabled={busy}>应用到当前表单草稿</Button>}
+      {parsed && (renderPreview ? renderPreview(parsed) : <VoiceParsePreview result={parsed} />)}
+      {parsed && onApply && <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={() => void applyParsedDraft()} disabled={busy || applyDisabled}>应用到当前表单草稿</Button>}
     </VoiceDraftPanel>
   </div>;
 }

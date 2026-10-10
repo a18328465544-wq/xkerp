@@ -40,6 +40,21 @@ test("sales inventory query requests only active candidates", () => {
   assert.equal(params.get("sortKey"), "entryTime");
 });
 
+test("sales voice inventory lookup requests a bounded first page in oldest-first order", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.equal(input, "/api/inventory/items?page=1&pageSize=100&activeOnly=true&includeSold=false&sortKey=entryTime&sortDirection=asc&keyword=3821");
+    return new Response(JSON.stringify({data: [{id: "KC-1", productId: "P-1", productName: "RTX 4090", sn: "SN-3821", status: "已入库", entryTime: "2026-10-01"}], meta: {page: 1, pageSize: 100, total: 1}}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    const result = await salesApi.searchInventory("3821", {showCost: false, showProfit: false}, undefined, {pageSize: 100, sortDirection: "asc"});
+    assert.equal(result[0]?.serialNumber, "SN-3821");
+    assert.equal(result[0]?.costPrice, undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("sales product picker requests the product-level availability endpoint", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
