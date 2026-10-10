@@ -75,6 +75,7 @@ export {imageMimeTypeValues, type ImageMimeType} from "./media";
 export type {FinanceExpenseCategory, FinanceExpenseCollection, FinanceExpenseFilters, FinanceExpenseFormValues, FinanceExpenseItem} from "./finance-expense";
 export type {FinanceTransferCollection, FinanceTransferFilters, FinanceTransferFormValues, FinanceTransferItem} from "./finance-transfer";
 export type {DailySalesAiNarrative, DailySalesAiNarrativeSource, DailySalesComparison, DailySalesMetrics, DailySalesPriceBreakdown, DailySalesProductSummary, DailySalesReturnProductSummary, DailySalesReturnSummary, DailySalesSummary, DailySalesSummaryResult} from "./ai";
+export type {VoiceIssue, VoiceParseResult, VoiceParseSource, VoicePartnerCandidate, VoiceProductCandidate, VoicePurchaseLineDraft, VoiceResolvedScene, VoiceSalesLineDraft, VoiceScene} from "./voice";
 export type {CommissionAdjustment, CommissionMode, CommissionSettlementStatus} from "./commission";
 export {commissionPayoutCycleValues, commissionPayoutMethodValues, commissionRuleBaseValues, commissionRuleCalculationValues} from "./legacy-commission";
 export type {CommissionPayoutCycle, CommissionPayoutMethod, CommissionRuleBase, CommissionRuleCalculation} from "./legacy-commission";

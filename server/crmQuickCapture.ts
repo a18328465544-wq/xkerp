@@ -17,6 +17,7 @@ import {productCategoryValues} from "../src/types/core.ts";
 import {crmLeadPriorityValues, crmLeadStageValues, quickCaptureDeliveryMethodValues, quickCaptureIntentValues, quickCaptureTransactionValues} from "../src/types/crm.ts";
 import { storeDate, storeDateAfterDays, storeDateTime } from "../src/utils/storeTime.ts";
 import { QUICK_CAPTURE_AI_JSON_SCHEMA, validateQuickCaptureModelPayload } from "./quickCaptureSchema.ts";
+import {parseVoiceAmount} from "./voice/voiceNumbers.ts";
 
 export const QUICK_CAPTURE_MAX_TEXT_LENGTH = 12000;
 const PRODUCT_CATEGORIES: readonly ProductCategory[] = productCategoryValues;
@@ -56,11 +57,13 @@ function optionalNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   const normalized = String(value).replace(/[,，￥¥\s]/g, "");
   const match = normalized.match(/(-?\d+(?:\.\d+)?)(万|千)?/);
-  if (!match) return undefined;
-  const base = Number(match[1]);
-  if (!Number.isFinite(base) || base < 0) return undefined;
-  const multiplier = match[2] === "万" ? 10000 : match[2] === "千" ? 1000 : 1;
-  return Math.round(base * multiplier * 100) / 100;
+  if (match) {
+    const base = Number(match[1]);
+    if (!Number.isFinite(base) || base < 0) return undefined;
+    const multiplier = match[2] === "万" ? 10000 : match[2] === "千" ? 1000 : 1;
+    return Math.round(base * multiplier * 100) / 100;
+  }
+  return parseVoiceAmount(normalized);
 }
 
 function optionalPositiveNumber(value: unknown) {
