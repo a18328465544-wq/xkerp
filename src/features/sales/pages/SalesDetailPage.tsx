@@ -1,14 +1,10 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
-import {usePhoneBackAction} from "@/src/hooks/usePhoneBack";
-import {ErpDialogShell} from "@/src/components/common/ErpDialogShell";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import {Link} from "@tanstack/react-router";
-import {ArrowLeft, CircleDollarSign, LockKeyhole, Pencil, RefreshCw, ShieldCheck, Truck, UserRound} from "lucide-react";
+import {CircleDollarSign, LockKeyhole, Pencil, RefreshCw, ShieldCheck, Truck, UserRound} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {notify} from "@/src/utils/notification";
-import {Button, Card} from "@/src/components/ui";
-import {ErpDetailPageFrame, ErpLoadingState, ErpOutstandingSettlementDialog, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {Card} from "@/src/components/ui";
+import {ErpRecordPage, ErpLoadingState, ErpOutstandingSettlementDialog, ErpPageError, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, financeAccountsApi, financeSettlementApi, invalidateErpDomains, queryKeys, salesApi} from "@/src/services/api";
 import {useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -36,9 +32,6 @@ function errorText(error: unknown) {
 
 export function SalesDetailPage({salesId}: {salesId: string}) {
   const {active} = useWorkspaceTabActivity();
-  const phone = useErpPhone();
-  const phoneBack = usePhoneBackAction("/sales");
-  const [actionsOpen, setActionsOpen] = useState(false);
   const queryClient = useQueryClient();
   const {session, status, error: authError, refresh, logout} = useAuth();
   const [settlementOpen, setSettlementOpen] = useState(false);
@@ -118,21 +111,22 @@ export function SalesDetailPage({salesId}: {salesId: string}) {
   ];
 
   return <>
-    <ErpDetailPageFrame className="max-w-[1600px] space-y-5 pb-12">
-    <ErpPageHeader
+    <ErpRecordPage
       title={item.invoiceNo || item.id}
       subtitle={<span className="flex flex-wrap items-center gap-2"><span>销售单详情 · {item.date}</span><ErpStatusBadge label={item.paymentStatus} tone={item.paymentStatus === "已收款" ? "success" : "warning"} /></span>}
-      quickStatus={phone ? [] : quickStatus}
-      leading={phone ? <Button type="button" variant="ghost" size="iconTouch" aria-label="返回销售单据" onClick={phoneBack}><ArrowLeft className="h-5 w-5" /></Button> : undefined}
-      actions={phone ? undefined : <><Link to="/sales" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-semibold text-[var(--erp-color-text)]"><ArrowLeft className="h-4 w-4" />返回销售单据</Link>{settlementContext && <Button type="button" size="sm" variant="secondary" onClick={() => {settlementMutation.reset(); setSettlementOpen(true);}}><CircleDollarSign className="h-4 w-4" />待收款 {formatCurrency(item.unpaidAmount)}</Button>}{policy.canEditMetadata && <Link to="/sales/$salesId/edit" params={{salesId: item.id}} className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-primary)] px-3 text-xs font-semibold text-white shadow-sm"><Pencil className="h-4 w-4" />编辑销售单</Link>}<Button type="button" size="sm" variant="secondary" onClick={() => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.sales.all()})]);}} disabled={detailQuery.isFetching}><RefreshCw className={`h-4 w-4 ${detailQuery.isFetching ? "animate-spin" : ""}`} />刷新</Button></>}
-    />
-    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      {!phone && policy.mode !== "full" && <Card className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><div className="flex items-start gap-3 p-4"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-[var(--erp-color-warning)]" /><div><p className="text-sm font-semibold text-[var(--erp-color-text)]">编辑范围：{policy.mode === "limited" ? "仅快递单号和备注" : "只读"}</p><p className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{policy.reasons.join(" ")}</p></div></div></Card>}
+      quickStatus={quickStatus}
+      back={{to: "/sales", label: "返回销售单据"}}
+      actions={[
+        ...(settlementContext ? [{key: "settle", label: `待收款 ${formatCurrency(item.unpaidAmount)}`, phoneLabel: `收款 ${formatCurrency(item.unpaidAmount)}`, icon: <CircleDollarSign className="h-4 w-4" />, onClick: () => {settlementMutation.reset(); setSettlementOpen(true);}, phone: "primary" as const}] : []),
+        ...(policy.canEditMetadata ? [{key: "edit", label: "编辑销售单", icon: <Pencil className="h-4 w-4" />, to: `/sales/${encodeURIComponent(item.id)}/edit`, variant: "primary" as const, phone: "both" as const}] : []),
+        {key: "refresh", label: "刷新", phoneLabel: "刷新单据", icon: <RefreshCw className={`h-4 w-4 ${detailQuery.isFetching ? "animate-spin" : ""}`} />, onClick: () => {void Promise.all([detailQuery.refetch(), queryClient.invalidateQueries({queryKey: queryKeys.sales.all()})]);}, disabled: detailQuery.isFetching, phone: "more" as const},
+      ]}
+      phoneMoreTitle="销售单操作"
+      phoneMoreNote={policy.summary}
+      notice={policy.mode !== "full" ? {title: `编辑范围：${policy.mode === "limited" ? "仅快递单号和备注" : "只读"}`, body: policy.reasons.join(" ")} : undefined}
+    >
       <SalesSnapshotDetail item={item} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} />
-      {phone && policy.mode !== "full" && <details className="text-xs text-[var(--erp-color-text-secondary)]"><summary className="min-h-11 py-3">编辑范围：{policy.mode === "limited" ? "仅快递单号和备注" : "只读"}</summary>{policy.reasons.join(" ")}</details>}
-    </ErpPageContent>
-    {phone && <><div className="erp-phone-detail-actions"><Button type="button" variant="secondary" onClick={() => setActionsOpen(true)}>更多</Button>{settlementContext ? <Button variant="primary" onClick={() => {settlementMutation.reset(); setSettlementOpen(true);}}>收款 {formatCurrency(item.unpaidAmount)}</Button> : policy.canEditMetadata ? <Link className="erp-phone-detail-action-link" to="/sales/$salesId/edit" params={{salesId: item.id}}>编辑销售单</Link> : <span className="flex items-center justify-center text-sm text-[var(--erp-color-text-muted)]">当前只读</span>}</div><ErpDialogShell open={actionsOpen} onOpenChange={setActionsOpen} title="销售单操作" mobilePresentation="sheet"><div className="grid gap-2">{policy.canEditMetadata && <Link className="erp-phone-detail-action-link" to="/sales/$salesId/edit" params={{salesId: item.id}}>编辑销售单</Link>}<Button onClick={() => {void detailQuery.refetch();}} disabled={detailQuery.isFetching}>刷新单据</Button><p className="text-xs text-[var(--erp-color-text-secondary)]">{policy.summary}</p></div></ErpDialogShell></>}
-    </ErpDetailPageFrame>
+    </ErpRecordPage>
     <ErpOutstandingSettlementDialog
       open={settlementOpen}
       context={settlementContext}

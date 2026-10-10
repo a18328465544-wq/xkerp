@@ -4,12 +4,11 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useNavigate} from "@tanstack/react-router";
 import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-table";
 import {Banknote, CircleDollarSign, Filter, Plus, ShoppingCart, Truck} from "lucide-react";
-import {ErpEntityThumbnail} from "@/src/components/common";
+import {ErpEntityThumbnail, ErpRecordDetail} from "@/src/components/common";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
-import {Button, Card, CardContent} from "@/src/components/ui";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
-import {ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpDocumentDeleteDialog, ErpEmptyState, ErpListPage, ErpLoadingState, ErpMetricCard, ErpOutstandingSettlementDialog, ErpPageError, type ErpFilterField, type QuickStatusItemData} from "@/src/components/common";
+import {Button, Card} from "@/src/components/ui";
+import {ErpDataTable, ErpDetailDrawer, ErpDocumentDeleteDialog, ErpEmptyState, ErpListPage, ErpLoadingState, ErpMetricCard, ErpOutstandingSettlementDialog, ErpPageError, type ErpFilterField, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, salesApi} from "@/src/services/api";
 import {financeAccountsApi, financeSettlementApi, invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -228,7 +227,6 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
 }
 
 export function SalesSnapshotDetail({item, showCost, showProfit}: {item: SalesListItem; showCost: boolean; showProfit: boolean}) {
-  const phone = useErpPhone();
   const columns = useMemo<ColumnDef<SalesListLine, unknown>[]>(() => {
     const result: ColumnDef<SalesListLine, unknown>[] = [
       {accessorKey: "productName", header: "商品", size: 220, cell: ({row}) => <div><p className="font-semibold">{row.original.productName}</p><p className="mt-1 erp-data-number text-xs text-[var(--erp-color-text-muted)]">{row.original.sn || "SN 待出库绑定"}</p></div>},
@@ -240,20 +238,37 @@ export function SalesSnapshotDetail({item, showCost, showProfit}: {item: SalesLi
     if (showProfit) result.push({accessorKey: "profit", header: "利润", size: 100, cell: ({getValue}) => <span className="erp-data-number text-[var(--erp-color-success)]">{getValue() === undefined ? "—" : formatCurrency(Number(getValue()))}</span>});
     return result;
   }, [showCost, showProfit]);
-  if (phone) return <div className="erp-phone-document" data-phone-detail="document">
-    <section data-erp-region="detail-hero"><div className="erp-phone-customer-identity"><ErpEntityThumbnail kind="customer" name={item.customerName || ""} /><div><h2>{item.customerName || "未关联客户"}</h2><p className="erp-phone-detail-status">{item.paymentStatus} · {item.outboundStatus}</p></div></div><div className="erp-detail-hero-amount"><span>销售金额</span><strong className="erp-data-number">{formatCurrency(item.totalAmount)}</strong></div><DetailFact label="下单日期" value={item.date} /><DetailFact label="经办人" value={item.handleBy || "—"} /></section>
-    <section><h2>商品明细</h2><ErpDataTable mobileSorting={false} mobileRow={(line) => <div className="erp-phone-line-fact"><div><strong>{line.productName}</strong><small>{line.condition} · {line.quantity} 件 · SN {line.sn || "待出库绑定"}</small>{showCost && line.costPrice !== undefined && <small>成本 {formatCurrency(line.costPrice)}</small>}{showProfit && line.profit !== undefined && <small>利润 {formatCurrency(line.profit)}</small>}</div><span className="erp-data-number">{formatCurrency(line.sellPrice)}</span></div>} ariaLabel="销售单商品明细" columns={columns} data={item.lines} getRowId={(line) => line.id} surface="plain" emptyTitle="该销售单没有商品明细" /></section>
-    <section><h2>结算</h2><DetailFact label="销售金额" value={formatCurrency(item.totalAmount)} /><DetailFact label="已收款" value={formatCurrency(item.paidAmount)} /><DetailFact label="未收款" value={formatCurrency(item.unpaidAmount)} />{showProfit && item.totalProfit !== undefined && <DetailFact label="销售利润" value={formatCurrency(item.totalProfit)} />}</section>
-    <details><summary>物流与补充信息</summary><DetailFact label="联系方式" value={item.contact || "—"} /><DetailFact label="渠道" value={item.channel} /><DetailFact label="物流" value={item.freeShipping ? "客户自提 / 无需物流" : [item.expressCompany, item.expressNo].filter(Boolean).join(" · ") || "未填写"} /><DetailFact label="需要发票" value={item.needInvoice ? "是" : "否"} /><DetailFact label="售后条款" value={item.aftersalesTerms || "—"} /><DetailFact label="备注" value={item.remarks || "—"} /></details>
-  </div>;
-  return <div className="space-y-5" data-phone-detail="document">
-    <div className="grid gap-3 sm:grid-cols-2"><DetailFact label="客户" value={item.customerName || "—"} /><DetailFact label="联系方式" value={item.contact || "—"} /><DetailFact label="渠道" value={item.channel} /><DetailFact label="经办人" value={item.handleBy || "—"} /><DetailFact label="销售金额" value={formatCurrency(item.totalAmount)} /><DetailFact label="销售利润" value={showProfit && item.totalProfit !== undefined ? formatCurrency(item.totalProfit) : "无权查看"} /><DetailFact label="收款状态" value={`${item.paymentStatus} · 已收 ${formatCurrency(item.paidAmount)} · 未收 ${formatCurrency(item.unpaidAmount)}`} /><DetailFact label="出库状态" value={`${item.outboundStatus}${item.outboundTime ? ` · ${item.outboundTime}` : ""}`} /></div>
-    <Card><CardContent className="p-4"><div className="grid gap-3 sm:grid-cols-2"><DetailFact label="物流" value={item.freeShipping ? "客户自提 / 无需物流" : [item.expressCompany, item.expressNo].filter(Boolean).join(" · ") || "未填写"} /><DetailFact label="需要发票" value={item.needInvoice ? "是" : "否"} /><DetailFact label="售后条款" value={item.aftersalesTerms || "—"} /><DetailFact label="备注" value={item.remarks || "—"} /></div></CardContent></Card>
-    <div><h3 className="mb-3 text-sm font-semibold">商品明细</h3><ErpDataTable mobileRow={(line) => <div className="erp-phone-line-fact"><div><strong>{line.productName}</strong><small>{line.condition} · {line.quantity} 件 · SN {line.sn || "待出库绑定"}</small></div><span className="erp-data-number">{formatCurrency(line.sellPrice)}</span></div>} ariaLabel="销售单商品明细" columns={columns} data={item.lines} getRowId={(line) => line.id} density="compact" stickyHeader emptyTitle="该销售单没有商品明细" /></div>
-  </div>;
+  const lineFact = (line: SalesListLine) => <div className="erp-phone-line-fact"><div><strong>{line.productName}</strong><small>{line.condition} · {line.quantity} 件 · SN {line.sn || "待出库绑定"}</small>{showCost && line.costPrice !== undefined && <small>成本 {formatCurrency(line.costPrice)}</small>}{showProfit && line.profit !== undefined && <small>利润 {formatCurrency(line.profit)}</small>}</div><span className="erp-data-number">{formatCurrency(line.sellPrice)}</span></div>;
+  const shipping = item.freeShipping ? "客户自提 / 无需物流" : [item.expressCompany, item.expressNo].filter(Boolean).join(" · ") || "未填写";
+  return <ErpRecordDetail
+    hero={{
+      title: item.customerName || "未关联客户",
+      titleLabel: "客户",
+      thumbnail: <ErpEntityThumbnail kind="customer" name={item.customerName || ""} />,
+      status: <p className="erp-phone-detail-status">{item.paymentStatus} · {item.outboundStatus}{item.outboundTime ? ` · ${item.outboundTime}` : ""}</p>,
+      amount: {label: "销售金额", value: formatCurrency(item.totalAmount)},
+      facts: [{label: "下单日期", value: item.date}, {label: "经办人", value: item.handleBy || "—"}],
+    }}
+    sections={[
+      {title: "商品明细", facts: [], extra: <ErpDataTable surface="responsive" mobileSorting={false} density="compact" stickyHeader mobileRow={lineFact} ariaLabel="销售单商品明细" columns={columns} data={item.lines} getRowId={(line) => line.id} emptyTitle="该销售单没有商品明细" />},
+      {title: "结算", facts: [
+        {label: "销售金额", value: formatCurrency(item.totalAmount)},
+        {label: "已收款", value: formatCurrency(item.paidAmount)},
+        {label: "未收款", value: formatCurrency(item.unpaidAmount)},
+        showProfit && item.totalProfit !== undefined && {label: "销售利润", value: formatCurrency(item.totalProfit)},
+      ]},
+      {title: "物流与补充信息", collapsed: true, facts: [
+        {label: "联系方式", value: item.contact || "—"},
+        {label: "渠道", value: item.channel},
+        {label: "物流", value: shipping},
+        {label: "需要发票", value: item.needInvoice ? "是" : "否"},
+        {label: "售后条款", value: item.aftersalesTerms || "—"},
+        {label: "备注", value: item.remarks || "—"},
+      ]},
+    ]}
+  />;
 }
 
-const DetailFact = ErpDetailFact;
 
 function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) {
   return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />;

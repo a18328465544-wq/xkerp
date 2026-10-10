@@ -30,3 +30,9 @@ test("desktop keeps one two-column fact grid led by the hero amount", () => {
   assert.match(markup, /标签A/);
   assert.doesNotMatch(markup, /<details|erp-phone-document|空分组/);
 });
+
+test("desktop shows hero status and titles table-only sections", () => {
+  const markup = renderToStaticMarkup(<ErpRecordDetail hero={{title: "XS-1", status: <span>已收款</span>}} sections={[{title: "商品明细", facts: [], extra: <table />}]} phone={false} />);
+  assert.match(markup, /<span>已收款<\/span>/);
+  assert.match(markup, /<h3[^>]*>商品明细<\/h3><table/);
+});
