@@ -79,6 +79,6 @@
 
 1. `npm run lint`：包含本文所有标 [lint] 的规则。
 2. `npm run test:mobile-rules`：需要先启动本地预览，命令是 `ERP_MOBILE_QA_PORT=3020 python3 scripts/mobile-preview-server.py`。脚本会在 320 和 390 两个宽度下检查全部业务页面，覆盖本文所有标 [浏览器] 的规则。确有合理原因的例外，登记在 `scripts/mobile-rules-allowlist.json` 里并写明原因。
-3. **改版前后截图对比**：页面结构改动（迁移模板、改公共组件）必须跑 `npm run snapshots -- capture before`（旧代码）、`capture after`（新代码）和 `compare before after`。电脑端（1024 / 1440）差异超过 0.5% 会失败，需要在 PR 里逐条说明或修正；手机端差异附对比图说明。预览服务会自动跳过比源码旧的 `dist/`，也可以用 `ERP_PREVIEW_SOURCE=vite|dist` 指定。
+3. **改版前后截图对比**：页面结构改动（迁移模板、改公共组件）必须跑 `npm run snapshots -- capture before`（旧代码）、`capture after`（新代码）和 `compare before after`。电脑端（1024 / 1440）差异超过 0.5% 会失败，需要在 PR 里逐条说明或修正；手机端差异附对比图说明。预览服务默认优先用本地 Vite（只有它会注入开单草稿等测试数据，前后截图才可比），Vite 没启动时才用 `dist/`，且不会用比源码旧的 `dist/`；也可以用 `ERP_PREVIEW_SOURCE=vite|dist` 指定。
 4. **人工**：按第 3、4 节逐条核对，并附上 390 宽度的截图。
 5. **真机**：浏览器模拟不能代替真机。iPhone Safari / 主屏幕模式下的软键盘、安全区、横屏和摄像头，发布前都要在真机上确认。

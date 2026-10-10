@@ -88,8 +88,9 @@ def inventory_rows(params):
     return rows
 
 
-# A dist/ left behind by an earlier `npm run build` must never mask newer
-# source edits. auto (default) serves dist only while it is newer than src/;
+# auto (default) prefers the local Vite on 127.0.0.1:3010 whenever it answers:
+# only that path injects the draft fixtures, so screenshots stay comparable.
+# Without Vite it serves dist/, but never a dist/ older than src/.
 # ERP_PREVIEW_SOURCE=dist or =vite forces one side.
 preview_source = os.environ.get("ERP_PREVIEW_SOURCE", "auto")
 if preview_source not in {"auto", "dist", "vite"}:
@@ -105,11 +106,17 @@ def serve_build(build):
         return True
     now = time.monotonic()
     if now - _build_check["at"] > 2:
+        try:
+            with urlopen("http://127.0.0.1:3010/", timeout=1):
+                vite_up = True
+        except Exception:
+            vite_up = False
         sources = [root.parent / "index.html", *(item for item in (root.parent / "src").rglob("*") if item.is_file())]
         newest = max((item.stat().st_mtime for item in sources if item.exists()), default=0)
-        _build_check.update(at=now, use=newest <= index.stat().st_mtime)
+        fresh = newest <= index.stat().st_mtime
+        _build_check.update(at=now, use=fresh and not vite_up)
         if _build_check["reported"] != _build_check["use"]:
-            print("预览使用 dist/ 构建产物" if _build_check["use"] else "dist/ 比源码旧，预览改走本地 Vite（127.0.0.1:3010）", flush=True)
+            print("预览使用 dist/ 构建产物" if _build_check["use"] else ("预览使用本地 Vite（127.0.0.1:3010）" if vite_up else "dist/ 比源码旧，且本地 Vite 未启动"), flush=True)
             _build_check["reported"] = _build_check["use"]
     return _build_check["use"]
 
