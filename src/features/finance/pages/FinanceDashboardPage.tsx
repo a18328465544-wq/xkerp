@@ -2,7 +2,7 @@ import {
   keepPreviousData,
   useQuery,
 } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import {useNavigate} from "@tanstack/react-router";
 import {CalendarDays, CircleDollarSign, RefreshCw, ShieldAlert} from "lucide-react";
 import {
   useEffect,
@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import {notify} from "@/src/utils/notification";
-import { Button, Card } from "@/src/components/ui";
+import {Button, Card} from "@/src/components/ui";
 import {
   DashboardSection,
   ErpFinancePageFrame,
@@ -27,16 +27,16 @@ import {
   queryKeys,
   type AuthSession,
 } from "@/src/services/api";
-import { createCapabilities, useAuth } from "@/src/app/auth";
-import { useErpDesktop, useErpPhone } from "@/src/hooks/useErpViewport";
-import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
+import {createCapabilities, useAuth} from "@/src/app/auth";
+import {useErpDesktop} from "@/src/hooks/useErpViewport";
+import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import { buildFinanceDashboard } from "@/src/services/api/adapters";
+import {buildFinanceDashboard} from "@/src/services/api/adapters";
 import type {
   FinanceDashboardAccess,
   FinanceDateRange,
 } from "@/src/types/finance";
-import { storeDate } from "@/src/utils/storeTime";
+import {storeDate} from "@/src/utils/storeTime";
 import {
   defaultFinanceRange,
   financeRangeToSearch,
@@ -170,7 +170,6 @@ function FinanceDashboardContent({
   range: FinanceDateRange;
   commit: (next: FinanceDateRange) => boolean;
 }) {
-  const phone = useErpPhone();
   const desktop = useErpDesktop();
   const navigate = useNavigate();
   const capabilities = createCapabilities(session);
@@ -218,8 +217,8 @@ function FinanceDashboardContent({
         subtitle="集中查看可用资金、今日收支、周转效率与待处理风险。"
         quickStatus={quickStatus}
         dateContent={
-          phone ? null : (
-            <span className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs text-[var(--erp-color-text-secondary)] sm:h-8 sm:w-auto">
+          (
+            <span className="max-md:hidden inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs text-[var(--erp-color-text-secondary)] sm:h-8 sm:w-auto">
               <CalendarDays className="h-3.5 w-3.5" />
               {storeDate()}
             </span>
@@ -227,12 +226,11 @@ function FinanceDashboardContent({
         }
         actions={
           <div className="flex w-full gap-2 sm:w-auto">
-            {phone && (
-              <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--erp-color-text-secondary)]">
-                <CalendarDays className="h-4 w-4" />
-                <span>当前日期：{storeDate()}</span>
-              </div>
-            )}
+            {/* Phones list the date inside the header's 更多 sheet; desktop shows the date chip. */}
+            <p className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--erp-color-text-secondary)] md:hidden">
+              <CalendarDays className="h-4 w-4" />
+              <span>当前日期：{storeDate()}</span>
+            </p>
             <Button
               type="button"
               size="md"

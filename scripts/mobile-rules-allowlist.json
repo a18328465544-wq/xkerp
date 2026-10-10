@@ -34,50 +34,6 @@
       "reason": "看板页只需保证数据卡与图表单列（T13）"
     },
     {
-      "file": "src/features/finance/pages/FinanceAccountsPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceClosingPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceCommissionPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceCustomerFundsPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceDashboardPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceExpensePage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceIncomePage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceLedgerPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceProfitPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceReturnReconcilePage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
-      "file": "src/features/finance/pages/FinanceTransfersPage.tsx",
-      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
-    },
-    {
       "file": "src/features/inspections/pages/InspectionWorkspacePage.tsx",
       "reason": "工作台页面待评估（T12）"
     },

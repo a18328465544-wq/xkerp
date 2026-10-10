@@ -14,7 +14,7 @@ import {ApiError, financeAccountsApi, queryKeys} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api/invalidation";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
-import {useErpDesktop, useErpPhone} from "@/src/hooks/useErpViewport";
+import {useErpDesktop} from "@/src/hooks/useErpViewport";
 import type {AuthSession} from "@/src/services/api/endpoints/auth";
 import {financeAccountTypes, type FinanceAccountCollection, type FinanceAccountCreateValues, type FinanceAccountItem, type FinanceAccountLedgerItem, type FinanceAccountReconcileValues} from "@/src/types/finance-account";
 import {FinanceAccountCreateDialog, FinanceAccountDeleteDialog, FinanceAccountReconcileDialog} from "../components/FinanceAccountDialogs";
@@ -174,7 +174,6 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
 }
 
 function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCreate, onTransfer, onReconcile, canViewReconciliation = false, onLedger, onExport}: {accounts?: FinanceAccountItem[]; loading?: boolean; onRefresh?: () => void; onCreate?: () => void; onTransfer?: () => void; onReconcile?: () => void; canViewReconciliation?: boolean; onLedger?: () => void; onExport?: () => void}) {
-  const phone = useErpPhone();
   const desktop = useErpDesktop();
   const hasDifference = accounts.some((account) => account.difference !== undefined && Math.abs(account.difference) > 0.009);
   const pending = accounts.some(isPendingAccount);
@@ -189,7 +188,7 @@ function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCre
   const quickStatus: QuickStatusItemData[] = [
     {icon: <FileCheck2 className="h-4 w-4" />, label: "对账状态", value: reconciliation.label, tone: reconciliation.tone, description: reconciliation.description},
   ];
-  return <ErpPageHeader title="资金账户" quickStatus={desktop ? undefined : quickStatus} actions={<>{!phone && <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>}{desktop && onLedger && <Button type="button" size="sm" variant="secondary" onClick={onLedger}><FileText className="h-4 w-4" />查看流水</Button>}{desktop && <FinanceAccountsMoreMenu onTransfer={onTransfer} onReconcile={canViewReconciliation ? onReconcile : undefined} onExport={onExport} /> }<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
+  return <ErpPageHeader title="资金账户" quickStatus={desktop ? undefined : quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>{desktop && onLedger && <Button type="button" size="sm" variant="secondary" onClick={onLedger}><FileText className="h-4 w-4" />查看流水</Button>}{desktop && <FinanceAccountsMoreMenu onTransfer={onTransfer} onReconcile={canViewReconciliation ? onReconcile : undefined} onExport={onExport} /> }<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
 }
 
 function FinanceAccountsMoreMenu({onTransfer, onReconcile, onExport}: {onTransfer?: () => void; onReconcile?: () => void; onExport?: () => void}) {

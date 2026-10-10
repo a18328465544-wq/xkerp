@@ -7,6 +7,7 @@ import {
 import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
 import {useFinanceAnalysisPreference} from "@/src/hooks/useFinanceAnalysisPreference";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {FinanceSectionTabs, type FinanceSectionTab} from "./FinanceSectionTabs";
 
 export interface FinanceDetailPageLayoutProps {
@@ -18,6 +19,8 @@ export interface FinanceDetailPageLayoutProps {
   filters?: ReactNode;
   metrics?: ReactNode;
   beforeTable?: ReactNode;
+  /** Phones move `beforeTable` (trend, insights) after the table, folded under this title. */
+  phoneFoldBeforeTable?: string;
   table: ReactNode;
   analysis?: {
     title: string;
@@ -28,10 +31,13 @@ export interface FinanceDetailPageLayoutProps {
 }
 
 /**
- * Shared desktop-first finance detail layout. Mobile keeps the existing
- * Finance frame search-first ordering; desktop follows filters → metrics → table.
+ * Shared finance detail layout for every viewport. Desktop follows
+ * filters → metrics → table; phones keep the Finance frame's search-first
+ * ordering and can fold pre-table analysis after the records.
  */
-export function FinanceDetailPageLayout({header, tabs, filters, metrics, beforeTable, table, analysis, children}: FinanceDetailPageLayoutProps) {
+export function FinanceDetailPageLayout({header, tabs, filters, metrics, beforeTable, phoneFoldBeforeTable, table, analysis, children}: FinanceDetailPageLayoutProps) {
+  const phone = useErpPhone();
+  const foldBeforeTable = Boolean(phone && phoneFoldBeforeTable && beforeTable);
   return (
     <ErpFinancePageFrame>
       {header}
@@ -43,8 +49,12 @@ export function FinanceDetailPageLayout({header, tabs, filters, metrics, beforeT
       {filters}
       {metrics && <div data-finance-layout-slot="metrics">{metrics}</div>}
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-        {beforeTable && <div data-finance-layout-slot="before-table">{beforeTable}</div>}
+        {beforeTable && !foldBeforeTable && <div data-finance-layout-slot="before-table">{beforeTable}</div>}
         <div data-finance-layout-slot="table">{table}</div>
+        {foldBeforeTable && <details data-finance-layout-slot="before-table" className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--erp-color-text)]">{phoneFoldBeforeTable}</summary>
+          <div className="mt-3 space-y-4">{beforeTable}</div>
+        </details>}
         {analysis && (
           <FinanceAnalysisDisclosure
             key={analysis.preferenceKey}
