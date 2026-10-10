@@ -92,17 +92,22 @@ test("visual polish uses phone-only tokens, quiet summaries and restrained selec
   for (const name of polish.matchAll(/var\((--erp-[a-z0-9-]+)\)/g)) assert.ok(tokens.includes(`${name[1]}:`), `undefined token ${name[1]}`);
 });
 
-test("order detail identity and totals are promoted only in phone branches with existing permission gates", () => {
+test("order detail identity and totals are promoted only in phone layouts with existing permission gates", () => {
   const purchase = readFileSync(new URL("../features/purchase/pages/PurchaseDetailPage.tsx", import.meta.url), "utf8");
   const sales = readFileSync(new URL("../features/sales/pages/SalesListPage.tsx", import.meta.url), "utf8");
-  for (const source of [purchase, sales]) {
-    assert.ok(source.indexOf('data-erp-region="detail-hero"') > source.indexOf("if (phone) return"));
-    assert.match(source, /className="erp-phone-customer-identity"/);
-    assert.match(source, /className="erp-phone-detail-status"/);
-    assert.match(source, /className="erp-detail-hero-amount"/);
-    assert.match(source, /label="经办人"/);
-  }
+  const recordDetail = readFileSync(new URL("../components/common/ErpRecordDetail.tsx", import.meta.url), "utf8");
+  // Purchase keeps an explicit phone body; the hero lives only there.
+  assert.ok(purchase.indexOf('data-erp-region="detail-hero"') > purchase.indexOf("phoneBody={"));
+  assert.match(purchase, /className="erp-phone-customer-identity"/);
+  assert.match(purchase, /className="erp-phone-detail-status"/);
   assert.match(purchase, /\{showCost && <div className="erp-detail-hero-amount"/);
+  assert.match(purchase, /label="经办人"/);
   assert.match(purchase, /formatCurrency\(invoice.totalCost\)/);
-  assert.match(sales, /formatCurrency\(item.totalAmount\)/);
+  // Sales uses the shared record template, which renders the phone hero.
+  assert.match(sales, /<ErpRecordDetail/);
+  assert.match(sales, /className="erp-phone-detail-status"/);
+  assert.match(sales, /amount: \{label: "销售金额", value: formatCurrency\(item.totalAmount\)\}/);
+  assert.match(sales, /label: "经办人"/);
+  assert.ok(recordDetail.indexOf('data-erp-region="detail-hero"') > recordDetail.indexOf("if (phone) return"));
+  assert.match(recordDetail, /className="erp-detail-hero-amount"/);
 });

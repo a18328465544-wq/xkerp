@@ -105,7 +105,7 @@ for (const file of collectFiles(path.join(root, "src")).filter((candidate) => !/
   }
 }
 
-const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame|Finance(?:Entry|Detail)PageLayout|ErpListPage\b/;
+const pageFramePattern = /Erp(?:List|Transaction|Warehouse|Finance|Crm|Analytics|Detail|Settings|Dashboard)PageFrame|ErpPageFrame|Finance(?:Entry|Detail)PageLayout|ErpListPage\b|ErpRecordPage\b/;
 for (const file of productionFiles.filter((candidate) => /\/pages\/[^/]+\.tsx$/.test(relative(candidate)) && relative(candidate).startsWith("src/features/"))) {
   const source = fs.readFileSync(file, "utf8");
   const fileName = relative(file);

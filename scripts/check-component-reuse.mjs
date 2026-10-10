@@ -30,7 +30,8 @@ const targets = [
   {
     name: "客户 CRM 工作台",
     file: "src/features/crm/pages/CrmWorkspacePage.tsx",
-    required: ["ErpPageHeader", "ErpFilterBar", "ErpDataTable", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError", "MetricsRegion"],
+    // Header, filters, table and metrics come from the ErpListPage template.
+    required: ["ErpListPage", "ErpDetailDrawer", "ErpStatusBadge", "ErpLoadingState", "ErpPageError"],
     forbidden: [
       [/<table\b/, "不得在 CRM 页面重复实现 DataTable 外壳"],
       [/<Sheet\b|<Sheet\./, "详情必须使用 ErpDetailDrawer，不能直接使用基础 Sheet"],
