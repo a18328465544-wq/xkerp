@@ -185,11 +185,11 @@ function SummaryCards({summary, accountCount, desktop = false, distribution, neg
   const positiveRows = distribution?.rows || [];
   const positiveTotal = distribution?.positiveTotal || 0;
   const supplement = desktop ? <div className="space-y-1.5">
-    <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--erp-color-text-muted)]"><span>正余额资金分布</span><span>{formatMoney(positiveTotal)}</span></div>
+    <div className="flex items-center justify-between gap-2 text-xs text-[var(--erp-color-text-muted)]"><span>正余额资金分布</span><span>{formatMoney(positiveTotal)}</span></div>
     <div role="img" aria-label={`正余额资金分布，共 ${positiveRows.length} 个分类`} className="flex h-1.5 w-full overflow-hidden rounded-full bg-[var(--erp-color-surface-muted)]">
       {positiveTotal > 0 ? positiveRows.map((row) => <span key={row.id} title={row.name} className="h-full min-w-0" style={{flexGrow: row.value, flexBasis: 0, backgroundColor: financeChartCategoryColor(row.id)}} />) : <span className="h-full w-full bg-[var(--erp-color-border-strong)]" />}
     </div>
-    {negativeAccountCount > 0 && <span className="block text-[10px] font-medium text-[var(--erp-color-warning)]">{negativeAccountCount} 个账户余额为负</span>}
+    {negativeAccountCount > 0 && <span className="block text-xs font-medium text-[var(--erp-color-warning)]">{negativeAccountCount} 个账户余额为负</span>}
   </div> : undefined;
   return <MetricsRegion><SummaryCard label="账面余额" value={summary.bookBalance} detail="全部资金账户，包含负余额" supplementalContent={supplement} icon={<WalletCards className="h-4 w-4" />} tone="info" /><SummaryCard label="可用资金" value={summary.availableBalance} detail="账面余额减冻结金额" icon={<Banknote className="h-4 w-4" />} tone="info" /><SummaryCard label="冻结资金" value={summary.frozenAmount} detail="暂不可动用的资金" icon={<LockKeyhole className="h-4 w-4" />} tone="warning" /><SummaryCard label="账户数量" value={accountCount} detail={`启用 ${summary.enabledCount} 个${summary.disabledCount ? ` · 停用 ${summary.disabledCount} 个` : ""}`} icon={<Landmark className="h-4 w-4" />} tone="info" count /></MetricsRegion>;
 }
