@@ -127,6 +127,7 @@ test("reads participate in revision checks while HEAD and OPTIONS remain lightwe
   assert.equal(shouldReloadStateFromDatabase("OPTIONS", "/api/products"), false);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/items"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/ai/daily-sales-summary"), []);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/market-quote-categories"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/customers/page"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/vendors"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/products"), []);
@@ -209,6 +210,14 @@ test("quick partner creates do not preload full logs before writing one new log"
     "crmFollowUps",
     "crmRequirements",
   ]);
+});
+
+test("customer category writes persist only audit logs and stay tenant scoped", () => {
+  for (const [method, path] of [["POST", "/api/customer-categories"], ["PATCH", "/api/customer-categories/CC-1"]]) {
+    assert.deepEqual(getPersistenceKeysForRequest(method!, path!), ["logs"]);
+    assert.deepEqual(getReloadKeysForRequest(method!, path!), []);
+    assert.deepEqual(getStatePatchKeysForRequest(method!, path!), ["logs"]);
+  }
 });
 
 test("quick capture keeps parse lightweight and confirms CRM state atomically", () => {

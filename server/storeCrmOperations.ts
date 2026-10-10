@@ -87,6 +87,7 @@ export function createCrmOperationHelpers(dependencies: CrmOperationsDependencie
       company: customer.company || "",
       source: channel,
       firstChannel: channel,
+      categoryId: customer.categoryId?.trim() || undefined,
       type: customer.type || "个人买家客户",
       crmStatus: customer.crmStatus || "线索",
       crmStage: customer.crmStage || "新线索",

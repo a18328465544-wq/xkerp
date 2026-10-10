@@ -14,6 +14,13 @@ export const customerTypeValues = [
 ] as const;
 export type CustomerType = typeof customerTypeValues[number];
 
+export interface CustomerCategory {
+  id: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 /**
  * Stable option contract for the shared customer / partner picker.
  *
@@ -52,6 +59,9 @@ export interface CustomerDirectoryItem {
   company?: string;
   source: string;
   type: string;
+  categoryId?: string;
+  categoryName?: string;
+  categoryActive?: boolean;
   level: CustomerLevel;
   suggestedLevel?: CustomerLevel;
   isCoreCustomer: boolean;
@@ -77,6 +87,7 @@ export interface CustomerDirectorySnapshot {
   customers: CustomerDirectoryItem[];
   channels: string[];
   types: string[];
+  categories: CustomerCategory[];
   levels: CustomerLevel[];
   page: number;
   pageSize: number;
@@ -88,6 +99,7 @@ export interface CustomerDirectoryFilters {
   keyword: string;
   type: string;
   channel: string;
+  categoryId: string;
   level: string;
   page: number;
   pageSize: number;
@@ -98,6 +110,7 @@ export interface CustomerRecordFormValues {
   contact: string;
   type: string;
   source: string;
+  categoryId: string;
   level: CustomerLevel;
   isCoreCustomer: boolean;
   riskReason: string;

@@ -7,6 +7,12 @@ import {
   inspectionUpdateDto,
   crmCustomerLeadDto,
   crmQuickCaptureConfirmDto,
+  customerCategoryCreateDto,
+  customerCategoryUpdateDto,
+  marketQuoteCategoryCreateDto,
+  marketQuoteCategoryUpdateDto,
+  customerCreateDto,
+  crmCustomerUpdateDto,
   globalSearchQueryDto,
   parseHttpDto,
   paymentInCreateDto,
@@ -137,4 +143,25 @@ test("CRM lead and quick-capture DTOs reject drifted shapes before domain comman
     parseId: "QCAP-1", rawText: "王总要 4090", fields: {customerName: "王总", tags: []},
     matchAction: "link_existing",
   }), /客户/);
+});
+
+test("customer category and assignment DTOs stay separate from customer grade", () => {
+  assert.deepEqual(parseHttpDto(customerCategoryCreateDto, {name: " 长期客户 "}), {name: "长期客户"});
+  assert.deepEqual(parseHttpDto(customerCategoryUpdateDto, {isActive: false}), {isActive: false});
+  assert.throws(() => parseHttpDto(customerCategoryCreateDto, {name: "   "}), ValidationError);
+  assert.throws(() => parseHttpDto(customerCategoryUpdateDto, {}), ValidationError);
+
+  const created = parseHttpDto(customerCreateDto, {name: "张三", categoryId: "CC-long-term", level: "B级"});
+  const updated = parseHttpDto(crmCustomerUpdateDto, {categoryId: null, level: "B级"});
+  assert.equal(created.categoryId, "CC-long-term");
+  assert.equal(created.level, "B级");
+  assert.equal(updated.categoryId, null);
+  assert.equal(updated.level, "B级");
+});
+
+test("market quote category DTOs accept editable names and reject empty updates", () => {
+  assert.deepEqual(parseHttpDto(marketQuoteCategoryCreateDto, {name: " 显卡行情 "}), {name: "显卡行情"});
+  assert.deepEqual(parseHttpDto(marketQuoteCategoryUpdateDto, {isActive: false}), {isActive: false});
+  assert.throws(() => parseHttpDto(marketQuoteCategoryCreateDto, {name: "  "}), ValidationError);
+  assert.throws(() => parseHttpDto(marketQuoteCategoryUpdateDto, {}), ValidationError);
 });

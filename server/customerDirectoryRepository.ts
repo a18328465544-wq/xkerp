@@ -1,4 +1,5 @@
 import {withDatabaseTransaction} from "./db.ts";
+import {listCustomerCategories} from "./customerCategoryRepository.ts";
 
 export type CustomerDirectoryPageFilters = {
   tenantId?: string;
@@ -7,6 +8,7 @@ export type CustomerDirectoryPageFilters = {
   keyword?: string;
   type?: string;
   channel?: string;
+  categoryId?: string;
   level?: string;
   sortKey?: string;
   sortDirection?: "asc" | "desc";
@@ -43,6 +45,7 @@ export function buildCustomerDirectoryPageQuery(filters: CustomerDirectoryPageFi
   }
   if (filters.type?.trim() && filters.type !== "all") clauses.push(`COALESCE(data->>'type', '个人买家客户') = ${bind(filters.type.trim())}`);
   if (filters.channel?.trim() && filters.channel !== "all") clauses.push(`COALESCE(NULLIF(data->>'firstChannel', ''), NULLIF(data->>'source', ''), '未记录') = ${bind(filters.channel.trim())}`);
+  if (filters.categoryId?.trim() && filters.categoryId !== "all") clauses.push(`data->>'categoryId' = ${bind(filters.categoryId.trim())}`);
   if (filters.level?.trim() && filters.level !== "all") clauses.push(`${normalizedLevel} = ${bind(filters.level.trim())}`);
   const sortExpression = sortExpressions[filters.sortKey || ""] || `COALESCE(data->>'lastDealTime', '')`;
   const sortDirection = filters.sortDirection === "asc" ? "ASC" : "DESC";
@@ -88,9 +91,15 @@ export async function listCustomerDirectoryPage(filters: CustomerDirectoryPageFi
        FROM gpu_customers ${tenantClause}`,
       tenantValues,
     );
+    const categories = filters.tenantId?.trim() ? await listCustomerCategories(client, filters.tenantId.trim()) : [];
+    const categoriesById = new Map(categories.map((category) => [category.id, category]));
     const summary = aggregate.rows[0];
     return {
-      data: rows.rows.map((row) => ({...row.data, id: row.id})),
+      data: rows.rows.map((row) => {
+        const categoryId = typeof row.data.categoryId === "string" ? row.data.categoryId : undefined;
+        const category = categoryId ? categoriesById.get(categoryId) : undefined;
+        return {...row.data, id: row.id, categoryId, categoryName: category?.name, categoryActive: category?.isActive};
+      }),
       meta: {
         page: query.page,
         pageSize: query.pageSize,
@@ -102,6 +111,7 @@ export async function listCustomerDirectoryPage(filters: CustomerDirectoryPageFi
         },
         types: Array.from(new Set(options.rows.map((row) => row.type).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN")),
         channels: Array.from(new Set(options.rows.map((row) => row.channel).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN")),
+        categories,
       },
     };
   });

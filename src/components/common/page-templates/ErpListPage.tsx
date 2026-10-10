@@ -198,7 +198,7 @@ export function ErpListPage<TData>({
   const onPageSizeChange = table?.onPageSizeChange ?? pagination?.onPageSizeChange;
   const activeFilters = countActiveErpFilterFields(filters) + (search?.value ? 1 : 0) + additionalActiveFilterCount;
   const resetButton = onResetFilters ? <Button type="button" size="sm" variant="ghost" onClick={onResetFilters}><RotateCcw className="h-4 w-4" />重置</Button> : null;
-  const actionButtons = actions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={action.onClick}>{action.icon}{action.label}</Button>);
+  const actionButtons = actions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={() => {setSheetOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>);
   const refreshButton = onRefresh ? <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />刷新</Button> : null;
   const searchInput = search ? <ErpSearchInput className={phone ? "w-full" : "min-w-64 flex-1"} value={search.value} onChange={(event) => search.onChange(event.target.value)} placeholder={phone ? search.phonePlaceholder ?? search.placeholder : search.placeholder} aria-label={search.label} /> : null;
   const metricsRegion = metricsContent ?? (metrics?.length ? <ErpMobileSummary phone={phone}><MetricsRegion>{metrics}</MetricsRegion></ErpMobileSummary> : null);

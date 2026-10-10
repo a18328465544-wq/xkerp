@@ -10,6 +10,7 @@ test("customer directory query applies tenant filters and bounded pagination", (
     keyword: "张三",
     type: "个人买家客户",
     channel: "微信",
+    categoryId: "CC-gaming",
     level: "S级",
     sortKey: "totalAmount",
     sortDirection: "asc",
@@ -17,7 +18,8 @@ test("customer directory query applies tenant filters and bounded pagination", (
   assert.equal(query.page, 2);
   assert.equal(query.pageSize, 100);
   assert.equal(query.offset, 100);
-  assert.deepEqual(query.values, ["tenant-a", "%张三%", "个人买家客户", "微信", "S级"]);
+  assert.deepEqual(query.values, ["tenant-a", "%张三%", "个人买家客户", "微信", "CC-gaming", "S级"]);
+  assert.match(query.where, /data->>'categoryId' = \$5/);
   assert.match(query.where, /tenant_id = \$1/);
   assert.match(query.orderBy, /totalAmount/);
   assert.match(query.orderBy, /ASC/);

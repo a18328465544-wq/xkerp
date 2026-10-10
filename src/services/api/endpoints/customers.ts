@@ -11,6 +11,7 @@ export const customersApi = {
     if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
     if (filters.type !== "all") params.set("type", filters.type);
     if (filters.channel !== "all") params.set("channel", filters.channel);
+    if (filters.categoryId !== "all") params.set("categoryId", filters.categoryId);
     if (filters.level !== "all") params.set("level", filters.level);
     const sort = sorting[0];
     if (sort) {
@@ -33,5 +34,15 @@ export const customersApi = {
 
   async remove(id: string, signal?: AbortSignal) {
     await apiRequest<CustomerMutationResponseDto>(`/api/customers/${encodeURIComponent(id)}`, {method: "DELETE", signal});
+  },
+
+  async createCategory(name: string) {
+    const response = await apiRequest<{data?: unknown}>("/api/customer-categories", {method: "POST", body: JSON.stringify({name})});
+    return response.data;
+  },
+
+  async updateCategory(id: string, updates: {name?: string; isActive?: boolean}) {
+    const response = await apiRequest<{data?: unknown}>(`/api/customer-categories/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(updates)});
+    return response.data;
   },
 };

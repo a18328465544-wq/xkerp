@@ -143,3 +143,14 @@ test("mobileCell replaces a rich desktop cell on phones only", () => {
   assert.doesNotMatch(phone, /附加说明/);
   assert.match(desktop, /附加说明/);
 });
+
+test("empty phone meta values do not leave a dangling separator", () => {
+  const cols: ColumnDef<Customer, unknown>[] = [
+    ...customerColumns.slice(0, 1),
+    {accessorKey: "internal", header: "分类", meta: {mobile: "meta", mobileCell: () => null}},
+    {accessorKey: "phone", header: "电话", meta: {mobile: "meta"}},
+  ];
+  const markup = renderToStaticMarkup(<ErpDataTable columns={cols} data={customers} getRowId={(row) => row.id} mobileRow="columns" phone compactViewport />);
+  assert.match(markup, /erp-phone-record-meta"><span class="contents"><span class="contents">13800000000/);
+  assert.doesNotMatch(markup, / · /);
+});

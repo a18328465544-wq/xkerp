@@ -3,20 +3,20 @@ import {Controller, useForm} from "react-hook-form";
 import {useEffect} from "react";
 import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpCheckboxField, ErpDialogShell, ErpField} from "@/src/components/common";
-import type {CustomerDirectoryItem, CustomerLevel, CustomerRecordFormValues} from "@/src/types/customer";
+import type {CustomerCategory, CustomerDirectoryItem, CustomerLevel, CustomerRecordFormValues} from "@/src/types/customer";
 import {customerLevels} from "@/src/types/customer";
 import {customerRecordSchema} from "../customer.schema";
 
 const commonSources = ["闲鱼", "微信", "抖音", "到店", "转介绍", "散客自荐", "其他"];
 const commonTypes = ["个人买家客户", "个人卖家客户", "回收客户", "购买客户", "散客玩家", "老主顾", "售后敏感户"];
-const emptyValues: CustomerRecordFormValues = {name: "", contact: "", type: "个人买家客户", source: "闲鱼", level: "C级", isCoreCustomer: false, riskReason: "", remarks: ""};
+const emptyValues: CustomerRecordFormValues = {name: "", contact: "", type: "个人买家客户", source: "闲鱼", categoryId: "", level: "C级", isCoreCustomer: false, riskReason: "", remarks: ""};
 
 function valuesFromCustomer(customer: CustomerDirectoryItem | null): CustomerRecordFormValues {
   if (!customer) return emptyValues;
-  return {name: customer.name, contact: customer.contact, type: customer.type, source: customer.source, level: customer.level, isCoreCustomer: customer.isCoreCustomer, riskReason: customer.riskReason || "", remarks: customer.remarks || ""};
+  return {name: customer.name, contact: customer.contact, type: customer.type, source: customer.source, categoryId: customer.categoryId || "", level: customer.level, isCoreCustomer: customer.isCoreCustomer, riskReason: customer.riskReason || "", remarks: customer.remarks || ""};
 }
 
-export function CustomerRecordDialog({open, customer, channels, types, pending, error, onOpenChange, onSubmit}: {open: boolean; customer: CustomerDirectoryItem | null; channels: string[]; types: string[]; pending: boolean; error?: string; onOpenChange: (open: boolean) => void; onSubmit: (values: CustomerRecordFormValues) => Promise<void>}) {
+export function CustomerRecordDialog({open, customer, channels, types, categories, pending, error, onOpenChange, onSubmit}: {open: boolean; customer: CustomerDirectoryItem | null; channels: string[]; types: string[]; categories: CustomerCategory[]; pending: boolean; error?: string; onOpenChange: (open: boolean) => void; onSubmit: (values: CustomerRecordFormValues) => Promise<void>}) {
   const form = useForm<CustomerRecordFormValues>({defaultValues: emptyValues, resolver: zodResolver(customerRecordSchema), mode: "onBlur"});
   const {control, register, reset, handleSubmit, setValue, watch, formState} = form;
   const isCore = watch("isCoreCustomer");
@@ -25,6 +25,7 @@ export function CustomerRecordDialog({open, customer, channels, types, pending, 
   useEffect(() => {if (open) reset(valuesFromCustomer(customer));}, [customer, open, reset]);
   const sourceOptions = Array.from(new Set([...commonSources, ...channels])).map((value) => ({value, label: value}));
   const typeOptions = Array.from(new Set([...commonTypes, ...types])).map((value) => ({value, label: value}));
+  const categoryOptions = [{value: "", label: "未分类"}, ...categories.map((category) => ({value: category.id, label: category.isActive ? category.name : `${category.name}（已停用）`, disabled: !category.isActive && category.id !== customer?.categoryId}))];
   const message = (field: keyof CustomerRecordFormValues) => formState.errors[field]?.message ? String(formState.errors[field]?.message) : undefined;
 
   return <ErpDialogShell
@@ -42,6 +43,7 @@ export function CustomerRecordDialog({open, customer, channels, types, pending, 
         <ErpField label="电话 / 微信 / 闲鱼号" htmlFor="customer-contact" error={message("contact")}><Input id="customer-contact" {...register("contact")} placeholder="可留空；与已有客户同名时可能无法保存" disabled={pending} /></ErpField>
         <ErpField label="客户类型" htmlFor="customer-type" required error={message("type")}><Controller control={control} name="type" render={({field}) => <Select id="customer-type" value={field.value} onValueChange={field.onChange} options={typeOptions} disabled={pending} aria-label="客户类型" />} /></ErpField>
         <ErpField label="客户来源" htmlFor="customer-source" error={message("source")}><Controller control={control} name="source" render={({field}) => <Select id="customer-source" value={field.value} onValueChange={field.onChange} options={sourceOptions} disabled={pending} aria-label="客户来源" />} /></ErpField>
+        <ErpField label="客户分类" htmlFor="customer-category" error={message("categoryId")}><Controller control={control} name="categoryId" render={({field}) => <Select id="customer-category" value={field.value} onValueChange={field.onChange} options={categoryOptions} placeholder="未分类" disabled={pending} aria-label="客户分类" />} /></ErpField>
       </div>
       <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-4">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">

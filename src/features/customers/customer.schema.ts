@@ -6,6 +6,7 @@ export const customerRecordSchema = z.object({
   contact: z.string().trim().max(80, "联系方式最多 80 字"),
   type: z.string().trim().min(1, "请选择客户类型").max(40),
   source: z.string().trim().min(1, "请选择客户来源").max(40),
+  categoryId: z.string().trim().max(120, "客户分类无效"),
   level: z.enum(customerLevels),
   isCoreCustomer: z.boolean(),
   riskReason: z.string().trim().max(200, "风险原因最多 200 字"),

@@ -1,5 +1,5 @@
 import {apiRequest} from "../client";
-import {adaptMarketQuoteImportResult, adaptMarketQuoteMutation, adaptMarketQuoteSnapshot, toMarketQuoteCreateRequest, toMarketQuoteUpdateRequest} from "../adapters/quote.adapter";
+import {adaptMarketQuoteCategories, adaptMarketQuoteImportResult, adaptMarketQuoteMutation, adaptMarketQuoteSnapshot, toMarketQuoteCreateRequest, toMarketQuoteUpdateRequest} from "../adapters/quote.adapter";
 import type {MarketQuoteSnapshotResponseDto} from "../dto/quote.dto";
 import type {PermissionModel} from "./auth";
 import type {MarketQuoteFormValues, MarketQuoteImportRow} from "@/src/types/quote";
@@ -7,9 +7,26 @@ import {storeDate} from "@/src/utils/storeTime";
 
 const today = () => storeDate();
 
+function adaptCategoryResponse(value: unknown) {
+  const category = adaptMarketQuoteCategories({data: [value]})[0];
+  if (!category) throw new Error("服务器未返回有效的行情分类");
+  return category;
+}
+
 export const quotesApi = {
   async list(permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
     return adaptMarketQuoteSnapshot(await apiRequest<MarketQuoteSnapshotResponseDto>("/api/market-quotes", {signal}), permissions);
+  },
+  async categories(signal?: AbortSignal) {
+    return adaptMarketQuoteCategories(await apiRequest<{data?: unknown}>("/api/market-quote-categories", {signal}));
+  },
+  async createCategory(name: string) {
+    const response = await apiRequest<{data?: unknown}>("/api/market-quote-categories", {method: "POST", body: JSON.stringify({name})});
+    return adaptCategoryResponse(response.data);
+  },
+  async updateCategory(id: string, updates: {name?: string; isActive?: boolean}) {
+    const response = await apiRequest<{data?: unknown}>(`/api/market-quote-categories/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(updates)});
+    return adaptCategoryResponse(response.data);
   },
   async create(values: MarketQuoteFormValues, permissions: Pick<PermissionModel, "showCost" | "showProfit">, signal?: AbortSignal) {
     const response = await apiRequest<MarketQuoteSnapshotResponseDto>("/api/market-quotes", {method: "POST", body: JSON.stringify(toMarketQuoteCreateRequest(values, today())), signal});

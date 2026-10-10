@@ -52,7 +52,7 @@ export function parseMarketQuotePaste(input: string): QuotePasteResult {
     const trendValue = concise ? cells[3] || "" : cells[4] || "";
     const note = (concise ? cells.slice(4) : cells.slice(5)).join("，").trim();
     if (!model || buyPrice === null || sellPrice === null) {errors.push(`第 ${index + 1} 行：型号、回收价或销售价无效。`); return;}
-    rows.push({model, brand, buyPrice, sellPrice, trend: trend(trendValue), note, sourceLine: index + 1});
+    rows.push({model, brand, categoryId: "", buyPrice, sellPrice, trend: trend(trendValue), note, sourceLine: index + 1});
   });
   return {rows, errors};
 }

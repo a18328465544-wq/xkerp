@@ -2,7 +2,7 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState, VisibilityState} from "@tanstack/react-table";
 import {ErpListPage, ErpRecordDetail, type ErpFilterField} from "@/src/components/common";
-import {BadgeDollarSign, CircleDollarSign, Download, Plus, Star, Users} from "lucide-react";
+import {BadgeDollarSign, CircleDollarSign, Download, Plus, Star, Tags, Users} from "lucide-react";
 import {ErpEntityThumbnail} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -20,6 +20,7 @@ import {customerLevels} from "@/src/types/customer";
 import {createCustomerColumns, customerLevelTone} from "../customer.columns";
 import {customerFiltersToSearch, defaultCustomerFilters, parseCustomerFilters} from "../customer.filters";
 import {CustomerRecordDialog} from "../components/CustomerRecordDialog";
+import {CustomerCategoryManagerDialog} from "../components/CustomerCategoryManagerDialog";
 
 function useCustomerUrlState() {
   return useUrlSearchState({defaultValue: defaultCustomerFilters, parse: parseCustomerFilters, serialize: customerFiltersToSearch});
@@ -46,8 +47,10 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
   const [detail, setDetail] = useState<CustomerDirectoryItem | null>(null);
   const [editing, setEditing] = useState<CustomerDirectoryItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [deleting, setDeleting] = useState<CustomerDirectoryItem | null>(null);
   const customers = query.data?.customers || [];
+  const categories = query.data?.categories || [];
   const canEdit = createCapabilities(session).menu("crm");
   const canDelete = session.permissions.canDelete;
 
@@ -56,7 +59,8 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
   useEffect(() => {if (filters.page > totalPages) onFiltersChange({...filters, page: totalPages});}, [filters, onFiltersChange, totalPages]);
   const invalidate = () => invalidateErpDomains(queryClient, ["customers", "state", "crm"]);
   const handleMutationError = (error: Error) => {if (error instanceof ApiError && error.isUnauthorized) {onAuthExpired(); return;} notify.error(error.message);};
-  const saveMutation = useMutation({mutationFn: ({values, current}: {values: CustomerRecordFormValues; current: CustomerDirectoryItem | null}) => current ? customersApi.update(current.id, values, session.permissions) : customersApi.create(values, session.permissions), onSuccess: async (customer) => {notify.success(`${customer.name} 已保存`); setDialogOpen(false); setEditing(null); setDetail(customer); await invalidate();}, onError: handleMutationError});
+  const saveMutation = useMutation({mutationFn: ({values, current}: {values: CustomerRecordFormValues; current: CustomerDirectoryItem | null}) => current ? customersApi.update(current.id, values, session.permissions) : customersApi.create(values, session.permissions), onSuccess: async (customer) => {notify.success(`${customer.name} 已保存`); setDialogOpen(false); setEditing(null); const category = categories.find((item) => item.id === customer.categoryId); setDetail({...customer, categoryName: category?.name, categoryActive: category?.isActive}); await invalidate();}, onError: handleMutationError});
+  const categoryMutation = useMutation({mutationFn: (command: {kind: "create"; name: string} | {kind: "update"; id: string; updates: {name?: string; isActive?: boolean}}) => command.kind === "create" ? customersApi.createCategory(command.name) : customersApi.updateCategory(command.id, command.updates), onSuccess: async (_result, command) => {notify.success(command.kind === "create" ? "客户分类已新增" : "客户分类已更新"); await invalidate();}, onError: handleMutationError});
   const deleteMutation = useMutation({mutationFn: (id: string) => customersApi.remove(id), onSuccess: async () => {notify.success("客户档案已删除"); setDeleting(null); setDetail(null); await invalidate();}, onError: handleMutationError});
   const openCreate = () => {setEditing(null); setDialogOpen(true); saveMutation.reset();};
   const openEdit = (customer: CustomerDirectoryItem) => {if (!canEdit) return; setEditing(customer); setDialogOpen(true); saveMutation.reset();};
@@ -64,13 +68,14 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
   const coreCount = query.data?.summary.coreCount || 0;
   const receivable = query.data?.summary.receivable || 0;
   const payable = query.data?.summary.payable || 0;
-  const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(filters.channel !== "all") + Number(filters.level !== "all");
+  const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(filters.channel !== "all") + Number(filters.categoryId !== "all") + Number(filters.level !== "all");
+  const openCategoryManager = () => {setCategoryManagerOpen(true); categoryMutation.reset();};
   const quickStatus: QuickStatusItemData[] = [
     {icon: <Star className="h-4 w-4" />, label: "核心客户", value: `${coreCount} 位`, description: "核心身份固定 S 级", tone: coreCount ? "info" : "neutral"},
   ];
 
   const exportCustomers = () => {
-    const rows = [["档案编号", "客户名称", "联系方式", "类型", "来源", "等级", "CRM状态", "负责人", "累计交易", ...(session.permissions.showProfit ? ["累计利润"] : []), "应收", "应付", "最近交易", "备注"], ...customers.map((item) => [item.id, item.name, item.contact, item.type, item.source, item.level, item.crmStatus, item.owner || "", item.totalAmount, ...(session.permissions.showProfit ? [item.totalProfit || 0] : []), item.receivableBalance, item.payableBalance, item.lastDealTime || "", item.remarks || ""])];
+    const rows = [["档案编号", "客户名称", "联系方式", "类型", "来源", "客户分类", "等级", "CRM状态", "负责人", "累计交易", ...(session.permissions.showProfit ? ["累计利润"] : []), "应收", "应付", "最近交易", "备注"], ...customers.map((item) => [item.id, item.name, item.contact, item.type, item.source, item.categoryName || "", item.level, item.crmStatus, item.owner || "", item.totalAmount, ...(session.permissions.showProfit ? [item.totalProfit || 0] : []), item.receivableBalance, item.payableBalance, item.lastDealTime || "", item.remarks || ""])];
     const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\n")}`;
     const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
     const link = document.createElement("a"); link.href = url; link.download = "客户档案.csv"; link.click(); URL.revokeObjectURL(url);
@@ -79,6 +84,7 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
   const filterFields: ErpFilterField[] = [
     {kind: "select", key: "type", label: "客户类型", width: "w-40", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...(query.data?.types || []).map((value) => ({value, label: value}))], onChange: (type) => onFiltersChange({...filters, type, page: 1})},
     {kind: "select", key: "channel", label: "客户来源", width: "w-36", value: filters.channel, defaultValue: "all", options: [{value: "all", label: "全部来源"}, ...(query.data?.channels || []).map((value) => ({value, label: value}))], onChange: (channel) => onFiltersChange({...filters, channel, page: 1})},
+    {kind: "select", key: "categoryId", label: "客户分类", width: "w-36", value: filters.categoryId, defaultValue: "all", options: [{value: "all", label: "全部分类"}, ...categories.map((category) => ({value: category.id, label: category.isActive ? category.name : `${category.name}（已停用）`}))], onChange: (categoryId) => onFiltersChange({...filters, categoryId, page: 1})},
     {kind: "select", key: "level", label: "客户等级", width: "w-32", value: filters.level, defaultValue: "all", options: [{value: "all", label: "全部等级"}, ...customerLevels.map((value) => ({value, label: value}))], onChange: (level) => onFiltersChange({...filters, level, page: 1})},
   ];
 
@@ -105,7 +111,7 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
     ]}
     defaultSortLabel="最近交易"
     primaryAction={{label: "新建客户", icon: <Plus className="h-4 w-4" />, onClick: openCreate}}
-    actions={[{label: "导出", icon: <Download className="h-4 w-4" />, onClick: exportCustomers}]}
+    actions={[...(canEdit ? [{label: "分类管理", icon: <Tags className="h-4 w-4" />, onClick: openCategoryManager}] : []), {label: "导出", icon: <Download className="h-4 w-4" />, onClick: exportCustomers}]}
     onRefresh={() => void query.refetch()}
     refreshing={query.isFetching}
     resultsLabel="全部客户"
@@ -113,10 +119,11 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
     columnSettings={{columns, visibility: columnVisibility, onVisibilityChange: setColumnVisibility, density, onDensityChange: setDensity}}
     table={{ariaLabel: "个人客户明细", columns, data: customers, getRowId: (row) => row.id, mobileRow: "columns", mobileEntity: "customer", loading: query.isPending, fetching: query.isFetching, error: query.error as Error | null, errorTitle: "客户档案加载失败", emptyTitle: "暂无匹配客户", emptyDescription: activeFilters ? "请调整搜索或筛选条件。" : "点击新建客户创建第一份档案。", onRetry: () => void query.refetch(), onRowClick: setDetail, manualSorting: true, sorting, onSortingChange, page: filters.page, pageSize: filters.pageSize, total, onPageChange: (page) => onFiltersChange({...filters, page}), onPageSizeChange: (pageSize) => onFiltersChange({...filters, page: 1, pageSize}), enableColumnResizing: true, stickyHeader: true}}
     sheetExtra={<dl className="erp-customer-filter-summary"><div><dt>核心 / S级</dt><dd>{coreCount} 位</dd></div><div><dt>应收余额</dt><dd>{formatCurrency(receivable)}</dd></div><div><dt>应付余额</dt><dd>{formatCurrency(payable)}</dd></div></dl>}
-    overlayOpen={Boolean(detail || dialogOpen || deleting)}
+    overlayOpen={Boolean(detail || dialogOpen || deleting || categoryManagerOpen)}
     overlays={<>
       <CustomerDetailDrawer customer={detail} showProfit={session.permissions.showProfit} canEdit={canEdit} onClose={() => setDetail(null)} onEdit={() => {if (detail) openEdit(detail);}} />
-      <CustomerRecordDialog open={dialogOpen} customer={editing} channels={query.data?.channels || []} types={query.data?.types || []} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, current: editing});}} />
+      <CustomerRecordDialog open={dialogOpen} customer={editing} channels={query.data?.channels || []} types={query.data?.types || []} categories={categories} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, current: editing});}} />
+      <CustomerCategoryManagerDialog open={categoryManagerOpen} categories={categories} pending={categoryMutation.isPending} error={categoryMutation.error instanceof Error ? categoryMutation.error.message : undefined} onOpenChange={setCategoryManagerOpen} onCreate={(name) => categoryMutation.mutateAsync({kind: "create", name})} onUpdate={(id, updates) => categoryMutation.mutateAsync({kind: "update", id, updates})} />
       <DeleteCustomerDialog customer={deleting} pending={deleteMutation.isPending} error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined} onClose={() => {setDeleting(null); deleteMutation.reset();}} onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}} />
     </>}
   />;
@@ -140,6 +147,7 @@ function CustomerDetailDrawer({customer, showProfit, canEdit, onClose, onEdit}: 
           {label: "负责人", value: customer.owner || "未分配"},
           {label: "CRM 状态", value: [customer.crmStatus, customer.crmStage].filter(Boolean).join(" · ")},
           {label: "来源", value: customer.source},
+          {label: "客户分类", value: customer.categoryName || "未分类"},
         ]},
         {title: "档案与备注", collapsed: true, facts: [
           {label: "意向", value: customer.intent || "未记录"},

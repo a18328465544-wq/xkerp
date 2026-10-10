@@ -40,9 +40,31 @@ test("quote update uses the existing PATCH contract and never sends fake history
     return new Response(JSON.stringify({data: {id: "MQ-1", model: "RTX 4090", brand: "NVIDIA", todayBuyPrice: 18000, todaySellPrice: 19500}}), {status: 200, headers: {"Content-Type": "application/json"}});
   };
   try {
-    await quotesApi.update("MQ-1", {model: "RTX 4090", brand: "NVIDIA", buyPrice: 18000, sellPrice: 19500, trend: "up", note: "上涨"}, {showCost: true, showProfit: true});
-    assert.deepEqual(JSON.parse(body), {todayBuyPrice: 18000, todaySellPrice: 19500, remarks: "上涨"});
+    await quotesApi.update("MQ-1", {model: "RTX 4090", brand: "NVIDIA", categoryId: "MQC-gpu", buyPrice: 18000, sellPrice: 19500, trend: "up", note: "上涨"}, {showCost: true, showProfit: true});
+    assert.deepEqual(JSON.parse(body), {todayBuyPrice: 18000, todaySellPrice: 19500, categoryId: "MQC-gpu", remarks: "上涨"});
     assert.equal(JSON.parse(body).history, undefined);
+  } finally {globalThis.fetch = previousFetch;}
+});
+
+test("market quote categories use the dedicated list and editable category endpoints", async () => {
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{path: string; method: string; body?: unknown}> = [];
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    const method = String(init?.method || "GET");
+    calls.push({path, method, ...(init?.body ? {body: JSON.parse(String(init.body)) as unknown} : {})});
+    const category = {id: "MQC-gpu", name: "显卡", isActive: true, sortOrder: 10};
+    return new Response(JSON.stringify(method === "GET" ? {data: [category]} : {data: category}), {status: method === "POST" ? 201 : 200, headers: {"Content-Type": "application/json"}});
+  };
+  try {
+    assert.deepEqual(await quotesApi.categories(), [{id: "MQC-gpu", name: "显卡", isActive: true, sortOrder: 10}]);
+    assert.equal((await quotesApi.createCategory("显卡")).id, "MQC-gpu");
+    assert.equal((await quotesApi.updateCategory("MQC-gpu", {name: "GPU"})).name, "显卡");
+    assert.deepEqual(calls, [
+      {path: "/api/market-quote-categories", method: "GET"},
+      {path: "/api/market-quote-categories", method: "POST", body: {name: "显卡"}},
+      {path: "/api/market-quote-categories/MQC-gpu", method: "PATCH", body: {name: "GPU"}},
+    ]);
   } finally {globalThis.fetch = previousFetch;}
 });
 
@@ -51,7 +73,7 @@ test("quote import keeps the real array envelope", async () => {
   let body = "";
   globalThis.fetch = async (input, init) => {assert.equal(input, "/api/market-quotes/import"); body = String(init?.body || ""); return new Response(JSON.stringify({data: {created: 1, updated: 0, skipped: 0}}), {status: 201, headers: {"Content-Type": "application/json"}});};
   try {
-    const result = await quotesApi.importRows([{model: "RTX 4090", brand: "NVIDIA", buyPrice: 18000, sellPrice: 19500, trend: "stable", note: "", sourceLine: 1}]);
+    const result = await quotesApi.importRows([{model: "RTX 4090", brand: "NVIDIA", categoryId: "", buyPrice: 18000, sellPrice: 19500, trend: "stable", note: "", sourceLine: 1}]);
     assert.equal(JSON.parse(body).quotes.length, 1);
     assert.equal(JSON.parse(body).quotes[0].history, undefined);
     assert.equal(result.created, 1);

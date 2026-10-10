@@ -384,7 +384,13 @@ function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; enti
   const titleValue = titleCell?.getValue();
   const title = typeof titleValue === "string" || typeof titleValue === "number" ? String(titleValue) : row.id;
   const subtitleCell = byRole("subtitle")[0];
-  const metaCells = byRole("meta");
+  // Empty phone values (e.g. an unset category) must not leave a dangling separator.
+  const metaParts = byRole("meta").flatMap((cell) => {
+    const mobileCell = cell.column.columnDef.meta?.mobileCell;
+    const value = mobileCell ? mobileCell(row.original) : undefined;
+    if (mobileCell && (value === null || value === undefined || value === "")) return [];
+    return [{key: cell.id, node: render(cell)}];
+  });
   const amountCell = byRole("amount")[0];
   const statusCell = byRole("status")[0];
   const imageValue = byRole("image")[0]?.getValue();
@@ -394,7 +400,7 @@ function ErpColumnMobileRow<TData>({row, entity, onOpen}: {row: Row<TData>; enti
     title={title}
     titleMono={Boolean(titleCell?.column.columnDef.meta?.mobileMono)}
     subtitle={subtitleCell ? render(subtitleCell) : undefined}
-    meta={metaCells.length ? metaCells.map((cell, index) => <span key={cell.id} className="contents">{index > 0 && " · "}{render(cell)}</span>) : undefined}
+    meta={metaParts.length ? metaParts.map((part, index) => <span key={part.key} className="contents">{index > 0 && " · "}{part.node}</span>) : undefined}
     amount={amountCell ? render(amountCell) : undefined}
     amountLabel={amountCell?.column.columnDef.meta?.mobileLabel}
     status={statusCell ? render(statusCell) : undefined}

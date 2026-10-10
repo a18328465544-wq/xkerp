@@ -12,6 +12,7 @@ type PostgresInitializerDependencies = {
   applyCommercialFoundationSchema: (client: PoolClient) => Promise<void>;
   applyCommercialHardeningSchema: (client: PoolClient) => Promise<void>;
   applyAccountingControlPlaneSchema: (client: PoolClient) => Promise<void>;
+  applyMarketQuoteCategorySchema: (client: PoolClient) => Promise<void>;
   upgradePersistedUserPasswords: (client: PoolClient) => Promise<void>;
   rollbackQuietly: (client: PoolClient) => Promise<void>;
 };
@@ -26,6 +27,7 @@ export function createPostgresInitializer({
   applyCommercialFoundationSchema,
   applyCommercialHardeningSchema,
   applyAccountingControlPlaneSchema,
+  applyMarketQuoteCategorySchema,
   upgradePersistedUserPasswords,
   rollbackQuietly,
 }: PostgresInitializerDependencies) {
@@ -131,6 +133,7 @@ export function createPostgresInitializer({
       await applyCommercialFoundationSchema(client);
       await applyCommercialHardeningSchema(client);
       await applyAccountingControlPlaneSchema(client);
+      await applyMarketQuoteCategorySchema(client);
       // Scope columns must exist before password upgrades write account rows.
       await upgradePersistedUserPasswords(client);
 

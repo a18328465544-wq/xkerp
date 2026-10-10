@@ -5,6 +5,7 @@ import {customerFiltersToSearch, defaultCustomerFilters, parseCustomerFilters} f
 import {customerLevelTone} from "./customer.columns";
 
 const source = readFileSync(new URL("./pages/CustomerDirectoryPage.tsx", import.meta.url), "utf8");
+const customerForm = readFileSync(new URL("./components/CustomerRecordDialog.tsx", import.meta.url), "utf8");
 const table = readFileSync(new URL("../../components/common/ErpDataTable.tsx", import.meta.url), "utf8");
 const columns = readFileSync(new URL("./customer.columns.tsx", import.meta.url), "utf8");
 const template = readFileSync(new URL("../../components/common/page-templates/ErpListPage.tsx", import.meta.url), "utf8");
@@ -30,11 +31,17 @@ test("long customer names can wrap without splitting the transaction date", () =
 });
 
 test("search and creation uses original draft/mutation callbacks and hides for customer overlays", () => {
-  assert.match(source, /overlayOpen=\{Boolean\(detail \|\| dialogOpen \|\| deleting\)\}/);
+  assert.match(source, /overlayOpen=\{Boolean\(detail \|\| dialogOpen \|\| deleting \|\| categoryManagerOpen\)\}/);
   assert.match(template, /<ErpMobileActionDock hidden=\{overlayOpen \|\| sheetOpen\}/);
   assert.match(source, /onClick: openCreate/);
   assert.match(source, /onChange: \(keyword\) => onFiltersChange\(\{\.\.\.filters, keyword, page: 1\}\)/);
   assert.match(source, /<CustomerRecordDialog open=\{dialogOpen\}/);
+});
+
+test("customer category remains independent from grade and can be cleared", () => {
+  assert.match(customerForm, /label="客户分类"[^\n]+name="categoryId"/);
+  assert.match(customerForm, /categoryOptions = \[\{value: "", label: "未分类"\}/);
+  assert.match(customerForm, /label="客户等级"[^\n]+name="level"/);
 });
 
 test("compact paging stays opt-in and desktop page-size controls remain available", () => {

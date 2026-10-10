@@ -20,6 +20,7 @@ export function registerCustomerDirectoryRoutes(app: Express, dependencies: Cust
         keyword: query.keyword,
         type: query.type,
         channel: query.channel,
+        categoryId: query.categoryId,
         level: query.level,
         sortKey: query.sortKey,
         sortDirection: query.sortDirection,
