@@ -57,12 +57,13 @@ export function ErpPageHeader({title, subtitle, density = "compact", quickStatus
     // The persistent sidebar leaves a narrow canvas at tablet widths. Keep
     // the identity, quick-status strip, and actions in a readable stack until
     // the wide desktop canvas is available; otherwise short titles wrap into
-    // two lines beside a partially wrapped status strip.
-    className={cn(density === "default" && "gap-4", hasQuickStatus && "xl:grid xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.8fr)_auto] xl:items-center xl:gap-4")}
+    // two lines beside a partially wrapped status strip. On wide screens the
+    // status chips sit beside the actions instead of floating mid-row.
+    className={cn(density === "default" && "gap-4", hasQuickStatus && "xl:grid xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center xl:gap-4")}
   >
     {leading && <div className="shrink-0">{leading}</div>}
     <ErpPageIdentity title={title} subtitle={showSubtitle ? subtitle : undefined} reserveSubtitle={showSubtitle && Boolean(subtitle)} />
-    {hasQuickStatus ? <ErpPageContext><QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} className="min-w-0" /></ErpPageContext> : null}
+    {hasQuickStatus ? <ErpPageContext className="xl:justify-self-end"><QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} className="min-w-0" /></ErpPageContext> : null}
     {rightArea}
   </ErpPageTopbar>{phone && secondary.length > 0 && <ErpDialogShell open={moreOpen} onOpenChange={setMoreOpen} title="页面操作" mobilePresentation="sheet"><div className="erp-phone-action-menu">{secondary}</div></ErpDialogShell>}</>;
 }
