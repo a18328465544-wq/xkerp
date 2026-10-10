@@ -550,9 +550,8 @@ try {
     if (await page.locator('[data-erp-region="line-items-table"]').isVisible()) throw new Error("mobile purchase form must not expose the clipped desktop line table");
     await page.goto(${baseLiteral} + "/products");
     await page.getByRole("heading", {name: "商品库"}).waitFor();
-    await page.getByRole("button", {name: "更多页面操作"}).click();
-    const mobileActionsDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "页面操作"})});
-    await mobileActionsDialog.getByRole("button", {name: "新建模板"}).click();
+    // ErpListPage puts the page's primary action in the phone dock.
+    await page.locator('[data-erp-component="mobile-action-dock"]').getByRole("button", {name: "新建模板"}).click();
     const mobileProductDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "新建商品规格模板"})});
     await mobileProductDialog.getByRole("heading", {name: "新建商品规格模板"}).waitFor();
     const mobileDialogState = await mobileProductDialog.evaluate((element) => {
@@ -567,8 +566,6 @@ try {
     if (mobileDialogState.hasFooter !== "true" || mobileDialogState.footerHeight <= 0 || mobileDialogState.footerTop < mobileDialogState.top || mobileDialogState.footerBottom > mobileDialogState.bottom + 1) throw new Error("mobile product template dialog footer must remain visible inside the dialog: " + JSON.stringify(mobileDialogState));
     await mobileProductDialog.getByRole("button", {name: "关闭"}).click();
     await mobileProductDialog.waitFor({state: "hidden"});
-    await mobileActionsDialog.getByRole("button", {name: "关闭"}).click();
-    await mobileActionsDialog.waitFor({state: "hidden"});
   `);
   screenshot("mobile-purchase-form.png");
 

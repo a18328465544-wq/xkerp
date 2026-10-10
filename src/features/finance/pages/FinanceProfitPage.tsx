@@ -174,14 +174,14 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
 
 function createFinanceProfitColumns({showCost, showProfit}: {showCost: boolean; showProfit: boolean}): ColumnDef<FinanceProfitGroupRow, unknown>[] {
   const columns: ColumnDef<FinanceProfitGroupRow, unknown>[] = [
-    {accessorKey: "label", header: "分组", size: 220, cell: ({row}) => <div><p className="font-semibold">{row.original.label}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{row.original.secondary}</p></div>},
-    {accessorKey: "orderCount", header: "订单数", size: 90, cell: ({row}) => <span className="erp-data-number">{row.original.orderCount} 单</span>},
-    {accessorKey: "quantity", header: "数量", size: 90, cell: ({row}) => <span className="erp-data-number">{row.original.quantity} 件</span>},
-    {accessorKey: "revenue", header: "销售额", size: 130, cell: ({row}) => <span className="erp-data-number font-semibold">{formatCurrency(row.original.revenue)}</span>},
+    {accessorKey: "label", header: "分组", size: 180, cell: ({row}) => <div><p className="font-semibold">{row.original.label}</p><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{row.original.secondary}</p></div>},
+    {accessorKey: "orderCount", header: "订单数", size: 72, cell: ({row}) => <span className="erp-data-number">{row.original.orderCount} 单</span>},
+    {accessorKey: "quantity", header: "数量", size: 72, cell: ({row}) => <span className="erp-data-number">{row.original.quantity} 件</span>},
+    {accessorKey: "revenue", header: "销售额", size: 120, cell: ({row}) => <span className="erp-data-number font-semibold">{formatCurrency(row.original.revenue)}</span>},
   ];
-  if (showCost) columns.push({accessorKey: "cost", header: "成本", size: 125, cell: ({row}) => row.original.cost === undefined ? <span className="text-[var(--erp-color-text-muted)]">—</span> : <span className="erp-data-number">{formatCurrency(row.original.cost)}</span>});
-  if (showProfit) columns.push({accessorKey: "profit", header: "毛利", size: 125, cell: ({row}) => <span className={`erp-data-number font-semibold ${row.original.profit !== undefined && row.original.profit < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-success)]"}`}>{row.original.profit === undefined ? "—" : formatCurrency(row.original.profit)}</span>});
-  if (showProfit) columns.push({accessorKey: "margin", header: "毛利率", size: 100, cell: ({row}) => row.original.margin === undefined ? "—" : `${(row.original.margin * 100).toFixed(2)}%`});
+  if (showCost) columns.push({accessorKey: "cost", header: "成本", size: 108, cell: ({row}) => row.original.cost === undefined ? <span className="text-[var(--erp-color-text-muted)]">—</span> : <span className="erp-data-number">{formatCurrency(row.original.cost)}</span>});
+  if (showProfit) columns.push({accessorKey: "profit", header: "毛利", size: 108, cell: ({row}) => <span className={`erp-data-number font-semibold ${row.original.profit !== undefined && row.original.profit < 0 ? "text-[var(--erp-color-danger)]" : "text-[var(--erp-color-success)]"}`}>{row.original.profit === undefined ? "—" : formatCurrency(row.original.profit)}</span>});
+  if (showProfit) columns.push({accessorKey: "margin", header: "毛利率", size: 84, cell: ({row}) => row.original.margin === undefined ? "—" : `${(row.original.margin * 100).toFixed(2)}%`});
   return columns;
 }
 

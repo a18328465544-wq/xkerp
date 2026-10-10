@@ -320,7 +320,7 @@ export function ErpDataTable<TData>({
             {headerGroup.headers.map((header) => <th key={header.id} data-erp-sticky-action={isUtilityColumn(header.column.id) && header.column.id !== "select" ? "true" : undefined} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-medium" style={{width: header.getSize()}}>
               {header.isPlaceholder ? null : <div className="flex items-center gap-1">
                 {header.column.getCanSort() ? <button type="button" className="erp-focus-ring inline-flex items-center gap-1 rounded px-1" onClick={header.column.getToggleSortingHandler()}>{flexRender(header.column.columnDef.header, header.getContext())}{header.column.getIsSorted() === "asc" ? <ArrowUp className="h-3 w-3" /> : header.column.getIsSorted() === "desc" ? <ArrowDown className="h-3 w-3" /> : <ChevronsUpDown className="h-3 w-3 opacity-40" />}</button> : flexRender(header.column.columnDef.header, header.getContext())}
-                {header.column.getCanResize() && <button type="button" aria-label={`调整${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}列宽`} title="拖动或用左右方向键调整；Shift 加速，Home 恢复默认" className="erp-focus-ring absolute right-0 top-0 h-full w-3 cursor-col-resize text-transparent hover:text-[var(--erp-color-primary)]" onKeyDown={(event) => {
+                {header.column.getCanResize() && <button type="button" aria-label={`调整${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}列宽`} title="拖动或用左右方向键调整；Shift 加速，Home 恢复默认" className="erp-focus-ring absolute right-0 top-0 h-full w-3 cursor-col-resize overflow-hidden text-transparent hover:text-[var(--erp-color-primary)]" onKeyDown={(event) => {
                   if (!["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
                   event.preventDefault();
                   const id = header.column.id;
@@ -331,7 +331,7 @@ export function ErpDataTable<TData>({
                     next[id] = Math.max(header.column.columnDef.minSize ?? 20, Math.min(header.column.columnDef.maxSize ?? Number.MAX_SAFE_INTEGER, header.column.getSize() + (event.key === "ArrowRight" ? step : -step)));
                     return next;
                   });
-                }} onMouseDown={header.getResizeHandler()} onTouchStart={header.getResizeHandler()}><GripVertical className="mx-auto h-4 w-4" /></button>}
+                }} onMouseDown={header.getResizeHandler()} onTouchStart={header.getResizeHandler()}><GripVertical className="mx-auto h-4 w-3" /></button>}
               </div>}
             </th>)}
           </tr>)}

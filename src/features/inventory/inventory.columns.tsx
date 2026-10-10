@@ -29,7 +29,7 @@ export function createInventoryColumns({showCost, showProfit, onDetail}: {showCo
   columns.push(
     {accessorKey: "entryTime", header: "入库时间", size: 120, cell: ({row}) => <span className="text-xs text-[var(--erp-color-text-secondary)]">{row.original.entryTime ? formatStoreDateTime(row.original.entryTime).slice(0, 10) : "—"}</span>},
     {accessorKey: "inventoryDays", header: "库龄", size: 80, cell: ({row}) => <span className={row.original.inventoryDays >= 30 ? "erp-data-number font-semibold text-[var(--erp-color-danger)]" : "erp-data-number"}>{row.original.inventoryDays} 天</span>},
-    {id: "actions", header: "操作", enableSorting: false, enableResizing: false, size: 72, enableHiding: false, cell: ({row}) => <Button type="button" size="xs" variant="ghost" className="h-7 gap-1 px-2 text-xs font-semibold text-[var(--erp-color-primary)] hover:bg-[var(--erp-color-info-soft)]" onClick={(event) => {event.stopPropagation(); onDetail(row.original);}}><Eye className="h-3.5 w-3.5" />详情</Button>},
+    {id: "actions", header: "操作", enableSorting: false, enableResizing: false, size: 96, enableHiding: false, cell: ({row}) => <Button type="button" size="xs" variant="ghost" className="h-7 gap-1 px-2 text-xs font-semibold text-[var(--erp-color-primary)] hover:bg-[var(--erp-color-info-soft)]" onClick={(event) => {event.stopPropagation(); onDetail(row.original);}}><Eye className="h-3.5 w-3.5" />详情</Button>},
   );
   return prioritizeTableColumns(columns, ["select", "product", "status", "condition", "category", "costPrice", "estimatedSellPrice", "inventoryDays", "estimatedProfit"]);
 }

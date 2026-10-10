@@ -1,12 +1,12 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import type { ColumnDef } from "@tanstack/react-table";
-import { Filter, RefreshCw, Undo2 } from "lucide-react";
+import type {ColumnDef} from "@tanstack/react-table";
+import {Filter, RefreshCw, Undo2} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import {useEffect, useMemo, useState} from "react";
+import {useNavigate} from "@tanstack/react-router";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
-import { Button, Card, Select } from "@/src/components/ui";
+import {Button, Card, Select} from "@/src/components/ui";
 import {
   ErpFinancePageFrame,
   ErpDetailFact,
@@ -34,11 +34,11 @@ import type {
   SalesReturnListFilters,
   SalesReturnListItem,
 } from "@/src/types/returns";
-import type { FinanceReturnReconcileItem } from "@/src/types/finance-remaining";
-import { formatCurrency } from "@/src/lib/format";
-import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
-import { FinanceTableRegion } from "../components/FinanceTableRegion";
-import { isAnyMenuAllowed, isMenuAllowed } from "@/src/utils/menu";
+import type {FinanceReturnReconcileItem} from "@/src/types/finance-remaining";
+import {formatCurrency} from "@/src/lib/format";
+import {FinanceSectionTabs} from "../components/FinanceSectionTabs";
+import {FinanceTableRegion} from "../components/FinanceTableRegion";
+import {isAnyMenuAllowed, isMenuAllowed} from "@/src/utils/menu";
 import {matchesReturnReconcileType} from "../finance-return-reconcile.filters";
 import {FinanceDetailPageLayout} from "../components/FinanceDetailPageLayout";
 
@@ -292,13 +292,6 @@ function FinanceReturnReconcileContent({
       tone: filtered.some((item) => item.status === "待处理")
         ? "warning"
         : "success",
-    },
-    {
-      icon: <Filter className="h-4 w-4" />,
-      label: "筛选结果",
-      value: `${filtered.length} 条`,
-      description: "当前条件匹配",
-      tone: "info",
     },
   ];
   const header = (
