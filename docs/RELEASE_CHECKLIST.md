@@ -58,6 +58,8 @@ systemctl status gpu-erp-backup.timer --no-pager
 `005_commercial_hardening.sql` 顺序执行；应用启动的幂等 schema 初始化与该顺序保持一致。
 生产密钥不得使用示例占位值且长度不得少于 16 位，`POSTGRES_IMPORT_LEGACY_JSON` 必须为 `false`；`DATABASE_SSL` 必须显式设置，生产 Cookie 不得关闭 Secure。
 
+启用语音录入前，确认 HTTPS、Helmet 与 Nginx 的 `Permissions-Policy` 未禁止麦克风；若存在该策略，至少允许同源 `microphone=(self)`。首次录音入口必须告知用户原始音频会发送到已配置的 ASR 服务、录音不会保存；未配置 `VOICE_ASR_API_KEY` 时应只提供文字录入，不得报页面错误。
+
 运行时拓扑必须明确为单实例：`STATE_RUNTIME_MODE=single-instance`，PM2 使用
 `instances: 1` + `exec_mode: fork`。这是因为服务端仍保留进程内状态投影；数据库锁
 只保护写入竞态，不能替代共享读模型。预检还会拒绝未哈希的系统账号密码。
