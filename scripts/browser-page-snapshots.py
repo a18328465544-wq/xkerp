@@ -57,6 +57,21 @@ def capture(label, routes, widths):
                         break
                     page.wait_for_timeout(250)
                 page.wait_for_timeout(800)
+                # The app shell scrolls inside <main>, so full_page alone stops at the
+                # first screen. Grow the viewport until the whole page content fits.
+                needed = page.evaluate("""() => {
+                  const main = document.querySelector('main');
+                  if (!main) return 0;
+                  let scroller = main;
+                  for (let node = main; node; node = node.parentElement) {
+                    if (node.scrollHeight > node.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(node).overflowY)) { scroller = node; break; }
+                  }
+                  return Math.ceil(scroller.scrollHeight + scroller.getBoundingClientRect().top + (innerHeight - scroller.getBoundingClientRect().bottom));
+                }""")
+                base_height = 844 if phone else 900
+                if needed > base_height:
+                    page.set_viewport_size({"width": width, "height": min(needed, 8000)})
+                    page.wait_for_timeout(500)
                 page.screenshot(path=str(target / slug(route, width)), full_page=True)
                 context.close()
                 print(f"{width}px {route}", flush=True)
