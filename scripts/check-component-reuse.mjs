@@ -20,7 +20,8 @@ const targets = [
   {
     name: "新建销售单页",
     file: "src/features/sales/pages/NewSalesOrderPage.tsx",
-    required: ["ErpPageHeader", "ErpFormSection", "ErpSubmitBar", "ErpLoadingState", "ErpPageError", "CustomerPicker", "SalesLineItemsTable", "SalesAmountSummary", "SalesPaymentSection"],
+    // ErpTransactionHeader wraps ErpPageHeader for order editors.
+    required: ["ErpTransactionHeader", "ErpFormSection", "ErpSubmitBar", "ErpLoadingState", "ErpPageError", "CustomerPicker", "SalesLineItemsTable", "SalesAmountSummary", "SalesPaymentSection"],
     forbidden: [
       [/<Sheet\b|<Sheet\./, "详情或侧栏不能在销售页另建基础 Sheet"],
       [/function\s+PageState\b/, "加载/错误状态应使用 Common 状态组件"],
