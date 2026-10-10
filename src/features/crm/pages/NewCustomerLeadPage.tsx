@@ -10,6 +10,7 @@ import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {QuickCaptureConfirmInput, QuickCaptureParseResult, QuickCaptureSourceType} from "@/src/types/crm";
 import {useWorkspaceTabActivity, useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 import {VoiceEntryControl} from "@/src/features/voice/VoiceEntryControl";
+import {appendVoiceTranscript as appendRecognizedText} from "@/src/features/voice/voiceTranscript";
 
 const sourceOptions = [{value: "manual", label: "手工录入"}, {value: "chat", label: "聊天记录"}, {value: "voice", label: "语音转写"}] satisfies Array<{value: QuickCaptureSourceType; label: string}>;
 
@@ -37,10 +38,10 @@ function LeadForm({onSuccess}: {onSuccess: () => void | Promise<void>}) {
   useWorkspaceTabDirty(tabId || "customers", dirty);
   useErpDirtyGuard(dirty);
   const blocker = useWorkspaceTabBlocker(dirty);
-  const parseMutation = useMutation({mutationFn: () => crmApi.parseQuickCapture(rawText.trim(), sourceType), onSuccess: (result) => { setParsed(result); setMatchedCustomerId(result.customerCandidates[0]?.customerId || ""); setError(""); notify.success("客户线索已解析"); }});
+  const parseMutation = useMutation({mutationFn: (input: {text: string; sourceType: QuickCaptureSourceType}) => crmApi.parseQuickCapture(input.text, input.sourceType), onSuccess: (result) => { setParsed(result); setMatchedCustomerId(result.customerCandidates[0]?.customerId || ""); setError(""); notify.success("客户线索已解析"); }, onError: (cause) => {setError(cause instanceof Error ? cause.message : "解析失败，请核对线索内容后重试");}});
   const confirmMutation = useMutation({mutationFn: (input: QuickCaptureConfirmInput) => crmApi.confirmQuickCapture(input), onSuccess: async () => { blocker.markSaved(); setSuccess("客户线索已保存，客户档案、跟进任务和时间线已同步。"); notify.success("客户线索已保存"); await onSuccess(); }});
-  const submitParse = (event: FormEvent) => { event.preventDefault(); if (parsed) return confirm(); setError(""); if (!rawText.trim()) return setError("请粘贴聊天记录或填写客户线索"); parseMutation.mutate(); };
-  const appendVoiceTranscript = (text: string) => {setRawText((current) => [current.trimEnd(), text].filter(Boolean).join("\n")); setSourceType("voice"); setParsed(null); setError("");};
+  const submitParse = (event: FormEvent) => { event.preventDefault(); if (parsed) return confirm(); setError(""); if (!rawText.trim()) return setError("请粘贴聊天记录或填写客户线索"); parseMutation.mutate({text: rawText.trim(), sourceType}); };
+  const appendVoiceTranscript = (text: string) => {const nextText = appendRecognizedText(rawText, text); if (!nextText) return; setRawText(nextText); setSourceType("voice"); setParsed(null); setError(""); parseMutation.mutate({text: nextText, sourceType: "voice"});};
   const confirm = () => {
     if (!parsed) return;
     if (!parsed.fields.customerName) return setError("解析结果缺少客户名称，请补充原文后重新解析");
