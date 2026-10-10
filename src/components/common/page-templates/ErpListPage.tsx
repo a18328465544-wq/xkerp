@@ -63,22 +63,12 @@ export interface ErpListPageProps<TData> {
   loadError?: boolean;
   /** Work items only (M17). */
   quickStatus?: QuickStatusItemData[];
-  /** Desktop metric cards, at most 4 (M18). Phones keep them behind a summary toggle. */
+  /** Desktop metric cards, at most 4 (M18). Phone lists do not show them. */
   metrics?: ReactNode[];
   /** Section tabs shown under the header on every viewport. */
   tabs?: ReactNode;
-  /** Feature-owned header/filter/metric content for specialized list families such as finance. */
-  headerContent?: ReactNode;
-  desktopFilterContent?: ReactNode;
-  phoneFilterContent?: ReactNode;
-  phoneSearchContent?: ReactNode;
-  metricsContent?: ReactNode;
   /** Preserve the existing semantic page frame while the list regions are templated. */
   pageFrame?: ErpListPageFrameKind;
-  /** Optional phone-only frame for pages with a distinct analytics presentation. */
-  phonePageFrame?: ErpListPageFrameKind;
-  /** Preserve feature families whose established desktop rhythm puts metrics after filters. */
-  metricsPlacement?: "before-filters" | "after-filters";
   search?: {value: string; onChange: (value: string) => void; label: string; placeholder: string; phonePlaceholder?: string};
   filters?: readonly ErpFilterField[];
   /** Additional active criteria managed by a page-specific queue/tab outside the field list. */
@@ -172,14 +162,7 @@ export function ErpListPage<TData>({
   phoneTableContent,
   tableDensity = "comfortable",
   phonePageSizeOptions = [20, 50, 100],
-  headerContent,
-  desktopFilterContent,
-  phoneFilterContent,
-  phoneSearchContent,
-  metricsContent,
   pageFrame = "list",
-  phonePageFrame,
-  metricsPlacement = "before-filters",
   columnSettings,
   table,
   pagination,
@@ -191,7 +174,7 @@ export function ErpListPage<TData>({
 }: ErpListPageProps<TData>) {
   const phoneFromHook = useErpPhone();
   const phone = phoneProp ?? phoneFromHook;
-  const PageFrame = getListPageFrame(phone ? phonePageFrame ?? pageFrame : pageFrame);
+  const PageFrame = getListPageFrame(pageFrame);
   const [sheetOpen, setSheetOpen] = useState(false);
   const total = table?.total ?? pagination?.total ?? table?.data.length ?? 0;
   const pageSize = table?.pageSize ?? pagination?.pageSize ?? 20;
@@ -201,16 +184,15 @@ export function ErpListPage<TData>({
   const actionButtons = actions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={() => {setSheetOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>);
   const refreshButton = onRefresh ? <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />刷新</Button> : null;
   const searchInput = search ? <ErpSearchInput className={phone ? "w-full" : "min-w-64 flex-1"} value={search.value} onChange={(event) => search.onChange(event.target.value)} placeholder={phone ? search.phonePlaceholder ?? search.placeholder : search.placeholder} aria-label={search.label} /> : null;
-  const metricsRegion = metricsContent ?? (metrics?.length ? <ErpMobileSummary phone={phone}><MetricsRegion>{metrics}</MetricsRegion></ErpMobileSummary> : null);
+  const metricsRegion = (metrics?.length ? <ErpMobileSummary phone={phone}><MetricsRegion>{metrics}</MetricsRegion></ErpMobileSummary> : null);
 
   if (!phone) {
     const dataTable = table ? <ErpDataTable {...table} surface="card" mobilePagination="compact" density={columnSettings?.density ?? tableDensity} columnVisibility={columnSettings?.visibility} onColumnVisibilityChange={columnSettings?.onVisibilityChange} phone={phoneProp} /> : null;
     return <PageFrame className={cn("erp-list-page", className)}>
-      {headerContent ?? <ErpPageHeader title={title} subtitle={subtitle} quickStatus={quickStatus} actions={desktopHeaderActions || refreshButton || primaryAction ? <>{desktopHeaderActions}{refreshButton}{primaryAction && <Button type="button" size="sm" variant="primary" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</Button>}</> : undefined} />}
+      <ErpPageHeader title={title} subtitle={subtitle} quickStatus={quickStatus} actions={desktopHeaderActions || refreshButton || primaryAction ? <>{desktopHeaderActions}{refreshButton}{primaryAction && <Button type="button" size="sm" variant="primary" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</Button>}</> : undefined} />
       {tabs}
-      {metricsPlacement === "before-filters" && metricsRegion}
-      {desktopFilterContent ?? <ErpPageToolbar><ErpFilterBar actions={resetButton || actionButtons.length ? <>{resetButton}{actionButtons}</> : undefined}>{searchInput}<ErpFilterFields fields={filters} layout="bar" /></ErpFilterBar></ErpPageToolbar>}
-      {metricsPlacement === "after-filters" && metricsRegion}
+      {metricsRegion}
+      <ErpPageToolbar><ErpFilterBar actions={resetButton || actionButtons.length ? <>{resetButton}{actionButtons}</> : undefined}>{searchInput}<ErpFilterFields fields={filters} layout="bar" /></ErpFilterBar></ErpPageToolbar>
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
         {tableNotice}
         {columnSettings && <ErpTableResultsBar
@@ -226,26 +208,23 @@ export function ErpListPage<TData>({
   const sheetFilterCount = countActiveErpFilterFields(filters) + additionalActiveFilterCount;
   const phoneCount = loading ? "正在加载…" : loadError ? "加载失败" : countLabel?.(total);
   const phoneTitleNode = <span className="erp-list-phone-title">{phoneTitle}{phoneCount ? <small>{phoneCount}</small> : null}</span>;
-  const hasSheet = filters.length > 0 || actions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange) || Boolean(desktopFilterContent) || Boolean(phoneFilterContent);
+  const hasSheet = filters.length > 0 || actions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange);
   const filterButton = hasSheet ? <Button type="button" variant="secondary" size="sm" onClick={() => setSheetOpen(true)} aria-label={`${phoneTitle}筛选与操作`}><SlidersHorizontal className="h-4 w-4" />筛选{sheetFilterCount > 0 && <span className="tabular-nums">{sheetFilterCount}</span>}</Button> : undefined;
   const mobileToolbar: ErpDataTableProps<TData>["mobileToolbar"] = ({openSorting, sortLabel, descending}) => <div className="erp-list-toolbar">
     {quickFilters.length > 0 && <div className="erp-list-quick-filters" role="group" aria-label={`${phoneTitle}快捷筛选`}>{quickFilters.slice(0, 4).map((item) => <Button key={item.label} type="button" variant={item.active ? "primary" : "ghost"} aria-pressed={item.active} onClick={item.onSelect}>{item.label}</Button>)}</div>}
     <Button type="button" variant="ghost" className="erp-list-sort" aria-label={`${phoneTitle}排序`} onClick={openSorting}><span>{sortLabel || defaultSortLabel}</span>{descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}</Button>
   </div>;
   return <PageFrame className={cn("erp-list-page", className)} data-phone-layout="thumb">
-    {headerContent ?? <ErpPageHeader title={phoneTitleNode} subtitle={subtitle} quickStatus={quickStatus} actions={phoneHeaderActions || filterButton ? <>{filterButton}{phoneHeaderActions}</> : undefined} />}
-    {headerContent && (filterButton || phoneHeaderActions) ? <div className="flex justify-end gap-2 md:hidden">{filterButton}{phoneHeaderActions}</div> : null}
+    <ErpPageHeader title={phoneTitleNode} subtitle={subtitle} quickStatus={quickStatus} actions={phoneHeaderActions || filterButton ? <>{filterButton}{phoneHeaderActions}</> : undefined} />
     {tabs}
     {/* Phones keep list rows near the top; summary metrics stay on desktop (M13/M18). */}
-    {metricsContent}
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {tableNotice}
       {phoneTableContent ?? (table ? <ErpDataTable {...table} surface="plain" mobilePagination="compact" mobileToolbar={mobileToolbar} density={tableDensity} phone={phoneProp} compactViewport={phoneProp} /> : null)}
-      {(phoneSearchContent || searchInput) && <ErpMobileActionDock hidden={overlayOpen || sheetOpen} ariaLabel={`${phoneTitle}搜索`} primaryAction={(phonePrimaryAction || primaryAction) ? <Button type="button" variant="primary" disabled={(phonePrimaryAction || primaryAction)?.disabled} onClick={(phonePrimaryAction || primaryAction)?.onClick}>{(phonePrimaryAction || primaryAction)?.icon}{(phonePrimaryAction || primaryAction)?.label}</Button> : undefined}>{phoneSearchContent ?? searchInput}</ErpMobileActionDock>}
+      {searchInput && <ErpMobileActionDock hidden={overlayOpen || sheetOpen} ariaLabel={`${phoneTitle}搜索`} primaryAction={(phonePrimaryAction || primaryAction) ? <Button type="button" variant="primary" disabled={(phonePrimaryAction || primaryAction)?.disabled} onClick={(phonePrimaryAction || primaryAction)?.onClick}>{(phonePrimaryAction || primaryAction)?.icon}{(phonePrimaryAction || primaryAction)?.label}</Button> : undefined}>{searchInput}</ErpMobileActionDock>}
       {hasSheet && <ErpDialogShell open={sheetOpen} onOpenChange={setSheetOpen} title={`${phoneTitle}筛选与操作`} mobilePresentation="sheet" footer={<>{resetButton}<Button type="button" variant="primary" onClick={() => setSheetOpen(false)}>查看结果</Button></>}>
         <div className="space-y-4">
           <ErpFilterFields fields={filters} layout="sheet" />
-          {phoneFilterContent ?? desktopFilterContent}
           {onPageSizeChange && <Select aria-label="每页条数" value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))} options={createErpPageSizeOptions(phonePageSizeOptions)} />}
           {(actionButtons.length > 0 || refreshButton) && <div className="flex flex-wrap gap-2">{actionButtons}{refreshButton}</div>}
           {sheetExtra}

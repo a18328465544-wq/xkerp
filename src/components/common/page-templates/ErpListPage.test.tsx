@@ -48,9 +48,9 @@ test("desktop can preserve a legacy plain table and its result summary", () => {
 
 test("semantic page frames survive the shared layout on the target viewport", () => {
   const desktop = renderToStaticMarkup(<ErpListPage {...props} pageFrame="finance" phone={false} />);
-  const phone = renderToStaticMarkup(<ErpListPage {...props} pageFrame="finance" phonePageFrame="analytics" phone />);
+  const phone = renderToStaticMarkup(<ErpListPage {...props} pageFrame="finance" phone />);
   assert.match(desktop, /data-page-frame="finance"/);
-  assert.match(phone, /data-page-frame="analytics"/);
+  assert.match(phone, /data-page-frame="finance"/);
 });
 
 test("specialized desktop and phone table slots keep the shared page shell", () => {
