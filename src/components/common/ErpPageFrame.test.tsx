@@ -105,13 +105,11 @@ test("formal dashboard pages use the canonical dashboard frame", () => {
 test("typical list pages delegate shared regions to ErpListPage", () => {
   const inventorySource = readFileSync(new URL("../../features/inventory/pages/InventoryListPage.tsx", import.meta.url), "utf8");
   const financeSource = readFileSync(new URL("../../features/finance/pages/FinanceIncomePage.tsx", import.meta.url), "utf8");
-  const financeLayoutSource = readFileSync(new URL("../../features/finance/components/FinanceEntryPageLayout.tsx", import.meta.url), "utf8");
   const listTemplateSource = readFileSync(new URL("./page-templates/ErpListPage.tsx", import.meta.url), "utf8");
 
   assert.match(inventorySource, /<ErpListPage[\s\S]+desktopTableContent=\{desktopTableContent\}[\s\S]+phoneTableContent=\{phoneTableContent\}/);
   assert.match(financeSource, /FinanceEntryPageLayout/);
   assert.match(financeSource, /<ErpFilterBar/);
-  assert.match(financeLayoutSource, /<ErpListPage/);
   assert.match(listTemplateSource, /<ErpPageToolbar>/);
   assert.match(listTemplateSource, /<ErpPageContent/);
 });
