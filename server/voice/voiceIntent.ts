@@ -1,20 +1,61 @@
 import type {InventoryCondition, SourceType} from "../../src/types/core.ts";
 import type {VoiceResolvedScene} from "../../src/types/voice.ts";
 
+const SCENE_PATTERNS: Array<[Exclude<VoiceResolvedScene, null>, RegExp]> = [
+  ["customer", /新客户|加个客户|记一下客户|新增客户|客户资料/],
+  ["purchase", /回收|收卡|收货|进货|拿货|采购|收购/],
+  ["sales", /卖给|出给|发给|销售|卖卡|出卡/],
+];
+
+/**
+ * The scene is decided by whichever business verb is spoken first, so
+ * "卖给老王，就是上次回收的那张 4090" stays a sale even though "回收" appears later.
+ */
 export function resolveVoiceScene(text: string): VoiceResolvedScene {
-  if (/新客户|加个客户|记一下客户|新增客户|客户资料/.test(text)) return "customer";
-  if (/回收|收卡|收货|进货|拿货|采购|收购/.test(text)) return "purchase";
-  if (/卖给|出给|发给|销售|卖卡|出卡/.test(text)) return "sales";
-  return null;
+  let best: {scene: Exclude<VoiceResolvedScene, null>; index: number} | null = null;
+  for (const [scene, pattern] of SCENE_PATTERNS) {
+    const index = text.search(pattern);
+    if (index >= 0 && (!best || index < best.index)) best = {scene, index};
+  }
+  return best?.scene ?? null;
 }
 
+const PAYMENT_METHOD_PATTERNS: Array<[string, RegExp]> = [
+  ["账期欠款", /账期|欠着|挂账|月结/g],
+  ["微信", /微信|微支付/g],
+  ["支付宝", /支付宝|alipay/gi],
+  ["现金", /现金|现付/g],
+  ["银行卡", /银行卡|刷卡|转账|银行转/g],
+];
+
+function isContactMention(text: string, index: number, length: number) {
+  const before = text.slice(Math.max(0, index - 2), index);
+  const after = text.slice(index + length, index + length + 2);
+  // "加了微信" / "微信号 xxx" / "微信是 xxx" describe a contact, not how money moved.
+  return /加了?$|加个$|有$/.test(before) || /^(?:号|是|[:：])/.test(after);
+}
+
+/**
+ * Picks the payment keyword closest to a money verb (付/收/转/给/结). Contact mentions
+ * such as "加了微信" never count, so "现金付清，加了微信" resolves to 现金.
+ */
 export function inferVoicePaymentMethod(text: string) {
-  if (/账期|欠着|挂账|月结/.test(text)) return "账期欠款";
-  if (/微信|微支付/.test(text)) return "微信";
-  if (/支付宝|支[付付]宝|alipay/i.test(text)) return "支付宝";
-  if (/现金|现付/.test(text)) return "现金";
-  if (/银行卡|刷卡|转账|银行转/.test(text)) return "银行卡";
-  return undefined;
+  const mentions: Array<{method: string; index: number; distance: number}> = [];
+  const moneyVerbs = [...text.matchAll(/付|收|转|给|结/g)].map((match) => match.index ?? 0);
+  for (const [method, pattern] of PAYMENT_METHOD_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      if (method === "微信" && isContactMention(text, index, match[0].length)) continue;
+      const distance = moneyVerbs.length ? Math.min(...moneyVerbs.map((verb) => Math.abs(verb - index))) : Number.POSITIVE_INFINITY;
+      mentions.push({method, index, distance});
+    }
+  }
+  if (!mentions.length) return undefined;
+  // 账期 wording is itself the payment decision and wins over any channel keyword.
+  const credit = mentions.find((item) => item.method === "账期欠款");
+  if (credit) return credit.method;
+  mentions.sort((left, right) => left.distance - right.distance || left.index - right.index);
+  return mentions[0]?.method;
 }
 
 export function inferVoiceChannel(text: string) {
@@ -47,16 +88,18 @@ export function inferVoicePurchaseSource(text: string): SourceType | undefined {
   return undefined;
 }
 
+/** Partial wording is checked first: "付了部分" / "先付了五千" must not read as fully paid. */
 export function inferVoicePaidStatus(text: string): "已付款" | "未付款" | "部分付款" | undefined {
-  if (/付清|已付清|全款|已付款|付了/.test(text)) return "已付款";
-  if (/未付|没付|欠着|挂账|账期/.test(text)) return "未付款";
-  if (/付了部分|先付|部分付款/.test(text)) return "部分付款";
+  if (/付了部分|付了一部分|部分付款|先付|定金|首付|还差|尾款/.test(text)) return "部分付款";
+  if (/未付|没付|还没给|欠着|挂账|账期/.test(text)) return "未付款";
+  if (/付清|已付清|全款|已付款|付了|给了钱|结清/.test(text)) return "已付款";
   return undefined;
 }
 
+/** Unpaid wording wins so "没收钱" / "钱还没收" never become a paid sale. */
 export function inferVoiceSalesPaid(text: string): boolean | undefined {
-  if (/已收|收了|收清|已付款|付清/.test(text)) return true;
-  if (/未收|没收|未付款|欠着|挂账|账期/.test(text)) return false;
+  if (/未收|没收|还没收|未付款|没付|欠着|挂账|账期|尾款/.test(text)) return false;
+  if (/已收|收了|收清|收到|已付款|付清|付了|结清/.test(text)) return true;
   return undefined;
 }
 
@@ -73,7 +116,7 @@ export function inferVoiceRepaired(text: string) {
 }
 
 export function inferVoiceAftersalesTerms(text: string) {
-  const match = text.match(/店保s*(半年|六个月|三个月|三月|一年)|保到手好|到手包好/);
+  const match = text.match(/店保\s*(半年|六个月|三个月|三月|两个月|一个月|一年)|保到手好|到手包好/);
   if (!match) return undefined;
   if (/保到手好|到手包好/.test(match[0])) return "保到手好";
   return `店保${match[1] === "六个月" ? "半年" : match[1] === "三月" ? "三个月" : match[1]}`;

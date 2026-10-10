@@ -74,7 +74,8 @@ const AFTERSALES_KEYS: StateCollectionKey[] = [
   "paymentOutRecords",
   "logs",
 ];
-const VOICE_TRANSCRIBE_READ_KEYS: StateCollectionKey[] = ["products", "inventory"];
+// Speech hints only read the product catalogue.
+const VOICE_TRANSCRIBE_READ_KEYS: StateCollectionKey[] = ["products"];
 const VOICE_PARSE_READ_KEYS: StateCollectionKey[] = ["products", "customers", "vendors", "inventory"];
 
 // These collections are required for the dashboard and the common entry pages. Histories that

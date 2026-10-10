@@ -68,7 +68,7 @@ test("GPU SN parse is a read-only POST while saving an estimate is an inventory 
 test("voice status and transcription are scoped read-only requests, not business mutations", () => {
   assert.deepEqual(getAuthenticationReloadKeys("GET", "/api/voice/status"), ["systemUsers"]);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/voice/status"), []);
-  assert.deepEqual(getAuthenticationReloadKeys("POST", "/api/voice/transcribe"), ["systemUsers", "products", "inventory"]);
+  assert.deepEqual(getAuthenticationReloadKeys("POST", "/api/voice/transcribe"), ["systemUsers", "products"]);
   assert.equal(requiresStateSerialization("POST", "/api/voice/transcribe"), false);
   assert.equal(getPersistenceKeysForRequest("POST", "/api/voice/transcribe"), null);
   assert.equal(getStatePatchKeysForRequest("POST", "/api/voice/transcribe"), null);

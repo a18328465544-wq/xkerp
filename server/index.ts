@@ -1132,6 +1132,8 @@ registerVoiceRoutes(app, {
     const allowedMenus = getPermissionsForUser((req as AuthRequest).authUser).allowedMenus;
     return allowedMenus.includes("all") || allowedMenus.includes(menuId);
   },
+  canViewCost: (req) => Boolean(getPermissionsForUser((req as AuthRequest).authUser).showCost),
+  canViewProfit: (req) => Boolean(getPermissionsForUser((req as AuthRequest).authUser).showProfit),
   sendApiError: (req, res, status, code, message) => sendApiError(req, res, status, code, message),
   logSafeEvent: (event) => console.info(JSON.stringify({event: "voice_asr", ...event})),
 });

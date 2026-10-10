@@ -5,7 +5,7 @@ import type {AddressInfo} from "node:net";
 import type {AsrProvider} from "./asrProvider.ts";
 import {resolveVoiceRuntimeConfig} from "../runtimeConfig.ts";
 import type {AppState} from "../store.ts";
-import {registerVoiceRoutes, resetVoiceAsrCooldownForTests, type VoiceSafeEvent} from "./voiceRoutes.ts";
+import {createVoiceAsrHints, registerVoiceRoutes, resetVoiceAsrCooldownForTests, type VoiceSafeEvent} from "./voiceRoutes.ts";
 
 function wav(dataBytes = 32_000) {
   const buffer = Buffer.alloc(44 + dataBytes);
@@ -176,4 +176,49 @@ test("audio body size is capped at 1.5 MB on the route", async () => {
     assert.equal(response.status, 413);
     assert.equal((await response.json()).error.code, "VOICE_AUDIO_TOO_LARGE");
   });
+});
+
+test("voice parse forwards the caller's price permissions and is rate limited per user", async () => {
+  const app = express();
+  app.use(express.json());
+  const requireAnyMenu = (): RequestHandler => (req, _res, next) => {
+    (req as typeof req & {authUser?: {id: string}}).authUser = {id: "voice-parse-limit-user"};
+    next();
+  };
+  const observed: Array<{canViewCost?: boolean; canViewProfit?: boolean}> = [];
+  registerVoiceRoutes(app, {
+    requireAnyMenu,
+    asyncRoute: (handler) => (req, res, next) => {void Promise.resolve(handler(req, res, next)).catch(next);},
+    getState: () => ({products: [], customers: [], vendors: [], inventory: []}) as unknown as AppState,
+    hasMenuPermission: () => true,
+    canViewCost: () => true,
+    canViewProfit: () => false,
+    getConfig: () => resolveVoiceRuntimeConfig({VOICE_ASR_API_KEY: "", VOICE_RATE_LIMIT_PER_MINUTE: "1"}),
+    parseText: async (input) => {
+      observed.push({canViewCost: input.canViewCost, canViewProfit: input.canViewProfit});
+      return {parseId: "parse-limit", scene: "customer", transcript: input.text, source: "rules", customer: {rawTextForQuickCapture: input.text}, issues: []};
+    },
+    sendApiError: (_req, res, status, code, message) => res.status(status).json({error: {code, message}}),
+  });
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+  });
+  const address = server.address() as AddressInfo;
+  try {
+    const request = () => fetch(`http://127.0.0.1:${address.port}/api/voice/parse`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({text: "加个客户王五", scene: "customer"})});
+    assert.equal((await request()).status, 200);
+    const limited = await request();
+    assert.equal(limited.status, 429);
+    assert.equal((await limited.json()).error.code, "VOICE_RATE_LIMITED");
+    assert.deepEqual(observed, [{canViewCost: true, canViewProfit: false}]);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("speech hints put shop slang before catalogue words", () => {
+  const hints = createVoiceAsrHints({products: [{id: "P-1", name: "华硕 RTX 4090 ROG STRIX 24G", brand: "华硕", model: "RTX 4090", version: "ROG STRIX", vram: "24G"}]} as unknown as Pick<AppState, "products">);
+  assert.equal(hints[0], "猛禽");
+  assert.ok(hints.includes("RTX 4090"));
+  assert.ok(hints.length <= 200);
 });

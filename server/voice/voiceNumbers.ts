@@ -32,6 +32,17 @@ function parseChineseSection(section: string, afterLargeUnit: boolean) {
   for (let index = 0; index < section.length; index += 1) {
     const char = section[index];
     if (!char) continue;
+    // ASR inverse text normalisation emits mixed forms such as "1万9" or "2千5":
+    // an Arabic digit run acts exactly like a single spoken digit before a unit.
+    if (/\d/.test(char)) {
+      let end = index;
+      while (end < section.length && /\d/.test(section[end] || "")) end += 1;
+      const digits = section.slice(index, end);
+      pendingDigit = Number(digits);
+      if (/^0+$/.test(digits)) containsExplicitZero = true;
+      index = end - 1;
+      continue;
+    }
     const digit = CHINESE_DIGITS[char];
     if (digit !== undefined) {
       pendingDigit = digit;
@@ -48,9 +59,12 @@ function parseChineseSection(section: string, afterLargeUnit: boolean) {
   }
 
   if (pendingDigit !== undefined) {
-    if (hasSmallUnit && !containsExplicitZero && lastSmallUnit > 1) {
+    // The trailing-digit shorthand ("八千二", "一万九") only applies to a single spoken digit;
+    // "2千50" is read literally as 2,050.
+    const singleDigit = pendingDigit < 10;
+    if (singleDigit && hasSmallUnit && !containsExplicitZero && lastSmallUnit > 1) {
       total += pendingDigit * (lastSmallUnit / 10);
-    } else if (afterLargeUnit && !hasSmallUnit && !containsExplicitZero) {
+    } else if (singleDigit && afterLargeUnit && !hasSmallUnit && !containsExplicitZero) {
       // In spoken prices, "一万九" conventionally means 19,000, not 10,009.
       total += pendingDigit * 1_000;
     } else {

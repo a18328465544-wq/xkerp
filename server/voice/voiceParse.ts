@@ -1,4 +1,5 @@
 import {randomUUID} from "node:crypto";
+import {z} from "zod";
 import type {CardInventory, CustomerCard, ProductTemplate, Vendor} from "../../src/types.ts";
 import type {VoiceIssue, VoiceParseResult, VoiceResolvedScene} from "../../src/types/voice.ts";
 import {inventoryConditionValues, sourceTypeValues} from "../../src/types/core.ts";
@@ -20,25 +21,6 @@ export interface VoiceParseContext {
   inventory?: CardInventory[];
 }
 
-export interface VoiceModelRequest {
-  text: string;
-  scene: VoiceResolvedScene;
-  candidates: {
-    products: Array<{id: string; name: string}>;
-    customers: Array<{id: string; name: string}>;
-    vendors: Array<{id: string; name: string}>;
-    enums: {
-      sourceTypes: readonly string[];
-      purchasePaymentMethods: readonly string[];
-      purchasePaymentStatuses: readonly string[];
-      salesChannels: readonly string[];
-      salesPaymentMethods: readonly string[];
-      conditions: readonly string[];
-    };
-  };
-}
-
-export type VoiceModelParser = (request: VoiceModelRequest) => Promise<unknown>;
 
 const AI_PROVIDER_FAILURE_COOLDOWN_MS = Math.max(0, Number(process.env.AI_PROVIDER_FAILURE_COOLDOWN_MS || 5 * 60 * 1000));
 let aiProviderFailureAt = 0;
@@ -68,20 +50,71 @@ function productCandidate(product: ProductTemplate) {
   };
 }
 
-export function findVoiceProductCandidates(query: string, products: ProductTemplate[], limit = 10) {
-  const normalizedQuery = expandProductAliases(query).replace(/[^\p{L}\p{N}]+/gu, "");
-  const ranked = rankProducts(products).map((product) => {
-    const searchable = expandProductAliases(`${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`).replace(/[^\p{L}\p{N}]+/gu, "");
-    const score = normalizedQuery && searchable.includes(normalizedQuery) ? 0 : normalizedQuery && normalizedQuery.split(/(?=RTX|GTX|RX|ROG)/i).some((part) => part.length >= 3 && searchable.includes(part)) ? 1 : normalizedQuery && searchable.includes(normalizedQuery.slice(0, 4)) ? 2 : 3;
-    return {product, score};
-  }).sort((left, right) => {
-    const difference = left.score - right.score;
-    if (difference) return difference;
-    const rankedPair = rankProducts([left.product, right.product]);
-    return rankedPair[0]?.id === left.product.id ? -1 : 1;
-  });
-  const matching = normalizedQuery ? ranked.filter((entry) => entry.score < 3) : [];
-  return matching.slice(0, limit).map(({product}) => productCandidate(product));
+const SPOKEN_DIGITS: Record<string, string> = {零: "0", 〇: "0", 洞: "0", 一: "1", 幺: "1", 二: "2", 两: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9"};
+
+/**
+ * Normalises a product phrase so speech and catalogue text compare equally:
+ * aliases (猛禽 → rog strix), digit-by-digit model numbers (四零九零 → 4090),
+ * and the "4080S" shorthand for SUPER cards.
+ */
+export function normalizeVoiceProductText(value: string) {
+  const spokenModels = value.replace(/[零〇洞一幺二两三四五六七八九]{3,}/g, (run) => [...run].map((char) => SPOKEN_DIGITS[char] ?? char).join(""));
+  return expandProductAliases(spokenModels)
+    .replace(/(\d{3,4})\s*s(?![a-z])/g, "$1super")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+type ProductMatchScore = 0 | 1 | 2 | 3;
+
+function productSearchText(product: ProductTemplate) {
+  return normalizeVoiceProductText(`${product.name} ${product.brand} ${product.model} ${product.version} ${product.vram}`);
+}
+
+/**
+ * Splits a normalised spoken phrase into match tokens. Chinese runs that no catalogue entry
+ * contains ("同行", "那张", stray price words) are noise and dropped; Latin/number tokens and
+ * Chinese brand words that do occur in the catalogue are kept as required tokens.
+ */
+function productQueryTokens(query: string, searchTexts: string[]) {
+  const normalized = normalizeVoiceProductText(query);
+  const tokens = normalized.match(/\d+|[a-z]+|\p{Script=Han}+/gu) || [];
+  return [...new Set(tokens.filter((token) => {
+    if (/\p{Script=Han}/u.test(token)) return searchTexts.some((text) => text.includes(token));
+    return token.length >= 2;
+  }))];
+}
+
+function scoreProduct(tokens: string[], searchText: string): ProductMatchScore {
+  if (!tokens.length) return 3;
+  const hits = tokens.filter((token) => searchText.includes(token));
+  if (hits.length === tokens.length) return 0;
+  const modelTokens = tokens.filter((token) => /\d{3,}/.test(token));
+  if (modelTokens.length && modelTokens.every((token) => searchText.includes(token))) return 1;
+  return hits.some((token) => token.length >= 3) ? 2 : 3;
+}
+
+export interface VoiceProductMatch {
+  candidates: ReturnType<typeof productCandidate>[];
+  /** Set only when exactly one catalogue entry contains every spoken product token. */
+  matchedId?: string;
+}
+
+/**
+ * Ranks catalogue entries for a spoken product phrase. Partial hits are offered as candidates
+ * only; auto-selection requires a unique full match, so "4090 猛禽" never silently becomes the
+ * only 4090 TUF in stock (PURCHASE_PASTE_CONTRACT: unmatched rows need a manual choice).
+ */
+export function matchVoiceProducts(query: string, products: ProductTemplate[], limit = 10): VoiceProductMatch {
+  const ranked = rankProducts(products).map((product) => ({product, searchText: productSearchText(product)}));
+  const tokens = productQueryTokens(query, ranked.map((entry) => entry.searchText));
+  const scored = ranked.map((entry) => ({product: entry.product, score: scoreProduct(tokens, entry.searchText)}))
+    .filter((entry) => entry.score < 3);
+  scored.sort((left, right) => left.score - right.score);
+  const fullMatches = scored.filter((entry) => entry.score === 0);
+  return {
+    candidates: scored.slice(0, limit).map(({product}) => productCandidate(product)),
+    ...(fullMatches.length === 1 && fullMatches[0] ? {matchedId: fullMatches[0].product.id} : {}),
+  };
 }
 
 function partnerCandidates<T extends {id: string; name: string; lastDealTime?: string}>(query: string, values: T[], limit = 5) {
@@ -94,25 +127,39 @@ function partnerCandidates<T extends {id: string; name: string; lastDealTime?: s
     .map(({item}) => ({id: item.id, name: item.name}));
 }
 
+/** A partner is linked automatically only when exactly one record has the spoken name verbatim. */
+function exactPartnerId(query: string, candidates: Array<{id: string; name: string}>) {
+  const normalizedQuery = clean(query).toLowerCase();
+  if (!normalizedQuery) return undefined;
+  const exact = candidates.filter((candidate) => candidate.name.trim().toLowerCase() === normalizedQuery);
+  return exact.length === 1 ? exact[0]?.id : undefined;
+}
+
 function partnerQuery(text: string, scene: VoiceResolvedScene) {
   const marker = scene === "sales"
     ? /(?:卖给|出给|发给|客户)\s*([\p{Script=Han}]{2,8}|[a-zA-Z][a-zA-Z0-9_-]{1,20})(?=\s|[一二两三四五六七八九十0-9]|[,，。]|$)/u
     : /(?:回收|收购|采购|进货|拿货|供应商)\s*([\p{Script=Han}]{2,8}|[a-zA-Z][a-zA-Z0-9_-]{1,20})(?=\s|[一二两三四五六七八九十0-9]|[,，。]|$)/u;
-  return text.match(marker)?.[1]?.replace(/(?:一张|两张|三张|四张|五张|[0-9]+张)$/, "") || "";
+  if (scene === "purchase") {
+    // "跟老王拿货 / 从李四那收" puts the name before the verb.
+    const before = text.match(/(?:跟|找|从|向)\s*([\p{Script=Han}]{2,4}?|[a-zA-Z][a-zA-Z0-9_-]{1,20})(?=那边|那里|那|这|拿货|进货|收|买|采购)/u)?.[1];
+    if (before) return before;
+  }
+  // The name run is greedy, so trim words that start the next phrase: "李四电话…" → "李四".
+  return text.match(marker)?.[1]
+    ?.replace(/(?:电话|手机|微信|扣扣|的|说|要|想|这边|那边).*$/, "")
+    .replace(/(?:一张|两张|三张|四张|五张|[0-9]+张)$/, "") || "";
 }
 
 function productQuery(text: string) {
   return clean(text
+    .replace(/(?:跟|找|从|向)\s*(?:[\p{Script=Han}]{2,4}?|[a-zA-Z][a-zA-Z0-9_-]{1,20})(?=那边|那里|那|这|拿货|进货|收|买|采购)/gu, " ")
     .replace(/(?:卖给|出给|发给|回收|收购|采购|进货|拿货|客户|供应商)\s*(?:[\p{Script=Han}]{2,8}|[a-zA-Z][a-zA-Z0-9_-]{1,20})/gu, " ")
+    .replace(/(?:先付了?|付了|定金|首付|还差|尾款)\s*[零〇洞一幺二两三四五六七八九十百千万亿点\d,.]*(?:元|块)?/g, " ")
+    .replace(/(?:加了|收了|收到了?|就是|上次|那张|这张|那块|这块|一下|的)/g, " ")
     .replace(/(?:每张|每片|每台|每个|单价|收购价|采购价|售价|销售价|报价|价格|成本价|总价|一共)\s*[零〇洞一幺二两三四五六七八九十百千万亿点\d,.，]+(?:元|块)?/g, " ")
     .replace(/[零〇洞一幺二两三四五六七八九十百千万亿点\d,.，]+\s*(?:张|片|台|个|件)/g, " ")
     .replace(/(?:全新|99\s*新|95\s*新|90\s*新|85\s*新|充新|靓机|良品|带盒|有盒|全套|修过|维修过|换过显存|付清|已付款|未付款|欠着|挂账|微信|支付宝|现金|银行卡|店保(?:半年|三个月|一年)|保到手好|闲鱼|抖音|小红书|B站|哔哩哔哩|微信私域|同行网店|到店|门店)/g, " ")
     .replace(/(?:电话|手机|微信号|微信|QQ)(?:是|号)?\s*[\w+\-\s]{5,20}/g, " "));
-}
-
-function phoneFromText(text: string) {
-  const match = text.match(/(?<!\d)1[3-9](?:[\s-]?\d){9}(?!\d)/);
-  return match?.[0].replace(/[\s-]/g, "");
 }
 
 function extractQuantity(text: string, issues: VoiceIssue[]) {
@@ -126,19 +173,44 @@ function extractQuantity(text: string, issues: VoiceIssue[]) {
   return parsed.value && Number.isInteger(parsed.value) && parsed.value > 0 ? parsed.value : 1;
 }
 
-function extractMoney(text: string) {
-  const number = "((?:[零〇洞一幺二两三四五六七八九十百千万亿点\\d]+)(?:[.．][零〇洞一幺二两三四五六七八九十\\d]+)?(?:万|千)?)";
-  const labeled = new RegExp(`(?:每张|每片|每台|每个|单价|收购价|采购价|售价|销售价|报价|价格|成本价|总价|一共|预算|成交价)\\s*[:：]?\\s*${number}\\s*(?:元|块)?`);
-  const labeledMatch = text.match(labeled);
-  if (labeledMatch?.[1]) return parseVoiceAmount(labeledMatch[1]);
-  const currency = text.match(new RegExp(`[￥¥]\\s*${number}\\s*(?:元|块)?`));
-  if (currency?.[1]) return parseVoiceAmount(currency[1]);
-  const trailing = text.match(new RegExp(`[，,、]\\s*${number}\\s*(?:元|块)?(?=\\s*(?:[，,。]|微信|支付宝|现金|银行卡|店保|闲鱼|抖音|$))`));
-  if (trailing?.[1]) return parseVoiceAmount(trailing[1]);
+const MONEY_NUMBER = "((?:[零〇洞一幺二两三四五六七八九十百千万亿点\\d]+)(?:[.．][零〇洞一幺二两三四五六七八九十\\d]+)?(?:万|千)?)";
+
+interface VoiceMoney {value: number; raw: string; kind: "unit" | "total" | "unlabeled"}
+
+/** Total-price wording ("一共 / 总价 / 合计") is kept apart from per-card prices. */
+function extractMoney(text: string): VoiceMoney | undefined {
+  const patterns: Array<[VoiceMoney["kind"], RegExp]> = [
+    ["total", new RegExp(`(?:总价|一共|总共|合计|总计|打包价|打包)\\s*[:：]?\\s*${MONEY_NUMBER}\\s*(?:元|块)?`)],
+    ["unit", new RegExp(`(?:每张|每片|每台|每个|单价|收购价|采购价|售价|销售价|报价|价格|成本价|预算|成交价)\\s*[:：]?\\s*${MONEY_NUMBER}\\s*(?:元|块)?`)],
+    ["unlabeled", new RegExp(`[￥¥]\\s*${MONEY_NUMBER}\\s*(?:元|块)?`)],
+    ["unlabeled", new RegExp(`[，,、]\\s*${MONEY_NUMBER}\\s*(?:元|块)?(?=\\s*(?:[，,。]|微信|支付宝|现金|银行卡|店保|闲鱼|抖音|$))`)],
+  ];
+  for (const [kind, pattern] of patterns) {
+    const match = text.match(pattern);
+    const value = match?.[1] ? parseVoiceAmount(match[1]) : undefined;
+    if (match && value !== undefined) return {value, raw: match[0], kind};
+  }
   return undefined;
 }
 
-function splitPurchaseLinesByExplicitUnitTraits(text: string, quantity: number, productQueryText: string, candidates: ReturnType<typeof findVoiceProductCandidates>, buyPrice: number | undefined) {
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+/** Converts the spoken amount into a per-card price; a total is spread evenly with a warning. */
+function unitPriceFor(money: VoiceMoney | undefined, quantity: number, issues: VoiceIssue[], field: string) {
+  if (!money) return undefined;
+  if (money.kind === "total" && quantity > 1) {
+    issues.push({field, level: "warning", message: `按总价 ¥${money.value} 平均到每张 ¥${roundMoney(money.value / quantity)}，请核对`});
+    return roundMoney(money.value / quantity);
+  }
+  if (money.kind === "unlabeled" && quantity > 1) {
+    issues.push({field, level: "warning", message: "没有说明是单价还是总价，已按每张价格处理，请核对"});
+  }
+  return money.value;
+}
+
+function splitPurchaseLinesByExplicitUnitTraits(text: string, quantity: number, productQueryText: string, match: VoiceProductMatch, buyPrice: number | undefined) {
   const descriptors = text.split(/[，,、。；;]/)
     .map((clause) => clause.trim())
     .filter((clause) => /[零〇洞一幺二两三四五六七八九十\d.]+\s*(?:张|片|台|个|件)/.test(clause)
@@ -146,19 +218,16 @@ function splitPurchaseLinesByExplicitUnitTraits(text: string, quantity: number, 
   if (descriptors.length < 2) return null;
   const quantities = descriptors.map((clause) => extractQuantity(clause, []));
   if (quantities.reduce((total, value) => total + value, 0) !== quantity) return null;
-  return descriptors.map((clause, index) => {
-    const matchedProduct = candidates.length === 1 ? candidates[0] : undefined;
-    return {
-      productQuery: productQueryText,
-      candidates,
-      ...(matchedProduct ? {productId: matchedProduct.id} : {}),
-      quantity: quantities[index] || 1,
-      ...(buyPrice === undefined ? {} : {buyPrice}),
-      ...(inferVoiceCondition(clause) ? {condition: inferVoiceCondition(clause)} : {}),
-      ...(inferVoiceFullBox(clause) === undefined ? {} : {fullBox: inferVoiceFullBox(clause)}),
-      ...(inferVoiceRepaired(clause) === undefined ? {} : {repaired: inferVoiceRepaired(clause)}),
-    };
-  });
+  return descriptors.map((clause, index) => ({
+    productQuery: productQueryText,
+    candidates: match.candidates,
+    ...(match.matchedId ? {productId: match.matchedId} : {}),
+    quantity: quantities[index] || 1,
+    ...(buyPrice === undefined ? {} : {buyPrice}),
+    ...(inferVoiceCondition(clause) ? {condition: inferVoiceCondition(clause)} : {}),
+    ...(inferVoiceFullBox(clause) === undefined ? {} : {fullBox: inferVoiceFullBox(clause)}),
+    ...(inferVoiceRepaired(clause) === undefined ? {} : {repaired: inferVoiceRepaired(clause)}),
+  }));
 }
 
 function extractSnTail(text: string) {
@@ -166,19 +235,108 @@ function extractSnTail(text: string) {
   return match?.[1];
 }
 
-function ruleParse(text: string, scene: VoiceResolvedScene, state: VoiceParseContext): VoiceParseResult {
+function contactsFromText(text: string) {
+  const contacts: {phone?: string; wechat?: string; qq?: string} = {};
+  for (const [placeholder, value] of redactVoicePersonalData(text).replacements) {
+    if (placeholder.startsWith("<PHONE_") && !contacts.phone) contacts.phone = value;
+    if (placeholder.startsWith("<WECHAT_") && !contacts.wechat) contacts.wechat = value;
+    if (placeholder.startsWith("<QQ_") && !contacts.qq) contacts.qq = value;
+  }
+  return contacts;
+}
+
+function isPersonalPurchaseSource(sourceType: string | undefined) {
+  return Boolean(sourceType && purchasePersonalSourceValues.includes(sourceType as (typeof purchasePersonalSourceValues)[number]));
+}
+
+function purchasePartnerPool(sourceType: string | undefined, state: VoiceParseContext): Array<{id: string; name: string; lastDealTime?: string}> {
+  return isPersonalPurchaseSource(sourceType) ? state.customers : state.vendors;
+}
+
+function partnerDraft<T extends {id: string; name: string; lastDealTime?: string}>(name: string, pool: T[]) {
+  const candidates = partnerCandidates(name, pool, 5);
+  const matchedId = exactPartnerId(name, pool);
+  return {query: name, candidates, ...(matchedId ? {matchedId} : {})};
+}
+
+export interface VoiceParseOptionsForUser {
+  /** Whether the caller may see cost-derived hints (the `showCost` permission). */
+  canViewCost?: boolean;
+  /** Whether the caller may see reference selling prices (the `showProfit` permission). */
+  canViewProfit?: boolean;
+}
+
+/** Mirrors publicState's product projection: hidden price fields never leave the server. */
+function projectDraftForUser(result: VoiceParseResult, options: VoiceParseOptionsForUser): VoiceParseResult {
+  if (!result.purchase) return result;
+  const lines = result.purchase.lines.map((line) => ({
+    ...line,
+    candidates: line.candidates.map(({refBuyPrice, refSellPrice, ...candidate}) => ({
+      ...candidate,
+      ...(options.canViewCost && refBuyPrice !== undefined ? {refBuyPrice} : {}),
+      ...(options.canViewProfit && refSellPrice !== undefined ? {refSellPrice} : {}),
+    })),
+  }));
+  return {...result, purchase: {...result.purchase, lines}};
+}
+
+type PurchaseLine = NonNullable<VoiceParseResult["purchase"]>["lines"][number];
+type SalesLine = NonNullable<VoiceParseResult["sales"]>["lines"][number];
+
+function purchasePriceIssues(lines: PurchaseLine[], state: VoiceParseContext, options: VoiceParseOptionsForUser): VoiceIssue[] {
+  // The deviation hint is derived from the reference purchase price, which only showCost users see.
+  if (!options.canViewCost) return [];
   const issues: VoiceIssue[] = [];
-  const query = productQuery(text);
-  const productCandidates = findVoiceProductCandidates(query, state.products, 10);
-  const matchedProduct = productCandidates.length === 1 ? productCandidates[0] : undefined;
-  const quantity = extractQuantity(text, issues);
-  const amount = extractMoney(text);
-  const candidateName = partnerQuery(text, scene);
-  const customers = partnerCandidates(candidateName, state.customers, 5);
-  const vendors = partnerCandidates(candidateName, state.vendors, 5);
-  const result: VoiceParseResult = {
-    parseId: randomUUID(), scene, transcript: text, source: "rules", issues,
+  for (const line of lines) {
+    const product = line.productId ? state.products.find((item) => item.id === line.productId) : undefined;
+    if (line.buyPrice !== undefined && product?.refBuyPrice && Math.abs(line.buyPrice - product.refBuyPrice) / product.refBuyPrice > 0.3) {
+      issues.push({field: "buyPrice", level: "warning", message: "采购价与商品参考回收价偏差超过 30%，请复核"});
+      break;
+    }
+  }
+  return issues;
+}
+
+function salesPriceIssues(lines: SalesLine[], state: VoiceParseContext, options: VoiceParseOptionsForUser): VoiceIssue[] {
+  // Cost-derived hints reveal purchase cost, so they are only produced for showCost users.
+  if (!options.canViewCost) return [];
+  const issues: VoiceIssue[] = [];
+  for (const line of lines) {
+    if (line.sellPrice === undefined) continue;
+    const match = matchVoiceProducts(line.productQuery, state.products, 10);
+    const reference = match.matchedId ? state.products.find((item) => item.id === match.matchedId) : undefined;
+    if (reference?.refBuyPrice && line.sellPrice < reference.refBuyPrice) {
+      issues.push({field: "sellPrice", level: "error", message: "销售价低于商品参考采购价，请复核"});
+      break;
+    }
+    const candidateIds = new Set(match.candidates.map((candidate) => candidate.id));
+    const stock = state.inventory?.filter((item) => candidateIds.has(item.productId) && ["已入库", "已上架"].includes(item.status)) || [];
+    if (stock.length && stock.every((item) => line.sellPrice !== undefined && line.sellPrice < item.costPrice)) {
+      issues.push({field: "sellPrice", level: "error", message: "销售价低于匹配库存的成本价，请复核"});
+      break;
+    }
+  }
+  return issues;
+}
+
+function purchasePayment(text: string, lines: PurchaseLine[], money: VoiceMoney | undefined) {
+  const method = inferVoicePaymentMethod(text);
+  const status = inferVoicePaidStatus(text);
+  if (!method && !status && !money) return undefined;
+  const lineTotal = lines.every((line) => line.buyPrice !== undefined)
+    ? roundMoney(lines.reduce((total, line) => total + (line.buyPrice || 0) * line.quantity, 0))
+    : undefined;
+  const paidAmount = status === "已付款" ? (money?.kind === "total" ? money.value : lineTotal) : undefined;
+  return {
+    ...(method && purchasePaymentMethodValues.includes(method as never) ? {method} : {}),
+    ...(status ? {status} : {}),
+    ...(paidAmount === undefined ? {} : {paidAmount}),
   };
+}
+
+function ruleParse(text: string, scene: VoiceResolvedScene, state: VoiceParseContext, options: VoiceParseOptionsForUser): VoiceParseResult {
+  const issues: VoiceIssue[] = [];
+  const result: VoiceParseResult = {parseId: randomUUID(), scene, transcript: text, source: "rules", issues};
   if (!scene) {
     issues.push({field: "scene", level: "warning", message: "未判断出录入场景，请选择采购、销售或新建客户"});
     return result;
@@ -187,52 +345,54 @@ function ruleParse(text: string, scene: VoiceResolvedScene, state: VoiceParseCon
     result.customer = {rawTextForQuickCapture: text};
     return result;
   }
+  const money = extractMoney(text);
+  // Contacts and the spoken price are removed before product matching so a phone number,
+  // WeChat ID or "19000" can never become a required product token.
+  const productText = redactVoicePersonalData(money ? text.replace(money.raw, " ") : text).text.replace(/<[A-Z]+_\d+>/g, " ");
+  const query = productQuery(productText);
+  const match = matchVoiceProducts(query, state.products, 10);
+  const quantity = extractQuantity(text, issues);
+  const partnerName = partnerQuery(text, scene);
+  const contacts = contactsFromText(text);
+
   if (scene === "purchase") {
-    const buyPrice = amount;
     const sourceType = inferVoicePurchaseSource(text);
-    const purchasePartners = sourceType && purchasePersonalSourceValues.includes(sourceType as (typeof purchasePersonalSourceValues)[number]) ? customers : vendors;
-    const product = matchedProduct;
-    const purchaseLines = query || productCandidates.length ? splitPurchaseLinesByExplicitUnitTraits(text, quantity, query, productCandidates, buyPrice) || [{
+    const buyPrice = unitPriceFor(money, quantity, issues, "buyPrice");
+    const lines: PurchaseLine[] = query || match.candidates.length ? splitPurchaseLinesByExplicitUnitTraits(text, quantity, query, match, buyPrice) || [{
       productQuery: query,
-      candidates: productCandidates,
-      ...(product ? {productId: product.id} : {}),
+      candidates: match.candidates,
+      ...(match.matchedId ? {productId: match.matchedId} : {}),
       quantity,
       ...(buyPrice === undefined ? {} : {buyPrice}),
       ...(inferVoiceCondition(text) ? {condition: inferVoiceCondition(text)} : {}),
       ...(inferVoiceFullBox(text) === undefined ? {} : {fullBox: inferVoiceFullBox(text)}),
       ...(inferVoiceRepaired(text) === undefined ? {} : {repaired: inferVoiceRepaired(text)}),
     }] : [];
-    if (buyPrice !== undefined && product?.refBuyPrice && Math.abs(buyPrice - product.refBuyPrice) / product.refBuyPrice > 0.3) {
-      issues.push({field: "buyPrice", level: "warning", message: "采购价与商品参考回收价偏差超过 30%，请复核"});
-    }
+    issues.push(...purchasePriceIssues(lines, state, options));
+    const payment = purchasePayment(text, lines, money);
     result.purchase = {
       ...(sourceType ? {sourceType} : {}),
-      partner: {query: candidateName, candidates: purchasePartners, ...(purchasePartners.length === 1 ? {matchedId: purchasePartners[0]?.id} : {}), ...(phoneFromText(text) ? {phone: phoneFromText(text)} : {})},
-      lines: purchaseLines,
-      ...((inferVoicePaymentMethod(text) || inferVoicePaidStatus(text) || buyPrice !== undefined) ? {payment: {
-        ...(inferVoicePaymentMethod(text) ? {method: inferVoicePaymentMethod(text)} : {}),
-        ...(inferVoicePaidStatus(text) ? {status: inferVoicePaidStatus(text)} : {}),
-        ...(inferVoicePaidStatus(text) === "已付款" && buyPrice !== undefined ? {paidAmount: buyPrice * quantity} : {}),
-      }} : {}),
+      partner: {...partnerDraft(partnerName, purchasePartnerPool(sourceType, state)), ...(contacts.phone ? {phone: contacts.phone} : {})},
+      lines,
+      ...(payment ? {payment} : {}),
     };
     return result;
   }
-  const sellPrice = amount;
-  const salesCandidates = customers;
-  if (sellPrice !== undefined && productCandidates.length === 1 && productCandidates[0]?.refBuyPrice && sellPrice < productCandidates[0].refBuyPrice) {
-    issues.push({field: "sellPrice", level: "error", message: "销售价低于商品参考采购价，请复核"});
-  }
-  const inventoryForProduct = state.inventory?.filter((item) => productCandidates.some((candidate) => candidate.id === item.productId && ["已入库", "已上架"].includes(item.status))) || [];
-  if (sellPrice !== undefined && inventoryForProduct.length && inventoryForProduct.every((item) => sellPrice < item.costPrice)) {
-    issues.push({field: "sellPrice", level: "error", message: "销售价低于匹配库存的成本价，请复核"});
-  }
+
+  const sellPrice = unitPriceFor(money, quantity, issues, "sellPrice");
+  const lines: SalesLine[] = query || match.candidates.length ? [{productQuery: query, ...(extractSnTail(text) ? {snTail: extractSnTail(text)} : {}), ...(sellPrice === undefined ? {} : {sellPrice}), quantity}] : [];
+  issues.push(...salesPriceIssues(lines, state, options));
+  const paymentMethod = inferVoicePaymentMethod(text);
+  const channel = inferVoiceChannel(text);
+  const isPaid = inferVoiceSalesPaid(text);
+  const aftersalesTerms = inferVoiceAftersalesTerms(text);
   result.sales = {
-    customer: {query: candidateName, candidates: salesCandidates, ...(salesCandidates.length === 1 ? {matchedId: salesCandidates[0]?.id} : {})},
-    lines: query || productCandidates.length ? [{productQuery: query, ...(extractSnTail(text) ? {snTail: extractSnTail(text)} : {}), ...(sellPrice === undefined ? {} : {sellPrice}), quantity}] : [],
-    ...(inferVoiceChannel(text) ? {channel: inferVoiceChannel(text)} : {}),
-    ...(inferVoicePaymentMethod(text) && salesPaymentMethodValues.includes(inferVoicePaymentMethod(text) as never) ? {paymentMethod: inferVoicePaymentMethod(text) as VoiceParseResult["sales"] extends {paymentMethod?: infer T} ? T : never} : {}),
-    ...(inferVoiceSalesPaid(text) === undefined ? {} : {isPaid: inferVoiceSalesPaid(text)}),
-    ...(inferVoiceAftersalesTerms(text) ? {aftersalesTerms: inferVoiceAftersalesTerms(text)} : {}),
+    customer: {...partnerDraft(partnerName, state.customers), ...contacts},
+    lines,
+    ...(channel ? {channel} : {}),
+    ...(paymentMethod && salesPaymentMethodValues.includes(paymentMethod as never) ? {paymentMethod: paymentMethod as (typeof salesPaymentMethodValues)[number]} : {}),
+    ...(isPaid === undefined ? {} : {isPaid}),
+    ...(aftersalesTerms ? {aftersalesTerms} : {}),
   };
   return result;
 }
@@ -253,32 +413,88 @@ export function redactVoicePersonalData(text: string): RedactedText {
   return {text: redacted, replacements};
 }
 
-function restorePersonalData(value: unknown, replacements: Map<string, string>): unknown {
-  if (typeof value === "string") {
-    return [...replacements.entries()].reduce((result, [placeholder, original]) => result.replaceAll(placeholder, original), value);
-  }
-  if (Array.isArray(value)) return value.map((item) => restorePersonalData(item, replacements));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, restorePersonalData(item, replacements)]));
-  return value;
+const voiceModelLineSchema = z.object({
+  productQuery: z.string().max(120).nullish(),
+  quantity: z.number().int().min(1).max(500).nullish(),
+  unitPrice: z.number().nonnegative().max(10_000_000).nullish(),
+  condition: z.string().nullish(),
+  fullBox: z.boolean().nullish(),
+  repaired: z.boolean().nullish(),
+  snTail: z.string().max(32).nullish(),
+});
+
+/**
+ * The model returns this small flat shape, never ERP IDs. The server re-matches every product and
+ * partner name against the catalogue, so the model cannot select records the rules would not.
+ */
+const voiceModelOutputSchema = z.object({
+  sourceType: z.string().nullish(),
+  partnerName: z.string().max(40).nullish(),
+  lines: z.array(voiceModelLineSchema).max(30).nullish(),
+  paymentMethod: z.string().nullish(),
+  paymentStatus: z.string().nullish(),
+  isPaid: z.boolean().nullish(),
+  channel: z.string().nullish(),
+  aftersalesTerms: z.string().max(80).nullish(),
+});
+type VoiceModelOutput = z.infer<typeof voiceModelOutputSchema>;
+
+const VOICE_MODEL_SYSTEM_PROMPT = [
+  "你是 ERP 语音录入草稿解析器，只把一句门店口语整理成 JSON，不执行、不提交任何操作。",
+  "只返回一个 JSON 对象，字段固定如下（不知道的字段填 null，不要增加其他字段）：",
+  '{"sourceType":null,"partnerName":null,"lines":[{"productQuery":"","quantity":1,"unitPrice":null,"condition":null,"fullBox":null,"repaired":null,"snTail":null}],"paymentMethod":null,"paymentStatus":null,"isPaid":null,"channel":null,"aftersalesTerms":null}',
+  "规则：",
+  "1. productQuery 写商品的品牌、系列和型号原话，例如“华硕 4090 猛禽”；如果 catalogue 里有对应写法，尽量照抄 catalogue 中的名称。不要写数量、价格、成色。",
+  "2. unitPrice 是每张的价格（数字）。如果只说了总价，用总价除以数量。",
+  "3. 同型号多张卡如果成色、包装或维修情况不同，必须拆成多行，每行写自己的 quantity 和属性。",
+  "4. partnerName 是对方的称呼原话（如“李四”“老王”），只能取原文中出现的人名；partners 列表里有相同写法时照抄。",
+  "5. sourceType / paymentMethod / paymentStatus / channel / condition 只能从 enums 里选，选不出就填 null。",
+  "6. 采购场景用 paymentStatus，销售场景用 isPaid（true 已收款 / false 未收款）。",
+  "7. 文本里形如 <PHONE_1> 的占位符原样保留，不要猜测其内容。",
+].join("\n");
+
+export interface VoiceModelRequest {
+  text: string;
+  scene: Exclude<VoiceResolvedScene, null | "customer">;
+  catalogue: string[];
+  partners: string[];
+  enums: {
+    sourceTypes: readonly string[];
+    purchasePaymentMethods: readonly string[];
+    purchasePaymentStatuses: readonly string[];
+    salesChannels: readonly string[];
+    salesPaymentMethods: readonly string[];
+    conditions: readonly string[];
+  };
 }
 
-function modelCandidateRequest(text: string, scene: VoiceResolvedScene, context: VoiceParseContext): VoiceModelRequest {
-  const sortPartners = <T extends {id: string; name: string; lastDealTime?: string}>(items: T[]) => [...items]
-    .sort((left, right) => String(right.lastDealTime || "").localeCompare(String(left.lastDealTime || "")))
-    .slice(0, 5).map(({id, name}) => ({id, name}));
+export type VoiceModelParser = (request: VoiceModelRequest) => Promise<unknown>;
+
+/** Raised when the provider answered but its content is not usable JSON; this never triggers the cooldown. */
+class VoiceModelFormatError extends Error {}
+
+/**
+ * Only names that the rules already matched against the spoken words are sent: the model helps
+ * normalise wording and split lines, and unrelated customers or products never leave the server.
+ */
+function modelRequestFor(redactedText: string, scene: "purchase" | "sales", fallback: VoiceParseResult): VoiceModelRequest {
+  const lines = fallback.purchase?.lines || [];
+  const catalogue = scene === "purchase"
+    ? [...new Set(lines.flatMap((line) => line.candidates.map((candidate) => candidate.name)))].slice(0, 10)
+    : [];
+  const partners = (scene === "purchase" ? fallback.purchase?.partner.candidates : fallback.sales?.customer.candidates) || [];
   return {
-    text, scene,
-    candidates: {
-      products: rankProducts(context.products).slice(0, 10).map(({id, name}) => ({id, name})),
-      customers: sortPartners(context.customers), vendors: sortPartners(context.vendors),
-      enums: {
-        sourceTypes: sourceTypeValues,
-        purchasePaymentMethods: purchasePaymentMethodValues,
-        purchasePaymentStatuses: purchasePaymentStatusValues,
-        salesChannels: salesChannelValues,
-        salesPaymentMethods: salesPaymentMethodValues,
-        conditions: inventoryConditionValues,
-      },
+    text: redactedText,
+    scene,
+    catalogue,
+    partners: partners.map((partner) => partner.name).slice(0, 5),
+    enums: {
+      sourceTypes: sourceTypeValues,
+      purchasePaymentMethods: purchasePaymentMethodValues,
+      purchasePaymentStatuses: purchasePaymentStatusValues,
+      salesChannels: salesChannelValues,
+      salesPaymentMethods: salesPaymentMethodValues,
+      conditions: inventoryConditionValues,
     },
   };
 }
@@ -297,7 +513,7 @@ async function callConfiguredAi(request: VoiceModelRequest): Promise<unknown> {
       response_format: {type: "json_object"},
       temperature: 0,
       messages: [
-        {role: "system", content: "你是 ERP 语音录入草稿解析器。只返回 JSON，不执行或提交操作。候选商品、客户、供应商只可返回清单中的 id，不能编造 id；不确定时用 null。所有枚举必须从给定值选择。数量不明确按 1 返回并在 issues 标记 warning。采购同型号商品如果逐张成色、包装或维修描述不同，必须拆成多个 lines，并为每行保留对应数量和属性；明确的每张价格可逐行沿用。返回完整 VoiceParseResult，不得扩展业务字段。"},
+        {role: "system", content: VOICE_MODEL_SYSTEM_PROMPT},
         {role: "user", content: JSON.stringify(request)},
       ],
     }),
@@ -307,109 +523,126 @@ async function callConfiguredAi(request: VoiceModelRequest): Promise<unknown> {
   if (!payload || typeof payload !== "object" || !("choices" in payload) || !Array.isArray(payload.choices)) throw new Error("AI provider response was malformed");
   const choice = payload.choices[0];
   if (!choice || typeof choice !== "object" || !("message" in choice) || !choice.message || typeof choice.message !== "object" || !("content" in choice.message) || typeof choice.message.content !== "string") throw new Error("AI provider content was malformed");
-  return JSON.parse(choice.message.content);
+  try {
+    return JSON.parse(choice.message.content);
+  } catch {
+    throw new VoiceModelFormatError("AI provider content was not JSON");
+  }
 }
 
-function constrainModelIds(candidate: unknown, products: VoiceModelRequest["candidates"]["products"], customers: VoiceModelRequest["candidates"]["customers"], vendors: VoiceModelRequest["candidates"]["vendors"], fallback: VoiceParseResult) {
-  if (!candidate || typeof candidate !== "object") return candidate;
-  const value = structuredClone(candidate) as Record<string, unknown>;
-  const allowed = (list: Array<{id: string; name: string}>) => new Set(list.map((item) => item.id));
-  const allowedProducts = allowed(products), allowedCustomers = allowed(customers), allowedVendors = allowed(vendors);
-  const sanitizePartner = (target: unknown, ids: Set<string>) => {
-    if (!target || typeof target !== "object") return;
-    const partner = target as Record<string, unknown>;
-    partner.candidates = [];
-    if (typeof partner.matchedId === "string" && !ids.has(partner.matchedId)) delete partner.matchedId;
-  };
-  if (value.purchase && typeof value.purchase === "object") {
-    const purchase = value.purchase as Record<string, unknown>;
-    if (fallback.purchase?.sourceType) purchase.sourceType = fallback.purchase.sourceType;
-    const sourceType = typeof purchase.sourceType === "string" ? purchase.sourceType : "";
-    const isPersonalSource = purchasePersonalSourceValues.includes(sourceType as (typeof purchasePersonalSourceValues)[number]);
-    sanitizePartner(purchase.partner, isPersonalSource ? allowedCustomers : allowedVendors);
-    if (Array.isArray(purchase.lines)) purchase.lines = purchase.lines.map((line) => {
-      if (!line || typeof line !== "object") return line;
-      const row = line as Record<string, unknown>;
-      row.candidates = [];
-      if (typeof row.productId === "string" && !allowedProducts.has(row.productId)) delete row.productId;
-      return row;
-    });
-  }
-  if (value.sales && typeof value.sales === "object") {
-    const sales = value.sales as Record<string, unknown>;
-    sanitizePartner(sales.customer, allowedCustomers);
-  }
-  return value;
+function enumValue<T extends string>(values: readonly T[], value: string | null | undefined): T | undefined {
+  return value && values.includes(value as T) ? value as T : undefined;
 }
 
-function materializeModelResult(value: unknown, fallback: VoiceParseResult, context: VoiceParseContext): VoiceParseResult | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const output = structuredClone(value) as Record<string, unknown>;
-  output.parseId = fallback.parseId;
-  output.transcript = fallback.transcript;
-  output.scene = fallback.scene;
-  output.source = "ai";
-  const products = new Map(context.products.map((product) => [product.id, productCandidate(product)]));
-  const customers = new Map(context.customers.map((item) => [item.id, {id: item.id, name: item.name}]));
-  const vendors = new Map(context.vendors.map((item) => [item.id, {id: item.id, name: item.name}]));
-  const attachPartnerCandidates = (target: unknown, index: Map<string, {id: string; name: string}>) => {
-    if (!target || typeof target !== "object") return;
-    const partner = target as Record<string, unknown>;
-    const query = typeof partner.query === "string" ? partner.query : "";
-    const matched = [...index.values()].filter((item) => query && item.name.toLowerCase().includes(query.toLowerCase()));
-    const allowed = (matched.length ? matched : [...index.values()]).slice(0, 5);
-    partner.candidates = allowed;
-    if (typeof partner.matchedId !== "string" || !index.has(partner.matchedId) || !allowed.some((item) => item.id === partner.matchedId)) delete partner.matchedId;
-  };
-  if (output.purchase && typeof output.purchase === "object") {
-    const purchase = output.purchase as Record<string, unknown>;
-    if (fallback.purchase?.sourceType) purchase.sourceType = fallback.purchase.sourceType;
-    const sourceType = typeof purchase.sourceType === "string" ? purchase.sourceType : "";
-    const partnerIndex = purchasePersonalSourceValues.includes(sourceType as (typeof purchasePersonalSourceValues)[number]) ? customers : vendors;
-    attachPartnerCandidates(purchase.partner, partnerIndex);
-    if (purchase.partner && typeof purchase.partner === "object") {
-      const partner = purchase.partner as Record<string, unknown>;
-      if (fallback.purchase?.partner.phone) partner.phone = fallback.purchase.partner.phone;
-      else delete partner.phone;
-    }
-    if (Array.isArray(purchase.lines)) purchase.lines = purchase.lines.map((line) => {
-      if (!line || typeof line !== "object") return line;
-      const row = line as Record<string, unknown>;
-      const query = typeof row.productQuery === "string" ? row.productQuery : "";
-      const candidates = findVoiceProductCandidates(query, context.products, 10);
-      row.candidates = candidates;
-      if (typeof row.productId !== "string" || !products.has(row.productId) || !candidates.some((candidate) => candidate.id === row.productId)) delete row.productId;
-      return row;
-    });
+function cleanModelText(value: string | null | undefined, maxLength: number) {
+  return (value || "").replace(/<[A-Z]+_\d+>/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+/**
+ * Builds the draft from the model's flat answer on top of the rule draft. Everything identifying a
+ * record (product, partner) is re-derived by the same matching the rules use, and fields the model
+ * left empty keep the rule value.
+ */
+function mergeModelDraft(model: VoiceModelOutput, fallback: VoiceParseResult, state: VoiceParseContext, options: VoiceParseOptionsForUser): VoiceParseResult | undefined {
+  const issues = fallback.issues.filter((issue) => issue.field !== "buyPrice" && issue.field !== "sellPrice");
+  const result: VoiceParseResult = {parseId: fallback.parseId, scene: fallback.scene, transcript: fallback.transcript, source: "ai", issues};
+  const modelLines = (model.lines || []).filter((line) => cleanModelText(line.productQuery, 120) || line.unitPrice != null);
+
+  if (fallback.scene === "purchase" && fallback.purchase) {
+    const sourceType = fallback.purchase.sourceType || enumValue(sourceTypeValues, model.sourceType);
+    const partnerName = cleanModelText(model.partnerName, 40) || fallback.purchase.partner.query;
+    const lines: PurchaseLine[] = modelLines.length ? modelLines.map((line) => {
+      const query = cleanModelText(line.productQuery, 120) || fallback.purchase?.lines[0]?.productQuery || "";
+      const match = matchVoiceProducts(query, state.products, 10);
+      const condition = enumValue(inventoryConditionValues, line.condition);
+      return {
+        productQuery: query,
+        candidates: match.candidates,
+        ...(match.matchedId ? {productId: match.matchedId} : {}),
+        quantity: line.quantity ?? 1,
+        ...(line.unitPrice == null ? {} : {buyPrice: roundMoney(line.unitPrice)}),
+        ...(condition ? {condition} : {}),
+        ...(line.fullBox == null ? {} : {fullBox: line.fullBox}),
+        ...(line.repaired == null ? {} : {repaired: line.repaired}),
+      };
+    }) : fallback.purchase.lines;
+    const method = enumValue(purchasePaymentMethodValues, model.paymentMethod) || fallback.purchase.payment?.method;
+    const status = enumValue(purchasePaymentStatusValues, model.paymentStatus) || fallback.purchase.payment?.status;
+    const lineTotal = lines.every((line) => line.buyPrice !== undefined)
+      ? roundMoney(lines.reduce((total, line) => total + (line.buyPrice || 0) * line.quantity, 0))
+      : undefined;
+    const paidAmount = status === "已付款" ? lineTotal : undefined;
+    issues.push(...purchasePriceIssues(lines, state, options));
+    result.purchase = {
+      ...(sourceType ? {sourceType} : {}),
+      partner: {...partnerDraft(partnerName, purchasePartnerPool(sourceType, state)), ...(fallback.purchase.partner.phone ? {phone: fallback.purchase.partner.phone} : {})},
+      lines,
+      ...(method || status ? {payment: {...(method ? {method} : {}), ...(status ? {status} : {}), ...(paidAmount === undefined ? {} : {paidAmount})}} : {}),
+    };
+  } else if (fallback.scene === "sales" && fallback.sales) {
+    const partnerName = cleanModelText(model.partnerName, 40) || fallback.sales.customer.query;
+    const {query: _query, candidates: _candidates, matchedId: _matchedId, ...contacts} = fallback.sales.customer;
+    const lines: SalesLine[] = modelLines.length ? modelLines.map((line) => {
+      const snTail = cleanModelText(line.snTail, 32);
+      return {
+        productQuery: cleanModelText(line.productQuery, 120) || fallback.sales?.lines[0]?.productQuery || "",
+        ...(snTail ? {snTail} : {}),
+        ...(line.unitPrice == null ? {} : {sellPrice: roundMoney(line.unitPrice)}),
+        quantity: line.quantity ?? 1,
+      };
+    }) : fallback.sales.lines;
+    const channel = enumValue(salesChannelValues, model.channel) || fallback.sales.channel;
+    const paymentMethod = enumValue(salesPaymentMethodValues, model.paymentMethod) || fallback.sales.paymentMethod;
+    const isPaid = model.isPaid ?? fallback.sales.isPaid;
+    const aftersalesTerms = cleanModelText(model.aftersalesTerms, 80) || fallback.sales.aftersalesTerms;
+    issues.push(...salesPriceIssues(lines, state, options));
+    result.sales = {
+      customer: {...partnerDraft(partnerName, state.customers), ...contacts},
+      lines,
+      ...(channel ? {channel} : {}),
+      ...(paymentMethod ? {paymentMethod} : {}),
+      ...(isPaid === undefined ? {} : {isPaid}),
+      ...(aftersalesTerms ? {aftersalesTerms} : {}),
+    };
+  } else {
+    return undefined;
   }
-  if (output.sales && typeof output.sales === "object") attachPartnerCandidates((output.sales as Record<string, unknown>).customer, customers);
-  const parsed = voiceParseResultSchema.safeParse(output);
+  const parsed = voiceParseResultSchema.safeParse(result);
   return parsed.success ? parsed.data as VoiceParseResult : undefined;
 }
 
 export interface ParseVoiceOptions {modelParser?: VoiceModelParser; now?: () => number}
 
-export async function parseVoiceText(input: {text: string; scene: "purchase" | "sales" | "customer" | "auto"; state: VoiceParseContext}, options: ParseVoiceOptions = {}): Promise<VoiceParseResult> {
+export async function parseVoiceText(input: {text: string; scene: "purchase" | "sales" | "customer" | "auto"; state: VoiceParseContext} & VoiceParseOptionsForUser, options: ParseVoiceOptions = {}): Promise<VoiceParseResult> {
   const text = input.text.trim();
   const scene = input.scene === "auto" ? resolveVoiceScene(text) : input.scene;
-  const fallback = ruleParse(text, scene, input.state);
+  const userOptions: VoiceParseOptionsForUser = {canViewCost: input.canViewCost === true, canViewProfit: input.canViewProfit === true};
+  const draft = await parseVoiceDraft(text, scene, input.state, userOptions, options);
+  return projectDraftForUser(draft, userOptions);
+}
+
+async function parseVoiceDraft(text: string, scene: VoiceResolvedScene, state: VoiceParseContext, userOptions: VoiceParseOptionsForUser, options: ParseVoiceOptions): Promise<VoiceParseResult> {
+  const fallback = ruleParse(text, scene, state, userOptions);
+  // Customer drafts go through quick-capture, and an unknown scene has nothing to refine.
+  if (scene !== "purchase" && scene !== "sales") return fallback;
   const modelParser = options.modelParser || (process.env.AI_API_KEY?.trim() ? callConfiguredAi : undefined);
   if (!modelParser) return fallback;
   const now = options.now?.() ?? Date.now();
   if (AI_PROVIDER_FAILURE_COOLDOWN_MS > 0 && now - aiProviderFailureAt < AI_PROVIDER_FAILURE_COOLDOWN_MS) return fallback;
   const redacted = redactVoicePersonalData(text);
-  const request = modelCandidateRequest(redacted.text, scene, input.state);
+  let response: unknown;
   try {
-    const response = await modelParser(request);
-    const constrained = constrainModelIds(response, request.candidates.products, request.candidates.customers, request.candidates.vendors, fallback);
-    const restored = restorePersonalData(constrained, redacted.replacements);
-    const materialized = materializeModelResult(restored, fallback, input.state);
-    if (!materialized) throw new Error("AI provider payload did not match the voice schema");
-    return materialized;
-  } catch {
-    aiProviderFailureAt = now;
+    response = await modelParser(modelRequestFor(redacted.text, scene, fallback));
+  } catch (error) {
+    // Only an unreachable or failing provider pauses AI parsing; a bad answer affects this request alone.
+    if (!(error instanceof VoiceModelFormatError)) aiProviderFailureAt = now;
     return fallback;
   }
+  // Contacts in the draft always come from the rules on the original text; placeholders the model
+  // echoes back are stripped rather than restored, so no contact can drift into a name or product.
+  const parsed = voiceModelOutputSchema.safeParse(response);
+  if (!parsed.success) return fallback;
+  return mergeModelDraft(parsed.data, fallback, state, userOptions) || fallback;
 }
 
 export function resetVoiceAiCooldownForTests() { aiProviderFailureAt = 0; }

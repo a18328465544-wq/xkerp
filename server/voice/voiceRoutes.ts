@@ -10,6 +10,7 @@ import {asrProviderForConfig, type AsrProvider} from "./asrProvider.ts";
 import {voiceParseRequestSchema} from "./voiceSchema.ts";
 import {parseVoiceText, type VoiceParseContext} from "./voiceParse.ts";
 import {resolveVoiceScene} from "./voiceIntent.ts";
+import {PRODUCT_ALIASES} from "./productAliases.ts";
 
 type VoiceRequest = AuthenticatedRequest<SystemUserAccount>;
 export interface VoiceSafeEvent {userId: string; durationMs: number; provider: string; latencyMs: number; success: boolean}
@@ -20,7 +21,11 @@ interface VoiceRouteDependencies {
   getConfig?: () => VoiceRuntimeConfig;
   createProvider?: (config: VoiceRuntimeConfig) => AsrProvider | undefined;
   hasMenuPermission: (req: Request, menuId: string) => boolean;
-  parseText?: (input: {text: string; scene: VoiceScene; state: VoiceParseContext}) => Promise<VoiceParseResult>;
+  parseText?: (input: {text: string; scene: VoiceScene; state: VoiceParseContext; canViewCost?: boolean; canViewProfit?: boolean}) => Promise<VoiceParseResult>;
+  /** Whether the caller holds the showCost permission; cost-derived hints are withheld otherwise. */
+  canViewCost?: (req: Request) => boolean;
+  /** Whether the caller holds the showProfit permission; reference selling prices are withheld otherwise. */
+  canViewProfit?: (req: Request) => boolean;
   sendApiError: (req: Request, res: Response, status: number, code: string, message: string) => void;
   logSafeEvent?: (event: VoiceSafeEvent) => void;
 }
@@ -60,7 +65,8 @@ export function createVoiceAsrHints(state: Pick<AppState, "products">): string[]
   const products = [...state.products].sort((left, right) =>
     String(right.lastDealTime || "").localeCompare(String(left.lastDealTime || "")) ||
     (right.currentStock || 0) - (left.currentStock || 0));
-  const values = new Set<string>();
+  // Shop slang ("猛禽", "魔龙") goes first: these are the words generic ASR models miss most.
+  const values = new Set<string>(PRODUCT_ALIASES.map((item) => item.alias));
   for (const product of products) {
     [product.name, product.brand, product.model, product.version, product.vram].forEach((value) => {if (value?.trim()) values.add(value.trim());});
     if (values.size >= 200) break;
@@ -89,6 +95,18 @@ export function registerVoiceRoutes(app: Express, dependencies: VoiceRouteDepend
     },
     handler: (req, res) => dependencies.sendApiError(req, res, 429, "VOICE_RATE_LIMITED", "语音识别请求过于频繁，请稍后再试"),
   });
+  // Parsing may call the paid LLM, so it is throttled per user just like transcription.
+  const parseRateLimitMiddleware = rateLimit({
+    windowMs: 60_000,
+    limit: getConfig().rateLimitPerMinute,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+      const userId = (req as VoiceRequest).authUser?.id;
+      return userId || ipKeyGenerator(req.ip || "");
+    },
+    handler: (req, res) => dependencies.sendApiError(req, res, 429, "VOICE_RATE_LIMITED", "语音解析请求过于频繁，请稍后再试"),
+  });
   const parseWav = express.raw({type: "audio/wav", limit: "1.5mb"});
 
   app.get("/api/voice/status", dependencies.requireAnyMenu(VOICE_MENU_IDS), (_req, res) => {
@@ -97,7 +115,7 @@ export function registerVoiceRoutes(app: Express, dependencies: VoiceRouteDepend
     res.json({data: {asrEnabled: providerReady, aiEnabled: config.aiEnabled, maxSeconds: config.maxSeconds}});
   });
 
-  app.post("/api/voice/parse", dependencies.requireAnyMenu(VOICE_MENU_IDS), dependencies.asyncRoute(async (req, res) => {
+  app.post("/api/voice/parse", dependencies.requireAnyMenu(VOICE_MENU_IDS), parseRateLimitMiddleware, dependencies.asyncRoute(async (req, res) => {
     const command = voiceParseRequestSchema.safeParse(req.body);
     if (!command.success) {
       dependencies.sendApiError(req, res, 400, "VOICE_PARSE_INVALID", "请输入不超过 2000 字的有效录入内容");
@@ -113,7 +131,7 @@ export function registerVoiceRoutes(app: Express, dependencies: VoiceRouteDepend
     }
     const state = dependencies.getState();
     const context: VoiceParseContext = {products: state.products, customers: state.customers, vendors: state.vendors, inventory: state.inventory};
-    const result = await parseText({text: command.data.text, scene: command.data.scene, state: context});
+    const result = await parseText({text: command.data.text, scene: command.data.scene, state: context, canViewCost: dependencies.canViewCost?.(req) === true, canViewProfit: dependencies.canViewProfit?.(req) === true});
     res.json({data: result});
   }));
 

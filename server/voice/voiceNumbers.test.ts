@@ -9,6 +9,9 @@ test("voice numeric parser handles common Chinese money and quantity forms", () 
     ["一千", 1_000], ["八千二", 8_200], ["八千零二", 8_002], ["七千八", 7_800],
     ["一万", 10_000], ["一万九", 19_000], ["一万九千五", 19_500], ["1.95万", 19_500],
     ["两张", 2], ["五块", 5], ["￥8,200", 8_200], ["一亿二万三", 100_023_000],
+    // Mixed forms produced by ASR inverse text normalisation.
+    ["1万9", 19_000], ["1万9千", 19_000], ["1万9千5", 19_500], ["2千5", 2_500], ["2千50", 2_050],
+    ["1万零5百", 10_500], ["3千", 3_000], ["19000", 19_000], ["1.9万", 19_000],
   ];
   for (const [input, expected] of cases) assert.equal(parseVoiceAmount(input), expected, input);
 });
