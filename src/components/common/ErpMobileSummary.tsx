@@ -6,8 +6,9 @@ import {useErpPhone} from "@/src/hooks/useErpViewport";
 
 /** Keep the full, authoritative metrics available without pushing a phone's
  * search results below the fold. No calculations or copies of data live here. */
-export function ErpMobileSummary({label = "查看统计", summary, children}: {label?: string; summary?: ReactNode; children: ReactNode}) {
-  const phone = useErpPhone();
+export function ErpMobileSummary({label = "查看统计", summary, children, phone: phoneProp}: {label?: string; summary?: ReactNode; children: ReactNode; phone?: boolean}) {
+  const phoneFromHook = useErpPhone();
+  const phone = phoneProp ?? phoneFromHook;
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   if (phone) return <section data-erp-component="mobile-summary"><Button type="button" variant="ghost" size="sm" className="w-full justify-between" onClick={() => setExpanded(true)} aria-expanded={expanded}><span>{summary || label}</span><span className="flex items-center gap-1 text-xs">{summary ? label : null}<ChevronDown className="h-4 w-4" /></span></Button><ErpDialogShell open={expanded} onOpenChange={setExpanded} title={label} mobilePresentation="sheet">{children}</ErpDialogShell></section>;

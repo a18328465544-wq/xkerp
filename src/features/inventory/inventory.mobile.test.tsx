@@ -31,18 +31,20 @@ test("inventory phone preserves full identity, SN, warehouse and existing adapte
 });
 
 test("inventory dock uses original filter controller, scanner and permission-checked task routes", () => {
-  assert.match(source, /hidden=\{filtersOpen \|\| statsOpen \|\| scanOpen \|\| Boolean\(detailId\) \|\| ledgerOpen\}/);
+  assert.match(source, /search=\{\{value: filters\.keyword/);
+  assert.match(source, /overlayOpen=\{Boolean\(statsOpen \|\| scanOpen \|\| actionsOpen \|\| detailId \|\| ledgerOpen\)\}/);
   assert.match(source, /isPathAllowed\(permissions.allowedMenus, item.path\)/);
   assert.match(source, /<ErpBarcodeScannerDialog[\s\S]+onDetected=\{\(keyword\) => updateFilter\(\{keyword\}\)\}/);
-  assert.match(source, /manualSorting sorting=\{sorting\} onSortingChange=\{onSortingChange\}/);
-  assert.match(source, /onPageChange=\{\(page\) => commitFilters\(\{\.\.\.filters, page\}\)\}/);
+  assert.match(source, /manualSorting: true,[\s\S]+sorting,[\s\S]+onSortingChange,[\s\S]+onPageChange: pagination\.onPageChange,[\s\S]+onPageSizeChange: pagination\.onPageSizeChange/);
+  assert.match(source, /onPageChange: \(page: number\) => commitFilters\(\{\.\.\.filters, page\}\)/);
   assert.doesNotMatch(source, /rows\.filter\(/);
 });
 
 test("mobile-only selection and compact presentation do not rewrite saved desktop visibility", () => {
-  assert.match(source, /columnVisibility=\{phone \? \{\.\.\.columnVisibility, select: selectionMode\} : columnVisibility\}/);
-  assert.match(source, /surface=\{phone \? "plain" : "card"\} mobilePagination="compact"/);
-  assert.match(source, /label="每页条数"/);
+  assert.match(source, /surface="card" density=\{density\} columnVisibility=\{columnVisibility\}/);
+  assert.match(source, /surface="plain" density=\{density\} columnVisibility=\{\{\.\.\.columnVisibility, select: selectionMode\}\}/);
+  assert.match(source, /phonePageSizeOptions=\{\[20, 50, 100\]\}/);
+  assert.match(source, /pagination=\{pagination\}/);
   assert.match(source, /phone \? <><DetailField label="SN"[^\n]+label="库存编号" value=\{item.id\}/);
 });
 

@@ -15,6 +15,7 @@ test("finance detail layout keeps its desktop region order and collapsed analysi
     />,
   );
   const slots = [
+    'data-page-frame="finance"',
     'data-erp-region="page-topbar"',
     'data-erp-region="page-toolbar"',
     'data-finance-layout-slot="metrics"',

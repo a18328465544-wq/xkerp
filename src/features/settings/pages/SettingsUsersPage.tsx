@@ -1,15 +1,13 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ColumnDef} from "@tanstack/react-table";
-import {Filter, Pencil, RefreshCw, ShieldCheck, UserPlus, Users} from "lucide-react";
-import {ErpSearchInput} from "@/src/components/common";
+import {Pencil, ShieldCheck, UserPlus, Users} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {notify} from "@/src/utils/notification";
-import {Button, Card, Select} from "@/src/components/ui";
-import {DashboardSection, ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpFilterBar, ErpMetricCard, ErpMobileRecordRow, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpSettingsPageFrame, ErpStatusBadge, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {Button, Card} from "@/src/components/ui";
+import {DashboardSection, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpListPage, ErpMetricCard, ErpMobileRecordRow, ErpPageError, ErpStatusBadge, type ErpFilterField, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, usersApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import type {SettingsUserItem} from "@/src/types/finance-remaining";
 import {permissionOverrideDescription, toUserMutationValues, UserPermissionDialog, type UserPermissionFormValues} from "../components/UserPermissionDialog";
 
@@ -27,7 +25,6 @@ export function SettingsUsersPage() {
 }
 
 function SettingsUsersContent({users, loading, fetching, error, onRetry, onAuthExpired}: {users: SettingsUserItem[]; loading: boolean; fetching: boolean; error: Error | null; onRetry: () => void; onAuthExpired: () => void}) {
-  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const [keyword, setKeyword] = useState("");
   const [role, setRole] = useState("");
@@ -74,16 +71,40 @@ function SettingsUsersContent({users, loading, fetching, error, onRetry, onAuthE
     {id: "action", header: "操作", size: 150, cell: ({row}) => <div className="flex items-center gap-1"><Button type="button" size="sm" variant="ghost" onClick={(event) => {event.stopPropagation(); setDetail(row.original);}}>详情</Button><Button type="button" size="sm" variant="ghost" onClick={(event) => {event.stopPropagation(); setMutationError(""); setEditor({mode: "edit", user: row.original});}}><Pencil className="h-3.5 w-3.5" />编辑</Button></div>},
   ], []);
   const reset = () => {setKeyword(""); setRole(""); setStatus("");};
-  return <ErpSettingsPageFrame>
-    <ErpPageHeader title="员工权限" subtitle="管理成员账号、角色默认权限与账号级权限，保存后立即生效。" quickStatus={quickStatus} actions={<div className="flex items-center gap-2">{!phone && <Button type="button" size="sm" variant="secondary" onClick={onRetry} disabled={fetching}><RefreshCw className={fetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>}<Button type="button" size="sm" variant="primary" onClick={() => {setMutationError(""); setEditor({mode: "create", user: null});}}><UserPlus className="h-4 w-4" />新增成员</Button></div>} />
-    <MetricsRegion><Metric label="成员总数" value={`${users.length} 人`} detail="当前成员档案" /><Metric label="启用账号" value={`${users.filter((item) => item.enabled).length} 人`} detail="允许登录" tone="success" /><Metric label="停用账号" value={`${users.filter((item) => !item.enabled).length} 人`} detail="不能登录" tone="warning" /><Metric label="账号级覆盖" value={`${users.filter((item) => item.permissionOverrides && Object.keys(item.permissionOverrides).length > 0).length} 人`} detail="可单独调整权限" tone="info" /></MetricsRegion>
-    <ErpPageToolbar><ErpFilterBar actions={<Button type="button" size="sm" variant="ghost" onClick={reset} disabled={!keyword && !role && !status}><Filter className="h-4 w-4" />重置筛选</Button>}><ErpSearchInput className="min-w-64 flex-1" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="姓名、账号、角色或备注" aria-label="搜索员工" /><Select className="w-32" value={role} options={[{value: "", label: "全部角色"}, ...roles]} onValueChange={setRole} aria-label="筛选角色" /><Select className="w-32" value={status} options={[{value: "", label: "全部状态"}, {value: "enabled", label: "启用"}, {value: "disabled", label: "停用"}]} onValueChange={setStatus} aria-label="筛选账号状态" /></ErpFilterBar></ErpPageToolbar>
-    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-    <DashboardSection title="成员列表" description="创建成员、设置角色与账号权限。"><ErpDataTable ariaLabel="员工成员列表" surface={phone ? "plain" : "card"} mobilePagination="compact" columns={columns} data={filtered} getRowId={(row) => row.id} loading={loading} fetching={fetching} error={error} errorTitle="员工列表刷新失败" emptyTitle="暂无员工" emptyDescription="当前筛选条件没有匹配成员。" onRetry={onRetry} onRowClick={setDetail} stickyHeader density="compact" mobileRow={(item) => <ErpMobileRecordRow title={item.displayName} subtitle={item.username} meta={`${item.role}${item.lastLoginTime ? ` · 最近: ${item.lastLoginTime.slice(0, 10)}` : ""}`} status={<ErpStatusBadge label={item.enabled ? "启用" : "停用"} tone={item.enabled ? "success" : "neutral"} />} statusPlacement="title" onOpen={() => setDetail(item)} />} /></DashboardSection>
+  const filterFields: ErpFilterField[] = [
+    {kind: "select", key: "role", label: "角色", value: role, defaultValue: "", options: [{value: "", label: "全部角色"}, ...roles], onChange: setRole},
+    {kind: "select", key: "status", label: "账号状态", value: status, defaultValue: "", options: [{value: "", label: "全部状态"}, {value: "enabled", label: "启用"}, {value: "disabled", label: "停用"}], onChange: setStatus},
+  ];
+  const createMember = () => {setMutationError(""); setEditor({mode: "create", user: null});};
+  return <ErpListPage
+    pageFrame="settings"
+    title="员工权限"
+    phoneTitle="员工"
+    subtitle="管理成员账号、角色默认权限与账号级权限，保存后立即生效。"
+    countLabel={(total) => `${total} 人`}
+    quickStatus={quickStatus}
+    metrics={[
+      <Metric key="total" label="成员总数" value={`${users.length} 人`} detail="当前成员档案" />,
+      <Metric key="enabled" label="启用账号" value={`${users.filter((item) => item.enabled).length} 人`} detail="允许登录" tone="success" />,
+      <Metric key="disabled" label="停用账号" value={`${users.filter((item) => !item.enabled).length} 人`} detail="不能登录" tone="warning" />,
+      <Metric key="overrides" label="账号级覆盖" value={`${users.filter((item) => item.permissionOverrides && Object.keys(item.permissionOverrides).length > 0).length} 人`} detail="可单独调整权限" tone="info" />,
+    ]}
+    search={{value: keyword, onChange: setKeyword, label: "搜索员工", placeholder: "姓名、账号、角色或备注"}}
+    filters={filterFields}
+    onResetFilters={reset}
+    onRefresh={onRetry}
+    refreshing={fetching}
+    primaryAction={{label: "新增成员", icon: <UserPlus className="h-4 w-4" />, onClick: createMember}}
+    tableTitle="成员列表"
+    tableDescription="创建成员、设置角色与账号权限。"
+    tableDensity="compact"
+    table={{ariaLabel: "员工成员列表", columns, data: filtered, getRowId: (row) => row.id, loading, fetching, error, errorTitle: "员工列表刷新失败", emptyTitle: "暂无员工", emptyDescription: "当前筛选条件没有匹配成员。", onRetry, onRowClick: setDetail, stickyHeader: true, mobileRow: (item) => <ErpMobileRecordRow title={item.displayName} subtitle={item.username} meta={`${item.role}${item.lastLoginTime ? ` · 最近: ${item.lastLoginTime.slice(0, 10)}` : ""}`} status={<ErpStatusBadge label={item.enabled ? "启用" : "停用"} tone={item.enabled ? "success" : "neutral"} />} statusPlacement="title" onOpen={() => setDetail(item)} />}}
+    overlayOpen={Boolean(detail || editor)}
+    overlays={<>
     <ErpDetailDrawer modal={false} resizable drawerKey="settings-user-detail" defaultWidth={620} minWidth={500} maxWidth={780} open={Boolean(detail)} onOpenChange={(open) => {if (!open) setDetail(null);}} title={detail?.displayName || "成员详情"} description={detail ? `${detail.role} · ${detail.username}` : undefined} footer={detail ? <div className="flex justify-end"><Button type="button" variant="primary" onClick={() => {setMutationError(""); setEditor({mode: "edit", user: detail});}}>编辑成员权限</Button></div> : undefined}>{detail && <div className="space-y-5"><ErpDetailFactGrid><Fact label="账号" value={detail.username} /><Fact label="角色" value={detail.role} /><Fact label="状态" value={detail.enabled ? "启用" : "停用"} /><Fact label="最近登录" value={detail.lastLoginTime || "未记录"} /></ErpDetailFactGrid><DashboardSection title="权限状态" description="账号级权限会与角色默认权限合并生效。"><div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{permissionOverrideDescription(detail)}</div></DashboardSection>{detail.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{detail.remarks}</p>}</div>}</ErpDetailDrawer>
     <UserPermissionDialog open={Boolean(editor)} mode={editor?.mode || "create"} user={editor?.user || null} pending={mutation.isPending} error={mutationError} onOpenChange={(open) => {if (!open) {setEditor(null); setMutationError("");}}} onSubmit={(values) => {if (editor) mutation.mutate({mode: editor.mode, user: editor.user, values});}} />
-    </ErpPageContent>
-  </ErpSettingsPageFrame>;
+    </>}
+  />;
 }
 
 function Metric({label, value, detail, tone = "neutral"}: {label: string; value: string; detail: string; tone?: "neutral" | "success" | "warning" | "info"}) {return <ErpMetricCard label={label} value={value} detail={detail} tone={tone} valueTone={tone} />;}

@@ -37,13 +37,15 @@
 
 所有页面都必须套用下面四种模板之一。参考实现是客户页：`src/features/customers/pages/CustomerDirectoryPage.tsx`。
 
+> **模板组件（2026-10-10 起）**：列表页用 `ErpListPage`，详情抽屉内容用 `ErpRecordDetail`，开单页用 `ErpMobileWorkflow`。页面只提供数据（标题、计数、`ErpFilterField[]` 筛选、快捷筛选、主操作、表格），下面 M13 / M16 的结构由模板生成，页面里不再写 `useErpPhone` 分支。手机列表行优先在列定义上声明 `meta.mobile`（`title` / `subtitle` / `meta` / `amount` / `status` / `image` / `thumbnail`），表格传 `mobileRow="columns"`；电脑端单元格太复杂时用 `meta.mobileCell` 单独写手机显示。客户页 `CustomerDirectoryPage.tsx` 是第一个迁移完成的页面，其余页面按 [MOBILE_TEMPLATE_PLAN_20261010.md](MOBILE_TEMPLATE_PLAN_20261010.md) 分批迁移。
+
 - **M13 列表页**（单据、库存、客户、商品、财务明细……）
   1. 页头：标题，下面一行小字显示结果数量（只在这里出现一次）；右侧放「筛选」按钮（`secondary` 样式，有生效筛选时显示数字角标）。
   2. `mobileToolbar`：左侧最多 4 个快捷筛选，右侧放排序按钮。
   3. 列表：`ErpDataTable` 传 `surface="plain"`、`mobilePagination="compact"`、`mobileRow`；每一行用 `ErpMobileRecordRow` 渲染，平铺成一整块白色列表面，行与行之间用细分隔线。
   4. 底部：`ErpMobileActionDock`，放搜索框，加上最多 1 个主操作。
   5. 高级筛选条件、每页条数、刷新入口都放进 `ErpDialogShell mobilePresentation="sheet"` 打开的筛选面板。
-  - 功能页面使用 `ErpDataTable` 时必须传 `mobileRow`，或者显式传 `mobileMode="table"` 并写明原因。[lint，由 `check-ui-contracts` 检查]
+  - 功能页面使用 `ErpDataTable` 时必须传 `mobileRow`（函数或 `"columns"`），或者显式传 `mobileMode="table"` 并写明原因。[lint，由 `check-ui-contracts` 检查]
   - 手机上不得出现：刷新按钮、列设置 / 列显示、舒适 / 紧凑密度切换、「查看其余 N 项」、通用卡片（`data-erp-region="mobile-card-header"`）。[浏览器]
 - **M14 开单页**（采购、销售、退货、编辑）：分成「客户 / 来源与商品 → 结算」两步，未显示的步骤保持挂载；每件商品用 `ErpMobileOrderLine` 编辑；底部用 `ErpSubmitBar` 显示合计和**唯一**的主操作；物流、质保、备注、附件折叠在结算步骤里。[人工]
 - **M15 选择器**：少量固定选项用 `Select` 的底部菜单；需要搜索的内容（客户、商品、库存、单据）用全屏选择器，搜索区固定，只有结果区滚动；打开选择器时不自动弹出键盘。[人工]

@@ -28,3 +28,10 @@ test("finance metric regions can opt into a full-width primary layout", () => {
   assert.match(markup, /data-metric-parity="even"/);
   assert.match(markup, /data-mobile-primary-full-width="true"/);
 });
+
+test("metric cards passed as one fragment still count as separate grid items", () => {
+  const cards = <><div>sales</div><div>settled</div><div>records</div><div>pending</div></>;
+  const markup = renderToStaticMarkup(<MetricsRegion>{cards}</MetricsRegion>);
+  assert.match(markup, /data-metric-count="4"/);
+  assert.equal(markup.match(/<div>/g)?.length, 4);
+});

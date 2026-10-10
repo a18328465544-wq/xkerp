@@ -5,17 +5,14 @@ import { Filter, RefreshCw, Undo2 } from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import { Button, Card, Select } from "@/src/components/ui";
 import {
-  ErpFinancePageFrame,
   ErpDetailFact,
   ErpDetailFactGrid,
   ErpDetailDrawer,
   ErpFilterBar,
   ErpMetricCard,
   ErpMobileRecordRow,
-  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
   ErpPageToolbar,
@@ -36,7 +33,6 @@ import type {
 } from "@/src/types/returns";
 import type { FinanceReturnReconcileItem } from "@/src/types/finance-remaining";
 import { formatCurrency } from "@/src/lib/format";
-import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
 import { FinanceTableRegion } from "../components/FinanceTableRegion";
 import { isAnyMenuAllowed, isMenuAllowed } from "@/src/utils/menu";
 import {matchesReturnReconcileType} from "../finance-return-reconcile.filters";
@@ -151,7 +147,6 @@ function FinanceReturnReconcileContent({
   error: Error | null;
   onRetry: () => void;
 }) {
-  const phone = useErpPhone();
   const navigate = useNavigate();
   const [detail, setDetail] = useState<FinanceReturnReconcileItem | null>(null);
   const items = useMemo(
@@ -307,7 +302,7 @@ function FinanceReturnReconcileContent({
         subtitle="集中处理日结异常与退货对账，保留原有权限和业务边界。"
         quickStatus={quickStatus}
         actions={
-          !phone ? (
+          <div className="hidden md:flex">
             <Button
               type="button"
               size="sm"
@@ -320,17 +315,8 @@ function FinanceReturnReconcileContent({
               />
               刷新
             </Button>
-          ) : undefined
+          </div>
         }
-      />
-  );
-  const tabs = (
-      <FinanceSectionTabs
-        label="财务核对分类"
-        items={[
-          {label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")},
-          {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)},
-        ]}
       />
   );
   const metrics = (
@@ -410,6 +396,8 @@ function FinanceReturnReconcileContent({
       </ErpFilterBar>
     </ErpPageToolbar>
   );
+  const phoneFilters = <div className="space-y-4"><label className="block space-y-2 text-sm"><span>退货类型</span><Select className="w-full" value={filters.type} options={[{value: "all", label: "全部类型"}, {value: "销售退货", label: "销售退货"}, {value: "进货退货", label: "进货退货"}]} onValueChange={(value) => update({type: value as typeof filters.type})} aria-label="退货类型" /></label><label className="block space-y-2 text-sm"><span>状态</span><Select className="w-full" value={filters.status} options={statuses} onValueChange={(value) => update({status: value as typeof filters.status})} aria-label="退货状态" /></label></div>;
+  const phoneSearch = <ErpSearchInput className="w-full" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="退货单、关联单据、往来方、商品或 SN" aria-label="搜索退货对账" />;
   const table = (
       <FinanceTableRegion
         title="对账记录"
@@ -501,20 +489,7 @@ function FinanceReturnReconcileContent({
       </ErpDetailDrawer>
   );
 
-  if (!phone) return <FinanceDetailPageLayout header={header} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} metrics={metrics} table={table}>{detailDrawer}</FinanceDetailPageLayout>;
-
-  return (
-    <ErpFinancePageFrame>
-      {header}
-      {tabs}
-      {metrics}
-      {filterBar}
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-        {table}
-        {detailDrawer}
-      </ErpPageContent>
-    </ErpFinancePageFrame>
-  );
+  return <FinanceDetailPageLayout header={header} title="财务核对" phoneTitle="退货对账" countLabel={(count) => `${count} 条`} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} phoneFilters={phoneFilters} phoneSearch={phoneSearch} additionalActiveFilterCount={Number(filters.type !== "all") + Number(Boolean(filters.status))} onResetFilters={() => setFilters(defaultFilters)} metrics={metrics} table={table} overlayOpen={Boolean(detail)}>{detailDrawer}</FinanceDetailPageLayout>;
 }
 function Metric({
   label,
