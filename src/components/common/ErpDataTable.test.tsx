@@ -154,3 +154,10 @@ test("empty phone meta values do not leave a dangling separator", () => {
   assert.match(markup, /erp-phone-record-meta"><span class="contents"><span class="contents">13800000000/);
   assert.doesNotMatch(markup, / · /);
 });
+
+test("responsive surface is plain on phones and a card elsewhere", () => {
+  const phone = renderToStaticMarkup(<ErpDataTable columns={customerColumns} data={customers} getRowId={(row) => row.id} mobileRow="columns" surface="responsive" phone compactViewport />);
+  const desktop = renderToStaticMarkup(<ErpDataTable columns={customerColumns} data={customers} getRowId={(row) => row.id} mobileRow="columns" surface="responsive" phone={false} compactViewport={false} />);
+  assert.match(phone, /data-surface="plain"/);
+  assert.doesNotMatch(desktop, /data-surface="plain"/);
+});

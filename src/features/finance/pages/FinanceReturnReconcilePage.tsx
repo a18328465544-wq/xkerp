@@ -5,17 +5,14 @@ import {Filter, RefreshCw, Undo2} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState} from "react";
 import {useNavigate} from "@tanstack/react-router";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {Button, Card, Select} from "@/src/components/ui";
 import {
-  ErpFinancePageFrame,
   ErpDetailFact,
   ErpDetailFactGrid,
   ErpDetailDrawer,
   ErpFilterBar,
   ErpMetricCard,
   ErpMobileRecordRow,
-  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
   ErpPageToolbar,
@@ -36,7 +33,6 @@ import type {
 } from "@/src/types/returns";
 import type {FinanceReturnReconcileItem} from "@/src/types/finance-remaining";
 import {formatCurrency} from "@/src/lib/format";
-import {FinanceSectionTabs} from "../components/FinanceSectionTabs";
 import {FinanceTableRegion} from "../components/FinanceTableRegion";
 import {isAnyMenuAllowed, isMenuAllowed} from "@/src/utils/menu";
 import {matchesReturnReconcileType} from "../finance-return-reconcile.filters";
@@ -151,7 +147,6 @@ function FinanceReturnReconcileContent({
   error: Error | null;
   onRetry: () => void;
 }) {
-  const phone = useErpPhone();
   const navigate = useNavigate();
   const [detail, setDetail] = useState<FinanceReturnReconcileItem | null>(null);
   const items = useMemo(
@@ -300,7 +295,6 @@ function FinanceReturnReconcileContent({
         subtitle="集中处理日结异常与退货对账，保留原有权限和业务边界。"
         quickStatus={quickStatus}
         actions={
-          !phone ? (
             <Button
               type="button"
               size="sm"
@@ -313,17 +307,7 @@ function FinanceReturnReconcileContent({
               />
               刷新
             </Button>
-          ) : undefined
         }
-      />
-  );
-  const tabs = (
-      <FinanceSectionTabs
-        label="财务核对分类"
-        items={[
-          {label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")},
-          {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)},
-        ]}
       />
   );
   const metrics = (
@@ -494,20 +478,7 @@ function FinanceReturnReconcileContent({
       </ErpDetailDrawer>
   );
 
-  if (!phone) return <FinanceDetailPageLayout header={header} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} metrics={metrics} table={table}>{detailDrawer}</FinanceDetailPageLayout>;
-
-  return (
-    <ErpFinancePageFrame>
-      {header}
-      {tabs}
-      {metrics}
-      {filterBar}
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-        {table}
-        {detailDrawer}
-      </ErpPageContent>
-    </ErpFinancePageFrame>
-  );
+  return <FinanceDetailPageLayout header={header} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} metrics={metrics} table={table}>{detailDrawer}</FinanceDetailPageLayout>;
 }
 function Metric({
   label,

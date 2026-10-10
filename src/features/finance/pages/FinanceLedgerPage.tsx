@@ -388,7 +388,7 @@ function ExpenseShareCard({rows}: {rows: ExpenseRow[]}) {
 function LedgerTableCard({rows, summary, total, page, pageSize, query, columns, columnVisibility, onColumnVisibilityChange, density, onDensityChange, onPageChange, onPageSizeChange, activeFilters, onRowClick, phone}: {rows: FinanceLedgerItem[]; summary: ReturnType<typeof summarizeFinanceLedgerPage>; total: number; page: number; pageSize: number; query: LedgerQuery; columns: ReturnType<typeof createFinanceLedgerColumns>; columnVisibility: VisibilityState; onColumnVisibilityChange: OnChangeFn<VisibilityState>; density: "comfortable" | "compact"; onDensityChange: (value: "comfortable" | "compact") => void; onPageChange: (page: number) => void; onPageSizeChange: (pageSize: number) => void; activeFilters: number; onRowClick: (item: FinanceLedgerItem) => void; phone?: boolean}) {
   const content = (
     <ErpDataTable
-      surface={phone ? "plain" : "card"}
+      surface="responsive"
       mobilePagination="compact"
       mobileRow={(item) => {
         const {isIncome, formatted, colorClass} = formatLedgerChangeAmount(item.changeAmount);

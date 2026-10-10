@@ -60,7 +60,7 @@ function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; on
 
   const crmTable = (
     <ErpDataTable
-      surface={phone ? "plain" : "card"}
+      surface="responsive"
       mobilePagination="compact"
       mobileShowDetailAction={false}
       mobileToolbar={({openSorting, sortLabel, descending}) => (

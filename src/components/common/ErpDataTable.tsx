@@ -57,7 +57,8 @@ export interface ErpDataTableProps<TData> {
   density?: ErpTableDensity;
   stickyHeader?: boolean;
   footer?: ReactNode;
-  surface?: "card" | "plain";
+  /** `responsive` is plain on phones (a flat list) and a card on wider screens. */
+  surface?: "card" | "plain" | "responsive";
   /** Accessible name for the table; each feature should provide a business-specific label. */
   ariaLabel?: string;
   /** Phone and tablet lists use compact cards below 1024px; dense entry grids may keep their internal horizontal table. */
@@ -201,7 +202,8 @@ export function ErpDataTable<TData>({
     if (!enableSelection && Object.keys(rowSelection).length > 0) setRowSelection({});
   }, [enableSelection, rowSelection, setRowSelection]);
 
-  const wrapSurface = (content: ReactNode, className = "") => surface === "plain"
+  const resolvedSurface = surface === "responsive" ? (phone ? "plain" : "card") : surface;
+  const wrapSurface = (content: ReactNode, className = "") => resolvedSurface === "plain"
     ? <div data-erp-component="data-table" data-surface="plain" className={cn("min-w-0", className)}>{content}</div>
     : <Card data-erp-component="data-table" className={className}>{content}</Card>;
 

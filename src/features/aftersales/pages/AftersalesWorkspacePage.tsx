@@ -57,7 +57,7 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
 
   const aftersalesTable = (
     <ErpDataTable
-      surface={phone ? "plain" : "card"}
+      surface="responsive"
       mobilePagination="compact"
       mobileShowDetailAction={false}
       mobileToolbar={({openSorting, sortLabel, descending}) => (
