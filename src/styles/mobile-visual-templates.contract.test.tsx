@@ -78,7 +78,7 @@ test("order template keeps fixed touch areas and one summary-primary action rhyt
 });
 
 test("visual polish uses phone-only tokens, quiet summaries and restrained selection", () => {
-  const polish = blocks.find((block) => block.includes('.erp-entity-thumbnail {'));
+  const polish = blocks.find((block) => /^\s*\.erp-entity-thumbnail \{/m.test(block));
   assert.ok(polish);
   for (const selector of [".erp-entity-thumbnail {", '.erp-order-checkout input[readonly]', '.erp-detail-hero-amount > strong', 'button[data-erp-button-variant="primary"][aria-pressed="true"]']) {
     assert.ok(polish.includes(selector), `${selector} must be inside the phone block`);
