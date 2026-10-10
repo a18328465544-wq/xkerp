@@ -9,6 +9,11 @@
       "file": "src/types/accounting.ts",
       "name": "accountingEventStatusValues",
       "reason": "保留共享账务事件状态枚举；不能因为当前页面未直接读取而删除领域公共契约。"
+    },
+    {
+      "file": "src/components/ui/chart-primitives.tsx",
+      "name": "StackedStructureBar",
+      "reason": "docs/CHART_USAGE_RULES.md 指定的占比图标准组件（替代饼图/环形图）；资金账户旧侧栏移除后暂时无页面引用，但属于图表体系的公共组件。"
     }
   ]
 }
