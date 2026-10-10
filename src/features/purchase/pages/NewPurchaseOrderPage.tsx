@@ -37,6 +37,8 @@ import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWork
 import {formatCurrency} from "@/src/lib/format";
 import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
 import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
+import {useVoiceDraftHandoff} from "@/src/app/voice/useVoiceDraftHandoff";
+import {VoiceHandoffConflictDialog} from "@/src/app/voice/VoiceHandoffConflictDialog";
 import {createPurchasePasteRowsFromVoice, type PurchasePasteRow} from "@/src/features/purchase/utils/parse-purchase-paste";
 import {applyPurchaseVoiceDraftToForm} from "@/src/features/purchase/utils/apply-purchase-voice-draft";
 import {findExactVoicePurchasePartner, voicePurchasePartnerType, voiceSourceTypeMatchesPartner} from "@/src/features/purchase/utils/voice-purchase-partner";
@@ -73,6 +75,9 @@ export function NewPurchaseOrderPage() {
 
 function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthExpired: () => void}) {
   const {active} = useWorkspaceTabActivity();
+  const {handoff, setHandoff} = useVoiceDraftHandoff("purchase", active);
+  const handledHandoffId = useRef("");
+  const [handoffConflictOpen, setHandoffConflictOpen] = useState(false);
   const [settlementEntry, setSettlementEntry] = useState<PaymentEntryFeedback>({ready: true});
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -181,7 +186,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     const options = {
       defaults: createPurchaseLineDefaults(),
       products: referenceData.products,
-      existingItems: values.items || [],
+      existingItems: getValues("items") || [],
       canEnterCost: canEnterPurchaseCost,
       canEnterEstimatedSell: permissions.showProfit,
     };
@@ -203,7 +208,36 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     }
     setVoicePurchaseDraft({purchase: result.purchase, transcript, rows, partnerOptions, partnerLookupFailed});
     setPasteOpen(true);
-  }, [canEnterPurchaseCost, canReadCustomers, canReadProducts, canReadVendors, permissions.showProfit, referenceData, referencePermissions, values.items]);
+  }, [canEnterPurchaseCost, canReadCustomers, canReadProducts, canReadVendors, getValues, permissions.showProfit, referenceData, referencePermissions]);
+
+  useEffect(() => {
+    if (!active || !referenceData || !handoff || handledHandoffId.current === handoff.parseId) return;
+    handledHandoffId.current = handoff.parseId;
+    if (isDirty) setHandoffConflictOpen(true);
+    else void applyVoicePurchase(handoff.result, handoff.transcript).then(() => setHandoff(null)).catch((cause: unknown) => notify.warning(cause instanceof Error ? cause.message : "语音采购草稿无法打开，请重新尝试。"));
+  }, [active, applyVoicePurchase, handoff, isDirty, referenceData, setHandoff]);
+
+  const applyGlobalPurchaseHandoff = async (replace: boolean) => {
+    if (!handoff) return;
+    if (replace) {
+      clearMediaRef.current?.();
+      updateMediaState({pending: false, failed: false, uploaded: 0, total: 0});
+      reset(createPurchaseDefaults(operatorName));
+      setSelectedSource(null);
+      setRestoredDraftActive(false);
+      discardDraft();
+      setPaymentResetVersion((version) => version + 1);
+      setVoicePurchaseDraft(null);
+      setPasteOpen(false);
+    }
+    setHandoffConflictOpen(false);
+    try {
+      await applyVoicePurchase(handoff.result, handoff.transcript);
+      setHandoff(null);
+    } catch (cause) {
+      notify.warning(cause instanceof Error ? cause.message : "语音采购草稿无法打开，请重新尝试。");
+    }
+  };
 
   const selectProduct = (index: number, productId: string, productOverride?: PurchaseProductOption) => {
     const product = productOverride || referenceData?.products.find((item) => item.id === productId);
@@ -435,6 +469,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     }} />
     <PurchasePartnerCreateDialog open={Boolean(partnerCreate)} target={partnerCreate?.target || null} initialName={partnerCreate?.initialName || ""} initialContact={partnerInitialContact} onOpenChange={(open) => {if (!open) {setPartnerCreate(null); setPartnerInitialContact(""); voiceSourceTypeAfterCreate.current = undefined;}}} onCreated={handleCreatedSource} />
     <ErpProductTemplateDialog open={Boolean(productCreate)} product={null} initialValues={productCreateInitialValues} showCost={permissions.showCost} showProfit={permissions.showProfit} pending={productCreateMutation.isPending} error={productCreateMutation.error ? quickCreateError(productCreateMutation.error, "商品模板") : undefined} onOpenChange={(open) => {if (!open) {setProductCreate(null); productCreateMutation.reset();}}} onSubmit={submitProductTemplate} />
+    <VoiceHandoffConflictDialog open={handoffConflictOpen} sceneLabel="采购草稿" onAppend={() => void applyGlobalPurchaseHandoff(false)} onReplace={() => void applyGlobalPurchaseHandoff(true)} onCancel={() => {setHandoffConflictOpen(false); setHandoff(null);}} />
     </ErpPageContent>
   </ErpTransactionPageFrame>;
 }

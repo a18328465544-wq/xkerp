@@ -16,6 +16,8 @@ export interface VoiceCaptureButtonProps {
   onAudio: (audio: Blob) => void | Promise<void>;
   onRecorderChange?: (snapshot: VoiceRecorderSnapshot) => void;
   onUnavailable?: (reason: string) => void;
+  compactTrigger?: boolean;
+  triggerLabel?: string;
   className?: string;
 }
 
@@ -24,7 +26,7 @@ function clockLabel(milliseconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = false, onAudio, onRecorderChange, onUnavailable, className}: VoiceCaptureButtonProps) {
+export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = false, onAudio, onRecorderChange, onUnavailable, compactTrigger = false, triggerLabel, className}: VoiceCaptureButtonProps) {
   const recorder = useVoiceRecorder({maxSeconds, onComplete: onAudio});
   const [cancelArmed, setCancelArmed] = useState(false);
   const pointerStartRef = useRef<{id: number; y: number} | null>(null);
@@ -94,7 +96,7 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
   const icon = mode === "hold"
     ? recording ? <MicOff className="h-4 w-4" aria-hidden="true" /> : <Mic className="h-4 w-4" aria-hidden="true" />
     : recording ? <Square className="h-3.5 w-3.5" aria-hidden="true" /> : <Mic className="h-4 w-4" aria-hidden="true" />;
-  const label = cancelArmed ? "松开取消" : mode === "hold" ? recording ? "松开结束" : "按住说话" : recording ? "结束录音" : "语音录入";
+  const label = cancelArmed ? "松开取消" : recording ? mode === "hold" ? "松开结束" : "结束录音" : triggerLabel || (mode === "hold" ? "按住说话" : "语音录入");
 
   return <div className="inline-flex min-w-0 flex-col items-start gap-1" data-erp-component="voice-capture">
     <Button
@@ -108,6 +110,7 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
       data-voice-entry-trigger
       title={mode === "toggle" ? "语音录入（Alt+V）" : "按住说话，向上滑动取消"}
       className={cn(mode === "hold" && "min-h-[var(--erp-mobile-touch-size)] touch-none select-none [-webkit-touch-callout:none]", recording && "text-white", className)}
+      size={compactTrigger ? "icon" : undefined}
       onClick={mode === "toggle" ? toggle : undefined}
       onContextMenu={mode === "hold" ? (event) => event.preventDefault() : undefined}
       onPointerDown={mode === "hold" ? onPointerDown : undefined}
@@ -116,15 +119,16 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
       onPointerCancel={mode === "hold" ? (event) => finishHold(event, true) : undefined}
       onLostPointerCapture={mode === "hold" ? (event) => finishHold(event, cancelArmed) : undefined}
     >
-      {icon}<span>{busy ? "处理中…" : label}</span>
+      {icon}<span className={compactTrigger ? "sr-only" : undefined}>{busy ? "处理中…" : label}</span>
     </Button>
-    {recording && <div role="status" aria-live="polite" className="flex items-center gap-2 text-xs text-[var(--erp-color-text-secondary)]">
+    {recording && !compactTrigger && <div role="status" aria-live="polite" className="flex items-center gap-2 text-xs text-[var(--erp-color-text-secondary)]">
       <span className="flex h-3 items-end gap-0.5" aria-label="录音音量">
         {[0.42, 0.72, 1, 0.63, 0.36].map((scale, index) => <i key={index} aria-hidden="true" className="w-1 rounded-full bg-[var(--erp-color-warning)] transition-[height]" style={{height: `${Math.max(3, recorder.level * 12 * scale)}px`}} />)}
       </span>
       <span>{clockLabel(recorder.elapsedMs)} / {clockLabel(maxSeconds * 1_000)}</span>
       {mode === "hold" && <span>{cancelArmed ? "松开取消" : "向上滑动取消"}</span>}
     </div>}
+    {recording && compactTrigger && <span role="status" aria-live="polite" className="sr-only">正在录音 {clockLabel(recorder.elapsedMs)}</span>}
     {recorder.error && <p id="voice-capture-error" role="status" className="max-w-sm text-xs text-[var(--erp-color-warning)]">{recorder.error}</p>}
   </div>;
 }

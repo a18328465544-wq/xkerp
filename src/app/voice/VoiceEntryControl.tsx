@@ -1,11 +1,12 @@
 import {useCallback, useEffect, useRef, useState, type ReactNode} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {FileText, Loader2, Mic} from "lucide-react";
-import {Button} from "@/src/components/ui";
+import {Button, Select} from "@/src/components/ui";
 import {queryKeys, voiceApi, type VoiceStatus} from "@/src/services/api";
-import type {VoiceParseResult, VoiceScene} from "@/src/types/voice";
+import type {VoiceParseResult, VoiceResolvedScene, VoiceScene} from "@/src/types/voice";
 import {VoiceCaptureButton, type VoiceCaptureMode, type VoiceRecorderSnapshot} from "@/src/features/voice/VoiceCaptureButton";
 import {VoiceDraftPanel} from "@/src/features/voice/VoiceDraftPanel";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 
 export function useVoiceStatus() {
   return useQuery<VoiceStatus>({
@@ -18,9 +19,14 @@ export function useVoiceStatus() {
 }
 
 export interface VoiceEntryControlProps {
-  scene: Exclude<VoiceScene, "auto">;
+  scene: VoiceScene;
   mode?: VoiceCaptureMode;
   label?: string;
+  compactTrigger?: boolean;
+  allowedScenes?: readonly Exclude<VoiceResolvedScene, null>[];
+  initialDraft?: {result: VoiceParseResult; transcript: string} | null;
+  initialDraftPresentation?: "desktop" | "phone" | "all";
+  applyLabel?: string;
   onTranscript?: (transcript: string) => void | Promise<void>;
   onTextFallback?: () => void;
   onParsed?: (result: VoiceParseResult) => void | Promise<void>;
@@ -30,9 +36,10 @@ export interface VoiceEntryControlProps {
   className?: string;
 }
 
-export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, onTextFallback, onParsed, onApply, renderPreview, applyDisabled = false, className}: VoiceEntryControlProps) {
+export function VoiceEntryControl({scene, mode = "toggle", label, compactTrigger = false, allowedScenes, initialDraft, initialDraftPresentation = "all", applyLabel = "应用到当前表单草稿", onTranscript, onTextFallback, onParsed, onApply, renderPreview, applyDisabled = false, className}: VoiceEntryControlProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const status = useVoiceStatus();
+  const phone = useErpPhone();
   const [open, setOpen] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [parsed, setParsed] = useState<VoiceParseResult | null>(null);
@@ -40,14 +47,22 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
   const [statusText, setStatusText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState<VoiceRecorderSnapshot>({state: "idle", elapsedMs: 0, level: 0});
+  const selectedSceneRef = useRef<Exclude<VoiceResolvedScene, null> | "">(scene === "auto" ? "" : scene);
+  const [selectedScene, setSelectedScene] = useState<Exclude<VoiceResolvedScene, null> | "">(scene === "auto" ? "" : scene);
+  const onParsedRef = useRef(onParsed);
+  const initialDraftIdRef = useRef<string | null>(null);
+  onParsedRef.current = onParsed;
 
-  const parseText = useCallback(async (text: string) => {
-    if (scene === "customer") return;
+  const parseText = useCallback(async (text: string, requestedScene: VoiceScene = scene) => {
     setBusy(true);
     setStatusText("解析中…");
     setError(null);
     try {
-      const result = await voiceApi.parse({text, scene});
+      const result = await voiceApi.parse({text, scene: requestedScene});
+      if (result.scene) {
+        selectedSceneRef.current = result.scene;
+        setSelectedScene(result.scene);
+      }
       if (onParsed) setStatusText("正在匹配表单候选…");
       await onParsed?.(result);
       setParsed(result);
@@ -110,6 +125,31 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
     }
   }, [onApply, parsed, transcript]);
 
+  useEffect(() => {
+    const draft = initialDraft;
+    if (initialDraftPresentation === "desktop" && phone || initialDraftPresentation === "phone" && !phone) return;
+    if (!draft || initialDraftIdRef.current === draft.result.parseId) return;
+    initialDraftIdRef.current = draft.result.parseId;
+    setOpen(true);
+    setTranscript(draft.transcript);
+    setParsed(null);
+    setError(null);
+    setBusy(true);
+    setStatusText("正在匹配表单候选…");
+    void (async () => {
+      try {
+        await onParsedRef.current?.(draft.result);
+        setParsed(draft.result);
+        setStatusText("");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "草稿候选准备失败，请重试。");
+        setStatusText("");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [initialDraft?.result.parseId, initialDraftPresentation, phone]);
+
   const handleUnavailable = useCallback((reason: string) => {
     setError(reason);
     if (onTextFallback) onTextFallback();
@@ -131,14 +171,24 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mode]);
 
-  const sceneLabel = scene === "purchase" ? "采购单" : scene === "sales" ? "销售单" : "客户线索";
+  const sceneLabel = scene === "auto" ? "快捷录入" : scene === "purchase" ? "采购单" : scene === "sales" ? "销售单" : "客户线索";
   const asrEnabled = status.data?.asrEnabled === true;
   const fallbackLabel = mode === "hold" ? "改用文字" : label || "文字录入";
+  const availableSceneOptions = (allowedScenes || ["purchase", "sales", "customer"]).map((value) => ({value, label: value === "purchase" ? "采购开单" : value === "sales" ? "销售开单" : "新建客户"}));
+  const unresolvedScene = scene === "auto" && parsed?.scene === null;
+  const parseSelectedScene = () => {
+    const requested = selectedSceneRef.current;
+    if (!requested || (allowedScenes && !allowedScenes.includes(requested))) {
+      setError("请选择当前账号有权限的录入场景。");
+      return;
+    }
+    void parseText(transcript.trim(), requested);
+  };
 
   return <div ref={rootRef} className={className} data-erp-component="voice-entry-control">
-    {status.isPending ? <Button type="button" variant="secondary" disabled data-voice-entry-trigger aria-label="正在检查语音输入能力"><Loader2 className="h-4 w-4 animate-spin" />检查语音…</Button>
-      : asrEnabled ? <VoiceCaptureButton mode={mode} maxSeconds={status.data?.maxSeconds || 30} onAudio={handleAudio} onRecorderChange={setRecording} onUnavailable={handleUnavailable} className={mode === "hold" ? "min-h-12 w-full" : "min-h-[var(--erp-control-height)]"} />
-      : <Button type="button" variant="secondary" data-voice-entry-trigger aria-keyshortcuts={mode === "toggle" ? "Alt+V" : undefined} title={mode === "toggle" ? "文字录入（语音识别未启用）· Alt+V" : "改用文字输入"} onClick={openTextFallback}><FileText className="h-4 w-4" />{fallbackLabel}</Button>}
+    {status.isPending ? <Button type="button" variant="secondary" disabled data-voice-entry-trigger aria-label="正在检查语音输入能力" size={compactTrigger ? "icon" : undefined}><Loader2 className="h-4 w-4 animate-spin" />{!compactTrigger && "检查语音…"}</Button>
+      : asrEnabled ? <VoiceCaptureButton mode={mode} maxSeconds={status.data?.maxSeconds || 30} onAudio={handleAudio} onRecorderChange={setRecording} onUnavailable={handleUnavailable} compactTrigger={compactTrigger} triggerLabel={label} className={compactTrigger ? "h-9 w-9" : mode === "hold" ? "min-h-12 w-full" : "min-h-[var(--erp-control-height)]"} />
+      : <Button type="button" variant="secondary" data-voice-entry-trigger aria-label={compactTrigger ? "打开语音快捷录入（当前使用文字输入）" : undefined} aria-keyshortcuts={mode === "toggle" ? "Alt+V" : undefined} title={compactTrigger ? "语音快捷录入（未配置识别服务，点击后可输入文字）" : mode === "toggle" ? "文字录入（语音识别未启用）· Alt+V" : "改用文字输入"} size={compactTrigger ? "icon" : undefined} className={compactTrigger ? "h-9 w-9" : undefined} onClick={openTextFallback}>{compactTrigger ? <Mic className="h-4 w-4" /> : <><FileText className="h-4 w-4" />{fallbackLabel}</>}</Button>}
     {mode === "hold" && (recording.state === "starting" || recording.state === "recording") && <div className="pointer-events-none fixed inset-0 z-[var(--erp-layer-modal)] flex items-center justify-center bg-[var(--erp-color-backdrop)] px-6" role="status" aria-live="polite" aria-label="正在录音，松开按钮结束，上滑取消"><div className="w-full max-w-sm rounded-[var(--erp-radius-xl)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-6 text-center shadow-[var(--erp-shadow-popover)]"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]"><Mic className="h-7 w-7" /></span><p className="mt-4 text-lg font-semibold text-[var(--erp-color-text)]">{recording.state === "starting" ? "正在启动麦克风…" : "正在录音"}</p><p aria-hidden="true" className="mt-2 text-2xl font-semibold tabular-nums text-[var(--erp-color-text)]">{formatClock(recording.elapsedMs)}</p><p className="mt-2 text-sm text-[var(--erp-color-text-secondary)]">松开结束 · 向上滑动取消</p><div className="mx-auto mt-4 flex h-8 items-center justify-center gap-1" aria-hidden="true">{[0.4, 0.7, 1, 0.62, 0.38].map((scale, index) => <i key={index} className="h-3 w-1.5 animate-pulse motion-reduce:animate-none rounded-full bg-[var(--erp-color-primary)]" style={{animationDelay: `${index * 100}ms`, transform: `scaleY(${Math.max(0.5, recording.level * 2) * scale})`}} />)}</div></div></div>}
     <VoiceDraftPanel
       open={open}
@@ -151,8 +201,9 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
       statusText={statusText}
       error={error}
     >
+      {unresolvedScene && <section className="space-y-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-warning)]/30 bg-[var(--erp-color-warning-soft)] p-3" aria-label="选择录入场景"><p className="text-sm font-medium text-[var(--erp-color-text)]">暂时无法判断要进入哪种录入，请选择场景后重新解析。</p><div className="flex flex-wrap items-center gap-2"><Select className="min-w-44 flex-1" value={selectedScene} options={availableSceneOptions} onValueChange={(value) => {const next = value as Exclude<VoiceResolvedScene, null>; selectedSceneRef.current = next; setSelectedScene(next);}} aria-label="语音录入场景" placeholder="选择录入场景" /><Button type="button" variant="secondary" onClick={parseSelectedScene} disabled={busy || !selectedScene}>重新解析</Button></div></section>}
       {parsed && (renderPreview ? renderPreview(parsed) : <VoiceParsePreview result={parsed} />)}
-      {parsed && onApply && <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={() => void applyParsedDraft()} disabled={busy || applyDisabled}>应用到当前表单草稿</Button>}
+      {parsed && onApply && <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={() => void applyParsedDraft()} disabled={busy || applyDisabled || scene === "auto" && parsed.scene === null}>{applyLabel}</Button>}
     </VoiceDraftPanel>
   </div>;
 }

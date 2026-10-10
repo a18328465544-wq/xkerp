@@ -4,7 +4,7 @@
  * boundary: the same key can identify a different entity on another page,
  * and Keep-Alive keeps the old page mounted while the new one activates.
  */
-export const pageScopedNavigationKeys = ["detail", "view", "invoice", "inventory"] as const;
+export const pageScopedNavigationKeys = ["detail", "view", "invoice", "inventory", "voiceDraftId"] as const;
 
 function readSearch(search?: string) {
   if (search !== undefined) return search;

@@ -16,3 +16,10 @@ test("phone voice capture uses an accessible press-and-hold affordance", () => {
   assert.match(html, /title="按住说话，向上滑动取消"/);
   assert.match(html, /touch-none select-none/);
 });
+
+test("compact global voice capture does not add visible text beside the mic", () => {
+  const html = renderToStaticMarkup(<VoiceCaptureButton mode="toggle" maxSeconds={30} compactTrigger triggerLabel="语音快捷录入" onAudio={() => undefined} />);
+  assert.match(html, /aria-label="语音快捷录入"/);
+  assert.match(html, /<span class="sr-only">语音快捷录入<\/span>/);
+  assert.match(html, /h-9 w-9/);
+});

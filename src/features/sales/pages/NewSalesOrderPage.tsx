@@ -32,6 +32,8 @@ import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWorkflow";
 import {formatCurrency} from "@/src/lib/format";
 import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
+import {useVoiceDraftHandoff} from "@/src/app/voice/useVoiceDraftHandoff";
+import {VoiceHandoffConflictDialog} from "@/src/app/voice/VoiceHandoffConflictDialog";
 import {applySalesVoiceDraftToForm, type SalesVoiceLineSelection} from "@/src/features/sales/sales.voice-draft";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -84,6 +86,10 @@ export function NewSalesOrderPage() {
 
 function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthExpired: () => void}) {
   const {active} = useWorkspaceTabActivity();
+  const {handoff, setHandoff} = useVoiceDraftHandoff("sales", active);
+  const handledHandoffId = useRef("");
+  const [handoffConflictOpen, setHandoffConflictOpen] = useState(false);
+  const [globalVoiceDraft, setGlobalVoiceDraft] = useState<{result: VoiceParseResult; transcript: string} | null>(null);
   const [settlementEntry, setSettlementEntry] = useState<PaymentEntryFeedback>({ready: true});
   const queryClient = useQueryClient();
   const operatorName = session.user.displayName.trim() || session.user.username;
@@ -382,6 +388,43 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     setVoiceReview((current) => current?.parseId === result.parseId ? {...current, lines} : current);
   };
 
+  useEffect(() => {
+    if (!active || !handoff || handledHandoffId.current === handoff.parseId) return;
+    handledHandoffId.current = handoff.parseId;
+    if (isDirty) setHandoffConflictOpen(true);
+    else {
+      setGlobalVoiceDraft({result: handoff.result, transcript: handoff.transcript});
+      setHandoff(null);
+    }
+  }, [active, handoff, isDirty, setHandoff]);
+
+  const resolveGlobalSalesHandoff = (replace: boolean) => {
+    if (!handoff) return;
+    if (replace) {
+      form.reset(defaultValues);
+      setSelectedCustomer(null);
+      setSelectedCandidates({});
+      setPendingVoiceCandidateAssignments([]);
+      setVoiceReview(null);
+      setVoiceSelectedCustomer(null);
+      setVoiceCustomerKeyword("");
+      setVoiceCustomerLookupError(null);
+      setRestoredDraftActive(false);
+      discardDraft();
+      setPaymentResetVersion((version) => version + 1);
+      setServerError(null);
+      setConflictError(false);
+    }
+    setHandoffConflictOpen(false);
+    setGlobalVoiceDraft({result: handoff.result, transcript: handoff.transcript});
+    setHandoff(null);
+  };
+
+  const applyVoiceSalesDraftFromControl = async (result: VoiceParseResult, transcript: string) => {
+    await applyVoiceSalesDraft(result, transcript);
+    if (globalVoiceDraft?.result.parseId === result.parseId) setGlobalVoiceDraft(null);
+  };
+
   const applyVoiceSalesDraft = async (result: VoiceParseResult, transcript: string) => {
     const salesDraft = result.sales;
     const review = voiceReview?.parseId === result.parseId ? voiceReview : null;
@@ -429,13 +472,13 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const salesExtraFields = <><ErpMobileWorkflowPhone><ErpFormSection title="交付与质保"><div className="space-y-3"><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label><label className="block text-sm font-semibold md:col-span-12">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label></div></ErpFormSection></ErpMobileWorkflowPhone>
           <ErpFormSection title="销售备注" description="记录交付、售后和客户特殊要求。"><Textarea {...register("remarks")} className="min-h-24" placeholder="销售单备注、交付说明或客户特殊要求" /></ErpFormSection></>;
   return <ErpTransactionPageFrame className="erp-order-entry-page">
-    <ErpTransactionHeader title="销售开单" subtitle="选择客户、收款账户和销售型号，提交后由仓库出库扫码绑定 SN。" back={{label: "返回销售管理", fallback: "/sales", onDesktopBack: () => window.history.back()}} pending={createMutation.isPending} actions={<VoiceEntryControl scene="sales" onParsed={prepareVoiceSalesReview} renderPreview={renderVoiceSalesPreview} applyDisabled={!voiceSalesReady} onApply={applyVoiceSalesDraft} />} phoneActions={<span className="erp-order-draft-label">已自动保存草稿</span>} />
+    <ErpTransactionHeader title="销售开单" subtitle="选择客户、收款账户和销售型号，提交后由仓库出库扫码绑定 SN。" back={{label: "返回销售管理", fallback: "/sales", onDesktopBack: () => window.history.back()}} pending={createMutation.isPending} actions={<VoiceEntryControl scene="sales" initialDraft={globalVoiceDraft} initialDraftPresentation="desktop" onParsed={prepareVoiceSalesReview} renderPreview={renderVoiceSalesPreview} applyDisabled={!voiceSalesReady} onApply={applyVoiceSalesDraftFromControl} />} phoneActions={<span className="erp-order-draft-label">已自动保存草稿</span>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">库存未在开单阶段改为已售出，出库时再完成物理卡绑定。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
     {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">库存可能已被其他订单占用；刷新候选不会清空当前表单。</p>}</div><div className="flex shrink-0 items-center gap-2">{conflictError && <Button type="button" size="sm" variant="secondary" onClick={refreshInventoryCandidates}><RefreshCw className="h-3.5 w-3.5" />刷新库存候选</Button>}<Button type="button" size="icon" variant="ghost" onClick={() => { submission.clearFeedback(); setServerError(null); setConflictError(false); }} aria-label="关闭错误提示">×</Button></div></CardContent></Card>}
     {!canReadCustomers && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有 CRM 客户读取权限，客户选择已禁用；请联系管理员授权后再开单。</CardContent></Card>}
     {!canReadInventory && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有查看库存的权限，暂时无法选择商品。</CardContent></Card>}
-    <ErpMobileWorkflow resetKey={editorScope.current} pending={createMutation.isPending || submission.validating} phoneAction={<VoiceEntryControl scene="sales" mode="hold" label="按住说话" onParsed={prepareVoiceSalesReview} renderPreview={renderVoiceSalesPreview} applyDisabled={!voiceSalesReady} onApply={applyVoiceSalesDraft} />} steps={[
+    <ErpMobileWorkflow resetKey={editorScope.current} pending={createMutation.isPending || submission.validating} phoneAction={<VoiceEntryControl scene="sales" mode="hold" label="按住说话" initialDraft={globalVoiceDraft} initialDraftPresentation="phone" onParsed={prepareVoiceSalesReview} renderPreview={renderVoiceSalesPreview} applyDisabled={!voiceSalesReady} onApply={applyVoiceSalesDraftFromControl} />} steps={[
       {label: "客户与商品", ready: !hasWorkflowErrors(issues, ["customerId", "customerName", "customerPartnerType", "items"]), blockedReason: workflowBlockedReason(issues, ["customerId", "customerName", "customerPartnerType", "items"], "请完善商品价格与数量")},
       {label: "结算"},
     ]} summary={<span className="erp-order-action-total"><strong className="erp-data-number">{formatCurrency(amounts.subtotal)}</strong><small>共 {amounts.quantity} 件</small></span>}>
@@ -463,6 +506,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     </form>
     </ErpMobileWorkflow>
     <ErpPartnerQuickCreateDialog open={Boolean(customerCreate)} target="customer" initialName={customerCreate?.initialName || ""} initialContact={customerCreate?.initialContact || ""} pending={customerCreateMutation.isPending} error={customerCreateMutation.error ? customerQuickCreateError(customerCreateMutation.error) : undefined} onOpenChange={(open) => {if (!open) {setCustomerCreate(null); customerCreateMutation.reset();}}} onSubmit={submitCustomerCreate} />
+    <VoiceHandoffConflictDialog open={handoffConflictOpen} sceneLabel="销售草稿" onAppend={() => resolveGlobalSalesHandoff(false)} onReplace={() => resolveGlobalSalesHandoff(true)} onCancel={() => {setHandoffConflictOpen(false); setHandoff(null);}} />
     </ErpPageContent>
   </ErpTransactionPageFrame>;
 }

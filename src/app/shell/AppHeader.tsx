@@ -4,6 +4,7 @@ import {LogOut, Menu, Search, Settings, Sparkles, UserRound} from "lucide-react"
 import {Button, Popover} from "@/src/components/ui";
 import {useUiStore} from "@/src/stores";
 import {useAuth} from "@/src/app/auth";
+import {GlobalVoiceEntry} from "@/src/app/voice/GlobalVoiceEntry";
 import {WorkspaceTabs} from "./WorkspaceTabs";
 
 const GlobalSearchDialog = lazy(() =>
@@ -51,6 +52,7 @@ export function AppHeader() {
         </Button>
         <WorkspaceTabs />
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <GlobalVoiceEntry />
           <Button
             type="button"
             variant="ghost"

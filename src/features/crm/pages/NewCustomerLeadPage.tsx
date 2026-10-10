@@ -1,6 +1,6 @@
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {Check, Link2, Loader2, LogIn, MessageSquareText, RefreshCw, Sparkles, UserPlus} from "lucide-react";
-import {useState, type FormEvent, type ReactNode} from "react";
+import {useEffect, useRef, useState, type FormEvent, type ReactNode} from "react";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Select, Textarea} from "@/src/components/ui";
@@ -10,6 +10,8 @@ import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {QuickCaptureConfirmInput, QuickCaptureParseResult, QuickCaptureSourceType} from "@/src/types/crm";
 import {useWorkspaceTabActivity, useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
 import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
+import {useVoiceDraftHandoff} from "@/src/app/voice/useVoiceDraftHandoff";
+import {VoiceHandoffConflictDialog} from "@/src/app/voice/VoiceHandoffConflictDialog";
 import {appendVoiceTranscript as appendRecognizedText} from "@/src/lib/voiceTranscript";
 
 const sourceOptions = [{value: "manual", label: "手工录入"}, {value: "chat", label: "聊天记录"}, {value: "voice", label: "语音转写"}] satisfies Array<{value: QuickCaptureSourceType; label: string}>;
@@ -34,7 +36,10 @@ function LeadForm({onSuccess}: {onSuccess: () => void | Promise<void>}) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const dirty = Boolean(rawText.trim() && !success);
-  const {tabId} = useWorkspaceTabActivity();
+  const {tabId, active} = useWorkspaceTabActivity();
+  const {handoff, setHandoff} = useVoiceDraftHandoff("customer", active);
+  const handledHandoffId = useRef("");
+  const [handoffConflictOpen, setHandoffConflictOpen] = useState(false);
   useWorkspaceTabDirty(tabId || "customers", dirty);
   useErpDirtyGuard(dirty);
   const blocker = useWorkspaceTabBlocker(dirty);
@@ -42,6 +47,31 @@ function LeadForm({onSuccess}: {onSuccess: () => void | Promise<void>}) {
   const confirmMutation = useMutation({mutationFn: (input: QuickCaptureConfirmInput) => crmApi.confirmQuickCapture(input), onSuccess: async () => { blocker.markSaved(); setSuccess("客户线索已保存，客户档案、跟进任务和时间线已同步。"); notify.success("客户线索已保存"); await onSuccess(); }});
   const submitParse = (event: FormEvent) => { event.preventDefault(); if (parsed) return confirm(); setError(""); if (!rawText.trim()) return setError("请粘贴聊天记录或填写客户线索"); parseMutation.mutate({text: rawText.trim(), sourceType}); };
   const appendVoiceTranscript = (text: string) => {const nextText = appendRecognizedText(rawText, text); if (!nextText) return; setRawText(nextText); setSourceType("voice"); setParsed(null); setError(""); parseMutation.mutate({text: nextText, sourceType: "voice"});};
+  useEffect(() => {
+    if (!active || !handoff || handledHandoffId.current === handoff.parseId) return;
+    handledHandoffId.current = handoff.parseId;
+    if (rawText.trim()) setHandoffConflictOpen(true);
+    else {
+      setSuccess("");
+      appendVoiceTranscript(handoff.transcript);
+      setHandoff(null);
+    }
+  }, [active, handoff, rawText, setHandoff]);
+  const applyCustomerHandoff = (replace: boolean) => {
+    if (!handoff) return;
+    const text = replace ? handoff.transcript : appendRecognizedText(rawText, handoff.transcript);
+    if (text) {
+      setSuccess("");
+      setRawText(text);
+      setSourceType("voice");
+      setParsed(null);
+      setMatchedCustomerId("");
+      setError("");
+      parseMutation.mutate({text, sourceType: "voice"});
+    }
+    setHandoffConflictOpen(false);
+    setHandoff(null);
+  };
   const confirm = () => {
     if (!parsed) return;
     if (!parsed.fields.customerName) return setError("解析结果缺少客户名称，请补充原文后重新解析");
@@ -68,6 +98,7 @@ function LeadForm({onSuccess}: {onSuccess: () => void | Promise<void>}) {
       </aside>
     </div>
     <ErpUnsavedChangesDialog open={blocker.status === "blocked"} onStay={() => blocker.reset?.()} onLeave={() => blocker.proceed?.()} />
+    <VoiceHandoffConflictDialog open={handoffConflictOpen} sceneLabel="客户线索" onAppend={() => applyCustomerHandoff(false)} onReplace={() => applyCustomerHandoff(true)} onCancel={() => {setHandoffConflictOpen(false); setHandoff(null);}} />
     </ErpPageContent>
   </ErpCrmPageFrame>;
 }
