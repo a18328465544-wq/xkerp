@@ -1126,7 +1126,12 @@ registerCrmQuickCaptureRoutes(app, {
 
 registerVoiceRoutes(app, {
   requireAnyMenu,
+  asyncRoute,
   getState: () => state,
+  hasMenuPermission: (req, menuId) => {
+    const allowedMenus = getPermissionsForUser((req as AuthRequest).authUser).allowedMenus;
+    return allowedMenus.includes("all") || allowedMenus.includes(menuId);
+  },
   sendApiError: (req, res, status, code, message) => sendApiError(req, res, status, code, message),
   logSafeEvent: (event) => console.info(JSON.stringify({event: "voice_asr", ...event})),
 });

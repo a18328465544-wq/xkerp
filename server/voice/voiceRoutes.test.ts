@@ -42,7 +42,9 @@ async function withVoiceServer(options: {
   const config = resolveVoiceRuntimeConfig({VOICE_ASR_API_KEY: options.apiKey ?? "mock-key", VOICE_RATE_LIMIT_PER_MINUTE: String(options.limit ?? 20)});
   registerVoiceRoutes(app, {
     requireAnyMenu,
+    asyncRoute: (handler) => (req, res, next) => {void Promise.resolve(handler(req, res, next)).catch(next);},
     getState: () => ({products: []}) as unknown as AppState,
+    hasMenuPermission: (req, menuId) => String(req.headers["x-allowed-menus"] || "purchase_add,sales_add,crm").split(",").includes(menuId),
     getConfig: () => config,
     createProvider: () => options.provider || {name: "mock", transcribe: async () => ({text: "模拟识别"})},
     sendApiError: (_req, res, status, code, message) => res.status(status).json({error: {code, message}}),
@@ -68,6 +70,52 @@ test("voice status is authenticated, permission scoped, and advertises text fall
     assert.equal(response.status, 200);
     assert.deepEqual((await response.json()).data, {asrEnabled: false, aiEnabled: false, maxSeconds: 30});
   });
+});
+
+test("voice parse validates input, checks the concrete scene permission, and returns a draft", async () => {
+  let observedScene = "";
+  await withVoiceServer({apiKey: ""}, async (baseUrl) => {
+    const headers = {authorization: "Bearer mock-session", "content-type": "application/json", "x-allowed-menus": "crm"};
+    const forbidden = await fetch(`${baseUrl}/api/voice/parse`, {method: "POST", headers, body: JSON.stringify({text: "回收李四一张 RTX4090", scene: "purchase"})});
+    assert.equal(forbidden.status, 403);
+
+    const invalid = await fetch(`${baseUrl}/api/voice/parse`, {method: "POST", headers, body: JSON.stringify({text: "x".repeat(2_001), scene: "customer"})});
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).error.code, "VOICE_PARSE_INVALID");
+  });
+
+  const app = express();
+  app.use(express.json());
+  const requireAnyMenu = (): RequestHandler => (req, res, next) => {
+    if (!req.headers.authorization) {res.status(401).json({error: {code: "UNAUTHORIZED"}}); return;}
+    (req as typeof req & {authUser?: {id: string}}).authUser = {id: "voice-test-user"};
+    next();
+  };
+  const config = resolveVoiceRuntimeConfig({VOICE_ASR_API_KEY: ""});
+  registerVoiceRoutes(app, {
+    requireAnyMenu,
+    asyncRoute: (handler) => (req, res, next) => {void Promise.resolve(handler(req, res, next)).catch(next);},
+    getState: () => ({products: [], customers: [], vendors: [], inventory: []}) as unknown as AppState,
+    getConfig: () => config,
+    hasMenuPermission: (_req, menuId) => menuId === "crm",
+    parseText: async (input) => {
+      observedScene = input.scene;
+      return {parseId: "parse-test", scene: "customer", transcript: input.text, source: "rules", customer: {rawTextForQuickCapture: input.text}, issues: []};
+    },
+    sendApiError: (_req, res, status, code, message) => res.status(status).json({error: {code, message}}),
+  });
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+  });
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/voice/parse`, {method: "POST", headers: {authorization: "Bearer mock-session", "content-type": "application/json"}, body: JSON.stringify({text: "加个客户王五", scene: "customer"})});
+    assert.equal(response.status, 200);
+    assert.equal(observedScene, "customer");
+    assert.equal((await response.json()).data.customer.rawTextForQuickCapture, "加个客户王五");
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test("transcribe validates WAV headers and enforces the configured maximum duration", async () => {

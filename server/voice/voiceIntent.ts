@@ -1,7 +1,4 @@
 import type {InventoryCondition, SourceType} from "../../src/types/core.ts";
-import {inventoryConditionValues, sourceTypeValues} from "../../src/types/core.ts";
-import {purchasePaymentMethodValues} from "../../src/types/purchase.ts";
-import {salesChannelValues, salesPaymentMethodValues} from "../../src/types/sales.ts";
 import type {VoiceResolvedScene} from "../../src/types/voice.ts";
 
 export function resolveVoiceScene(text: string): VoiceResolvedScene {
@@ -81,11 +78,3 @@ export function inferVoiceAftersalesTerms(text: string) {
   if (/保到手好|到手包好/.test(match[0])) return "保到手好";
   return `店保${match[1] === "六个月" ? "半年" : match[1] === "三月" ? "三个月" : match[1]}`;
 }
-
-export const VOICE_ENUMS = {
-  purchasePaymentMethods: purchasePaymentMethodValues,
-  salesPaymentMethods: salesPaymentMethodValues,
-  salesChannels: salesChannelValues,
-  inventoryConditions: inventoryConditionValues,
-  sourceTypes: sourceTypeValues,
-} as const;

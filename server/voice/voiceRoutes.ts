@@ -3,16 +3,24 @@ import rateLimit, {ipKeyGenerator} from "express-rate-limit";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
 import type {SystemUserAccount} from "../../src/types.ts";
 import type {AppState} from "../store.ts";
+import type {VoiceParseResult} from "../../src/types/voice.ts";
+import type {VoiceScene} from "../../src/types/voice.ts";
 import {resolveVoiceRuntimeConfig, type VoiceRuntimeConfig} from "../runtimeConfig.ts";
 import {asrProviderForConfig, type AsrProvider} from "./asrProvider.ts";
+import {voiceParseRequestSchema} from "./voiceSchema.ts";
+import {parseVoiceText, type VoiceParseContext} from "./voiceParse.ts";
+import {resolveVoiceScene} from "./voiceIntent.ts";
 
 type VoiceRequest = AuthenticatedRequest<SystemUserAccount>;
 export interface VoiceSafeEvent {userId: string; durationMs: number; provider: string; latencyMs: number; success: boolean}
 interface VoiceRouteDependencies {
   requireAnyMenu: (menuIds: string[]) => RequestHandler;
+  asyncRoute: (handler: RequestHandler) => RequestHandler;
   getState: () => AppState;
   getConfig?: () => VoiceRuntimeConfig;
   createProvider?: (config: VoiceRuntimeConfig) => AsrProvider | undefined;
+  hasMenuPermission: (req: Request, menuId: string) => boolean;
+  parseText?: (input: {text: string; scene: VoiceScene; state: VoiceParseContext}) => Promise<VoiceParseResult>;
   sendApiError: (req: Request, res: Response, status: number, code: string, message: string) => void;
   logSafeEvent?: (event: VoiceSafeEvent) => void;
 }
@@ -69,6 +77,7 @@ export function resetVoiceAsrCooldownForTests() { voiceAsrFailureAt = 0; }
 export function registerVoiceRoutes(app: Express, dependencies: VoiceRouteDependencies) {
   const getConfig = dependencies.getConfig || (() => resolveVoiceRuntimeConfig());
   const createProvider = dependencies.createProvider || asrProviderForConfig;
+  const parseText = dependencies.parseText || parseVoiceText;
   const rateLimitMiddleware = rateLimit({
     windowMs: 60_000,
     limit: getConfig().rateLimitPerMinute,
@@ -87,6 +96,26 @@ export function registerVoiceRoutes(app: Express, dependencies: VoiceRouteDepend
     const providerReady = config.asrProvider === "dashscope" && Boolean(config.asrApiKey) && Boolean(createProvider(config));
     res.json({data: {asrEnabled: providerReady, aiEnabled: config.aiEnabled, maxSeconds: config.maxSeconds}});
   });
+
+  app.post("/api/voice/parse", dependencies.requireAnyMenu(VOICE_MENU_IDS), dependencies.asyncRoute(async (req, res) => {
+    const command = voiceParseRequestSchema.safeParse(req.body);
+    if (!command.success) {
+      dependencies.sendApiError(req, res, 400, "VOICE_PARSE_INVALID", "请输入不超过 2000 字的有效录入内容");
+      return;
+    }
+    const resolvedScene = command.data.scene === "auto" ? resolveVoiceScene(command.data.text) : command.data.scene;
+    if (resolvedScene) {
+      const requiredMenu = resolvedScene === "purchase" ? "purchase_add" : resolvedScene === "sales" ? "sales_add" : "crm";
+      if (!dependencies.hasMenuPermission(req, requiredMenu)) {
+        dependencies.sendApiError(req, res, 403, "FORBIDDEN", "当前账号没有该录入场景的权限");
+        return;
+      }
+    }
+    const state = dependencies.getState();
+    const context: VoiceParseContext = {products: state.products, customers: state.customers, vendors: state.vendors, inventory: state.inventory};
+    const result = await parseText({text: command.data.text, scene: command.data.scene, state: context});
+    res.json({data: result});
+  }));
 
   app.post("/api/voice/transcribe", dependencies.requireAnyMenu(VOICE_MENU_IDS), rateLimitMiddleware, (req, res, next) => {
     parseWav(req, res, (error) => {

@@ -75,6 +75,7 @@ const AFTERSALES_KEYS: StateCollectionKey[] = [
   "logs",
 ];
 const VOICE_TRANSCRIBE_READ_KEYS: StateCollectionKey[] = ["products", "inventory"];
+const VOICE_PARSE_READ_KEYS: StateCollectionKey[] = ["products", "customers", "vendors", "inventory"];
 
 // These collections are required for the dashboard and the common entry pages. Histories that
 // are loaded only after a user opens their own page stay out of the login/focus refresh path.
@@ -121,6 +122,7 @@ function getPostReadReloadKeys(method: string, path: string): StateCollectionKey
   if (/^\/api\/sales-invoices\/[^/]+\/outbound\/preflight$/.test(pathname)) return ["salesInvoices", "inventory", "products"];
   if (pathname === "/api/gpu_erp/crm/quick-capture/parse") return ["customers", "products"];
   if (pathname === "/api/voice/transcribe") return VOICE_TRANSCRIBE_READ_KEYS;
+  if (pathname === "/api/voice/parse") return VOICE_PARSE_READ_KEYS;
   if (pathname === "/api/gpu_erp/crm/customer/lead-preview") return [];
   if (pathname === "/api/gpu-sn/parse") return [];
   return null;

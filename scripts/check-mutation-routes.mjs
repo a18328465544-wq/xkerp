@@ -52,6 +52,8 @@ const exemptions = new Map([
   ["/api/gpu_erp/crm/customer/lead-preview", "pure preview endpoint; no persisted business mutation"],
   ["/api/gpu-sn/parse", "parse/audit preparation endpoint; save is the protected mutation"],
   ["/api/sales-invoices/:id/outbound/preflight", "authoritative read-only outbound validation; confirmation is the protected mutation"],
+  ["/api/voice/parse", "read-only draft parsing; no business state or audit row is persisted"],
+  ["/api/voice/transcribe", "read-only ASR request; audio and transcript are not persisted"],
 ]);
 
 async function listTypeScriptFiles(directory) {

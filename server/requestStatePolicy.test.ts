@@ -73,6 +73,12 @@ test("voice status and transcription are scoped read-only requests, not business
   assert.equal(getPersistenceKeysForRequest("POST", "/api/voice/transcribe"), null);
   assert.equal(getStatePatchKeysForRequest("POST", "/api/voice/transcribe"), null);
   assert.equal(shouldAttachFreshStateToResponse("POST", "/api/voice/transcribe", {data: {text: "draft"}}), false);
+  assert.deepEqual(getAuthenticationReloadKeys("POST", "/api/voice/parse"), ["systemUsers", "products", "customers", "vendors", "inventory"]);
+  assert.deepEqual(getReloadKeysForRequest("POST", "/api/voice/parse"), ["products", "customers", "vendors", "inventory"]);
+  assert.equal(requiresStateSerialization("POST", "/api/voice/parse"), false);
+  assert.equal(getPersistenceKeysForRequest("POST", "/api/voice/parse"), null);
+  assert.equal(getStatePatchKeysForRequest("POST", "/api/voice/parse"), null);
+  assert.equal(shouldAttachFreshStateToResponse("POST", "/api/voice/parse", {data: {draft: true}}), false);
 });
 
 test("outbound preview stays a scoped read across middleware policies and URL variants", () => {
