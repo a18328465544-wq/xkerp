@@ -52,7 +52,7 @@ import {
 | 场景 | 组件 |
 | --- | --- |
 | 页面 | `ErpPageFrame`、`ErpPageHeader`、`ErpPageToolbar`、`ErpPageContent`、`ErpPageFrames` |
-| 页面模板 | `ErpListPage`（列表页，电脑和手机两种布局由模板决定）、`ErpRecordDetail`（详情抽屉内容） |
+| 页面模板 | `ErpListPage`（列表页，电脑和手机两种布局由模板决定）、`ErpRecordPage`（详情页：返回、操作、编辑范围提示，手机底部操作栏和「更多」面板）、`ErpRecordDetail`（详情抽屉和详情正文） |
 | 列表 | `ErpFilterBar`、`ErpFilterFields`（`ErpFilterField[]` 一份定义生成桌面筛选栏和手机筛选面板）、`ErpSearchInput`、`ErpDataTable`（列定义 `meta.mobile` 生成手机行）、`ErpColumnVisibilityMenu` |
 | 日期 | `ErpDatePicker`、`ErpDateTimePicker`、`ErpDateRangePicker`、`ErpCalendar`、`ErpDateOverlay` |
 | 表单 | `ErpField`、`ErpAmountInput`、`ErpQuantityStepper`、`ErpSegmentedControl`、`ErpCheckboxField`、`ErpRadioField`、`ErpRadioGroup`、`ErpUploader`、`ErpSubmitBar` |

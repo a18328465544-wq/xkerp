@@ -37,7 +37,7 @@
 
 所有页面都必须套用下面四种模板之一。参考实现是客户页：`src/features/customers/pages/CustomerDirectoryPage.tsx`。
 
-> **模板组件（2026-10-10 起）**：列表页用 `ErpListPage`，详情抽屉内容用 `ErpRecordDetail`，开单页用 `ErpMobileWorkflow`。页面只提供数据（标题、计数、`ErpFilterField[]` 筛选、快捷筛选、主操作、表格），下面 M13 / M16 的结构由模板生成，页面里不再写 `useErpPhone` 分支。手机列表行优先在列定义上声明 `meta.mobile`（`title` / `subtitle` / `meta` / `amount` / `status` / `image` / `thumbnail`），表格传 `mobileRow="columns"`；电脑端单元格太复杂时用 `meta.mobileCell` 单独写手机显示。客户页 `CustomerDirectoryPage.tsx` 是第一个迁移完成的页面，其余页面按 [MOBILE_TEMPLATE_PLAN_20261010.md](MOBILE_TEMPLATE_PLAN_20261010.md) 分批迁移。
+> **模板组件（2026-10-10 起）**：列表页用 `ErpListPage`，详情页用 `ErpRecordPage`，详情抽屉和详情正文用 `ErpRecordDetail`，财务明细页用 `FinanceDetailPageLayout`，开单页用 `ErpMobileWorkflow`。页面只提供数据（标题、计数、`ErpFilterField[]` 筛选、快捷筛选、主操作、表格），下面 M13 / M16 的结构由模板生成，页面里不再写 `useErpPhone` 分支。手机列表行优先在列定义上声明 `meta.mobile`（`title` / `subtitle` / `meta` / `amount` / `status` / `image` / `thumbnail`），表格传 `mobileRow="columns"`；电脑端单元格太复杂时用 `meta.mobileCell` 单独写手机显示。客户页 `CustomerDirectoryPage.tsx` 是第一个迁移完成的页面，其余页面按 [MOBILE_TEMPLATE_PLAN_20261010.md](MOBILE_TEMPLATE_PLAN_20261010.md) 分批迁移。
 
 - **M13 列表页**（单据、库存、客户、商品、财务明细……）
   1. 页头：标题，下面一行小字显示结果数量（只在这里出现一次）；右侧放「筛选」按钮（`secondary` 样式，有生效筛选时显示数字角标）。
