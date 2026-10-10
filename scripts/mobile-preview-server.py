@@ -7,6 +7,7 @@ import json
 import mimetypes
 import os
 import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -85,6 +86,32 @@ def inventory_rows(params):
     sort_key = {"product": "productName", "days": "inventoryDays", "status": "status", "cost": "costPrice", "warehouseLocation": "warehouseLocation"}.get(params.get("sortKey", ["entryTime"])[0], "entryTime")
     rows.sort(key=lambda item: item.get(sort_key) or (0 if sort_key in {"inventoryDays", "costPrice"} else ""), reverse=params.get("sortDirection", ["desc"])[0] == "desc")
     return rows
+
+
+# A dist/ left behind by an earlier `npm run build` must never mask newer
+# source edits. auto (default) serves dist only while it is newer than src/;
+# ERP_PREVIEW_SOURCE=dist or =vite forces one side.
+preview_source = os.environ.get("ERP_PREVIEW_SOURCE", "auto")
+if preview_source not in {"auto", "dist", "vite"}:
+    raise ValueError("Invalid ERP_PREVIEW_SOURCE")
+_build_check = {"at": 0.0, "use": False, "reported": None}
+
+
+def serve_build(build):
+    index = build / "index.html"
+    if preview_source == "vite" or not index.is_file():
+        return False
+    if preview_source == "dist":
+        return True
+    now = time.monotonic()
+    if now - _build_check["at"] > 2:
+        sources = [root.parent / "index.html", *(item for item in (root.parent / "src").rglob("*") if item.is_file())]
+        newest = max((item.stat().st_mtime for item in sources if item.exists()), default=0)
+        _build_check.update(at=now, use=newest <= index.stat().st_mtime)
+        if _build_check["reported"] != _build_check["use"]:
+            print("预览使用 dist/ 构建产物" if _build_check["use"] else "dist/ 比源码旧，预览改走本地 Vite（127.0.0.1:3010）", flush=True)
+            _build_check["reported"] = _build_check["use"]
+    return _build_check["use"]
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -229,7 +256,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             build = root.parent / "dist"
-            if (build / "index.html").is_file():
+            if serve_build(build):
                 target = (build / path.lstrip("/")).resolve()
                 if not target.is_relative_to(build.resolve()):
                     self.respond({"error": "Invalid preview path"}, 400)
