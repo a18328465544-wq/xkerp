@@ -5,10 +5,8 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import type { VisibilityState } from "@tanstack/react-table";
+import type {VisibilityState} from "@tanstack/react-table";
 import {
-  AlertTriangle,
-  CalendarCheck2,
   Download,
   Landmark,
   ReceiptText,
@@ -24,23 +22,18 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
-import { Button, Card } from "@/src/components/ui";
+import {Button, Card} from "@/src/components/ui";
 import {
   DashboardSection,
-  ErpFinancePageFrame,
   ErpDateRangePicker,
   ErpEmptyState,
   ErpFilterBar,
   ErpLoadingState,
   ErpMobileRecordRow,
-  ErpPageContent,
   ErpPageError,
   ErpPageHeader,
   ErpPageToolbar,
   ErpStatusBadge,
-  MainRegion,
   MetricsRegion,
   type QuickStatusItemData,
 } from "@/src/components/common";
@@ -54,7 +47,7 @@ import {
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
-import { formatCurrency } from "@/src/lib/format";
+import {formatCurrency} from "@/src/lib/format";
 import {storeMonth} from "@/src/utils/storeTime";
 import {notify} from "@/src/utils/notification";
 import type {
@@ -71,7 +64,6 @@ import {
   selectFinanceClosingReport,
   type FinanceClosingFilters,
 } from "../finance-closing";
-import { FinanceSectionTabs } from "../components/FinanceSectionTabs";
 import {FinanceTableControls} from "../components/FinanceTableControls";
 import {FinanceLatestExceptions} from "../components/FinanceLatestExceptions";
 import {FinanceTableRegion} from "../components/FinanceTableRegion";
@@ -174,8 +166,6 @@ function FinanceClosingContent({
   accountingPeriodsQuery: UseQueryResult<Awaited<ReturnType<typeof financeClosingApi.listAccountingPeriods>>, Error>;
   reconciliationQuery: UseQueryResult<FinanceReconciliationReport, Error>;
 }) {
-  const phone = useErpPhone();
-  const navigate = useNavigate();
   const capabilities = createCapabilities(session);
   const [detail, setDetail] = useState<FinanceDailyClosing | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState(() => storeMonth());
@@ -255,42 +245,6 @@ function FinanceClosingContent({
     link.click();
     URL.revokeObjectURL(url);
   };
-  const quickStatus: QuickStatusItemData[] = [
-    {
-      icon: <CalendarCheck2 className="h-4 w-4" />,
-      label: "已保存日结",
-      value: `${items.length} 条`,
-      description: "最近保存的日结记录",
-      tone: "info",
-    },
-    {
-      icon: <ShieldAlert className="h-4 w-4" />,
-      label: "最新异常",
-      value: latest
-        ? `${latest.snapshot.unreviewed + latest.snapshot.accountReconciliationDifferences} 项`
-        : "—",
-      description: latest ? "待复核与对账差异" : "暂无日结快照",
-      tone:
-        latest &&
-        (latest.snapshot.unreviewed ||
-          latest.snapshot.accountReconciliationDifferences)
-          ? "warning"
-          : "neutral",
-    },
-    {
-      icon: <ShieldCheck className="h-4 w-4" />,
-      label: "账务体检",
-      value: reconciliationQuery.data
-        ? reconciliationQuery.data.summary.errorCount > 0
-          ? `${reconciliationQuery.data.summary.errorCount} 项异常`
-          : reconciliationQuery.data.summary.warningCount > 0
-            ? `${reconciliationQuery.data.summary.warningCount} 项提示`
-            : "正常"
-        : "未检查",
-      description: reconciliationQuery.data ? "账户、收付款与退货链检查结果" : "手动检查当前账务一致性",
-      tone: reconciliationQuery.data?.summary.errorCount ? "danger" : reconciliationQuery.data?.summary.warningCount ? "warning" : "info",
-    },
-  ];
   const hasLatestExceptions = Boolean(latest && (
     latest.snapshot.unreviewed > 0 ||
     latest.snapshot.accountReconciliationDifferences > 0 ||
@@ -313,318 +267,75 @@ function FinanceClosingContent({
       action: () => document.getElementById("finance-closing-health")?.scrollIntoView({behavior: "smooth", block: "start"}),
     },
   ];
-  if (!phone) {
-    return <FinanceDetailPageLayout
-      header={<ErpPageHeader
-        title="财务核对"
-        subtitle="集中复核每日经营快照、账户差异与退货对账。"
-        quickStatus={healthQuickStatus}
-        actions={<>
-          <Button type="button" size="sm" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>
-            <RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新
-          </Button>
-          <Button type="button" size="sm" variant="secondary" disabled={!report.rows.length} onClick={exportRows}>
-            <Download className="h-4 w-4" />导出结果
-          </Button>
-          <Button type="button" size="sm" variant="secondary" disabled={reconciliationQuery.isFetching} onClick={() => void reconciliationQuery.refetch()}>
-            <ShieldCheck className={`h-4 w-4 ${reconciliationQuery.isFetching ? "animate-pulse" : ""}`} />检查账务
-          </Button>
-        </>}
-      />}
-      tabs={{label: "财务核对分类", items: [
-        {label: "日结与异常", path: "/finance/closing", visible: capabilities.menu("finance")},
-        {label: "退货对账", path: "/finance/return-reconcile", visible: capabilities.menu("return_purchase") || capabilities.menu("return_sales") || capabilities.menu("return_orders")},
-      ]}}
-      filters={<ErpPageToolbar><ErpFilterBar compact actions={<Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceClosingFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}>
-        <ErpSearchInput className="min-w-56 flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索日结编号、关闭人或备注" aria-label="搜索日结记录" />
-        <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} density="compact" triggerClassName="md:w-36" startAriaLabel="日结开始日期" endAriaLabel="日结结束日期" ariaLabel="日结日期范围" />
-      </ErpFilterBar></ErpPageToolbar>}
-      metrics={<MetricsRegion>
-        <FinanceMetricCard label="日结收入" value={formatCurrency(report.summary.income)} detail="当前筛选已保存快照合计" icon={<WalletCards className="h-4 w-4" />} tone="success" />
-        <FinanceMetricCard label="日结支出" value={formatCurrency(report.summary.expense)} detail="当前筛选已保存快照合计" icon={<ReceiptText className="h-4 w-4" />} tone="danger" />
-        <FinanceMetricCard label="净现金变动" value={formatCurrency(report.summary.netCash)} detail="收入减支出，不代表当前余额" icon={<Landmark className="h-4 w-4" />} tone={financeNetTone(report.summary.netCash)} />
-        <FinanceMetricCard label="待处理异常" value={`${report.summary.unreviewed + report.summary.reconciliationDifferences} 项`} detail={`待复核 ${report.summary.unreviewed} · 对账差异 ${report.summary.reconciliationDifferences}`} icon={<ShieldAlert className="h-4 w-4" />} tone={report.summary.unreviewed + report.summary.reconciliationDifferences ? "warning" : "success"} />
-      </MetricsRegion>}
-      table={<div className="space-y-[var(--erp-page-gap)]">
-        <FinanceAccountingPeriodPanel periods={accountingPeriods} selectedPeriod={selectedPeriod} onSelectedPeriodChange={setSelectedPeriod} onClosePeriod={(period) => accountingPeriodMutation.mutate({period, action: "close"})} onReopenPeriod={(period) => accountingPeriodMutation.mutate({period, action: "reopen"})} busy={accountingPeriodMutation.isPending || accountingPeriodsQuery.isFetching} />
-        {latest && hasLatestExceptions && <DashboardSection title="最新异常" description={`来自 ${latest.date} 日结快照`} actions={<ErpStatusBadge label={financeClosingStatusLabel(latest)} tone={financeClosingStatus(latest)} />}><FinanceLatestExceptions item={latest} /></DashboardSection>}
-        <FinanceTableRegion
-          title="已保存日结"
-          description="点击记录查看应收、应付、销售与采购摘要。"
-          actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`第 ${report.meta.page} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}
-          table={{
-            columns,
-            data: report.pageRows,
-            getRowId: (row) => row.id,
-            loading: query.isPending,
-            fetching: query.isFetching,
-            error: query.error as Error | null,
-            errorTitle: "日结快照加载失败",
-            emptyTitle: "暂无日结快照",
-            emptyDescription: activeFilters ? "当前筛选条件没有匹配的日结记录。" : "当前还没有已保存的日结快照。",
-            onRetry: () => void query.refetch(),
-            onRowClick: setDetail,
-            page: report.meta.page,
-            pageSize: report.meta.pageSize,
-            total: report.meta.total,
-            onPageChange: (page) => update({page}),
-            onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
-            mobileRow: (item) => <ErpMobileRecordRow title={item.date} subtitle={`关闭人: ${item.closedBy}`} meta={`收 ${formatCurrency(item.snapshot.income)} · 支 ${formatCurrency(item.snapshot.expense)}`} amount={formatCurrency(item.snapshot.netCash)} amountLabel="净现金" status={<ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />} statusPlacement="title" onOpen={() => setDetail(item)} />,
-            columnVisibility,
-            onColumnVisibilityChange: setColumnVisibility,
-            enableColumnResizing: true,
-            density,
-            stickyHeader: true,
-            virtualized: report.pageRows.length >= 50,
-          }}
-        />
-      </div>}
-    >
-      <div id="finance-closing-health" className="scroll-mt-6">{reconciliationQuery.data ? <FinanceReconciliationPanel report={reconciliationQuery.data} /> : <DashboardSection title="账务体检" description="尚未运行账户、收付款与退货链一致性检查。"><div className="flex items-center justify-between gap-3"><ErpEmptyState density="compact" title="等待检查" description="运行检查后，结果将在这里展开。" /><Button type="button" size="sm" variant="secondary" disabled={reconciliationQuery.isFetching} onClick={() => void reconciliationQuery.refetch()}>检查账务</Button></div></DashboardSection>}</div>
-      <FinanceClosingDetailDrawer item={detail} onClose={() => setDetail(null)} />
-    </FinanceDetailPageLayout>;
-  }
-  return (
-    <ErpFinancePageFrame>
-      <ErpPageHeader
-        title="财务核对"
-        subtitle="集中复核每日经营快照、账户差异与退货对账。"
-        quickStatus={quickStatus}
-        actions={
-          <>
-            {!phone && (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={query.isFetching}
-                onClick={() => void query.refetch()}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`}
-                />
-                刷新
-              </Button>
-            )}
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={!report.rows.length}
-              onClick={exportRows}
-            >
-              <Download className="h-4 w-4" />
-              导出结果
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => void navigate({ to: "/finance" })}
-            >
-              财务总览
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={reconciliationQuery.isFetching}
-              onClick={() => void reconciliationQuery.refetch()}
-            >
-              <ShieldCheck className={`h-4 w-4 ${reconciliationQuery.isFetching ? "animate-pulse" : ""}`} />
-              检查账务
-            </Button>
-          </>
-        }
+  return <FinanceDetailPageLayout
+    header={<ErpPageHeader
+      title="财务核对"
+      subtitle="集中复核每日经营快照、账户差异与退货对账。"
+      quickStatus={healthQuickStatus}
+      actions={<>
+        <Button type="button" size="sm" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>
+          <RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新
+        </Button>
+        <Button type="button" size="sm" variant="secondary" disabled={!report.rows.length} onClick={exportRows}>
+          <Download className="h-4 w-4" />导出结果
+        </Button>
+        <Button type="button" size="sm" variant="secondary" disabled={reconciliationQuery.isFetching} onClick={() => void reconciliationQuery.refetch()}>
+          <ShieldCheck className={`h-4 w-4 ${reconciliationQuery.isFetching ? "animate-pulse" : ""}`} />检查账务
+        </Button>
+      </>}
+    />}
+    tabs={{label: "财务核对分类", items: [
+      {label: "日结与异常", path: "/finance/closing", visible: capabilities.menu("finance")},
+      {label: "退货对账", path: "/finance/return-reconcile", visible: capabilities.menu("return_purchase") || capabilities.menu("return_sales") || capabilities.menu("return_orders")},
+    ]}}
+    filters={<ErpPageToolbar><ErpFilterBar compact actions={<Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceClosingFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}>
+      <ErpSearchInput className="min-w-56 flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索日结编号、关闭人或备注" aria-label="搜索日结记录" />
+      <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} density="compact" triggerClassName="md:w-36" startAriaLabel="日结开始日期" endAriaLabel="日结结束日期" ariaLabel="日结日期范围" />
+    </ErpFilterBar></ErpPageToolbar>}
+    metrics={<MetricsRegion>
+      <FinanceMetricCard label="日结收入" value={formatCurrency(report.summary.income)} detail="当前筛选已保存快照合计" icon={<WalletCards className="h-4 w-4" />} tone="success" />
+      <FinanceMetricCard label="日结支出" value={formatCurrency(report.summary.expense)} detail="当前筛选已保存快照合计" icon={<ReceiptText className="h-4 w-4" />} tone="danger" />
+      <FinanceMetricCard label="净现金变动" value={formatCurrency(report.summary.netCash)} detail="收入减支出，不代表当前余额" icon={<Landmark className="h-4 w-4" />} tone={financeNetTone(report.summary.netCash)} />
+      <FinanceMetricCard label="待处理异常" value={`${report.summary.unreviewed + report.summary.reconciliationDifferences} 项`} detail={`待复核 ${report.summary.unreviewed} · 对账差异 ${report.summary.reconciliationDifferences}`} icon={<ShieldAlert className="h-4 w-4" />} tone={report.summary.unreviewed + report.summary.reconciliationDifferences ? "warning" : "success"} />
+    </MetricsRegion>}
+    table={<div className="space-y-[var(--erp-page-gap)]">
+      <FinanceAccountingPeriodPanel periods={accountingPeriods} selectedPeriod={selectedPeriod} onSelectedPeriodChange={setSelectedPeriod} onClosePeriod={(period) => accountingPeriodMutation.mutate({period, action: "close"})} onReopenPeriod={(period) => accountingPeriodMutation.mutate({period, action: "reopen"})} busy={accountingPeriodMutation.isPending || accountingPeriodsQuery.isFetching} />
+      {latest && hasLatestExceptions && <DashboardSection title="最新异常" description={`来自 ${latest.date} 日结快照`} actions={<ErpStatusBadge label={financeClosingStatusLabel(latest)} tone={financeClosingStatus(latest)} />}><FinanceLatestExceptions item={latest} /></DashboardSection>}
+      <FinanceTableRegion
+        title="已保存日结"
+        description="点击记录查看应收、应付、销售与采购摘要。"
+        actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`第 ${report.meta.page} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}
+        table={{
+          columns,
+          data: report.pageRows,
+          getRowId: (row) => row.id,
+          loading: query.isPending,
+          fetching: query.isFetching,
+          error: query.error as Error | null,
+          errorTitle: "日结快照加载失败",
+          emptyTitle: "暂无日结快照",
+          emptyDescription: activeFilters ? "当前筛选条件没有匹配的日结记录。" : "当前还没有已保存的日结快照。",
+          onRetry: () => void query.refetch(),
+          onRowClick: setDetail,
+          page: report.meta.page,
+          pageSize: report.meta.pageSize,
+          total: report.meta.total,
+          onPageChange: (page) => update({page}),
+          onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
+          mobileRow: (item) => <ErpMobileRecordRow title={item.date} subtitle={`关闭人: ${item.closedBy}`} meta={`收 ${formatCurrency(item.snapshot.income)} · 支 ${formatCurrency(item.snapshot.expense)}`} amount={formatCurrency(item.snapshot.netCash)} amountLabel="净现金" status={<ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />} statusPlacement="title" onOpen={() => setDetail(item)} />,
+          columnVisibility,
+          onColumnVisibilityChange: setColumnVisibility,
+          enableColumnResizing: true,
+          density,
+          stickyHeader: true,
+          virtualized: report.pageRows.length >= 50,
+        }}
       />
-      <FinanceSectionTabs
-        label="财务核对分类"
-        items={[
-          {
-            label: "日结与异常",
-            path: "/finance/closing",
-            visible:
-              capabilities.menu("finance"),
-          },
-          {
-            label: "退货对账",
-            path: "/finance/return-reconcile",
-            visible:
-              capabilities.menu("return_purchase") ||
-              capabilities.menu("return_sales") ||
-              capabilities.menu("return_orders"),
-          },
-        ]}
-      />
-      <MetricsRegion>
-        <FinanceMetricCard
-          label="日结收入"
-          value={formatCurrency(report.summary.income)}
-          detail="当前筛选已保存快照合计"
-          icon={<WalletCards className="h-4 w-4" />}
-          tone="success"
-        />
-        <FinanceMetricCard
-          label="日结支出"
-          value={formatCurrency(report.summary.expense)}
-          detail="当前筛选已保存快照合计"
-          icon={<ReceiptText className="h-4 w-4" />}
-          tone="danger"
-        />
-        <FinanceMetricCard
-          label="净现金变动"
-          value={formatCurrency(report.summary.netCash)}
-          detail="收入减支出，不代表当前余额"
-          icon={<Landmark className="h-4 w-4" />}
-          tone={financeNetTone(report.summary.netCash)}
-        />
-        <FinanceMetricCard
-          label="待复核"
-          value={`${report.summary.unreviewed} 项`}
-          detail="日结时记录的快照值"
-          icon={<ShieldAlert className="h-4 w-4" />}
-          tone={report.summary.unreviewed ? "danger" : "success"}
-        />
-        <FinanceMetricCard
-          label="对账差异"
-          value={`${report.summary.reconciliationDifferences} 项`}
-          detail="日结时记录的账户差异"
-          icon={<AlertTriangle className="h-4 w-4" />}
-          tone={
-            report.summary.reconciliationDifferences ? "warning" : "success"
-          }
-        />
-      </MetricsRegion>
-      <ErpPageToolbar>
-      <ErpFilterBar
-        compact
-        actions={
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => onFiltersChange(defaultFinanceClosingFilters)}
-          >
-            <RotateCcw className="h-4 w-4" />
-            重置
-          </Button>
-        }
-      >
-        <ErpSearchInput className="min-w-56 flex-1"
-            value={filters.keyword}
-            onChange={(event) => update({ keyword: event.target.value })}
-            placeholder="搜索日结编号、关闭人或备注"
-            aria-label="搜索日结记录" />
-        <ErpDateRangePicker
-          value={{startDate: filters.dateStart, endDate: filters.dateEnd}}
-          onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})}
-          density="compact"
-          triggerClassName="md:w-36"
-          startAriaLabel="日结开始日期"
-          endAriaLabel="日结结束日期"
-          ariaLabel="日结日期范围"
-        />
-      </ErpFilterBar>
-      </ErpPageToolbar>
-      <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      <MainRegion variant="70-30" className="gap-3">
-        <MainRegion.Primary>
-          <FinanceTableRegion
-            title="已保存日结"
-            description="点击记录查看应收、应付、销售与采购摘要。"
-            actions={
-              <div className="flex items-center gap-2">
-                <ErpStatusBadge
-                  label={`第 ${report.meta.page} 页 · ${report.pageRows.length} 条`}
-                  tone="info"
-                />
-                  <FinanceTableControls
-                  columns={columns}
-                  visibility={columnVisibility}
-                  onVisibilityChange={setColumnVisibility}
-                  density={density}
-                  onDensityChange={setDensity}
-                />
-              </div>
-            }
-            table={{
-              columns,
-              data: report.pageRows,
-              getRowId: (row) => row.id,
-              loading: query.isPending,
-              fetching: query.isFetching,
-              error: query.error as Error | null,
-              errorTitle: "日结快照加载失败",
-              emptyTitle: "暂无日结快照",
-              emptyDescription:
-                activeFilters
-                  ? "当前筛选条件没有匹配的日结记录。"
-                  : "当前还没有已保存的日结快照。",
-              onRetry: () => void query.refetch(),
-              onRowClick: setDetail,
-              page: report.meta.page,
-              pageSize: report.meta.pageSize,
-              total: report.meta.total,
-              onPageChange: (page) => update({ page }),
-              onPageSizeChange: (pageSize) => update({ page: 1, pageSize }),
-              mobileRow: (item) => (
-                <ErpMobileRecordRow
-                  title={item.date}
-                  subtitle={`关闭人: ${item.closedBy}`}
-                  meta={`收 ${formatCurrency(item.snapshot.income)} · 支 ${formatCurrency(item.snapshot.expense)}`}
-                  amount={formatCurrency(item.snapshot.netCash)}
-                  amountLabel="净现金"
-                  status={<ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />}
-                  statusPlacement="title"
-                  onOpen={() => setDetail(item)}
-                />
-              ),
-              columnVisibility,
-              onColumnVisibilityChange: setColumnVisibility,
-              enableColumnResizing: true,
-              density,
-              stickyHeader: true,
-              virtualized: report.pageRows.length >= 50,
-            }}
-          />
-        </MainRegion.Primary>
-        <MainRegion.Secondary>
-          <FinanceAccountingPeriodPanel
-            periods={accountingPeriods}
-            selectedPeriod={selectedPeriod}
-            onSelectedPeriodChange={setSelectedPeriod}
-            onClosePeriod={(period) => accountingPeriodMutation.mutate({period, action: "close"})}
-            onReopenPeriod={(period) => accountingPeriodMutation.mutate({period, action: "reopen"})}
-            busy={accountingPeriodMutation.isPending || accountingPeriodsQuery.isFetching}
-          />
-          {reconciliationQuery.data ? <FinanceReconciliationPanel report={reconciliationQuery.data} /> : null}
-          <DashboardSection
-            title="最新异常"
-            description={
-              latest ? `来自 ${latest.date} 日结快照` : "暂无可供复核的日结快照"
-            }
-            actions={
-              <ErpStatusBadge
-                label={latest ? financeClosingStatusLabel(latest) : "无记录"}
-                tone={latest ? financeClosingStatus(latest) : "neutral"}
-              />
-            }
-          >
-            {latest ? (
-              <FinanceLatestExceptions item={latest} />
-            ) : (
-              <ErpEmptyState
-                title="暂无日结记录"
-                description="完成日结后，最新记录会显示在这里。"
-              />
-            )}
-          </DashboardSection>
-        </MainRegion.Secondary>
-      </MainRegion>
-      <FinanceClosingDetailDrawer item={detail} onClose={() => setDetail(null)} />
-      </ErpPageContent>
-    </ErpFinancePageFrame>
-  );
+    </div>}
+  >
+    <div id="finance-closing-health" className="scroll-mt-6">{reconciliationQuery.data ? <FinanceReconciliationPanel report={reconciliationQuery.data} /> : <DashboardSection title="账务体检" description="尚未运行账户、收付款与退货链一致性检查。"><div className="flex items-center justify-between gap-3"><ErpEmptyState density="compact" title="等待检查" description="运行检查后，结果将在这里展开。" /><Button type="button" size="sm" variant="secondary" disabled={reconciliationQuery.isFetching} onClick={() => void reconciliationQuery.refetch()}>检查账务</Button></div></DashboardSection>}</div>
+    <FinanceClosingDetailDrawer item={detail} onClose={() => setDetail(null)} />
+  </FinanceDetailPageLayout>;
 }
 
 function csvCell(value: string | number) {

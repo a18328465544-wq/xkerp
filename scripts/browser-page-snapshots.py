@@ -79,7 +79,7 @@ def capture(label, routes, widths):
     print(f"\n已保存到 {target.relative_to(ROOT)}")
 
 
-def compare(before, after, threshold):
+def compare(before, after, threshold, subset=False):
     try:
         from PIL import Image, ImageChops
     except ImportError:
@@ -92,7 +92,8 @@ def compare(before, after, threshold):
     for shot in sorted(left.glob("*.png")):
         other = right / shot.name
         if not other.exists():
-            failures.append(f"{shot.name}：{after} 中缺少这张截图")
+            if not subset:
+                failures.append(f"{shot.name}：{after} 中缺少这张截图")
             continue
         a, b = Image.open(shot).convert("RGB"), Image.open(other).convert("RGB")
         width, height = min(a.width, b.width), min(a.height, b.height)
@@ -132,12 +133,13 @@ def main():
     diff.add_argument("before")
     diff.add_argument("after")
     diff.add_argument("--threshold", type=float, default=0.5)
+    diff.add_argument("--subset", action="store_true", help="只对比 after 中存在的截图（只重拍了部分页面时使用）")
     args = parser.parse_args()
     if args.command == "capture":
         routes = args.routes.split(",") if args.routes else default_routes()
         capture(args.label, routes, [int(value) for value in args.widths.split(",")])
     else:
-        compare(args.before, args.after, args.threshold)
+        compare(args.before, args.after, args.threshold, args.subset)
 
 
 if __name__ == "__main__":

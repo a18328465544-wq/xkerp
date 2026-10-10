@@ -24,8 +24,7 @@ import {
   useState,
 } from "react";
 import {notify} from "@/src/utils/notification";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
-import { Button, Card, Input, Select } from "@/src/components/ui";
+import {Button, Card, Input, Select} from "@/src/components/ui";
 import {
   ErpDateRangePicker,
   ErpFilterBar,
@@ -45,9 +44,9 @@ import {
   type AuthSession,
 } from "@/src/services/api";
 import {invalidateErpDomains, refreshErpAfterDocument} from "@/src/services/api";
-import { createCapabilities, useAuth } from "@/src/app/auth";
-import { useUrlSearchState } from "@/src/hooks/useUrlSearchState";
-import { formatCurrency } from "@/src/lib/format";
+import {createCapabilities, useAuth} from "@/src/app/auth";
+import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
+import {formatCurrency} from "@/src/lib/format";
 import {
   financeExpenseCategories,
   legacyFinanceExpenseCategories,
@@ -55,14 +54,14 @@ import {
   type FinanceExpenseFormValues,
   type FinanceExpenseItem,
 } from "@/src/types/finance-expense";
-import { storeDate } from "@/src/utils/storeTime";
-import { createFinanceExpenseColumns } from "../finance-expense.columns";
+import {storeDate} from "@/src/utils/storeTime";
+import {createFinanceExpenseColumns} from "../finance-expense.columns";
 import {
   defaultFinanceExpenseFilters,
   financeExpenseFiltersToSearch,
   parseFinanceExpenseFilters,
 } from "../finance-expense.filters";
-import { FinanceExpenseDialog } from "../components/FinanceExpenseDialog";
+import {FinanceExpenseDialog} from "../components/FinanceExpenseDialog";
 import {FinanceEntryPageLayout} from "../components/FinanceEntryPageLayout";
 import {FinanceEntryDeleteDrawer, FinanceEntryDetailDrawer, FinanceEntryMetric} from "../components/FinanceEntryDetailDrawers";
 function useExpenseUrlState() {
@@ -137,7 +136,6 @@ function FinanceExpenseContent({
   accounts: Awaited<ReturnType<typeof financeAccountsApi.listAll>>["accounts"];
   canReadAccounts: boolean;
 }) {
-  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<FinanceExpenseItem | null>(null);
   const [editing, setEditing] = useState<FinanceExpenseItem | null>(null);
@@ -283,27 +281,24 @@ function FinanceExpenseContent({
         quickStatus: quickStatus,
         actions: (
           <>
-            {!phone && (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={expenseQuery.isFetching}
-                onClick={() => void expenseQuery.refetch()}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${expenseQuery.isFetching ? "animate-spin" : ""}`}
-                />
-                刷新
-              </Button>
-            )}
             <Button
               size="sm"
               variant="secondary"
-              disabled={phone && !collection.items.length}
+              disabled={expenseQuery.isFetching}
+              onClick={() => void expenseQuery.refetch()}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${expenseQuery.isFetching ? "animate-spin" : ""}`}
+              />
+              刷新
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={exportRows}
             >
               <Download className="h-4 w-4" />
-              {phone ? "导出当前页" : "导出"}
+              导出
             </Button>
             <Button
               size="sm"
@@ -342,7 +337,7 @@ function FinanceExpenseContent({
           icon={<CalendarRange className="h-4 w-4" />}
           tone="danger"
         />
-        {(topCategory || phone) && <FinanceEntryMetric
+        {topCategory && <FinanceEntryMetric
           label="主要支出类型"
           value={topCategory?.[0] || "暂无"}
           detail={topCategory ? formatCurrency(topCategory[1]) : "本月暂无登记"}
