@@ -12,7 +12,7 @@ import {ErpFilterBar} from "../ErpFilterBar";
 import {ErpMobileActionDock} from "../ErpMobileActionDock";
 import {ErpMobileSummary} from "../ErpMobileSummary";
 import {ErpPageContent, ErpPageToolbar, ErpTableResultsBar} from "../ErpPageFrame";
-import {ErpAnalyticsPageFrame, ErpFinancePageFrame, ErpListPageFrame, ErpSettingsPageFrame, ErpWarehousePageFrame} from "../ErpPageFrames";
+import {ErpAnalyticsPageFrame, ErpCrmPageFrame, ErpFinancePageFrame, ErpListPageFrame, ErpSettingsPageFrame, ErpWarehousePageFrame} from "../ErpPageFrames";
 import {ErpPageHeader} from "../ErpPageHeader";
 import type {QuickStatusItemData} from "../ErpQuickStatus";
 import {ErpSearchInput} from "../ErpSearchInput";
@@ -50,7 +50,7 @@ export interface ErpListPagePagination {
   onPageSizeChange?: (pageSize: number) => void;
 }
 
-export type ErpListPageFrameKind = "list" | "warehouse" | "finance" | "settings" | "analytics";
+export type ErpListPageFrameKind = "list" | "warehouse" | "finance" | "settings" | "analytics" | "crm";
 
 export interface ErpListPageProps<TData> {
   title: string;
@@ -245,6 +245,7 @@ function getListPageFrame(kind: ErpListPageFrameKind) {
     case "finance": return ErpFinancePageFrame;
     case "settings": return ErpSettingsPageFrame;
     case "analytics": return ErpAnalyticsPageFrame;
+    case "crm": return ErpCrmPageFrame;
     default: return ErpListPageFrame;
   }
 }

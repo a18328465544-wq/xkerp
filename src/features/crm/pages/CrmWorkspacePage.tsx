@@ -1,17 +1,16 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
-import {ArrowDown, ArrowUp, CalendarClock, ChevronDown, MessageSquarePlus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Target, UserPlus, Users} from "lucide-react";
-import {ErpDialogShell, ErpEntityThumbnail, ErpMobileActionDock, ErpMobileRecordRow, ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
+import {CalendarClock, MessageSquarePlus, Sparkles, Target, UserPlus, Users} from "lucide-react";
+import {ErpEntityThumbnail, ErpMobileRecordRow, ErpListPage, type ErpFilterField} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
-import {Button, Card, Select} from "@/src/components/ui";
-import {ErpColumnVisibilityMenu, DashboardSection, ErpCrmPageFrame, ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpEmptyState, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, ErpTableResultsBar, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {Button, Card} from "@/src/components/ui";
+import {DashboardSection, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageError, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, crmApi, queryKeys, type AuthSession} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useTablePreferences} from "@/src/hooks/useTablePreferences";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {formatCurrency} from "@/src/lib/format";
 import {formatStoreDateTime} from "@/src/utils/storeTime";
 import type {CrmAccount, CrmFollowUpFormValues, CrmTimelineEvent} from "@/src/types/crm";
@@ -32,14 +31,12 @@ export function CrmWorkspacePage() {
 }
 
 function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; onAuthExpired: () => void}) {
-  const phone = useErpPhone();
   const {active} = useWorkspaceTabActivity();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const {value: filters, commit} = useCrmUrlState();
   const [detail, setDetail] = useState<CrmAccount | null>(null);
   const [followUp, setFollowUp] = useState<CrmAccount | null>(null);
-  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<Record<string, boolean>>({feature: "crm", userId: session.user.id, defaultVisibility: {}, defaultDensity: "comfortable"});
   const accountQuery = useQuery({queryKey: queryKeys.crm.accounts(filters), queryFn: ({signal}) => crmApi.accounts(filters, signal), enabled: active, placeholderData: keepPreviousData, retry: false});
   const summaryFilters = {keyword: filters.keyword, owner: filters.owner};
@@ -58,24 +55,42 @@ function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; on
   const refresh = async () => {await Promise.all([accountQuery.refetch(), summaryQuery.refetch(), detail ? timelineQuery.refetch() : Promise.resolve()]);};
   const activeFilters = Number(Boolean(filters.keyword.trim())) + Number(Boolean(filters.owner));
 
-  const crmTable = (
-    <ErpDataTable
-      surface="responsive"
-      mobilePagination="compact"
-      mobileShowDetailAction={false}
-      mobileToolbar={({openSorting, sortLabel, descending}) => (
-        <div className="erp-customer-list-toolbar">
-          <div className="erp-customer-quick-filters" role="group" aria-label="CRM快捷筛选">
-            <Button type="button" variant={!filters.owner ? "primary" : "ghost"} aria-pressed={!filters.owner} onClick={() => commit({...filters, owner: "", page: 1})}>全部</Button>
-            {session.user.displayName && <Button type="button" variant={filters.owner === session.user.displayName ? "primary" : "ghost"} aria-pressed={filters.owner === session.user.displayName} onClick={() => commit({...filters, owner: session.user.displayName, page: 1})}>我的客户</Button>}
-          </div>
-          <Button type="button" variant="ghost" className="erp-customer-sort" aria-label="客户排序" onClick={openSorting}>
-            <span>{sortLabel || "默认排序"}</span>
-            {descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
-      mobileRow={(item) => (
+  const setOwner = (owner: string) => commit({...filters, owner, page: 1});
+  const filterFields: ErpFilterField[] = [
+    {kind: "select", key: "owner", label: "负责人", width: "w-40", value: filters.owner, defaultValue: "", options: [{value: "", label: "全部负责人"}, ...owners.map((owner) => ({value: owner, label: owner}))], onChange: setOwner},
+  ];
+  const openNewLead = () => void navigate({to: "/crm/customers/new"});
+
+  return <ErpListPage
+    title="客户 CRM"
+    subtitle="查看客户档案、跟进计划和业务时间线。"
+    countLabel={(count) => `${count} 位客户`}
+    loading={accountQuery.isPending}
+    loadError={Boolean(accountQuery.error && !accountQuery.data)}
+    quickStatus={quickStatus}
+    pageFrame="crm"
+    metrics={[
+      <MetricCard key="customers" label="客户档案统计" value={totals ? `${totals.customers} 位` : "—"} detail="按客户档案统计，可能与客户列表数量不同" icon={<Users className="h-4 w-4" />} />,
+      <MetricCard key="pending" label="到期跟进" value={totals ? `${totals.pendingFollowUps} 项` : "—"} detail="下次跟进时间不晚于今日" icon={<CalendarClock className="h-4 w-4" />} tone={totals?.pendingFollowUps ? "warning" : "normal"} />,
+      <MetricCard key="intent" label="高意向客户" value={totals ? `${totals.highIntent} 位` : "—"} detail="沿用原 CRM 意向字段" icon={<Target className="h-4 w-4" />} />,
+      <MetricCard key="deals" label="已成交客户" value={totals ? `${totals.deals} 位` : "—"} detail={totals ? `跟进中 ${totals.following} · 线索 ${totals.leads}` : "真实汇总加载中"} icon={<Sparkles className="h-4 w-4" />} tone="success" />,
+    ]}
+    search={{value: filters.keyword, onChange: (keyword) => commit({...filters, keyword, page: 1}), label: "搜索客户", placeholder: "搜索客户、电话、微信、城市或公司", phonePlaceholder: "搜索客户、电话、微信"}}
+    filters={filterFields}
+    onResetFilters={() => commit(defaultCrmFilters)}
+    quickFilters={[
+      {label: "全部", active: !filters.owner, onSelect: () => setOwner("")},
+      ...(session.user.displayName ? [{label: "我的客户", active: filters.owner === session.user.displayName, onSelect: () => setOwner(session.user.displayName)}] : []),
+    ]}
+    defaultSortLabel="默认排序"
+    primaryAction={{label: "新增客户线索", icon: <UserPlus className="h-4 w-4" />, onClick: openNewLead}}
+    phonePrimaryAction={{label: "新增线索", icon: <UserPlus className="h-5 w-5" />, onClick: openNewLead}}
+    onRefresh={() => void refresh()}
+    refreshing={accountQuery.isFetching || summaryQuery.isFetching}
+    resultsLabel="全部客户"
+    tableTitle="客户池"
+    columnSettings={{columns, visibility: columnVisibility, onVisibilityChange: setColumnVisibility, density, onDensityChange: setDensity}}
+    table={{ariaLabel: "CRM 客户池", columns, data: accounts, getRowId: (row) => row.id, mobileShowDetailAction: false, mobileRow: (item) => (
         <ErpMobileRecordRow
           title={item.displayName}
           thumbnail={<ErpEntityThumbnail kind="customer" name={item.displayName} />}
@@ -87,92 +102,13 @@ function CrmWorkspaceContent({session, onAuthExpired}: {session: AuthSession; on
           amount={item.estimatedAmount ? formatCurrency(item.estimatedAmount) : undefined}
           onOpen={() => setDetail(item)}
         />
-      )}
-      mobileFieldOrder={["contact","status","owner","nextFollowAt"]}
-      ariaLabel="CRM 客户池"
-      columns={columns}
-      data={accounts}
-      getRowId={(row) => row.id}
-      loading={accountQuery.isPending}
-      fetching={accountQuery.isFetching}
-      error={accountQuery.error as Error | null}
-      errorTitle="客户列表加载失败"
-      emptyTitle="暂无匹配客户"
-      emptyDescription={activeFilters ? "请调整关键词或负责人筛选。" : "当前 CRM 尚无客户主体。"}
-      onRetry={() => void accountQuery.refetch()}
-      onRowClick={setDetail}
-      page={filters.page}
-      pageSize={filters.pageSize}
-      total={accountQuery.data?.total}
-      onPageChange={(page) => commit({...filters, page})}
-      onPageSizeChange={(pageSize) => commit({...filters, page: 1, pageSize})}
-      columnVisibility={columnVisibility}
-      onColumnVisibilityChange={setColumnVisibility}
-      enableColumnResizing
-      density={density}
-      stickyHeader
-    />
-  );
-
-  return <ErpCrmPageFrame className="erp-customer-directory" data-phone-layout={phone ? "thumb" : undefined}>
-    <ErpPageHeader
-      title={phone ? <span className="erp-customer-phone-title">客户 CRM<small>{accountQuery.data?.total || 0} 位客户</small></span> : "客户 CRM"}
-      subtitle="查看客户档案、跟进计划和业务时间线。"
-      quickStatus={quickStatus}
-      actions={phone ? (
-        <Button type="button" variant="secondary" onClick={() => setPhoneFiltersOpen(true)} aria-label="CRM筛选与操作">
-          <SlidersHorizontal className="h-5 w-5" />筛选{activeFilters > 0 && <span className="tabular-nums">{activeFilters}</span>}
-        </Button>
-      ) : (
-        <>
-          <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={accountQuery.isFetching || summaryQuery.isFetching}><RefreshCw className={`h-4 w-4 ${accountQuery.isFetching || summaryQuery.isFetching ? "animate-spin" : ""}`} />刷新</Button>
-          <Button type="button" size="sm" variant="primary" onClick={() => void navigate({to: "/crm/customers/new"})}><UserPlus className="h-4 w-4" />新增客户线索</Button>
-        </>
-      )}
-    />
-    {!phone && (
-      <>
-        <ErpMobileSummary>
-          <MetricsRegion>
-            <MetricCard label="客户档案统计" value={totals ? `${totals.customers} 位` : "—"} detail="按客户档案统计，可能与客户列表数量不同" icon={<Users className="h-4 w-4" />} />
-            <MetricCard label="到期跟进" value={totals ? `${totals.pendingFollowUps} 项` : "—"} detail="下次跟进时间不晚于今日" icon={<CalendarClock className="h-4 w-4" />} tone={totals?.pendingFollowUps ? "warning" : "normal"} />
-            <MetricCard label="高意向客户" value={totals ? `${totals.highIntent} 位` : "—"} detail="沿用原 CRM 意向字段" icon={<Target className="h-4 w-4" />} />
-            <MetricCard label="已成交客户" value={totals ? `${totals.deals} 位` : "—"} detail={totals ? `跟进中 ${totals.following} · 线索 ${totals.leads}` : "真实汇总加载中"} icon={<Sparkles className="h-4 w-4" />} tone="success" />
-          </MetricsRegion>
-        </ErpMobileSummary>
-        <ErpPageToolbar>
-          <ErpFilterBar actions={<Button type="button" size="sm" variant="ghost" onClick={() => commit(defaultCrmFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}>
-            <ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => commit({...filters, keyword: event.target.value, page: 1})} placeholder="搜索客户、电话、微信、城市或公司" aria-label="搜索客户" />
-            <Select className="w-40" value={filters.owner} onValueChange={(owner) => commit({...filters, owner, page: 1})} options={[{value: "", label: "全部负责人"}, ...owners.map((owner) => ({value: owner, label: owner}))]} placeholder="全部负责人" aria-label="筛选负责人" />
-          </ErpFilterBar>
-        </ErpPageToolbar>
-      </>
-    )}
-    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      {!phone && <ErpTableResultsBar summary={<span className="flex flex-wrap items-center gap-2 text-[var(--erp-color-text-muted)]"><SlidersHorizontal className="h-3.5 w-3.5" /><ErpStatusBadge label={activeFilters ? `${activeFilters} 项筛选` : "全部客户"} tone={activeFilters ? "info" : "neutral"} /><span>共 {accountQuery.data?.total || 0} 条</span></span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
-      {phone ? crmTable : <DashboardSection title="客户池" actions={<ErpStatusBadge label={`共 ${accountQuery.data?.total || 0} 条`} tone="info" />}>{crmTable}</DashboardSection>}
-      <ErpMobileActionDock hidden={Boolean(detail || followUp || phoneFiltersOpen)} ariaLabel="客户搜索与新建" primaryAction={<Button type="button" variant="primary" onClick={() => void navigate({to: "/crm/customers/new"})}><UserPlus className="h-5 w-5" />新增线索</Button>}>
-        <ErpSearchInput className="w-full" value={filters.keyword} onChange={(event) => commit({...filters, keyword: event.target.value, page: 1})} placeholder="搜索客户、电话、微信" aria-label="搜索客户" />
-      </ErpMobileActionDock>
-      {phone && (
-        <ErpDialogShell open={phoneFiltersOpen} onOpenChange={setPhoneFiltersOpen} title="CRM筛选与操作" mobilePresentation="sheet" footer={<><Button type="button" size="sm" variant="ghost" onClick={() => commit(defaultCrmFilters)}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" variant="primary" onClick={() => setPhoneFiltersOpen(false)}>查看结果</Button></>}>
-          <div className="space-y-4">
-            <div data-erp-region="phone-filter-fields" className="grid gap-3">
-              <Select className="w-full" value={filters.owner} onValueChange={(owner) => commit({...filters, owner, page: 1})} options={[{value: "", label: "全部负责人"}, ...owners.map((owner) => ({value: owner, label: owner}))]} placeholder="全部负责人" aria-label="筛选负责人" />
-              <Select aria-label="每页条数" value={String(filters.pageSize)} onValueChange={(value) => commit({...filters, page: 1, pageSize: Number(value)})} options={[20, 50, 100].map((value) => ({value: String(value), label: `${value} 条/页`}))} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" disabled={accountQuery.isFetching || summaryQuery.isFetching} onClick={() => void refresh()}>
-                <RefreshCw className={`h-4 w-4 ${accountQuery.isFetching || summaryQuery.isFetching ? "animate-spin" : ""}`} />刷新
-              </Button>
-            </div>
-          </div>
-        </ErpDialogShell>
-      )}
+      ), mobileFieldOrder: ["contact","status","owner","nextFollowAt"], loading: accountQuery.isPending, fetching: accountQuery.isFetching, error: accountQuery.error as Error | null, errorTitle: "客户列表加载失败", emptyTitle: "暂无匹配客户", emptyDescription: activeFilters ? "请调整关键词或负责人筛选。" : "当前 CRM 尚无客户主体。", onRetry: () => void accountQuery.refetch(), onRowClick: setDetail, page: filters.page, pageSize: filters.pageSize, total: accountQuery.data?.total, onPageChange: (page) => commit({...filters, page}), onPageSizeChange: (pageSize) => commit({...filters, page: 1, pageSize}), enableColumnResizing: true, stickyHeader: true}}
+    overlayOpen={Boolean(detail || followUp)}
+    overlays={<>
       <CrmDetailDrawer account={detail} events={timelineQuery.data?.items || []} loading={timelineQuery.isPending} error={timelineQuery.error as Error | null} onRetry={() => void timelineQuery.refetch()} onClose={() => setDetail(null)} onFollowUp={() => {if (detail) setFollowUp(detail);}} />
       <CrmFollowUpDialog account={followUp} pending={followUpMutation.isPending} error={followUpMutation.error instanceof Error ? followUpMutation.error.message : undefined} onOpenChange={(open) => {if (!open) {setFollowUp(null); followUpMutation.reset();}}} onSubmit={async (values) => {await followUpMutation.mutateAsync(values);}} />
-    </ErpPageContent>
-  </ErpCrmPageFrame>;
+    </>}
+  />;
 }
 
 function CrmDetailDrawer({account, events, loading, error, onRetry, onClose, onFollowUp}: {account: CrmAccount | null; events: CrmTimelineEvent[]; loading: boolean; error: Error | null; onRetry: () => void; onClose: () => void; onFollowUp: () => void}) {

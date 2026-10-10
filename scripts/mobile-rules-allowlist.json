@@ -14,14 +14,6 @@
   "browser": [],
   "pageViewport": [
     {
-      "file": "src/features/aftersales/pages/AftersalesWorkspacePage.tsx",
-      "reason": "工作台页面待评估（T12）"
-    },
-    {
-      "file": "src/features/crm/pages/CrmWorkspacePage.tsx",
-      "reason": "工作台页面待评估（T12）"
-    },
-    {
       "file": "src/features/dashboard/pages/DashboardPage.tsx",
       "reason": "首页在手机上是独立的移动工作台（M9 底部导航「首页」根页面），与电脑端经营看板是两套界面，手机端也不加载 AI 建议；保留分支是有意的"
     },
