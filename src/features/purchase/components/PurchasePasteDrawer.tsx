@@ -1,5 +1,5 @@
 import {Check, ClipboardPaste, AlertTriangle, XCircle} from "lucide-react";
-import {useMemo, useState, type ClipboardEvent} from "react";
+import {useEffect, useMemo, useRef, useState, type ClipboardEvent} from "react";
 import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpAmountInput, ErpDetailDrawer, ErpEmptyState, ErpPageError, ErpStatusBadge} from "@/src/components/common";
 import {productDisplayName} from "@/src/lib/productName";
@@ -28,6 +28,9 @@ interface PurchasePasteDrawerProps {
   products: readonly PurchaseProductOption[];
   defaults: PurchaseLineFormValue;
   existingItems: readonly PurchaseLineFormValue[];
+  /** Optional parsed rows from another entry flow; still reviewed in this drawer. */
+  initialRows?: readonly PurchasePasteRow[];
+  initialRawText?: string;
   currentExpressNo?: string;
   canEnterCost: boolean;
   canEnterEstimatedSell: boolean;
@@ -67,14 +70,30 @@ function rowOptions(products: readonly PurchaseProductOption[]) {
   return products.map((product) => ({value: product.id, label: productDisplayName(product)}));
 }
 
-export function PurchasePasteDrawer({open, onOpenChange, products, defaults, existingItems, currentExpressNo = "", canEnterCost, canEnterEstimatedSell, onConfirm}: PurchasePasteDrawerProps) {
+export function PurchasePasteDrawer({open, onOpenChange, products, defaults, existingItems, initialRows, initialRawText = "", currentExpressNo = "", canEnterCost, canEnterEstimatedSell, onConfirm}: PurchasePasteDrawerProps) {
   const [rawText, setRawText] = useState("");
   const [result, setResult] = useState<PurchasePasteResult | null>(null);
   const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
   const [expressNoDraft, setExpressNoDraft] = useState(currentExpressNo);
+  const initializedRows = useRef<readonly PurchasePasteRow[] | null>(null);
   const options = useMemo<PurchasePasteOptions>(() => ({defaults, products, existingItems, canEnterCost, canEnterEstimatedSell, maxTextLength: PURCHASE_PASTE_MAX_TEXT_LENGTH, maxRows: PURCHASE_PASTE_MAX_ROWS}), [canEnterCost, canEnterEstimatedSell, defaults, existingItems, products]);
   const productOptions = useMemo(() => rowOptions(products), [products]);
   const selection = useMemo(() => result && !result.errors.length ? planPurchasePasteSelection(result.parsedRows, includedIds, options) : null, [includedIds, options, result]);
+
+  useEffect(() => {
+    if (!open) {
+      initializedRows.current = null;
+      return;
+    }
+    if (!initialRows || initializedRows.current === initialRows) return;
+    initializedRows.current = initialRows;
+    const rows = revalidatePurchasePasteRows(initialRows, options);
+    const preview = resultWithRows({delimiter: "unknown", headerDetected: false, headerFields: [], parsedRows: [], validRows: [], warningRows: [], invalidRows: [], needsConfirmationRows: [], errors: []}, rows);
+    setRawText(initialRawText);
+    setResult(preview);
+    setIncludedIds(new Set(rows.filter(eligible).map((row) => row.id)));
+    setExpressNoDraft(currentExpressNo);
+  }, [currentExpressNo, initialRawText, initialRows, open, options]);
 
   const processText = (text: string) => {
     setRawText(text);
@@ -169,8 +188,15 @@ export function PurchasePasteDrawer({open, onOpenChange, products, defaults, exi
 }
 
 function PasteRowCard({row, products, canEnterCost, canEnterEstimatedSell, included, onToggle, onChooseProduct, onUpdate}: {row: PurchasePasteRow; products: ReturnType<typeof rowOptions>; canEnterCost: boolean; canEnterEstimatedSell: boolean; included: boolean; onToggle: () => void; onChooseProduct: (value: string) => void; onUpdate: <K extends PurchasePasteEditableField>(field: K, value: PurchaseLineFormValue[K]) => void}) {
+  const voiceSuggestions = row.voiceSuggestions;
+  const voiceDetails = voiceSuggestions ? [
+    voiceSuggestions.condition ? `成色 ${voiceSuggestions.condition}` : null,
+    voiceSuggestions.fullBox === undefined ? null : voiceSuggestions.fullBox ? "带盒" : "无盒",
+    voiceSuggestions.repaired === undefined ? null : voiceSuggestions.repaired ? "有维修" : "未维修",
+  ].filter((item): item is string => Boolean(item)) : [];
   return <article className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3 shadow-[var(--erp-shadow-card)]">
     <div className="flex items-start gap-3"><input type="checkbox" checked={included} onChange={onToggle} disabled={!included && !eligible(row)} className="mt-1 accent-[var(--erp-color-primary)]" aria-label={`选择第 ${row.lineNumber} 行`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><ErpStatusBadge label={statusLabel(row.status)} tone={statusTone(row.status)} /><span className="text-xs text-[var(--erp-color-text-muted)]">第 {row.lineNumber} 行</span></div><p className="mt-1 break-all text-xs text-[var(--erp-color-text-secondary)]">原文：{row.rawText}</p></div>{row.status === "invalid" ? <XCircle className="h-4 w-4 shrink-0 text-[var(--erp-color-danger)]" /> : row.status === "needs-confirmation" ? <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--erp-color-warning)]" /> : null}</div>
+    {voiceDetails.length > 0 ? <p className="mt-2 rounded-[var(--erp-radius-sm)] bg-[var(--erp-color-info-soft)] px-2 py-1.5 text-xs text-[var(--erp-color-primary)]">识别建议：{voiceDetails.join(" · ")}，检测质检时复核</p> : null}
     <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold sm:col-span-2">商品模板<Select searchable searchPlaceholder="搜索现有商品模板" emptyText="没有找到匹配的商品模板" className="mt-1" value={row.line.productId} options={products} onValueChange={onChooseProduct} placeholder="请选择现有商品模板" aria-label={`第 ${row.lineNumber} 行商品模板`} /></label><label className="text-xs font-semibold">数量<Input className="mt-1" type="number" inputMode="numeric" min={1} max={PURCHASE_MAX_PHYSICAL_ITEMS} step={1} value={editableQuantityValue(row.line.quantity)} onChange={(event) => onUpdate("quantity", quantityFromInput(event.target.value))} aria-invalid={Boolean(purchaseQuantityError([row.line]))} aria-label={`第 ${row.lineNumber} 行数量`} /></label><label className="text-xs font-semibold">采购价{canEnterCost ? <ErpAmountInput className="mt-1" value={row.line.buyPrice} onValueChange={(detail) => onUpdate("buyPrice", detail.floatValue || 0)} aria-label={`第 ${row.lineNumber} 行采购价`} /> : <span className="mt-1 flex h-10 items-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 text-xs font-normal text-[var(--erp-color-text-muted)]">当前表单不可录入</span>}</label><label className="text-xs font-semibold">预计售价{canEnterEstimatedSell ? <ErpAmountInput className="mt-1" value={row.line.estSellPrice} onValueChange={(detail) => onUpdate("estSellPrice", detail.floatValue || 0)} aria-label={`第 ${row.lineNumber} 行预计售价`} /> : <span className="mt-1 flex h-10 items-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 text-xs font-normal text-[var(--erp-color-text-muted)]">当前表单不可录入</span>}</label><label className="text-xs font-semibold sm:col-span-2">行备注<Textarea className="mt-1 min-h-16 text-xs" value={row.line.remarks} onChange={(event) => onUpdate("remarks", event.target.value)} aria-label={`第 ${row.lineNumber} 行备注`} /></label></div>
     {row.candidates.length > 1 ? <p className="mt-2 text-xs text-[var(--erp-color-warning)]">发现多个严格匹配候选，请从商品模板中手动选择。</p> : null}
     {row.errors.length ? <div className="mt-2 space-y-1 text-xs text-[var(--erp-color-danger)]">{row.errors.map((error) => <p key={error}>{error}</p>)}</div> : null}

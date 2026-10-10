@@ -24,10 +24,11 @@ export interface VoiceEntryControlProps {
   onTranscript?: (transcript: string) => void | Promise<void>;
   onTextFallback?: () => void;
   onParsed?: (result: VoiceParseResult) => void;
+  onApply?: (result: VoiceParseResult, transcript: string) => void | Promise<void>;
   className?: string;
 }
 
-export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, onTextFallback, onParsed, className}: VoiceEntryControlProps) {
+export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, onTextFallback, onParsed, onApply, className}: VoiceEntryControlProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const status = useVoiceStatus();
   const [open, setOpen] = useState(false);
@@ -92,6 +93,20 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
     setOpen(true);
   }, [onTextFallback]);
 
+  const applyParsedDraft = useCallback(async () => {
+    if (!parsed || !onApply) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onApply(parsed, transcript);
+      setOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "草稿无法应用，请继续编辑识别文字。 ");
+    } finally {
+      setBusy(false);
+    }
+  }, [onApply, parsed, transcript]);
+
   const handleUnavailable = useCallback((reason: string) => {
     setError(reason);
     if (onTextFallback) onTextFallback();
@@ -134,6 +149,7 @@ export function VoiceEntryControl({scene, mode = "toggle", label, onTranscript, 
       error={error}
     >
       {parsed && <VoiceParsePreview result={parsed} />}
+      {parsed && onApply && <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={() => void applyParsedDraft()} disabled={busy}>应用到当前表单草稿</Button>}
     </VoiceDraftPanel>
   </div>;
 }

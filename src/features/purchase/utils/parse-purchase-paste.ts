@@ -1,4 +1,5 @@
 import type {PurchaseLineFormValue, PurchaseProductOption} from "@/src/types/purchase";
+import type {VoicePurchaseLineDraft} from "@/src/types/voice";
 import {filledPurchaseLines, normalizePurchaseMoney} from "@/src/lib/purchase";
 import {purchaseQuantity, purchaseQuantityError} from "@/src/utils/purchaseQuantity";
 
@@ -11,7 +12,7 @@ export const PURCHASE_PASTE_MAX_ROWS = 500;
 
 export type PurchasePasteDelimiter = "tab" | "comma" | "space" | "unknown";
 export type PurchasePasteRowStatus = "valid" | "warning" | "invalid" | "needs-confirmation";
-export type PurchasePasteMatchReason = "name-exact" | "identity-exact" | "brand-model-exact" | "model-exact" | "manual" | "none";
+export type PurchasePasteMatchReason = "name-exact" | "identity-exact" | "brand-model-exact" | "model-exact" | "voice-candidate" | "manual" | "none";
 export type PurchasePasteField =
   | "productName"
   | "brand"
@@ -59,6 +60,10 @@ export interface PurchasePasteRow {
   status: PurchasePasteRowStatus;
   candidates: PurchasePasteCandidate[];
   matchReason: PurchasePasteMatchReason;
+  /** Voice suggestions can narrow choices, but ambiguous suggestions are never auto-selected. */
+  voiceCandidateProductIds?: string[];
+  /** Voice-only provisional attributes, shown for confirmation before inspection. */
+  voiceSuggestions?: Pick<VoicePurchaseLineDraft, "condition" | "fullBox" | "repaired">;
   matchConfidence?: number;
   selectedProductId?: string;
 }
@@ -274,6 +279,17 @@ function matchProduct(explicit: PurchasePasteExplicitFields, products: readonly 
   return {candidates: [], reason: "none"};
 }
 
+function matchRowProduct(row: PurchasePasteRow, products: readonly PurchaseProductOption[]): ProductMatch {
+  if (row.selectedProductId) return matchProduct(row.explicit, products, row.selectedProductId);
+  if (!row.voiceCandidateProductIds?.length) return matchProduct(row.explicit, products);
+  const suggestions = products.filter((product) => row.voiceCandidateProductIds?.includes(product.id));
+  return {
+    product: suggestions.length === 1 ? suggestions[0] : undefined,
+    candidates: suggestions.map((product) => ({product, reason: "voice-candidate", confidence: 1})),
+    reason: suggestions.length === 1 ? "voice-candidate" : "none",
+  };
+}
+
 function applyProduct(line: PurchaseLineFormValue, product: PurchaseProductOption): PurchaseLineFormValue {
   return {
     ...line,
@@ -358,7 +374,7 @@ function validateRow(seed: PurchasePasteRow, options: PurchasePasteOptions): Pur
   let line = {...seed.line};
   const errors = seed.parseIssues.map((issue) => issue.message);
   const warnings = [...seed.baseWarnings];
-  let match = matchProduct(seed.explicit, options.products, seed.selectedProductId);
+  let match = matchRowProduct(seed, options.products);
   if (!match.product && line.productId) {
     const existing = options.products.find((product) => product.id === line.productId);
     if (existing) match = {product: existing, candidates: [{product: existing, reason: seed.matchReason, confidence: 1}], reason: seed.matchReason};
@@ -909,5 +925,52 @@ export function updatePurchasePasteRow(row: PurchasePasteRow, field: PurchasePas
 }
 
 export function selectPurchasePasteProduct(row: PurchasePasteRow, productId: string, options: PurchasePasteOptions): PurchasePasteRow {
-  return revalidatePurchasePasteRow({...row, selectedProductId: productId}, options);
+  return revalidatePurchasePasteRow({...row, selectedProductId: productId, voiceCandidateProductIds: undefined}, options);
+}
+
+/** Convert parsed voice lines into the existing editable paste-preview rows. */
+export function createPurchasePasteRowsFromVoice(lines: readonly VoicePurchaseLineDraft[], options: PurchasePasteOptions): PurchasePasteRow[] {
+  return lines.map((draft, index) => {
+    const explicit: PurchasePasteExplicitFields = {
+      productName: draft.productQuery,
+      quantity: draft.quantity,
+      ...(draft.buyPrice === undefined ? {} : {buyPrice: draft.buyPrice}),
+      ...(draft.remarks ? {remarks: draft.remarks} : {}),
+    };
+    const voiceCandidateProductIds = Array.from(new Set(draft.candidates
+      .map((candidate) => candidate.id)
+      .filter((id) => options.products.some((product) => product.id === id))));
+    const row: PurchasePasteRow = {
+      id: `voice-purchase-${index + 1}`,
+      lineNumber: index + 1,
+      rawText: `${draft.productQuery || "未识别商品"} × ${draft.quantity}${draft.buyPrice === undefined ? "" : ` · ¥${draft.buyPrice}`}`,
+      line: {
+        ...options.defaults,
+        quantity: draft.quantity,
+        buyPrice: draft.buyPrice ?? 0,
+        condition: draft.condition ?? options.defaults.condition,
+        fullBox: draft.fullBox ?? options.defaults.fullBox,
+        repaired: draft.repaired ?? options.defaults.repaired,
+        remarks: draft.remarks || "",
+        tempId: undefined,
+      },
+      explicit,
+      parseIssues: [],
+      baseWarnings: [],
+      errors: [],
+      warnings: [],
+      status: "invalid",
+      candidates: [],
+      matchReason: "none",
+      ...(voiceCandidateProductIds.length ? {voiceCandidateProductIds} : {}),
+      ...((draft.condition !== undefined || draft.fullBox !== undefined || draft.repaired !== undefined)
+        ? {voiceSuggestions: {
+          ...(draft.condition === undefined ? {} : {condition: draft.condition}),
+          ...(draft.fullBox === undefined ? {} : {fullBox: draft.fullBox}),
+          ...(draft.repaired === undefined ? {} : {repaired: draft.repaired}),
+        }}
+        : {}),
+    };
+    return validateRow(row, options);
+  });
 }

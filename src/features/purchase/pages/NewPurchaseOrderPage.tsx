@@ -13,6 +13,8 @@ import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
 import type {ProductTemplateFormValues} from "@/src/types/product";
 import type {PurchaseFormValues, PurchaseProductOption, PurchaseReferenceData, PurchaseSourceOption} from "@/src/types/purchase";
+import type {SourceType} from "@/src/types/core";
+import type {VoiceParseResult} from "@/src/types/voice";
 import {createPurchaseDefaults, createPurchaseLineDefaults} from "@/src/features/purchase/purchase.defaults";
 import {calculatePurchaseSettlement, calculatePurchaseSummary, filledPurchaseLines} from "@/src/lib/purchase";
 import {purchaseQuantityError} from "@/src/utils/purchaseQuantity";
@@ -35,6 +37,9 @@ import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWork
 import {formatCurrency} from "@/src/lib/format";
 import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
 import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
+import {createPurchasePasteRowsFromVoice, type PurchasePasteRow} from "@/src/features/purchase/utils/parse-purchase-paste";
+import {applyPurchaseVoiceDraftToForm} from "@/src/features/purchase/utils/apply-purchase-voice-draft";
+import {findExactVoicePurchasePartner, voicePurchasePartnerType, voiceSourceTypeMatchesPartner} from "@/src/features/purchase/utils/voice-purchase-partner";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 
@@ -45,6 +50,14 @@ function errorText(error: unknown) {
 type PurchaseOrderDraft = {
   values: PurchaseFormValues;
   selectedSource: PurchaseSourceOption | null;
+};
+
+type PurchaseVoiceDraft = {
+  purchase: NonNullable<VoiceParseResult["purchase"]>;
+  transcript: string;
+  rows: PurchasePasteRow[];
+  partnerOptions: PurchaseSourceOption[];
+  partnerLookupFailed: boolean;
 };
 
 function mergeByIdentity<T extends {id: string}>(primary: T[], secondary: T[]) {
@@ -90,10 +103,14 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [voicePurchaseDraft, setVoicePurchaseDraft] = useState<PurchaseVoiceDraft | null>(null);
+  const [paymentResetVersion, setPaymentResetVersion] = useState(0);
   const [mediaState, setMediaState] = useState<PurchaseMediaStateChange>({pending: false, failed: false, uploaded: 0, total: 0});
   const mediaStateRef = useRef(mediaState);
   const updateMediaState = useCallback((next: PurchaseMediaStateChange) => {mediaStateRef.current = next; setMediaState(next);}, []);
   const [partnerCreate, setPartnerCreate] = useState<{target: "customer" | "vendor"; initialName: string} | null>(null);
+  const [partnerInitialContact, setPartnerInitialContact] = useState("");
+  const voiceSourceTypeAfterCreate = useRef<SourceType | undefined>(undefined);
   const [productCreate, setProductCreate] = useState<{index: number; initialName: string} | null>(null);
   const productCreateInitialValues = useMemo(() => productCreate ? {model: productCreate.initialName} : undefined, [productCreate]);
   const editorScope = useRef(createIdempotencyKey("purchase-editor"));
@@ -157,6 +174,37 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
     setValue("vendorCreditAppliedAmount", 0, {shouldDirty: true, shouldValidate: true});
   };
 
+  const applyVoicePurchase = useCallback(async (result: VoiceParseResult, transcript: string) => {
+    if (!result.purchase) throw new Error("没有识别到采购草稿，请修改文字后重新解析。");
+    if (!canReadProducts || !referenceData) throw new Error("当前账号暂时无法读取商品模板，语音草稿没有应用。");
+    if (!result.purchase.lines.length) throw new Error("没有识别到采购商品明细，请补充商品和数量后重新解析。");
+    const options = {
+      defaults: createPurchaseLineDefaults(),
+      products: referenceData.products,
+      existingItems: values.items || [],
+      canEnterCost: canEnterPurchaseCost,
+      canEnterEstimatedSell: permissions.showProfit,
+    };
+    const rows = createPurchasePasteRowsFromVoice(result.purchase.lines, options);
+    const partnerQuery = result.purchase.partner.query.trim();
+    let partnerOptions: PurchaseSourceOption[] = [];
+    let partnerLookupFailed = false;
+    if (partnerQuery) {
+      const partnerType = voicePurchasePartnerType(result.purchase.sourceType);
+      const canReadPartner = partnerType === "vendor" ? canReadVendors : canReadCustomers;
+      if (!canReadPartner) partnerLookupFailed = true;
+      else {
+        try {
+          partnerOptions = await purchaseApi.searchSources(partnerQuery, referencePermissions);
+        } catch {
+          partnerLookupFailed = true;
+        }
+      }
+    }
+    setVoicePurchaseDraft({purchase: result.purchase, transcript, rows, partnerOptions, partnerLookupFailed});
+    setPasteOpen(true);
+  }, [canEnterPurchaseCost, canReadCustomers, canReadProducts, canReadVendors, permissions.showProfit, referenceData, referencePermissions, values.items]);
+
   const selectProduct = (index: number, productId: string, productOverride?: PurchaseProductOption) => {
     const product = productOverride || referenceData?.products.find((item) => item.id === productId);
     if (!product) return;
@@ -184,8 +232,47 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   const handleCreatedSource = (option: PurchaseSourceOption) => {
     queryClient.setQueryData<PurchaseReferenceData | undefined>(queryKeys.purchase.referenceData(), (previous) => previous ? addPurchaseSourceToReferenceData(previous, option) : previous);
     selectSource(option);
+    const voiceSourceType = voiceSourceTypeAfterCreate.current;
+    if (voiceSourceType && voiceSourceTypeMatchesPartner(voiceSourceType, option.partnerType)) setValue("sourceType", voiceSourceType, {shouldDirty: true, shouldValidate: true});
+    voiceSourceTypeAfterCreate.current = undefined;
+    setPartnerInitialContact("");
     setPartnerCreate(null);
     notify.success(`${option.partnerType === "vendor" ? "供应商" : "客户"}已新建并选中`, {description: "采购单其他内容保持不变。"});
+  };
+
+  const applyVoiceSourceAfterConfirmation = (draft: PurchaseVoiceDraft) => {
+    const partner = draft.purchase.partner;
+    const query = partner.query.trim();
+    if (!query) return;
+    if (draft.partnerLookupFailed) {
+      setSourceKeyword(query);
+      notify.warning("来源档案暂时无法核对，请在采购表单中手动选择；未自动新建档案。");
+      return;
+    }
+    const exact = findExactVoicePurchasePartner(partner, draft.partnerOptions);
+    const target = voicePurchasePartnerType(draft.purchase.sourceType);
+    const compatible = exact.filter((option) => option.partnerType === target);
+    if (exact.length === 1 && compatible.length === 1) {
+      selectSource(compatible[0]!);
+      if (draft.purchase.sourceType && voiceSourceTypeMatchesPartner(draft.purchase.sourceType, compatible[0]!.partnerType)) {
+        setValue("sourceType", draft.purchase.sourceType, {shouldDirty: true, shouldValidate: true});
+      }
+      return;
+    }
+    if (draft.partnerOptions.length) {
+      setSourceKeyword(query);
+      notify.warning(exact.length > 1 ? "来源档案有重名候选，请手动选择，未自动关联。" : "发现相似来源档案，请在采购表单中手动选择，未自动关联或新建。");
+      return;
+    }
+    const canCreatePartner = target === "vendor" ? canCreateVendor : canCreateCustomer;
+    if (!canCreatePartner) {
+      setSourceKeyword(query);
+      notify.warning("没有找到来源档案，当前账号没有新建权限，请手动选择或联系管理员。");
+      return;
+    }
+    voiceSourceTypeAfterCreate.current = draft.purchase.sourceType;
+    setPartnerInitialContact(partner.phone || "");
+    setPartnerCreate({target, initialName: query});
   };
 
   const handleCreatedProduct = (option: PurchaseProductOption) => {
@@ -291,13 +378,13 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           </ErpFormSection></>;
   return <ErpTransactionPageFrame className="erp-order-entry-page">
     <ErpTransactionHeader title="进货与回收" phoneTitle="采购开单" subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" back={{label: "返回采购单据", fallback: "/purchase", onDesktopBack: leaveDesktop}} pending={createMutation.isPending}
-      actions={<><GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button><VoiceEntryControl scene="purchase" /></>}
+      actions={<><GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => {setVoicePurchaseDraft(null); setPasteOpen(true);}} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button><VoiceEntryControl scene="purchase" onApply={applyVoicePurchase} /></>}
       phoneActions={<div className="flex items-center gap-2"><span className="erp-order-draft-label">草稿 · 切页保留</span><GpuSnDateLookupButton label="SN 查询" /></div>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">表单已重置为下一张采购单；如需处理 SN、成色或库位，请从检测质检入口进入。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
     {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">余额或来源可能已变化；表单内容已保留，请核对后重试。</p>}</div><Button type="button" size="icon" variant="ghost" onClick={() => {submission.clearFeedback(); setServerError(null); setConflictError(false);}} aria-label="关闭错误提示">×</Button></CardContent></Card>}
     {!canReadProducts && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="p-3 text-sm text-[var(--erp-color-warning)]">当前账号没有查看商品规格的权限，暂时无法选择商品。</CardContent></Card>}
-    <ErpMobileWorkflow resetKey={editorScope.current} pending={createMutation.isPending || submission.validating} steps={[
+    <ErpMobileWorkflow resetKey={editorScope.current} pending={createMutation.isPending || submission.validating} phoneAction={<VoiceEntryControl scene="purchase" mode="hold" label="按住说话" onApply={applyVoicePurchase} />} steps={[
       {label: "来源与商品", ready: Boolean(selectedSource) && !hasWorkflowErrors(issues, ["items"]) && !quantityError && Boolean((values.items || []).some((item) => item.productId)), blockedReason: !selectedSource ? "请选择采购来源" : workflowBlockedReason(issues, ["items"], "请填写商品采购价与数量")},
       {label: "结算"},
     ]} summary={<span className="erp-order-action-total"><strong className="erp-data-number">{canEnterPurchaseCost ? formatCurrency(summary.totalCost) : "—"}</strong><small>共 {summary.totalCount} 件</small></span>}>
@@ -309,7 +396,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           <Card className="erp-order-partner"><CardContent>
             <div className="grid items-start gap-3 md:grid-cols-12">
               <div className="hidden min-w-0 md:block md:col-span-3"><p className="flex items-center justify-between gap-1 text-sm font-semibold">单据编号<span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--erp-color-primary)]">未入库</span></p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 break-all erp-data-number text-xs font-semibold text-[var(--erp-color-text)]">{referenceData.nextInvoiceNo}</span></div></div>
-              <div className="min-w-0 md:col-span-6"><PurchaseSourcePicker compact selected={selectedSource} options={referenceData.sources} disabled={createMutation.isPending} loading={sourceSearchQuery.isFetching} canReadCustomers={canReadCustomers} canReadVendors={canReadVendors} canCreateCustomer={canCreateCustomer} canCreateVendor={canCreateVendor} onKeywordChange={setSourceKeyword} onSelect={selectSource} onClear={clearSource} onOpenCreateCustomer={(initialName) => setPartnerCreate({target: "customer", initialName: initialName || ""})} onOpenCreateVendor={(initialName) => setPartnerCreate({target: "vendor", initialName: initialName || ""})} /></div>
+              <div className="min-w-0 md:col-span-6"><PurchaseSourcePicker compact selected={selectedSource} options={referenceData.sources} disabled={createMutation.isPending} loading={sourceSearchQuery.isFetching} canReadCustomers={canReadCustomers} canReadVendors={canReadVendors} canCreateCustomer={canCreateCustomer} canCreateVendor={canCreateVendor} onKeywordChange={setSourceKeyword} onSelect={selectSource} onClear={clearSource} onOpenCreateCustomer={(initialName) => {voiceSourceTypeAfterCreate.current = undefined; setPartnerInitialContact(""); setPartnerCreate({target: "customer", initialName: initialName || ""});}} onOpenCreateVendor={(initialName) => {voiceSourceTypeAfterCreate.current = undefined; setPartnerInitialContact(""); setPartnerCreate({target: "vendor", initialName: initialName || ""});}} /></div>
               <ErpMobileWorkflowDesktop><label className="block text-sm font-semibold md:col-span-3">快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" placeholder="SF / YT / JD..." /></label></ErpMobileWorkflowDesktop>
             </div>
           </CardContent></Card>
@@ -323,15 +410,30 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
           <ErpMobileWorkflowSection step={1}>
-          <Card className="erp-order-checkout"><CardContent className="space-y-4 p-4"><ErpMobileWorkflowPhone><section className="erp-order-review"><div><span>{selectedSource?.name || "请选择来源"}</span><ErpMobileWorkflowEditButton disabled={createMutation.isPending} /></div><details><summary>{summary.totalCount} 件商品 · 查看明细</summary>{(values.items || []).filter((item) => item.productId).map((item, index) => <p key={index}><span>{item.productName}</span><span className="erp-data-number">×{item.quantity}</span></p>)}</details></section></ErpMobileWorkflowPhone><PurchasePaymentSection disabled={createMutation.isPending} embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} resetKey={editorScope.current} onReadinessChange={setSettlementEntry} /><ErpMobileWorkflowPhone><details className="erp-phone-order-extras"><summary>金额明细</summary><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></details></ErpMobileWorkflowPhone><ErpMobileWorkflowDesktop><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">进货财务汇总</h2><span className="erp-data-number text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div></ErpMobileWorkflowDesktop><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpMobileWorkflowPhone><details className="erp-phone-order-extras"><summary>物流、备注与图片（可选）</summary>{purchaseExtraFields}</details></ErpMobileWorkflowPhone><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : quantityError || settlementEntry.reason || issues[0]?.message || "请完善当前必填信息"} phoneAction={<VoiceEntryControl scene="purchase" mode="hold" label="按住说话" />} phoneSummary={<><strong className="erp-data-number">{canEnterPurchaseCost ? formatCurrency(summary.totalCost) : "—"}</strong><small>{summary.totalCount} 件 · 提交后待检测</small></>} submitting={createMutation.isPending || submission.validating} onCancel={leaveDesktop} submitLabel="确认提交 · 等待检测入库" phoneSubmitLabel="提交采购单"><ErpMobileWorkflowDesktop><span>经办人：{operatorName}</span></ErpMobileWorkflowDesktop></ErpSubmitBar></CardContent></Card>
+          <Card className="erp-order-checkout"><CardContent className="space-y-4 p-4"><ErpMobileWorkflowPhone><section className="erp-order-review"><div><span>{selectedSource?.name || "请选择来源"}</span><ErpMobileWorkflowEditButton disabled={createMutation.isPending} /></div><details><summary>{summary.totalCount} 件商品 · 查看明细</summary>{(values.items || []).filter((item) => item.productId).map((item, index) => <p key={index}><span>{item.productName}</span><span className="erp-data-number">×{item.quantity}</span></p>)}</details></section></ErpMobileWorkflowPhone><PurchasePaymentSection disabled={createMutation.isPending} embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} resetKey={`${editorScope.current}-${paymentResetVersion}`} onReadinessChange={setSettlementEntry} /><ErpMobileWorkflowPhone><details className="erp-phone-order-extras"><summary>金额明细</summary><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></details></ErpMobileWorkflowPhone><ErpMobileWorkflowDesktop><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">进货财务汇总</h2><span className="erp-data-number text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div></ErpMobileWorkflowDesktop><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpMobileWorkflowPhone><details className="erp-phone-order-extras"><summary>物流、备注与图片（可选）</summary>{purchaseExtraFields}</details></ErpMobileWorkflowPhone><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : quantityError || settlementEntry.reason || issues[0]?.message || "请完善当前必填信息"} phoneAction={<VoiceEntryControl scene="purchase" mode="hold" label="按住说话" onApply={applyVoicePurchase} />} phoneSummary={<><strong className="erp-data-number">{canEnterPurchaseCost ? formatCurrency(summary.totalCost) : "—"}</strong><small>{summary.totalCount} 件 · 提交后待检测</small></>} submitting={createMutation.isPending || submission.validating} onCancel={leaveDesktop} submitLabel="确认提交 · 等待检测入库" phoneSubmitLabel="提交采购单"><ErpMobileWorkflowDesktop><span>经办人：{operatorName}</span></ErpMobileWorkflowDesktop></ErpSubmitBar></CardContent></Card>
           </ErpMobileWorkflowSection>
         </ErpTransactionSecondary>
       </ErpTransactionColumns>
       </fieldset>
     </form>
     </ErpMobileWorkflow>
-    <PurchasePasteDrawer open={pasteOpen} onOpenChange={setPasteOpen} products={referenceData.products} defaults={createPurchaseLineDefaults()} existingItems={values.items || []} currentExpressNo={values.expressNo} canEnterCost={canEnterPurchaseCost} canEnterEstimatedSell={permissions.showProfit} onConfirm={(rows, expressNo) => { if (expressNo !== undefined) setValue("expressNo", expressNo, {shouldDirty: true, shouldValidate: true}); append(rows); notify.success(`已加入 ${rows.length} 行采购明细${expressNo ? "，并回填快递单号" : ""}`, {description: "内容已写入当前采购表单，提交时仍由统一适配层处理数量展开。"}); }} />
-    <PurchasePartnerCreateDialog open={Boolean(partnerCreate)} target={partnerCreate?.target || null} initialName={partnerCreate?.initialName || ""} onOpenChange={(open) => {if (!open) setPartnerCreate(null);}} onCreated={handleCreatedSource} />
+    <PurchasePasteDrawer open={pasteOpen} onOpenChange={(open) => {setPasteOpen(open); if (!open) setVoicePurchaseDraft(null);}} products={referenceData.products} defaults={createPurchaseLineDefaults()} existingItems={values.items || []} initialRows={voicePurchaseDraft?.rows} initialRawText={voicePurchaseDraft?.transcript} currentExpressNo={values.expressNo} canEnterCost={canEnterPurchaseCost} canEnterEstimatedSell={permissions.showProfit} onConfirm={(rows, expressNo) => {
+      if (expressNo !== undefined) setValue("expressNo", expressNo, {shouldDirty: true, shouldValidate: true});
+      if (voicePurchaseDraft) {
+        const applied = applyPurchaseVoiceDraftToForm({purchase: voicePurchaseDraft.purchase, transcript: voicePurchaseDraft.transcript, rows, existingItems: getValues("items"), existingRemarks: getValues("remarks"), vendorCreditAppliedAmount: getValues("vendorCreditAppliedAmount"), append, setValue, resetPaymentSection: () => setPaymentResetVersion((version) => version + 1)});
+        if (applied.note === "too-long") notify.warning("语音原话超过采购备注上限，未被截断或写入；请手动整理备注后再提交。");
+        if (applied.paymentPreset === "partial-needs-amount") notify.warning("识别为部分付款，但没有识别到付款金额；请在结算区手动选择部分付款并填写金额。");
+        if (applied.paymentPreset === "partial-out-of-range") notify.warning("识别到的部分付款金额不在有效范围内；请在结算区手动填写实际金额。");
+        applyVoiceSourceAfterConfirmation(voicePurchaseDraft);
+        setVoicePurchaseDraft(null);
+        setPasteOpen(false);
+        notify.success(`已加入 ${rows.length} 行语音识别采购明细`, {description: "来源和付款信息已按可确认内容回填；请检查当前采购表单，再点击原有提交按钮。"});
+        return;
+      }
+      append(rows);
+      notify.success(`已加入 ${rows.length} 行采购明细${expressNo ? "，并回填快递单号" : ""}`, {description: "内容已写入当前采购表单，提交时仍由统一适配层处理数量展开。"});
+    }} />
+    <PurchasePartnerCreateDialog open={Boolean(partnerCreate)} target={partnerCreate?.target || null} initialName={partnerCreate?.initialName || ""} initialContact={partnerInitialContact} onOpenChange={(open) => {if (!open) {setPartnerCreate(null); setPartnerInitialContact(""); voiceSourceTypeAfterCreate.current = undefined;}}} onCreated={handleCreatedSource} />
     <ErpProductTemplateDialog open={Boolean(productCreate)} product={null} initialValues={productCreateInitialValues} showCost={permissions.showCost} showProfit={permissions.showProfit} pending={productCreateMutation.isPending} error={productCreateMutation.error ? quickCreateError(productCreateMutation.error, "商品模板") : undefined} onOpenChange={(open) => {if (!open) {setProductCreate(null); productCreateMutation.reset();}}} onSubmit={submitProductTemplate} />
     </ErpPageContent>
   </ErpTransactionPageFrame>;

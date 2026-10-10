@@ -33,6 +33,12 @@ test("a single intake action does not pretend to be a multi-step workflow", () =
   assert.match(html, /name="serialNumber"/);
 });
 
+test("an optional phone action is rendered beside the intermediate step action", () => {
+  const html = renderToStaticMarkup(<ErpMobileWorkflow steps={[{label: "来源与商品", ready: false, blockedReason: "请选择采购来源"}, {label: "结算"}]} phoneAction={<button type="button">按住说话</button>}><form><input name="source" /></form></ErpMobileWorkflow>);
+  assert.match(html, /按住说话/);
+  assert.match(html, /下一步：结算/);
+});
+
 test("stage feedback uses the relevant schema issue instead of unrelated settlement errors", () => {
   const issues = [{path: ["settlementAccountId"], message: "请选择收款账户"}, {path: ["items", 0, "productId"], message: "请添加商品"}];
   assert.equal(workflowBlockedReason(issues, ["items"], "请完善明细"), "请添加商品");

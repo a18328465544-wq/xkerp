@@ -11,10 +11,12 @@ export type ErpMobileWorkflowStep = {label: string; ready?: boolean; blockedReas
 
 /** Presentation only: all sections stay mounted, including hidden sections.
  * The owning form retains its one controller, mutations and draft lifecycle. */
-export function ErpMobileWorkflow({steps, children, summary, pending = false, resetKey, errorStep}: {
+export function ErpMobileWorkflow({steps, children, summary, phoneAction, pending = false, resetKey, errorStep}: {
   steps: ErpMobileWorkflowStep[];
   children: ReactNode;
   summary?: ReactNode;
+  /** Optional secondary phone action shown beside the current-step action. */
+  phoneAction?: ReactNode;
   pending?: boolean;
   resetKey?: string;
   errorStep?: number;
@@ -48,7 +50,7 @@ export function ErpMobileWorkflow({steps, children, summary, pending = false, re
     {!final && <div className="erp-mobile-workflow-actions" data-erp-region="mobile-workflow-actions">
       {summary && <div className="erp-mobile-workflow-summary">{summary}</div>}
       {current?.ready === false && current.blockedReason && <p role="status" className="text-xs text-[var(--erp-color-text-secondary)]">{current.blockedReason}</p>}
-      <div className="flex gap-2">{step > 0 && <Button type="button" variant="secondary" disabled={pending} onClick={() => select(step - 1)}><ArrowLeft className="h-4 w-4" />上一步</Button>}<Button type="button" variant="primary" className="flex-1" disabled={pending || current?.ready === false} onClick={() => select(step + 1)}>下一步：{steps[step + 1]?.label}<ArrowRight className="h-4 w-4" /></Button></div>
+    <div className="flex min-w-0 gap-2">{phoneAction && <div className="min-w-0 shrink-0">{phoneAction}</div>}{step > 0 && <Button type="button" variant="secondary" disabled={pending} onClick={() => select(step - 1)}><ArrowLeft className="h-4 w-4" />上一步</Button>}<Button type="button" variant="primary" className="min-w-0 flex-1" disabled={pending || current?.ready === false} onClick={() => select(step + 1)}>下一步：{steps[step + 1]?.label}<ArrowRight className="h-4 w-4" /></Button></div>
     </div>}
   </div></Context.Provider>;
 }

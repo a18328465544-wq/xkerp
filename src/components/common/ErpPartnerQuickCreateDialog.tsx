@@ -12,6 +12,7 @@ export interface ErpPartnerQuickCreateDialogProps {
   open: boolean;
   target: ErpPartnerQuickCreateTarget | null;
   initialName?: string;
+  initialContact?: string;
   pending?: boolean;
   error?: string;
   onOpenChange: (open: boolean) => void;
@@ -19,7 +20,7 @@ export interface ErpPartnerQuickCreateDialogProps {
 }
 
 /** Shared quick-create presentation; feature adapters own API and permissions. */
-export function ErpPartnerQuickCreateDialog({open, target, initialName = "", pending = false, error, onOpenChange, onSubmit}: ErpPartnerQuickCreateDialogProps) {
+export function ErpPartnerQuickCreateDialog({open, target, initialName = "", initialContact = "", pending = false, error, onOpenChange, onSubmit}: ErpPartnerQuickCreateDialogProps) {
   const form = useForm<PartnerQuickCreateValues>({
     defaultValues: {name: initialName, contact: "", channel: "闲鱼", vendorType: "上游供应商", remarks: ""},
     resolver: zodResolver(partnerQuickCreateSchema),
@@ -28,8 +29,8 @@ export function ErpPartnerQuickCreateDialog({open, target, initialName = "", pen
   const {control, register, reset, handleSubmit} = form;
 
   useEffect(() => {
-    if (open) reset({name: initialName, contact: "", channel: "闲鱼", vendorType: "上游供应商", remarks: ""});
-  }, [initialName, open, reset, target]);
+    if (open) reset({name: initialName, contact: initialContact, channel: "闲鱼", vendorType: "上游供应商", remarks: ""});
+  }, [initialContact, initialName, open, reset, target]);
 
   const label = target === "vendor" ? "同行档案" : "个人客户";
   return <ErpDialogShell
