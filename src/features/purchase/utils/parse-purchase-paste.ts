@@ -66,6 +66,12 @@ export interface PurchasePasteRow {
 export interface PurchasePasteResult {
   delimiter: PurchasePasteDelimiter;
   headerDetected: boolean;
+  mode?: "table" | "chat";
+  /** A single order-level courier number recognized from chat text. */
+  expressNo?: string;
+  /** Distinct courier numbers found in the pasted content. */
+  expressNoCandidates?: string[];
+  ignoredLineCount?: number;
   headerFields: ReadonlyArray<PurchasePasteField>;
   parsedRows: PurchasePasteRow[];
   validRows: PurchasePasteRow[];
@@ -120,6 +126,19 @@ function normalizeText(value: string): string {
 
 function compactText(value: string): string {
   return normalizeText(value).replace(/[\s\-_/\\·•,，.]+/g, "");
+}
+
+function modelCodes(value: string): string[] {
+  const codes = new Set<string>();
+  const pattern = /(?<![a-z0-9])(?:rtx|gtx|rx|arc)?\s*(\d{3,5})(?:\s*(ti|super|xtx|xt|kf|k|f|x3d))?(?![a-z0-9])/gi;
+  for (const match of value.matchAll(pattern)) {
+    const base = match[1]?.toLowerCase();
+    const suffix = match[2]?.toLowerCase() || "";
+    if (!base) continue;
+    codes.add(`${base}${suffix}`);
+    codes.add(base);
+  }
+  return [...codes];
 }
 
 function normalizeHeader(value: string): string {
@@ -242,6 +261,15 @@ function matchProduct(explicit: PurchasePasteExplicitFields, products: readonly 
   if (model) {
     const byModel = products.filter((product) => exact(model, product.model));
     if (byModel.length) return makeCandidates(byModel, "model-exact");
+
+    // Short chat-style model hints (for example "4090") may omit the brand
+    // prefix. Match only the exact numeric model code; variants remain
+    // separate candidates and are never silently collapsed.
+    const hintCodes = modelCodes(model);
+    if (hintCodes.length) {
+      const byModelCode = products.filter((product) => modelCodes(product.model).some((code) => hintCodes.includes(code)));
+      if (byModelCode.length) return makeCandidates(byModelCode, "model-exact");
+    }
   }
   return {candidates: [], reason: "none"};
 }
@@ -318,12 +346,12 @@ function applyDuplicateWarnings(rows: PurchasePasteRow[], existingItems: readonl
   return next;
 }
 
-function refreshBuckets(rows: PurchasePasteRow[], delimiter: PurchasePasteDelimiter, headerDetected: boolean, headerFields: PurchasePasteField[], errors: string[]): PurchasePasteResult {
+function refreshBuckets(rows: PurchasePasteRow[], delimiter: PurchasePasteDelimiter, headerDetected: boolean, headerFields: PurchasePasteField[], errors: string[], metadata: Pick<PurchasePasteResult, "mode" | "expressNo" | "expressNoCandidates" | "ignoredLineCount"> = {}): PurchasePasteResult {
   const validRows = rows.filter((row) => row.status === "valid");
   const warningRows = rows.filter((row) => row.status === "warning");
   const invalidRows = rows.filter((row) => row.status === "invalid");
   const needsConfirmationRows = rows.filter((row) => row.status === "needs-confirmation");
-  return {delimiter, headerDetected, headerFields, parsedRows: rows, validRows, warningRows, invalidRows, needsConfirmationRows, errors};
+  return {delimiter, headerDetected, headerFields, mode: "table", expressNoCandidates: [], ignoredLineCount: 0, ...metadata, parsedRows: rows, validRows, warningRows, invalidRows, needsConfirmationRows, errors};
 }
 
 function validateRow(seed: PurchasePasteRow, options: PurchasePasteOptions): PurchasePasteRow {
@@ -403,7 +431,7 @@ function headerFor(tokens: readonly string[]): HeaderMap | undefined {
   return detectHeader(tokens);
 }
 
-export function parsePurchasePaste(rawText: string, options: PurchasePasteOptions): PurchasePasteResult {
+function parseStructuredPurchasePaste(rawText: string, options: PurchasePasteOptions): PurchasePasteResult {
   const maxTextLength = options.maxTextLength ?? PURCHASE_PASTE_MAX_TEXT_LENGTH;
   const maxRows = options.maxRows ?? PURCHASE_PASTE_MAX_ROWS;
   if (rawText.length > maxTextLength) return refreshBuckets([], "unknown", false, [], [`粘贴内容超过 ${maxTextLength.toLocaleString()} 个字符，请分批处理；系统不会静默截断。`]);
@@ -453,6 +481,397 @@ export function parsePurchasePaste(rawText: string, options: PurchasePasteOption
   });
   const withDuplicates = applyDuplicateWarnings(rows, options.existingItems || []);
   return refreshBuckets(withDuplicates, delimiter, Boolean(header), header?.fields || [], errors);
+}
+
+type ChatPasteField = "expressNo" | "model" | "quantity" | "buyPrice" | "remarks";
+type ChatPasteHeader = {fields: ChatPasteField[]; indexes: Map<ChatPasteField, number>; columnCount: number};
+
+const chatFieldAliases: Readonly<Record<ChatPasteField, readonly string[]>> = {
+  expressNo: ["单号", "快递单号", "物流单号", "运单号"],
+  model: ["卡型号", "显卡型号", "商品型号", "GPU型号", "型号"],
+  quantity: ["数量", "件数", "数量(件)", "数量（件）"],
+  buyPrice: ["价格", "采购价", "收购价", "收购价格", "进货价", "单价", "成本价"],
+  remarks: ["备注", "说明", "交易说明"],
+};
+
+function chatHeaderField(value: string): ChatPasteField | undefined {
+  const normalized = normalizeHeader(value);
+  return (Object.keys(chatFieldAliases) as ChatPasteField[]).find((field) => chatFieldAliases[field].some((alias) => normalizeHeader(alias) === normalized));
+}
+
+function detectChatHeader(rawText: string): {header?: ChatPasteHeader; headerLineNumber?: number; delimiter: PurchasePasteDelimiter} {
+  const lines = rawText.replace(/\r\n?/g, "\n").split("\n");
+  const first = lines.find((line) => line.trim());
+  if (!first) return {delimiter: "unknown"};
+  // Chat-table headers must be tab-delimited. Splitting whitespace headers
+  // would also split model names such as "RTX 4090" and corrupt columns.
+  if (!first.includes("\t")) return {delimiter: "unknown"};
+  const tokens = first.split("\t").map((token) => token.trim());
+  const fields = tokens.map(chatHeaderField);
+  const known = fields.filter((field): field is ChatPasteField => Boolean(field));
+  const hasExplicitCardModel = tokens.some((token) => ["卡型号", "显卡型号", "商品型号", "GPU型号"].includes(normalizeHeader(token)));
+  const hasOrderNumber = known.includes("expressNo");
+  const hasRequiredFields = known.includes("model") && known.includes("quantity") && known.includes("buyPrice");
+  if (known.length < 3 || !hasRequiredFields || (!hasOrderNumber && !hasExplicitCardModel)) return {delimiter: first.includes("\t") ? "tab" : "unknown"};
+  const indexes = new Map<ChatPasteField, number>();
+  fields.forEach((field, index) => {if (field) indexes.set(field, index);});
+  return {header: {fields: known, indexes, columnCount: tokens.length}, headerLineNumber: lines.indexOf(first) + 1, delimiter: "tab"};
+}
+
+function normalizeExpressNo(value: string): string {
+  return value.trim().replace(/^[#：:\s]+|[，,。；;\s]+$/g, "");
+}
+
+function extractExpressNos(value: string): {text: string; expressNos: string[]} {
+  const expressNos: string[] = [];
+  let text = value;
+  const labeledPattern = /(?:快递单号|物流单号|运单号|单号)\s*[:：#]?\s*([A-Z0-9][A-Z0-9-]{5,31})/gi;
+  text = text.replace(labeledPattern, (_match, number: string) => {
+    if (!/^1[3-9]\d{9}$/.test(number)) expressNos.push(normalizeExpressNo(number));
+    return " ";
+  });
+  const carrierPattern = /\b(?:YTO|STO|ZTO|SF|YT|JD|JT|EMS|DB)\s*[-:]?\s*[A-Z0-9]{6,32}\b/gi;
+  text = text.replace(carrierPattern, (number) => {
+    expressNos.push(normalizeExpressNo(number));
+    return " ";
+  });
+  const byNormalized = new Map<string, string>();
+  expressNos.forEach((number) => byNormalized.set(number.replace(/[^A-Z0-9]/gi, "").toUpperCase(), number));
+  return {text, expressNos: [...byNormalized.values()]};
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function flexibleTextPattern(value: string): RegExp {
+  const pieces = value.trim().split(/\s+/).filter(Boolean).map(escapeRegExp);
+  return new RegExp(pieces.join("\\s*"), "i");
+}
+
+interface ChatModelHint {
+  model?: string;
+  productName?: string;
+  cleanedText: string;
+  conflictingModels: string[];
+}
+
+function extractChatModelHint(value: string, products: readonly PurchaseProductOption[]): ChatModelHint {
+  const compactValue = compactText(value);
+  const namedCandidates = products.flatMap((product) => productDisplayNames(product).map((name) => ({product, name, compact: compactText(name)})))
+    .filter((item) => item.compact.length >= 5 && compactValue.includes(item.compact))
+    .sort((left, right) => right.compact.length - left.compact.length);
+  if (namedCandidates.length) {
+    const longest = namedCandidates[0]!;
+    const sameNameCandidates = namedCandidates.filter((item) => item.compact === longest.compact);
+    const matchedNames = new Set(sameNameCandidates.map((item) => item.product.name));
+    const model = sameNameCandidates[0]?.product.model || longest.name;
+    return {model, productName: matchedNames.size === 1 ? sameNameCandidates[0]?.product.name : undefined, cleanedText: value.replace(flexibleTextPattern(longest.name), " "), conflictingModels: []};
+  }
+
+  const knownCodes = new Set(products.flatMap((product) => modelCodes(product.model)));
+  const codePattern = /(?<![a-z0-9])(?:(rtx|gtx|rx|arc)\s*)?(\d{3,5})(?:\s*(ti|super|xtx|xt|kf|k|f|x3d))?(?![a-z0-9])/gi;
+  const mentions = [...value.matchAll(codePattern)].map((match) => ({
+    raw: match[0],
+    prefix: match[1]?.toUpperCase() || "",
+    base: match[2] || "",
+    suffix: match[3]?.toUpperCase() || "",
+    code: `${match[2] || ""}${match[3] || ""}`.toLowerCase(),
+    index: match.index || 0,
+  }));
+  const knownMentions = mentions.filter((mention) => knownCodes.has(mention.code) || knownCodes.has(mention.base));
+  const taggedMention = mentions.find((mention) => mention.prefix);
+  const selectedMentions = knownMentions.length ? knownMentions : taggedMention ? [taggedMention] : [];
+  const distinctModels = [...new Set(selectedMentions.map((mention) => `${mention.base}${mention.suffix}`.toLowerCase()))];
+  if (distinctModels.length > 1) {
+    return {cleanedText: value, conflictingModels: distinctModels.map((code) => selectedMentions.find((mention) => `${mention.base}${mention.suffix}`.toLowerCase() === code)?.raw || code)};
+  }
+  const mention = selectedMentions.sort((left, right) => right.raw.length - left.raw.length)[0];
+  if (!mention) return {cleanedText: value, conflictingModels: []};
+  const model = `${mention.prefix ? `${mention.prefix} ` : ""}${mention.base}${mention.suffix ? ` ${mention.suffix}` : ""}`;
+  const phrase = mention.raw;
+  return {model, cleanedText: `${value.slice(0, mention.index)} ${value.slice(mention.index + phrase.length)}`, conflictingModels: []};
+}
+
+interface ChatMoneyToken {raw: string; value?: number; issue?: string; start: number; end: number}
+
+function extractChatMoney(value: string): ChatMoneyToken[] {
+  const matches = [...value.matchAll(/(?:[¥￥]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|(?:[¥￥]\s*)?\d{4,}(?:\.\d{1,2})?/g)];
+  return matches.map((match) => {
+    const raw = match[0] || "";
+    const parsed = parseMoneyToken(raw, "tab");
+    return {raw, ...parsed, start: match.index || 0, end: (match.index || 0) + raw.length};
+  });
+}
+
+function removeRanges(value: string, ranges: readonly {start: number; end: number}[]): string {
+  let result = value;
+  [...ranges].sort((left, right) => right.start - left.start).forEach(({start, end}) => {result = `${result.slice(0, start)} ${result.slice(end)}`;});
+  return result;
+}
+
+function chineseCount(value: string): number | undefined {
+  if (/^\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+  }
+  const digits: Record<string, number> = {零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9};
+  if (value === "十") return 10;
+  if (value.includes("百")) {
+    const [hundredsText, remainder = ""] = value.split("百");
+    const hundreds = digits[hundredsText || "一"];
+    if (hundreds === undefined || hundreds > 5) return undefined;
+    const rest = remainder ? chineseCount(remainder) || 0 : 0;
+    return hundreds * 100 + rest;
+  }
+  if (value.includes("十")) {
+    const [tensText, onesText = ""] = value.split("十");
+    const tens = tensText ? digits[tensText] : 1;
+    const ones = onesText ? digits[onesText] : 0;
+    if (tens === undefined || ones === undefined) return undefined;
+    return tens * 10 + ones;
+  }
+  if (value.length === 1 && digits[value] !== undefined) return digits[value];
+  return undefined;
+}
+
+function extractChatQuantity(value: string, allowBareNumber: boolean): {value?: number; cleanedText: string; issue?: string} {
+  const count = String.raw`(\d{1,3}|[零〇一二两三四五六七八九十百]{1,3})`;
+  const unitPattern = new RegExp(String.raw`(?:数量|件数)\s*[:：]?\s*${count}\s*(?:张|片|个|件|台|块|只)?|(?<![\p{L}\d])${count}\s*(张|片|个|件|台|块|只)(?![\p{L}])`, "u");
+  const match = unitPattern.exec(value);
+  if (match) {
+    const quantityText = match[1] || match[2];
+    const quantity = quantityText ? chineseCount(quantityText) : undefined;
+    if (quantity === undefined || quantity > 500) return {cleanedText: value.replace(match[0], " "), issue: "数量无法识别或超过 500 件，请在预览中修正。"};
+    return {value: quantity, cleanedText: value.replace(match[0], " ")};
+  }
+  if (!allowBareNumber) return {cleanedText: value};
+  const bareMatches = [...value.matchAll(/(?<![\p{L}\d])(?:\d{1,3}|[一二两三四五六七八九十])(?![\p{L}\d])/gu)];
+  if (bareMatches.length !== 1) return {cleanedText: value, issue: bareMatches.length > 1 ? "检测到多个可能的数量，请明确写成“数量 1”或“1 张”。" : undefined};
+  const bare = bareMatches[0]!;
+  const quantity = chineseCount(bare[0]);
+  if (quantity === undefined || quantity > 500) return {cleanedText: value, issue: "数量无法识别或超过 500 件，请在预览中修正。"};
+  const start = bare.index || 0;
+  return {value: quantity, cleanedText: `${value.slice(0, start)} ${value.slice(start + bare[0].length)}`};
+}
+
+function cleanupChatRemainder(value: string): string {
+  return value
+    .replace(/\b\d{1,2}:\d{2}\b/g, " ")
+    .replace(/(?<!\d)1[3-9]\d{9}(?!\d)/g, " ")
+    .replace(/(?:单号|快递|物流|运单|卡型号|显卡型号|商品型号|型号|数量|件数|采购价|收购价|收购价格|价格|单价|进货价|成本价|人民币|元|张|片|个|件|台|块|只)\s*[:：]?/g, " ")
+    .replace(/[\s,，;；|/]+/g, " ")
+    .replace(/^[\s:：\-—]+|[\s:：\-—]+$/g, "")
+    .trim();
+}
+
+interface ParsedChatLine {
+  model?: string;
+  productName?: string;
+  quantity?: number;
+  buyPrice?: number;
+  remarks: string;
+  expressNos: string[];
+  issues: PurchasePasteIssue[];
+  hasRecordSignal: boolean;
+  hasStandalonePrice: boolean;
+  cleanedText: string;
+}
+
+function parseChatLine(rawText: string, products: readonly PurchaseProductOption[]): ParsedChatLine {
+  const extractedExpress = extractExpressNos(rawText);
+  const withoutPhones = extractedExpress.text.replace(/(?<!\d)1[3-9]\d{9}(?!\d)/g, " ");
+  const withoutTimestamps = withoutPhones.replace(/\b(?:19|20)\d{2}[-/.]\d{1,2}(?:[-/.]\d{1,2})?\b/g, " ").replace(/\b\d{1,2}:\d{2}\b/g, " ");
+  const modelHint = extractChatModelHint(withoutTimestamps, products);
+  const issues: PurchasePasteIssue[] = [];
+  if (modelHint.conflictingModels.length) issues.push({field: "model", message: `一行识别到多个型号（${modelHint.conflictingModels.join("、")}），请拆成多行后再粘贴。`});
+  const moneySource = modelHint.cleanedText.replace(/\b(?:19|20)\d{2}[-/.]\d{1,2}(?:[-/.]\d{1,2})?\b/g, (date) => " ".repeat(date.length));
+  const moneyTokens = extractChatMoney(moneySource);
+  const remainingAfterMoney = removeRanges(moneySource, moneyTokens);
+  const quantity = extractChatQuantity(remainingAfterMoney, Boolean(modelHint.model));
+  if (quantity.issue) issues.push({field: "quantity", message: quantity.issue});
+  const remainder = cleanupChatRemainder(quantity.cleanedText);
+  const remarks = remainder;
+  const hasStandalonePrice = Boolean(moneyTokens.length === 1 && !modelHint.model && !quantity.value && !remarks);
+  if (moneyTokens.length > 1) issues.push({field: "buyPrice", message: "一行识别到多个金额，请整理成单一采购价，或改用带表头的表格粘贴。"});
+  const money = moneyTokens.length === 1 ? moneyTokens[0] : undefined;
+  if (money?.issue) issues.push({field: "buyPrice", message: money.issue});
+  const hasPurchaseLanguage = /(?:采购|收购|进货|拿货|买入|购买|订货|下单|测完付|测完付款)/.test(remainder);
+  const hasModelContext = Boolean(modelHint.model && (quantity.value !== undefined || extractedExpress.expressNos.length || modelHint.productName || hasPurchaseLanguage));
+  const hasRecordSignal = Boolean(hasModelContext || quantity.value !== undefined || (money && !hasStandalonePrice));
+  return {
+    model: modelHint.model,
+    productName: modelHint.productName,
+    quantity: quantity.value,
+    buyPrice: money?.value,
+    remarks,
+    expressNos: extractedExpress.expressNos,
+    issues,
+    hasRecordSignal,
+    hasStandalonePrice,
+    cleanedText: remainder,
+  };
+}
+
+function chatRow(rawText: string, lineNumber: number, parsed: ParsedChatLine, options: PurchasePasteOptions, overrides: {quantity?: number; buyPrice?: number; remarks?: string; rawText?: string} = {}): PurchasePasteRow {
+  const explicit: PurchasePasteExplicitFields = {};
+  const line: PurchaseLineFormValue = {...options.defaults, tempId: undefined};
+  if (parsed.model) {explicit.model = parsed.model; line.model = parsed.model;}
+  if (parsed.productName) {explicit.productName = parsed.productName; line.productName = parsed.productName;}
+  const quantity = overrides.quantity ?? parsed.quantity;
+  if (quantity !== undefined) {explicit.quantity = quantity; line.quantity = quantity;} else line.quantity = 0;
+  const buyPrice = overrides.buyPrice ?? parsed.buyPrice;
+  if (buyPrice !== undefined) {explicit.buyPrice = buyPrice; line.buyPrice = buyPrice;}
+  const remarks = overrides.remarks ?? parsed.remarks;
+  if (remarks) {explicit.remarks = remarks; line.remarks = remarks;}
+  const parseIssues = [...parsed.issues];
+  if (quantity === undefined && !parseIssues.some((issue) => issue.field === "quantity")) parseIssues.push({field: "quantity", message: "未识别到商品数量，请在预览中填写。"});
+  if (buyPrice === undefined && !parseIssues.some((issue) => issue.field === "buyPrice")) parseIssues.push({field: "buyPrice", message: "未识别到采购价，请在预览中填写。"});
+  const match = matchProduct(explicit, options.products);
+  const seed: PurchasePasteRow = {id: `purchase-paste-${lineNumber}`, lineNumber, rawText: overrides.rawText || rawText, line, explicit, parseIssues, baseWarnings: [], errors: [], warnings: [], status: "invalid", candidates: match.candidates, matchReason: match.reason, matchConfidence: match.product ? 1 : undefined};
+  return validateRow(seed, options);
+}
+
+function chatNumberFromHeader(value: string | undefined): string {
+  if (!value) return "";
+  const labelled = extractExpressNos(value).expressNos[0];
+  return normalizeExpressNo(labelled || value);
+}
+
+function parseChatTable(rawText: string, options: PurchasePasteOptions, header: ChatPasteHeader, delimiter: "tab" | "space", headerLineNumber: number): PurchasePasteResult {
+  const sourceLines = rawText.replace(/\r\n?/g, "\n").split("\n");
+  const entries = sourceLines.map((line, index) => ({rawText: line, lineNumber: index + 1})).filter((entry) => entry.rawText.trim() && entry.lineNumber !== headerLineNumber);
+  const expressNos: string[] = [];
+  const rows = entries.map(({rawText: lineText, lineNumber}) => {
+    const tokens = delimiter === "tab" ? lineText.split("\t").map((token) => token.trim()) : lineText.trim().split(/\s+/);
+    const expressNo = chatNumberFromHeader(tokens[header.indexes.get("expressNo") ?? -1]);
+    if (expressNo) expressNos.push(expressNo);
+    const model = tokens[header.indexes.get("model") ?? -1]?.trim();
+    const quantityRaw = tokens[header.indexes.get("quantity") ?? -1]?.trim();
+    const buyRaw = tokens[header.indexes.get("buyPrice") ?? -1]?.trim();
+    const remarks = tokens[header.indexes.get("remarks") ?? -1]?.trim() || "";
+    const parsedQuantity = extractChatQuantity(quantityRaw || "", true);
+    const quantity = parsedQuantity.value;
+    const money = parseMoneyToken(buyRaw, "tab");
+    const parsed: ParsedChatLine = {
+      model,
+      quantity,
+      buyPrice: money.value,
+      remarks,
+      expressNos: [],
+      issues: [
+        ...(tokens.length !== header.columnCount ? [{field: "model" as const, message: "当前行列数与表头不一致，请检查是否有多余或缺失的 Tab 列。"}] : []),
+        ...(!quantityRaw || quantity === undefined ? [{field: "quantity" as const, message: parsedQuantity.issue || "数量必须是 1–500 的正整数。"}] : []),
+        ...(money.issue ? [{field: "buyPrice" as const, message: money.issue}] : []),
+      ],
+      hasRecordSignal: true,
+      hasStandalonePrice: false,
+      cleanedText: "",
+    };
+    return chatRow(lineText, lineNumber, parsed, options);
+  });
+  const uniqueExpressNos = [...new Set(expressNos.map(normalizeExpressNo))];
+  const errors = uniqueExpressNos.length > 1 ? ["这次粘贴包含多个不同单号，一张采购单只能填写一个快递单号。请按单号分开粘贴。"] : [];
+  const headerFields: PurchasePasteField[] = header.fields.flatMap((field): PurchasePasteField[] => {
+    if (field === "expressNo" || field === "remarks") return [];
+    if (field === "model") return ["model"];
+    if (field === "quantity") return ["quantity"];
+    return ["buyPrice"];
+  });
+  return refreshBuckets(applyDuplicateWarnings(rows, options.existingItems || []), delimiter, true, headerFields, errors, {mode: "chat", expressNo: uniqueExpressNos[0], expressNoCandidates: uniqueExpressNos, ignoredLineCount: 0});
+}
+
+function looksLikeChatPaste(rawText: string, products: readonly PurchaseProductOption[]): boolean {
+  const lines = rawText.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim());
+  if (!lines.length) return false;
+  const detectedHeader = detectChatHeader(rawText);
+  if (detectedHeader.header) return true;
+  const hasCourierNo = /\b(?:YTO|STO|ZTO|SF|YT|JD|JT|EMS|DB)\s*[-:]?\s*[A-Z0-9]{6,32}\b/i.test(rawText) || /(?:快递单号|物流单号|运单号|单号)\s*[:：#]?\s*[A-Z0-9][A-Z0-9-]{5,31}/i.test(rawText);
+  const hasQuantityUnit = /(?:数量|件数)\s*[:：]?\s*(?:\d{1,3}|[零〇一二两三四五六七八九十百]{1,3})\s*(?:张|片|个|件|台|块|只)?|(?:\d{1,3}|[零〇一二两三四五六七八九十百]{1,3})\s*(?:张|片|个|件|台|块|只)/u.test(rawText);
+  const hasKnownModel = products.some((product) => {
+    const codes = modelCodes(product.model);
+    return codes.some((code) => new RegExp(`(?<![a-z0-9])(?:rtx|gtx|rx|arc)?\\s*${escapeRegExp(code)}(?![a-z0-9])`, "i").test(rawText));
+  });
+  const hasAmount = /[¥￥]\s*\d|(?<!\d)\d{4,}(?!\d)/.test(rawText);
+  return hasCourierNo || hasQuantityUnit || (hasKnownModel && hasAmount && lines.length > 1);
+}
+
+function parseChatPurchasePaste(rawText: string, options: PurchasePasteOptions): PurchasePasteResult {
+  const maxTextLength = options.maxTextLength ?? PURCHASE_PASTE_MAX_TEXT_LENGTH;
+  const maxRows = options.maxRows ?? PURCHASE_PASTE_MAX_ROWS;
+  const lines = rawText.replace(/\r\n?/g, "\n").split("\n").map((line, index) => ({rawText: line, lineNumber: index + 1})).filter((entry) => entry.rawText.trim());
+  if (rawText.length > maxTextLength) return refreshBuckets([], "unknown", false, [], [`粘贴内容超过 ${maxTextLength.toLocaleString()} 个字符，请分批处理；系统不会静默截断。`], {mode: "chat"});
+  if (lines.length > maxRows) return refreshBuckets([], "unknown", false, [], [`粘贴内容超过 ${maxRows} 行，请分批处理；系统不会静默截断。`], {mode: "chat"});
+  if (!lines.length) return refreshBuckets([], "unknown", false, [], ["请先粘贴采购明细。"], {mode: "chat"});
+
+  const detectedHeader = detectChatHeader(rawText);
+  if (detectedHeader.header && detectedHeader.headerLineNumber) {
+    return parseChatTable(rawText, options, detectedHeader.header, detectedHeader.delimiter === "tab" ? "tab" : "space", detectedHeader.headerLineNumber);
+  }
+
+  const expressNos: string[] = [];
+  const rows: PurchasePasteRow[] = [];
+  let ignoredLineCount = 0;
+  let pending: {rawText: string; lineNumber: number; parsed: ParsedChatLine} | undefined;
+  const finishPending = () => {
+    if (!pending) return;
+    rows.push(chatRow(pending.rawText, pending.lineNumber, pending.parsed, options));
+    pending = undefined;
+  };
+
+  for (const entry of lines) {
+    const parsed = parseChatLine(entry.rawText, options.products);
+    expressNos.push(...parsed.expressNos);
+    if (parsed.hasStandalonePrice && parsed.buyPrice !== undefined && pending && pending.parsed.buyPrice === undefined) {
+      pending.parsed.buyPrice = parsed.buyPrice;
+      pending.parsed.issues.push(...parsed.issues);
+      pending.rawText = `${pending.rawText}\n${entry.rawText}`;
+      finishPending();
+      continue;
+    }
+    if (!parsed.hasRecordSignal) {
+      // Never carry a pending item across unrelated conversation lines: a
+      // later standalone amount could belong to a different order.
+      if (pending) finishPending();
+      ignoredLineCount += 1;
+      continue;
+    }
+    if (pending) finishPending();
+    if (!parsed.model && parsed.quantity === undefined && parsed.buyPrice !== undefined) {
+      ignoredLineCount += 1;
+      continue;
+    }
+    if (parsed.model && parsed.buyPrice === undefined) {
+      pending = {rawText: entry.rawText, lineNumber: entry.lineNumber, parsed};
+      continue;
+    }
+    rows.push(chatRow(entry.rawText, entry.lineNumber, parsed, options));
+  }
+  finishPending();
+
+  const uniqueExpressNos = [...new Map(expressNos.map((number) => [number.replace(/[^A-Z0-9]/gi, "").toUpperCase(), normalizeExpressNo(number)])).values()];
+  const errors = uniqueExpressNos.length > 1 ? ["这次粘贴包含多个不同单号，一张采购单只能填写一个快递单号。请按单号分开粘贴。"] : rows.length ? [] : ["没有识别到包含商品型号和数量/价格的明细。请粘贴聊天文本或使用表格格式。"];
+  return refreshBuckets(applyDuplicateWarnings(rows, options.existingItems || []), "unknown", false, [], errors, {mode: "chat", expressNo: uniqueExpressNos[0], expressNoCandidates: uniqueExpressNos, ignoredLineCount});
+}
+
+export function parsePurchasePaste(rawText: string, options: PurchasePasteOptions): PurchasePasteResult {
+  const maxTextLength = options.maxTextLength ?? PURCHASE_PASTE_MAX_TEXT_LENGTH;
+  const maxRows = options.maxRows ?? PURCHASE_PASTE_MAX_ROWS;
+  const nonEmptyCount = rawText.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim()).length;
+  if (rawText.length > maxTextLength || nonEmptyCount > maxRows) return parseStructuredPurchasePaste(rawText, options);
+
+  const detectedHeader = detectChatHeader(rawText);
+  if (detectedHeader.header) return parseChatPurchasePaste(rawText, options);
+  // Keep established tab/CSV imports on their original parser. Chat parsing
+  // is reserved for free-form conversation text, not structured spreadsheets.
+  if (rawText.includes("\t") || rawText.includes(",")) return parseStructuredPurchasePaste(rawText, options);
+  const firstNonEmptyLine = rawText.replace(/\r\n?/g, "\n").split("\n").find((line) => line.trim());
+  if (firstNonEmptyLine) {
+    const legacyHeader = detectHeader(firstNonEmptyLine.trim().split(/\s+/));
+    if (legacyHeader && !legacyHeader.error) return parseStructuredPurchasePaste(rawText, options);
+  }
+  if (looksLikeChatPaste(rawText, options.products)) return parseChatPurchasePaste(rawText, options);
+  return parseStructuredPurchasePaste(rawText, options);
 }
 
 function updateExplicit(explicit: PurchasePasteExplicitFields, field: PurchasePasteEditableField, value: PurchaseLineFormValue[PurchasePasteEditableField]): PurchasePasteExplicitFields {

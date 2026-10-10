@@ -1,5 +1,5 @@
 import {Check, ClipboardPaste, AlertTriangle, XCircle} from "lucide-react";
-import {useMemo, useState} from "react";
+import {useMemo, useState, type ClipboardEvent} from "react";
 import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import {ErpAmountInput, ErpDetailDrawer, ErpEmptyState, ErpPageError, ErpStatusBadge} from "@/src/components/common";
 import {productDisplayName} from "@/src/lib/productName";
@@ -28,9 +28,10 @@ interface PurchasePasteDrawerProps {
   products: readonly PurchaseProductOption[];
   defaults: PurchaseLineFormValue;
   existingItems: readonly PurchaseLineFormValue[];
+  currentExpressNo?: string;
   canEnterCost: boolean;
   canEnterEstimatedSell: boolean;
-  onConfirm: (rows: PurchaseLineFormValue[]) => void;
+  onConfirm: (rows: PurchaseLineFormValue[], expressNo?: string) => void;
 }
 
 function resultWithRows(result: PurchasePasteResult, rows: PurchasePasteRow[]): PurchasePasteResult {
@@ -66,18 +67,33 @@ function rowOptions(products: readonly PurchaseProductOption[]) {
   return products.map((product) => ({value: product.id, label: productDisplayName(product)}));
 }
 
-export function PurchasePasteDrawer({open, onOpenChange, products, defaults, existingItems, canEnterCost, canEnterEstimatedSell, onConfirm}: PurchasePasteDrawerProps) {
+export function PurchasePasteDrawer({open, onOpenChange, products, defaults, existingItems, currentExpressNo = "", canEnterCost, canEnterEstimatedSell, onConfirm}: PurchasePasteDrawerProps) {
   const [rawText, setRawText] = useState("");
   const [result, setResult] = useState<PurchasePasteResult | null>(null);
   const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
+  const [expressNoDraft, setExpressNoDraft] = useState(currentExpressNo);
   const options = useMemo<PurchasePasteOptions>(() => ({defaults, products, existingItems, canEnterCost, canEnterEstimatedSell, maxTextLength: PURCHASE_PASTE_MAX_TEXT_LENGTH, maxRows: PURCHASE_PASTE_MAX_ROWS}), [canEnterCost, canEnterEstimatedSell, defaults, existingItems, products]);
   const productOptions = useMemo(() => rowOptions(products), [products]);
   const selection = useMemo(() => result && !result.errors.length ? planPurchasePasteSelection(result.parsedRows, includedIds, options) : null, [includedIds, options, result]);
 
-  const parse = () => {
-    const next = parsePurchasePaste(rawText, options);
+  const processText = (text: string) => {
+    setRawText(text);
+    const next = parsePurchasePaste(text, options);
     setResult(next);
     setIncludedIds(new Set(next.parsedRows.filter(eligible).map((row) => row.id)));
+    setExpressNoDraft(next.mode === "chat" ? next.expressNo || currentExpressNo : currentExpressNo);
+  };
+
+  const parse = () => processText(rawText);
+
+  const pasteAndPreview = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = event.clipboardData.getData("text/plain");
+    if (!pastedText) return;
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    processText(`${textarea.value.slice(0, start)}${pastedText}${textarea.value.slice(end)}`);
   };
 
   const updateRows = (rows: PurchasePasteRow[]) => {
@@ -106,7 +122,7 @@ export function PurchasePasteDrawer({open, onOpenChange, products, defaults, exi
     const {refreshedRows, selectedRows: rowsToAdd, error} = planPurchasePasteSelection(result.parsedRows, includedIds, options);
     setResult(resultWithRows(result, refreshedRows));
     if (error) return;
-    onConfirm(rowsToAdd.map((row) => ({...row.line, tempId: undefined})));
+    onConfirm(rowsToAdd.map((row) => ({...row.line, tempId: undefined})), result.mode === "chat" ? expressNoDraft.trim() : undefined);
     const addedIds = new Set(rowsToAdd.map((row) => row.id));
     const remaining = refreshedRows.filter((row) => !addedIds.has(row.id));
     setResult(resultWithRows(result, remaining));
@@ -122,18 +138,27 @@ export function PurchasePasteDrawer({open, onOpenChange, products, defaults, exi
   };
 
   const canConfirm = Boolean(selection && !selection.error);
-  const description = "支持 Excel Tab 或不含千位逗号的逗号格式；先预览和修正，再加入当前采购表单。";
+  const description = "支持聊天文本或表格；识别结果先预览和修正，再加入当前采购表单。";
+  const replacesExpressNo = Boolean(result?.mode === "chat" && currentExpressNo.trim() && expressNoDraft.trim() !== currentExpressNo.trim());
 
   return <ErpDetailDrawer open={open} onOpenChange={onOpenChange} title={<span className="flex items-center gap-2"><ClipboardPaste className="h-5 w-5 text-[var(--erp-color-primary)]" />批量粘贴采购明细</span>} description={description} footer={<div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-[var(--erp-color-text-muted)]">{selection ? `已选 ${selection.selectedQuantity} 件，加入后共 ${selection.totalQuantity} / ${PURCHASE_MAX_PHYSICAL_ITEMS} 件。` : "加入后不会立即提交采购单，也不会生成 SN 或库存 ID。"}</p><div className="flex gap-2"><Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>关闭</Button><Button type="button" variant="primary" onClick={confirm} disabled={!canConfirm} title={selection?.error}><Check className="h-4 w-4" />确认加入{selection?.selectedRows.length ? `（${selection.selectedRows.length} 行）` : ""}</Button></div></div>}>
     <div className="space-y-4">
       <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-3 text-xs leading-5 text-[var(--erp-color-text-secondary)]">
         <p className="font-semibold text-[var(--erp-color-text)]">粘贴格式</p>
-        <p>无表头固定格式：商品名称、采购价、预计售价、备注。推荐使用带表头的 Excel Tab，可额外填写品牌、型号、版本、显存和数量。</p>
+        <p>可直接粘贴聊天内容（例如“SF 单号 4090 测完付 一张”下一行“23000”），也支持无表头固定格式或带表头 Excel Tab 表格。</p>
+        <p className="mt-1">识别的单号填入采购单快递单号；商品型号、数量、采购价和备注会逐行预览，型号有多个模板时必须手动选择。</p>
+        <p className="mt-1">聊天中未识别的剩余文字会放进行备注；确认前请检查并删掉无关内容。</p>
         <p className="mt-1 text-[var(--erp-color-primary)]">SN、成色、质保、库位和库存状态统一在检测质检阶段录入，批量粘贴不处理这些字段。</p>
         <p className="mt-1">内容上限 {PURCHASE_PASTE_MAX_TEXT_LENGTH.toLocaleString()} 个字符、{PURCHASE_PASTE_MAX_ROWS} 行；逗号格式的金额请填写 18000，不要写 18,000。</p>
       </div>
-      <label className="block text-sm font-semibold">采购明细文本<Textarea className="mt-2 min-h-40" value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder={"商品名称\t采购价\t预计售价\t备注\n华硕 RTX 4090\t18000\t19500\t包装完好"} aria-label="采购明细粘贴文本" /></label>
+      <label className="block text-sm font-semibold">采购明细文本<Textarea className="mt-2 min-h-40" value={rawText} onChange={(event) => {setRawText(event.target.value); setResult(null); setIncludedIds(new Set());}} onPaste={pasteAndPreview} placeholder={"SF0212189489698 4090 测完付 一张\n23000"} aria-label="采购明细粘贴文本" /></label>
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[var(--erp-color-text-muted)]">已输入 {rawText.length.toLocaleString()} / {PURCHASE_PASTE_MAX_TEXT_LENGTH.toLocaleString()} 字符</p><Button type="button" variant="primary" onClick={parse}>解析并预览</Button></div>
+      {result?.mode === "chat" ? <div className="space-y-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] p-3">
+        <label className="block text-sm font-semibold">快递单号<Input className="mt-1 erp-data-number" maxLength={120} value={expressNoDraft} onChange={(event) => setExpressNoDraft(event.target.value)} placeholder="从聊天文本识别，也可手动修改" aria-label="采购单快递单号预览" /></label>
+        <p className="text-xs text-[var(--erp-color-text-muted)]">确认加入时回填到当前采购单；采购单编号仍由系统生成。</p>
+        {replacesExpressNo ? <p className="text-xs text-[var(--erp-color-warning)]">确认后会将当前表单中的快递单号替换为上方内容，请先核对。</p> : null}
+        {result.ignoredLineCount ? <p className="text-xs text-[var(--erp-color-text-secondary)]">已忽略 {result.ignoredLineCount} 行未识别为商品明细的聊天内容。</p> : null}
+      </div> : null}
       {result?.errors.length ? <ErpPageError title="无法解析这次粘贴" description={result.errors.join(" ")} /> : null}
       {result && !result.errors.length ? <div className="flex flex-wrap gap-2"><ErpStatusBadge label={`有效 ${result.validRows.length} 行`} tone="success" /><ErpStatusBadge label={`需确认 ${result.warningRows.length} 行`} tone="warning" /><ErpStatusBadge label={`需选商品 ${result.needsConfirmationRows.length} 行`} tone="info" /><ErpStatusBadge label={`错误 ${result.invalidRows.length} 行`} tone="danger" /></div> : null}
       {selection?.selectedRows.length && selection.error ? <ErpPageError title="无法加入所选明细" description={`${selection.error} 当前表单和所选明细合计 ${selection.totalQuantity} 件；整单上限 ${PURCHASE_MAX_PHYSICAL_ITEMS} 件。`} /> : null}

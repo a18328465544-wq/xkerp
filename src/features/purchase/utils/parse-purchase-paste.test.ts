@@ -169,6 +169,54 @@ test("cost entry follows the form capability and is not inferred from historical
   assert.ok(noProfit.invalidRows[0]?.errors.some((message) => message.includes("不允许录入预计售价")));
 });
 
+test("chat paste joins a standalone price to the preceding model and fills its courier number", () => {
+  const result = parsePurchasePaste("SF0212189489698 4090 测完付 一张\n23000", options());
+  assert.equal(result.mode, "chat");
+  assert.equal(result.expressNo, "SF0212189489698");
+  assert.deepEqual(result.expressNoCandidates, ["SF0212189489698"]);
+  assert.equal(result.parsedRows.length, 1);
+  assert.equal(result.parsedRows[0]?.line.model, "RTX 4090");
+  assert.equal(result.parsedRows[0]?.line.quantity, 1);
+  assert.equal(result.parsedRows[0]?.line.buyPrice, 23_000);
+  assert.equal(result.parsedRows[0]?.line.remarks, "测完付");
+  assert.ok(["valid", "warning"].includes(result.parsedRows[0]!.status));
+});
+
+test("chat paste does not mistake a contact phone number for the purchase price", () => {
+  const result = parsePurchasePaste("SF0212189489698 4090 测完付 一张 13800138000\n23000", options());
+  assert.equal(result.parsedRows.length, 1);
+  assert.equal(result.parsedRows[0]?.line.buyPrice, 23_000);
+  assert.equal(result.expressNo, "SF0212189489698");
+});
+
+test("chat paste leaves quantity blank when it is not stated instead of inheriting the form default", () => {
+  const result = parsePurchasePaste("SF0212189489698 4090\n23000", options());
+  assert.equal(result.parsedRows.length, 1);
+  assert.equal(result.parsedRows[0]?.line.quantity, 0);
+  assert.ok(result.parsedRows[0]?.errors.some((message) => message.includes("未识别到商品数量")));
+});
+
+test("chat paste requires manual product selection when a numeric model maps to multiple templates", () => {
+  const result = parsePurchasePaste("SF0212189489698 4090 一张\n23000", options({products: [product, productTwo]}));
+  assert.equal(result.parsedRows.length, 1);
+  assert.equal(result.needsConfirmationRows.length, 1);
+  assert.equal(result.parsedRows[0]?.line.productId, "");
+  assert.equal(result.parsedRows[0]?.candidates.length, 2);
+});
+
+test("tab chat table recognizes localized quantity and rejects multiple order-level tracking numbers", () => {
+  const one = parsePurchasePaste("单号\t卡型号\t数量\t价格\t备注\nSF0212189489698\t4090\t一张\t¥23,000\t测完付", options());
+  assert.equal(one.mode, "chat");
+  assert.equal(one.expressNo, "SF0212189489698");
+  assert.equal(one.parsedRows[0]?.line.quantity, 1);
+  assert.equal(one.parsedRows[0]?.line.buyPrice, 23_000);
+  assert.equal(one.parsedRows[0]?.line.remarks, "测完付");
+
+  const multiple = parsePurchasePaste("SF0212189489698 4090 一张 23000\nYT1234567890123 4090 一张 23000", options());
+  assert.ok(multiple.errors.some((message) => message.includes("多个不同单号")));
+  assert.deepEqual(multiple.expressNoCandidates, ["SF0212189489698", "YT1234567890123"]);
+});
+
 test("limits fail explicitly without silently truncating", () => {
   const tooLong = parsePurchasePaste("x".repeat(PURCHASE_PASTE_MAX_TEXT_LENGTH + 1), options());
   assert.equal(tooLong.parsedRows.length, 0);
