@@ -3,9 +3,10 @@ import {Mic, MicOff, Square} from "lucide-react";
 import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
 import {createVoiceVad} from "./voiceVad";
-import {useVoiceRecorder} from "./useVoiceRecorder";
+import {useVoiceRecorder, type VoiceRecorderState} from "./useVoiceRecorder";
 
 export type VoiceCaptureMode = "toggle" | "hold";
+export interface VoiceRecorderSnapshot {state: VoiceRecorderState; elapsedMs: number; level: number}
 
 export interface VoiceCaptureButtonProps {
   mode: VoiceCaptureMode;
@@ -13,6 +14,7 @@ export interface VoiceCaptureButtonProps {
   disabled?: boolean;
   busy?: boolean;
   onAudio: (audio: Blob) => void | Promise<void>;
+  onRecorderChange?: (snapshot: VoiceRecorderSnapshot) => void;
   onUnavailable?: (reason: string) => void;
   className?: string;
 }
@@ -22,7 +24,7 @@ function clockLabel(milliseconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = false, onAudio, onUnavailable, className}: VoiceCaptureButtonProps) {
+export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = false, onAudio, onRecorderChange, onUnavailable, className}: VoiceCaptureButtonProps) {
   const recorder = useVoiceRecorder({maxSeconds, onComplete: onAudio});
   const [cancelArmed, setCancelArmed] = useState(false);
   const pointerStartRef = useRef<{id: number; y: number} | null>(null);
@@ -30,6 +32,8 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
   const vadRef = useRef(createVoiceVad());
   const recording = recorder.state === "recording";
   const controlDisabled = disabled || busy || recorder.state === "starting" || recorder.state === "stopping";
+
+  useEffect(() => {onRecorderChange?.({state: recorder.state, elapsedMs: recorder.elapsedMs, level: recorder.level});}, [onRecorderChange, recorder.elapsedMs, recorder.level, recorder.state]);
 
   useEffect(() => {
     if (mode !== "toggle" || !recording) {

@@ -42,7 +42,7 @@ export function VoiceDraftPanel({open, sceneLabel, transcript, onTranscriptChang
   const phone = useErpPhone();
   const description = "识别文字可以修改。录音会发送至当前配置的语音识别服务，不保存音频；草稿仅在你确认后写入业务单据。";
   const body = <VoiceDraftTranscriptEditor sceneLabel={sceneLabel} transcript={transcript} onTranscriptChange={onTranscriptChange} error={error} statusText={statusText}>{children}</VoiceDraftTranscriptEditor>;
-  const footer = <Button type="button" variant="primary" disabled={pending || !transcript.trim()} loading={pending} onClick={onReparse}>{pending ? "解析中…" : "重新解析"}</Button>;
+  const footer = <>{phone && <Button type="button" variant="secondary" onClick={() => document.getElementById("voice-draft-transcript")?.focus()}>改用文字</Button>}<Button type="button" variant="primary" disabled={pending || !transcript.trim()} loading={pending} onClick={onReparse}>{pending ? "解析中…" : "重新解析"}</Button></>;
 
   if (phone) return <ErpDialogShell open={open} onOpenChange={(next) => {if (!next) onClose();}} title="语音录入草稿" description={description} size="lg" mobilePresentation="sheet" pending={pending} footer={footer}>{body}</ErpDialogShell>;
   return <ErpDetailDrawer open={open} onOpenChange={(next) => {if (!next) onClose();}} title="语音录入草稿" description={description} footer={footer}>{body}</ErpDetailDrawer>;
