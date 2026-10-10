@@ -65,6 +65,16 @@ test("GPU SN parse is a read-only POST while saving an estimate is an inventory 
   assert.deepEqual(getReloadKeysForRequest("POST", savePath), ["inventory"]);
 });
 
+test("voice status and transcription are scoped read-only requests, not business mutations", () => {
+  assert.deepEqual(getAuthenticationReloadKeys("GET", "/api/voice/status"), ["systemUsers"]);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/voice/status"), []);
+  assert.deepEqual(getAuthenticationReloadKeys("POST", "/api/voice/transcribe"), ["systemUsers", "products", "inventory"]);
+  assert.equal(requiresStateSerialization("POST", "/api/voice/transcribe"), false);
+  assert.equal(getPersistenceKeysForRequest("POST", "/api/voice/transcribe"), null);
+  assert.equal(getStatePatchKeysForRequest("POST", "/api/voice/transcribe"), null);
+  assert.equal(shouldAttachFreshStateToResponse("POST", "/api/voice/transcribe", {data: {text: "draft"}}), false);
+});
+
 test("outbound preview stays a scoped read across middleware policies and URL variants", () => {
   for (const method of ["POST", "post"]) {
     for (const suffix of ["", "/"]) {

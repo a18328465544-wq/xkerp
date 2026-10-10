@@ -74,6 +74,7 @@ const AFTERSALES_KEYS: StateCollectionKey[] = [
   "paymentOutRecords",
   "logs",
 ];
+const VOICE_TRANSCRIBE_READ_KEYS: StateCollectionKey[] = ["products", "inventory"];
 
 // These collections are required for the dashboard and the common entry pages. Histories that
 // are loaded only after a user opens their own page stay out of the login/focus refresh path.
@@ -119,6 +120,7 @@ function getPostReadReloadKeys(method: string, path: string): StateCollectionKey
   const pathname = path.replace(/\/$/, "");
   if (/^\/api\/sales-invoices\/[^/]+\/outbound\/preflight$/.test(pathname)) return ["salesInvoices", "inventory", "products"];
   if (pathname === "/api/gpu_erp/crm/quick-capture/parse") return ["customers", "products"];
+  if (pathname === "/api/voice/transcribe") return VOICE_TRANSCRIBE_READ_KEYS;
   if (pathname === "/api/gpu_erp/crm/customer/lead-preview") return [];
   if (pathname === "/api/gpu-sn/parse") return [];
   return null;
@@ -215,6 +217,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices") return [];
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices/outbound") return [];
   if (method.toUpperCase() === "GET" && path === "/api/sales/product-candidates") return ["salesInvoices", "inventory", "products"];
+  if (method.toUpperCase() === "GET" && path === "/api/voice/status") return [];
   if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return [];
   if (method.toUpperCase() === "GET" && (path === "/api/assembly-operations" || path === "/api/assembly-operations/reference")) return [];
   if (method.toUpperCase() === "GET" && path === "/api/aftersales/workspace") return [];

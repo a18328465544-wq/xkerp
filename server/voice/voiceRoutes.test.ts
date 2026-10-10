@@ -1,0 +1,131 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import express, {type RequestHandler} from "express";
+import type {AddressInfo} from "node:net";
+import type {AsrProvider} from "./asrProvider.ts";
+import {resolveVoiceRuntimeConfig} from "../runtimeConfig.ts";
+import type {AppState} from "../store.ts";
+import {registerVoiceRoutes, resetVoiceAsrCooldownForTests, type VoiceSafeEvent} from "./voiceRoutes.ts";
+
+function wav(dataBytes = 32_000) {
+  const buffer = Buffer.alloc(44 + dataBytes);
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataBytes, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(16_000, 24);
+  buffer.writeUInt32LE(32_000, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataBytes, 40);
+  return buffer;
+}
+
+async function withVoiceServer(options: {
+  apiKey?: string;
+  limit?: number;
+  provider?: AsrProvider;
+  events?: VoiceSafeEvent[];
+}, run: (baseUrl: string) => Promise<void>) {
+  const app = express();
+  app.use(express.json());
+  const requireAnyMenu = (): RequestHandler => (req, res, next) => {
+    if (!req.headers.authorization) {res.status(401).json({error: {code: "UNAUTHORIZED"}}); return;}
+    if (req.headers["x-menu-denied"] === "1") {res.status(403).json({error: {code: "FORBIDDEN"}}); return;}
+    (req as typeof req & {authUser?: {id: string}}).authUser = {id: String(req.headers["x-user-id"] || "voice-test-user")};
+    next();
+  };
+  const config = resolveVoiceRuntimeConfig({VOICE_ASR_API_KEY: options.apiKey ?? "mock-key", VOICE_RATE_LIMIT_PER_MINUTE: String(options.limit ?? 20)});
+  registerVoiceRoutes(app, {
+    requireAnyMenu,
+    getState: () => ({products: []}) as unknown as AppState,
+    getConfig: () => config,
+    createProvider: () => options.provider || {name: "mock", transcribe: async () => ({text: "模拟识别"})},
+    sendApiError: (_req, res, status, code, message) => res.status(status).json({error: {code, message}}),
+    logSafeEvent: (event) => options.events?.push(event),
+  });
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+  });
+  const address = server.address() as AddressInfo;
+  try { await run(`http://127.0.0.1:${address.port}`); }
+  finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
+}
+
+const authHeaders = {authorization: "Bearer mock-session", "content-type": "audio/wav"};
+
+test("voice status is authenticated, permission scoped, and advertises text fallback", async () => {
+  await withVoiceServer({apiKey: ""}, async (baseUrl) => {
+    const anonymous = await fetch(`${baseUrl}/api/voice/status`);
+    assert.equal(anonymous.status, 401);
+    const forbidden = await fetch(`${baseUrl}/api/voice/status`, {headers: {authorization: "Bearer x", "x-menu-denied": "1"}});
+    assert.equal(forbidden.status, 403);
+    const response = await fetch(`${baseUrl}/api/voice/status`, {headers: {authorization: "Bearer x"}});
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).data, {asrEnabled: false, aiEnabled: false, maxSeconds: 30});
+  });
+});
+
+test("transcribe validates WAV headers and enforces the configured maximum duration", async () => {
+  await withVoiceServer({}, async (baseUrl) => {
+    const invalidType = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: {...authHeaders, "content-type": "application/octet-stream"}, body: wav()});
+    assert.equal(invalidType.status, 400);
+    assert.equal((await invalidType.json()).error.code, "VOICE_AUDIO_TYPE_INVALID");
+
+    const invalidWav = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: Buffer.from("not a wav")});
+    assert.equal(invalidWav.status, 400);
+    assert.equal((await invalidWav.json()).error.code, "VOICE_AUDIO_INVALID");
+
+    const tooLong = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: wav(960_032)});
+    assert.equal(tooLong.status, 400);
+    assert.equal((await tooLong.json()).error.code, "VOICE_AUDIO_TOO_LONG");
+  });
+});
+
+test("transcribe returns mocked text and records no transcript in safe events", async () => {
+  resetVoiceAsrCooldownForTests();
+  const events: VoiceSafeEvent[] = [];
+  let audioBytes = 0;
+  await withVoiceServer({events, provider: {name: "mock-provider", transcribe: async (input) => {audioBytes = input.audio.length; return {text: "仅供返回，不记日志"};}}}, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: wav()});
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).data, {text: "仅供返回，不记日志", durationMs: 1_000, provider: "mock-provider"});
+  });
+  assert.equal(audioBytes, wav().length);
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], {userId: "voice-test-user", durationMs: 1_000, provider: "mock-provider", latencyMs: events[0]?.latencyMs, success: true});
+  assert.equal(JSON.stringify(events).includes("仅供返回"), false);
+});
+
+test("provider errors return a safe 502 and per-user requests are rate limited", async () => {
+  resetVoiceAsrCooldownForTests();
+  const events: VoiceSafeEvent[] = [];
+  await withVoiceServer({events, provider: {name: "mock-failure", transcribe: async () => {throw new Error("mock provider failure");}}}, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: wav()});
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).error.code, "VOICE_ASR_UNAVAILABLE");
+  });
+  assert.equal(events[0]?.success, false);
+  assert.equal(JSON.stringify(events).includes("mock provider failure"), false);
+
+  resetVoiceAsrCooldownForTests();
+  await withVoiceServer({limit: 1}, async (baseUrl) => {
+    const first = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: wav()});
+    assert.equal(first.status, 200);
+    const second = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: wav()});
+    assert.equal(second.status, 429);
+    assert.equal((await second.json()).error.code, "VOICE_RATE_LIMITED");
+  });
+});
+
+test("audio body size is capped at 1.5 MB on the route", async () => {
+  await withVoiceServer({}, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/voice/transcribe`, {method: "POST", headers: authHeaders, body: Buffer.alloc(1_600_000)});
+    assert.equal(response.status, 413);
+    assert.equal((await response.json()).error.code, "VOICE_AUDIO_TOO_LARGE");
+  });
+});

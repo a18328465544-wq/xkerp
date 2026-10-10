@@ -105,6 +105,7 @@ import { registerCrmQuickCaptureRoutes } from "./routes/crmQuickCaptureRoutes.ts
 import { registerOrderPoolRoutes } from "./routes/orderPool.ts";
 import { registerOpenApiRoutes } from "./routes/openApi.ts";
 import {registerGpuSnDateRoutes} from "./routes/gpuSnDate.ts";
+import {registerVoiceRoutes} from "./voice/voiceRoutes.ts";
 import { registerLoginRoute, registerLogoutRoute, registerResetRoute } from "./routes/auth.ts";
 import { CommercialValidationError, assertCommercialTenantActive, assertSeatAvailable, claimIdempotencyKey, completeIdempotencyKeyInTransaction, commercialFeatureEnabled, estimateAiUsageUnits, hashIdempotencyPayload, recordCommercialUsage, releaseIdempotencyKey, releaseInventoryReservationsInTransaction, reserveSalesOutboundInventoryInTransaction, upsertCommercialMembershipInTransaction } from "./commercialRepository.ts";
 import { createStateProxy, getCurrentState, getFallbackState, replaceCurrentState, runTenantContext } from "./requestTenantContext.ts";
@@ -1121,6 +1122,13 @@ registerCrmQuickCaptureRoutes(app, {
   getState: () => state,
   actions: (req) => actions(req as AuthRequest),
   actorForRequest: (req) => crmActor(req),
+});
+
+registerVoiceRoutes(app, {
+  requireAnyMenu,
+  getState: () => state,
+  sendApiError: (req, res, status, code, message) => sendApiError(req, res, status, code, message),
+  logSafeEvent: (event) => console.info(JSON.stringify({event: "voice_asr", ...event})),
 });
 
 registerCrmMutationRoutes(app, {
