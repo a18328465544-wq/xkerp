@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
-import {ErpMetricCard, getErpMetricValueSize, metricComparisonTone} from "./ErpMetricCard";
+import {ErpMetricCard, getErpMetricValueSize, isZeroMetricValue, metricComparisonTone} from "./ErpMetricCard";
 
 test("ErpMetricCard exposes the shared card anatomy and semantic value tone", () => {
   const markup = renderToStaticMarkup(<ErpMetricCard label="今日收入" value="¥68,800" detail="昨日 ¥61,200" tone="success" valueTone="success" compare={12.4} />);
@@ -47,4 +47,13 @@ test("ErpMetricCard uses three value typography tiers without changing card geom
 test("ErpMetricCard keeps an explicit empty comparison visible", () => {
   const markup = renderToStaticMarkup(<ErpMetricCard label="今日支出" value="¥0" detail="昨日 ¥0" compare={null} />);
   assert.match(markup, /暂无对比/);
+});
+
+test("zero amounts and counts read neutral even when a tone is requested", () => {
+  for (const value of ["¥0", "¥0.00", "0 人", "0 款", "0%", "¥ 0"]) assert.equal(isZeroMetricValue(value), true, value);
+  for (const value of ["¥10", "0.5", "1 个", "—", "¥0 / ¥0", "10 人"]) assert.equal(isZeroMetricValue(value), false, value);
+  const zero = renderToStaticMarkup(<ErpMetricCard label="冻结资金" value="¥0.00" valueTone="warning" />);
+  const money = renderToStaticMarkup(<ErpMetricCard label="冻结资金" value="¥200.00" valueTone="warning" />);
+  assert.match(zero, /text-\[var\(--erp-color-text\)\]/);
+  assert.match(money, /text-\[var\(--erp-color-risk\)\]/);
 });

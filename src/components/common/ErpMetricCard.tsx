@@ -44,6 +44,11 @@ const valueSizeClasses: Record<ErpMetricVariant, Record<ErpMetricValueSize, stri
   },
 };
 
+/** Zero amounts and counts read neutral (MOBILE_UI_RULES M22): 「¥0.00」「0 人」「0 款」. */
+export function isZeroMetricValue(value: string) {
+  return /^[-+]?[¥￥]?[-+]?0+(?:\.0+)?(?:%|[\u4e00-\u9fff]{1,2}|[a-zA-Z]{1,3})?$/.test(value.replace(/[\s,]/g, ""));
+}
+
 /** Keep the card geometry stable and scale only the value typography by length. */
 export function getErpMetricValueSize(value: string): ErpMetricValueSize {
   const normalized = value.trim().replace(/\s+/g, "");
@@ -53,7 +58,7 @@ export function getErpMetricValueSize(value: string): ErpMetricValueSize {
 }
 
 /** Shared metric surface used by dashboards, analytics and finance pages. */
-export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant: requestedVariant = "default", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName, supplementalContent}: {
+export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant: requestedVariant = "responsive", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName, supplementalContent}: {
   label: string;
   value: string;
   detail?: ReactNode;
@@ -74,6 +79,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   const phone = useErpPhone();
   const variant: ErpMetricVariant = requestedVariant === "responsive" ? (phone ? "compact" : "default") : requestedVariant;
   const compact = variant === "compact";
+  const resolvedValueTone = valueTone !== "muted" && isZeroMetricValue(value) ? "neutral" : valueTone;
   const resolvedValueSize = valueSize ?? getErpMetricValueSize(value);
   const hasComparison = compare !== undefined;
   const hasFooter = detail !== undefined || hasComparison;
@@ -83,7 +89,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
     <CardContent className={`relative ${compact ? "p-4" : "p-5"}`} style={{minHeight: minHeight ?? (compact ? 76 : hasFooter ? 112 : 88)}}>
       <div className="min-w-0">
         <p data-erp-region="metric-label" className={`text-xs font-medium text-[var(--erp-color-text-secondary)] ${icon ? "pr-10" : ""}`}>{label}</p>
-        <p data-erp-region="metric-value" data-value-size={resolvedValueSize} title={value} style={{fontSize: fittedFont}} className={`${compact ? "mt-1" : "mt-2"} ${valueSizeClasses[variant][resolvedValueSize]} ${valueToneClasses[valueTone]} erp-data-number min-w-0 font-semibold leading-tight tracking-tight`}>{value}</p>
+        <p data-erp-region="metric-value" data-value-size={resolvedValueSize} title={value} style={{fontSize: fittedFont}} className={`${compact ? "mt-1" : "mt-2"} ${valueSizeClasses[variant][resolvedValueSize]} ${valueToneClasses[resolvedValueTone]} erp-data-number min-w-0 font-semibold leading-tight tracking-tight`}>{value}</p>
         {hasFooter ? <div data-erp-region="metric-footer" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           {detail !== undefined ? <span data-erp-region="metric-detail" className="min-w-0 break-words text-[var(--erp-color-text-muted)]">{detail}</span> : null}
           {hasComparison ? (compare == null ? <span data-erp-region="metric-comparison" className="text-[var(--erp-color-text-muted)]">暂无对比</span> : <span data-erp-region="metric-comparison" className={`inline-flex items-center gap-0.5 font-medium ${valueToneClasses[metricComparisonTone(compare, compareMeaning)]}`}><span className="sr-only">{compare === 0 ? "持平" : compare > 0 ? "上升" : "下降"}</span>{compare >= 0 ? <ArrowUpRight className="h-3 w-3" aria-hidden="true" /> : <ArrowDownRight className="h-3 w-3" aria-hidden="true" />}{Math.abs(compare).toFixed(1)}%<span className={compareLabelClassName || "font-normal text-[var(--erp-color-text-muted)]"}>{compareLabel}</span></span>) : null}

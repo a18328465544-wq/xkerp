@@ -2,6 +2,7 @@ import {ArrowRight, MoreHorizontal} from "lucide-react";
 import {useState, type ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {Popover} from "@/src/components/ui";
+import {isZeroMetricValue} from "./ErpMetricCard";
 
 export type QuickStatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 export type QuickStatusVariant = "compact" | "workflow";
@@ -28,6 +29,8 @@ const toneClasses: Record<QuickStatusTone, {icon: string; value: string}> = {
 };
 
 function resolveTone(item: QuickStatusItemData): QuickStatusTone {
+  // Same rule as metric cards: a zero count reads neutral (MOBILE_UI_RULES M22).
+  if (typeof item.value === "string" && isZeroMetricValue(item.value)) return "neutral";
   return item.tone ?? "neutral";
 }
 
