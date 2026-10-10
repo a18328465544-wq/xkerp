@@ -62,3 +62,19 @@ export function ErpMobileWorkflowEditButton({disabled = false}: {disabled?: bool
   const workflow = useContext(Context);
   return <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => workflow?.select(0)}>修改明细</Button>;
 }
+
+/** Content that only belongs to the phone steps, e.g. an order review or the
+ * folded logistics fields in the settlement step. Each form field still mounts
+ * once: either here or in its desktop place, never both. */
+export function ErpMobileWorkflowPhone({children}: {children: ReactNode}) {
+  const workflow = useContext(Context);
+  const phone = useErpPhone();
+  return (workflow ? workflow.phone : phone) ? <>{children}</> : null;
+}
+
+/** Desktop placement of content that phones show elsewhere in the workflow. */
+export function ErpMobileWorkflowDesktop({children}: {children: ReactNode}) {
+  const workflow = useContext(Context);
+  const phone = useErpPhone();
+  return (workflow ? workflow.phone : phone) ? null : <>{children}</>;
+}

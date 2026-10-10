@@ -5,7 +5,7 @@ export {ErpCheckboxField, ErpRadioField, ErpRadioGroup, type ErpCheckboxFieldPro
 export {ErpDetailFact, ErpDetailFactGrid, type ErpDetailFactProps} from "./ErpDetailFact";
 export {ErpEntityThumbnail} from "./ErpEntityThumbnail";
 export {ErpDialogShell, type ErpDialogShellProps, type ErpDialogSize} from "./ErpDialogShell";
-export {ErpMobileWorkflow, ErpMobileWorkflowSection, type ErpMobileWorkflowStep} from "./ErpMobileWorkflow";
+export {ErpMobileWorkflow, ErpMobileWorkflowDesktop, ErpMobileWorkflowPhone, ErpMobileWorkflowSection, type ErpMobileWorkflowStep} from "./ErpMobileWorkflow";
 export {ErpMobileSummary} from "./ErpMobileSummary";
 export {ErpMobileRecordRow} from "./ErpMobileRecordRow";
 export {ErpMobileActionDock} from "./ErpMobileActionDock";
@@ -54,3 +54,4 @@ export {countActiveErpFilterFields, ErpFilterFields, isErpFilterFieldActive, typ
 export {ErpListPage, type ErpListColumnSettings, type ErpListPageAction, type ErpListPageFrameKind, type ErpListPagePagination, type ErpListPageProps, type ErpListQuickFilter, type ErpListTableProps} from "./page-templates/ErpListPage";
 export {ErpRecordDetail, type ErpRecordDetailProps, type ErpRecordFact, type ErpRecordSection} from "./ErpRecordDetail";
 export {ErpRecordPage, type ErpRecordPageAction, type ErpRecordPageProps} from "./page-templates/ErpRecordPage";
+export {ErpTransactionHeader, type ErpTransactionHeaderProps} from "./page-templates/ErpTransactionHeader";

@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState, type ReactNode} from "react";
 import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {firstInvalidControl, focusFirstInvalidControl} from "@/src/lib/controlInteraction";
 
 export type ErpSubmitState = "invalid" | "ready" | "submitting";
@@ -10,7 +11,10 @@ export function resolveErpSubmitState({canSubmit, submitting}: {canSubmit: boole
   return canSubmit ? "ready" : "invalid";
 }
 
-export function ErpSubmitBar({dirty, canSubmit, blockedReason, submitting, onCancel, onLocateIssue, submitLabel = "保存销售单", children, compact = false, embedded = false, showCancel = true, summary}: {summary?: ReactNode; dirty: boolean; canSubmit: boolean; blockedReason?: string; submitting: boolean; onCancel: () => void; onLocateIssue?: () => void; submitLabel?: string; children?: ReactNode; compact?: boolean; embedded?: boolean; showCancel?: boolean}) {
+export function ErpSubmitBar({dirty, canSubmit, blockedReason, submitting, onCancel, onLocateIssue, submitLabel: desktopSubmitLabel = "保存销售单", phoneSubmitLabel, children, compact = false, embedded = false, showCancel = true, summary: desktopSummary, phoneSummary}: {summary?: ReactNode; /** Phone-only total line shown in the sticky bar (M14). */ phoneSummary?: ReactNode; /** Shorter phone wording, e.g. 「提交销售单」. */ phoneSubmitLabel?: string; dirty: boolean; canSubmit: boolean; blockedReason?: string; submitting: boolean; onCancel: () => void; onLocateIssue?: () => void; submitLabel?: string; children?: ReactNode; compact?: boolean; embedded?: boolean; showCancel?: boolean}) {
+  const phone = useErpPhone();
+  const summary = phone && phoneSummary !== undefined ? phoneSummary : desktopSummary;
+  const submitLabel = phone && phoneSubmitLabel ? phoneSubmitLabel : desktopSubmitLabel;
   const barRef = useRef<HTMLDivElement>(null);
   const [hasInvalidControl, setHasInvalidControl] = useState(false);
   useEffect(() => {
