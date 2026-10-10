@@ -155,7 +155,7 @@ with sync_playwright() as p:
                       navigator.mediaDevices.getUserMedia = async () => {const stream = new MediaStream(); stream.getTracks = () => [{stop: () => window.__cameraStops++}]; return stream;};
                       HTMLMediaElement.prototype.play = async () => {};
                     }""", STOCK["sn"])
-                    page.get_by_role("button", name="扫码搜索库存", exact=True).click()
+                    page.locator("[data-erp-component=\"mobile-action-dock\"]").get_by_role("button", name="扫码", exact=True).click()
                     expect(page.get_by_role("searchbox", name="搜索库存", exact=True)).to_have_value(STOCK["sn"])
                     expect(page.get_by_role("dialog")).to_have_count(0)
                     assert page.evaluate("window.__cameraStops") > 0

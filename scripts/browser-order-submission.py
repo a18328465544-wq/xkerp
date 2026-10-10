@@ -31,7 +31,9 @@ def tabs(page, width):
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     try:
-        for width in ([1440] if REPRODUCE else [int(value) for value in os.environ.get("ORDER_SMOKE_WIDTHS", "1440,1024,390").split(",")]):
+        # Desktop single-page editors. The phone two-step workflow (下一步：结算 → 提交)
+        # is covered by scripts/browser-mobile-workbench.py (npm run test:mobile-browser).
+        for width in ([1440] if REPRODUCE else [int(value) for value in os.environ.get("ORDER_SMOKE_WIDTHS", "1440,1024").split(",")]):
             for editor in ["purchase", "sales"]:
                 for mode in (["edit", "account", "partner", "items", "hidden", "retry", "pending-success"] if REPRODUCE else MODES):
                     context = browser.new_context(viewport={"width": width, "height": 1000})
@@ -110,11 +112,11 @@ with sync_playwright() as p:
                         if mode == "edit":
                             remarks.fill("修改后的备注")
                         elif mode == "account":
-                            form.get_by_role("combobox", name="收款账户", exact=True).click()
+                            form.get_by_role("combobox", name="付款账户" if editor == "purchase" else "收款账户", exact=True).click()
                             page.get_by_role("option").filter(has_text="本地账户B").click()
                         elif mode == "partner":
                             form.get_by_role("button", name="清除采购来源" if editor == "purchase" else "清除客户", exact=True).click()
-                            form.get_by_role("textbox", name="搜索采购来源" if editor == "purchase" else "搜索销售客户", exact=True).fill("本地客户B")
+                            form.get_by_role("combobox", name="搜索采购来源" if editor == "purchase" else "搜索销售客户", exact=True).fill("本地客户B")
                             page.get_by_role("option").filter(has_text="本地客户B").click()
                         elif mode == "items":
                             form.get_by_role("spinbutton", name="第 1 行数量", exact=True).fill("2")
@@ -133,7 +135,7 @@ with sync_playwright() as p:
                                 expect(remarks).to_be_disabled()
                                 expect(form.get_by_role("button", name="清除采购来源" if editor == "purchase" else "清除客户", exact=True)).to_be_disabled()
                                 expect(form.get_by_role("spinbutton", name="第 1 行数量", exact=True)).to_be_disabled()
-                                expect(form.get_by_role("combobox", name="收款账户", exact=True)).to_be_disabled()
+                                expect(form.get_by_role("combobox", name="付款账户" if editor == "purchase" else "收款账户", exact=True)).to_be_disabled()
                             success(held.pop())
                         if delayed:
                             page.evaluate("window.__delayValidation=false;window.__releaseValidation.splice(0).forEach(fn=>fn())")

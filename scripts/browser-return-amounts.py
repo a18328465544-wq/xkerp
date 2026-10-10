@@ -9,7 +9,9 @@ from playwright.sync_api import sync_playwright, expect
 BASE = os.environ.get("FORM_SMOKE_BASE_URL", "http://127.0.0.1:3010").rstrip("/")
 assert urlparse(BASE).hostname in ["127.0.0.1", "localhost"]
 REPRODUCE = "--reproduce" in sys.argv
-WIDTHS = [1440] if REPRODUCE else [1440, 1024, 390]
+# Amount validation is the same form controller on every viewport (MOBILE_UI_RULES M2);
+# the phone two-step return submission is covered by scripts/browser-mobile-workbench.py.
+WIDTHS = [1440] if REPRODUCE else [1440, 1024]
 MODES = ["refreshed-zero"] if REPRODUCE else ["zero", "refreshed-zero", "missing", "positive", "negative", "invalid"]
 PRODUCT = {"id": "P-LOCAL", "name": "本地 RTX4090", "category": "显卡", "model": "RTX4090", "brand": "本地", "version": "OC", "vram": "24G"}
 

@@ -67,6 +67,10 @@ with sync_playwright() as p:
 
             page.route(BASE + "/src/hooks/useWorkspaceTabRuntime.tsx*", runtime)
             page.route(BASE + "/api/**", api)
+            # Phones keep attachments in the settlement step (MOBILE_UI_RULES M14),
+            # which stays mounted but hidden until a source is chosen.
+            phone = width < 768
+            shown = (lambda locator: expect(locator).to_be_attached()) if phone else (lambda locator: expect(locator).to_be_visible())
             try:
                 page.goto(BASE + "/purchase/new")
                 page.wait_for_load_state("networkidle")
@@ -74,23 +78,24 @@ with sync_playwright() as p:
                 restored = page.locator('p[title="采购图片 1"]')
                 initial_count = restored.count()
                 if not REPRODUCE:
-                    expect(restored).to_be_visible()
+                    shown(restored)
                 png = page.evaluate("() => {const c=document.createElement('canvas');c.width=40;c.height=40;c.getContext('2d').fillRect(0,0,40,40);return c.toDataURL('image/png').split(',')[1];}")
                 page.locator('input[type="file"][accept*="image/jpeg"]').set_input_files({"name": "NEW.png", "mimeType": "image/png", "buffer": base64.b64decode(png)})
-                expect(page.locator('p[title="NEW.png"]')).to_be_visible()
-                page.wait_for_function("document.body.innerText.includes('已上传')")
+                shown(page.locator('p[title="NEW.png"]'))
+                page.wait_for_function("document.body.textContent.includes('已上传')")
                 page.wait_for_timeout(250)
                 assert len(calls) == 1, calls
                 if REPRODUCE:
                     print(json.dumps({"restoredPreviewCount": initial_count, "oldImageRetained": EXISTING in calls[0]["images"]}), flush=True)
                 else:
                     assert calls[0]["images"][0] == EXISTING, calls
-                    expect(restored).to_be_visible()
+                    shown(restored)
                     expect(page.get_by_text("已上传", exact=True)).to_have_count(2)
+                    remove = page.get_by_role("button", name="删除采购图片 1", exact=True, include_hidden=phone)
                     with page.expect_response(lambda response: urlparse(response.url).path == "/api/media" and response.request.method == "POST"):
-                        page.get_by_role("button", name="删除采购图片 1", exact=True).click()
+                        remove.dispatch_event("click") if phone else remove.click()
                     assert calls[-1]["images"] == [NEW], calls
-                    expect(page.locator('p[title="NEW.png"]')).to_be_visible()
+                    shown(page.locator('p[title="NEW.png"]'))
                     print(json.dumps({"width": width, "restoredUploadAndRemoval": True}), flush=True)
                 assert not errors, errors
                 assert not writes, writes
