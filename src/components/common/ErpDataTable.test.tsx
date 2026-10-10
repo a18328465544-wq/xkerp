@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import type {ColumnDef, SortingState} from "@tanstack/react-table";
-import {ErpDataTable, resolveMobileCardDetails} from "./ErpDataTable";
+import {ErpDataTable, fitColumnWidths, resolveMobileCardDetails} from "./ErpDataTable";
 
 type Row = {id: string; amount: number};
 
@@ -160,4 +160,14 @@ test("responsive surface is plain on phones and a card elsewhere", () => {
   const desktop = renderToStaticMarkup(<ErpDataTable columns={customerColumns} data={customers} getRowId={(row) => row.id} mobileRow="columns" surface="responsive" phone={false} compactViewport={false} />);
   assert.match(phone, /data-surface="plain"/);
   assert.doesNotMatch(desktop, /data-surface="plain"/);
+});
+
+test("columns shrink proportionally to their minimum before the table scrolls", () => {
+  const columns = [{id: "name", size: 300, min: 180}, {id: "amount", size: 200, min: 120}, {id: "actions", size: 100, min: 100}];
+  assert.deepEqual(fitColumnWidths(columns, 800), {name: 300, amount: 200, actions: 100}, "fits already");
+  const fitted = fitColumnWidths(columns, 500);
+  assert.equal(fitted.actions, 100, "fixed columns keep their width");
+  assert.ok(fitted.name! < 300 && fitted.name! >= 180);
+  assert.ok(Object.values(fitted).reduce((sum, width) => sum + width, 0) <= 500);
+  assert.deepEqual(fitColumnWidths(columns, 300), {name: 180, amount: 120, actions: 100}, "stops at minimums, then scrolls");
 });

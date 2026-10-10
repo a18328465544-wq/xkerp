@@ -18,5 +18,7 @@ declare module "@tanstack/react-table" {
     /** Phone rendering when the desktop cell is too rich (two lines, hints).
      * Defaults to the column's own cell. */
     mobileCell?: (row: TData) => ReactNode;
+    /** Narrowest desktop width when the table shrinks to fit (default 65% of size, at least 64px). */
+    minWidth?: number;
   }
 }

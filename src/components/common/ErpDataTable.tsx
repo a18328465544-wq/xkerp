@@ -22,6 +22,26 @@ export function resolveTableProjection({mobileMode, compactViewport}: {mobileMod
   return mobileMode === "cards" && compactViewport ? "cards" : "table";
 }
 
+export interface ErpFitColumn {id: string; size: number; min: number}
+
+/** Rough rendered width of a 12px header label: CJK glyphs are square, Latin about half. */
+export function estimateTextWidth(text: string) {
+  return [...text].reduce((sum, char) => sum + (/[\u2e80-\uffff]/.test(char) ? 12 : 7), 0);
+}
+
+/** Shrink flexible columns proportionally toward their minimum so a table
+ * fits its container before it scrolls; fixed columns keep `min === size`. */
+export function fitColumnWidths(columns: readonly ErpFitColumn[], available: number): Record<string, number> {
+  const widths = Object.fromEntries(columns.map((column) => [column.id, column.size]));
+  const total = columns.reduce((sum, column) => sum + column.size, 0);
+  if (!available || total <= available) return widths;
+  const slack = columns.reduce((sum, column) => sum + Math.max(0, column.size - column.min), 0);
+  if (slack <= 0) return widths;
+  const ratio = Math.min(1, (total - available) / slack);
+  for (const column of columns) widths[column.id] = Math.floor(column.size - Math.max(0, column.size - column.min) * ratio);
+  return widths;
+}
+
 export function resolveMobileCardDetails(fieldCount: number, mobileFields: number, expanded: boolean) {
   const previewCount = Math.max(0, Math.floor(mobileFields));
   const hiddenCount = Math.max(0, fieldCount - previewCount);
@@ -153,6 +173,21 @@ export function ErpDataTable<TData>({
   const setColumnVisibility = onColumnVisibilityChange || setInternalVisibility;
   const setRowSelection = onRowSelectionChange || setInternalSelection;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const observedNode = useRef<HTMLDivElement | null>(null);
+  const resizeObserver = useRef<ResizeObserver | null>(null);
+  // The desktop scroller mounts only when rows exist; re-check after each render.
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (node === observedNode.current) return;
+    resizeObserver.current?.disconnect();
+    observedNode.current = node;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => setContainerWidth(Math.floor(entry?.contentRect.width ?? 0)));
+    observer.observe(node);
+    resizeObserver.current = observer;
+  });
+  useEffect(() => () => resizeObserver.current?.disconnect(), []);
   // Keep the server and first client render identical; the media listener
   // applies the compact presentation immediately after hydration.
   const [internalCompactViewport, setInternalCompactViewport] = useState(false);
@@ -212,6 +247,16 @@ export function ErpDataTable<TData>({
     : ariaLabel;
 
   const isUtilityColumn = (id: string) => id === "select" || id === "actions" || id === "action" || id.endsWith(".actions") || id.endsWith("_actions");
+  const userSized = table.getState().columnSizing;
+  const columnWidths = fitColumnWidths(table.getVisibleLeafColumns().map((column) => {
+    const size = column.getSize();
+    const fixed = isUtilityColumn(column.id) || userSized[column.id] !== undefined;
+    // Never narrower than the header itself (text + cell padding + sort icon).
+    const header = column.columnDef.header;
+    const headerWidth = typeof header === "string" ? estimateTextWidth(header) + 44 + (column.getCanSort() ? 20 : 0) : 64;
+    return {id: column.id, size, min: fixed ? size : Math.min(size, Math.max(headerWidth, column.columnDef.meta?.minWidth ?? Math.max(64, Math.round(size * 0.65))))};
+  }), containerWidth);
+  const tableWidth = Object.values(columnWidths).reduce((sum, width) => sum + width, 0);
   const sortableColumns = table.getAllLeafColumns().filter((column) => !isUtilityColumn(column.id) && column.getCanSort());
   const activeSort = sorting[0];
   const activeSortColumn = activeSort ? table.getColumn(activeSort.id) : undefined;
@@ -316,10 +361,10 @@ export function ErpDataTable<TData>({
       })}
     </div>}
     {!showMobileCards && <div ref={scrollRef} className={cn("erp-table-desktop-view erp-scrollbar erp-horizontal-scroll overflow-x-auto", shouldVirtualize && "max-h-[min(48rem,68vh)] overflow-y-auto")}>
-      <table className="w-full table-fixed border-collapse text-left text-sm" style={{minWidth: table.getTotalSize()}} aria-label={resolvedAriaLabel} aria-busy={loading || fetching} aria-rowcount={total ?? undefined}>
+      <table className="w-full table-fixed border-collapse text-left text-sm" style={{minWidth: tableWidth}} aria-label={resolvedAriaLabel} aria-busy={loading || fetching} aria-rowcount={total ?? undefined}>
         <thead className={cn("bg-[var(--erp-color-surface-muted)] text-xs font-medium text-[var(--erp-color-text-secondary)]", stickyHeader && "sticky top-0 erp-content-sticky-layer")}>
           {table.getHeaderGroups().map((headerGroup) => <tr key={headerGroup.id}>
-            {headerGroup.headers.map((header) => <th key={header.id} data-erp-sticky-action={isUtilityColumn(header.column.id) && header.column.id !== "select" ? "true" : undefined} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-medium" style={{width: header.getSize()}}>
+            {headerGroup.headers.map((header) => <th key={header.id} data-erp-sticky-action={isUtilityColumn(header.column.id) && header.column.id !== "select" ? "true" : undefined} scope="col" className="relative whitespace-nowrap border-b border-[var(--erp-color-border)] px-4 py-3 font-medium" style={{width: columnWidths[header.column.id] ?? header.getSize()}}>
               {header.isPlaceholder ? null : <div className="flex items-center gap-1">
                 {header.column.getCanSort() ? <button type="button" className="erp-focus-ring inline-flex items-center gap-1 rounded px-1" onClick={header.column.getToggleSortingHandler()}>{flexRender(header.column.columnDef.header, header.getContext())}{header.column.getIsSorted() === "asc" ? <ArrowUp className="h-3 w-3" /> : header.column.getIsSorted() === "desc" ? <ArrowDown className="h-3 w-3" /> : <ChevronsUpDown className="h-3 w-3 opacity-40" />}</button> : flexRender(header.column.columnDef.header, header.getContext())}
                 {header.column.getCanResize() && <button type="button" aria-label={`调整${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}列宽`} title="拖动或用左右方向键调整；Shift 加速，Home 恢复默认" className="erp-focus-ring absolute right-0 top-0 h-full w-3 cursor-col-resize overflow-hidden text-transparent hover:text-[var(--erp-color-primary)]" onKeyDown={(event) => {
