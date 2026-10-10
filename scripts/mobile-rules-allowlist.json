@@ -18,20 +18,12 @@
       "reason": "工作台页面待评估（T12）"
     },
     {
-      "file": "src/features/ai/pages/AiInsightsPage.tsx",
-      "reason": "分析页只需保证数据卡与图表单列（T13）"
-    },
-    {
-      "file": "src/features/assembly/pages/AssemblyWorkspacePage.tsx",
-      "reason": "工作台页面待评估（T12）"
-    },
-    {
       "file": "src/features/crm/pages/CrmWorkspacePage.tsx",
       "reason": "工作台页面待评估（T12）"
     },
     {
       "file": "src/features/dashboard/pages/DashboardPage.tsx",
-      "reason": "看板页只需保证数据卡与图表单列（T13）"
+      "reason": "首页在手机上是独立的移动工作台（M9 底部导航「首页」根页面），与电脑端经营看板是两套界面，手机端也不加载 AI 建议；保留分支是有意的"
     },
     {
       "file": "src/features/inspections/pages/InspectionWorkspacePage.tsx",
@@ -46,20 +38,12 @@
       "reason": "开单页剩余分支待收拢进 ErpMobileWorkflow（T14）"
     },
     {
-      "file": "src/features/quotes/pages/MarketQuotesPage.tsx",
-      "reason": "分析页只需保证数据卡与图表单列（T13）"
-    },
-    {
       "file": "src/features/sales/pages/NewSalesOrderPage.tsx",
       "reason": "开单页剩余分支待收拢进 ErpMobileWorkflow（T14）"
     },
     {
       "file": "src/features/sales/pages/SalesOutboundPage.tsx",
       "reason": "工作台页面待评估（T12）"
-    },
-    {
-      "file": "src/features/settings/pages/BackupPage.tsx",
-      "reason": "备份页仅一处手机文案分支，待迁移"
     }
   ]
 }

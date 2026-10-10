@@ -11,7 +11,6 @@ import {ApiError, queryKeys, quotesApi, type AuthSession} from "@/src/services/a
 import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {formatCurrency} from "@/src/lib/format";
 import type {MarketQuoteFilters, MarketQuoteFormValues, MarketQuoteItem} from "@/src/types/quote";
 import {createQuoteColumns} from "../quote.columns";
@@ -37,7 +36,6 @@ export function MarketQuotesPage() {
 }
 
 function MarketQuotesContent({active, session, query, filters, onFiltersChange, onAuthExpired}: {active: boolean; session: AuthSession; query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof quotesApi.list>>>>; filters: MarketQuoteFilters; onFiltersChange: (filters: MarketQuoteFilters) => void; onAuthExpired: () => void}) {
-  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -83,7 +81,7 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
   ];
 
   return <ErpAnalyticsPageFrame>
-    <ErpPageHeader title="行情参考" subtitle="维护回收与销售参考价，查看价格变化与更新时间。" quickStatus={quickStatus} actions={<>{!phone && <Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setCategoryManagerOpen(true)}><Tags className="h-4 w-4" />分类管理</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setPasteOpen(true)}><Upload className="h-4 w-4" />批量粘贴</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="primary" onClick={openCreate}><Plus className="h-4 w-4" />新增参考价</Button>}</>} />
+    <ErpPageHeader title="行情参考" subtitle="维护回收与销售参考价，查看价格变化与更新时间。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setCategoryManagerOpen(true)}><Tags className="h-4 w-4" />分类管理</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setPasteOpen(true)}><Upload className="h-4 w-4" />批量粘贴</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="primary" onClick={openCreate}><Plus className="h-4 w-4" />新增参考价</Button>}</>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     <AnalyticsKpiRegion primary={<>
       <ErpMetricCard label="行情型号" value={`${quotes.length} 款`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<LineChart className="h-4 w-4" />} tone="info" />

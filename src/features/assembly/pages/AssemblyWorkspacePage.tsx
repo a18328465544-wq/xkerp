@@ -1,6 +1,5 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {Combine, PackageOpen, RefreshCw, Unplug, Wrench} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import {useMemo, useState, type ReactNode} from "react";
@@ -36,7 +35,6 @@ export function AssemblyWorkspacePage() {
 }
 
 function AssemblyContent({session, filters, onFiltersChange, listQuery, referenceQuery, onAuthExpired}: {session: AuthSession; filters: AssemblyOperationFilters; onFiltersChange: (filters: AssemblyOperationFilters) => void; listQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof assemblyApi.list>>>>; referenceQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof assemblyApi.referenceData>>>>; onAuthExpired: () => void}) {
-  const phone = useErpPhone();
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<AssemblyOperation | null>(null);
   const [deleting, setDeleting] = useState<AssemblyOperation | null>(null);
@@ -56,7 +54,7 @@ function AssemblyContent({session, filters, onFiltersChange, listQuery, referenc
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(Boolean(filters.handler));
 
   return <ErpWarehousePageFrame>
-    <ErpPageHeader title="整机与组装" subtitle="拆卸库存、组合配件，追溯库存与成本变化。" quickStatus={quickStatus} actions={phone ? null : <Button type="button" size="sm" variant="secondary" onClick={() => void Promise.all([listQuery.refetch(), referenceQuery.refetch()])} disabled={listQuery.isFetching || referenceQuery.isFetching}><RefreshCw className={`h-4 w-4 ${listQuery.isFetching || referenceQuery.isFetching ? "animate-spin" : ""}`} />刷新</Button>} />
+    <ErpPageHeader title="整机与组装" subtitle="拆卸库存、组合配件，追溯库存与成本变化。" quickStatus={quickStatus} actions={<Button type="button" size="sm" variant="secondary" onClick={() => void Promise.all([listQuery.refetch(), referenceQuery.refetch()])} disabled={listQuery.isFetching || referenceQuery.isFetching}><RefreshCw className={`h-4 w-4 ${listQuery.isFetching || referenceQuery.isFetching ? "animate-spin" : ""}`} />刷新</Button>} />
     <MetricsRegion><MetricCard label="操作单总数" value={`${listQuery.data?.total || 0} 单`} icon={<Wrench className="h-4 w-4" />} /><MetricCard label="本页拆卸" value={`${records.filter((item) => item.type === "拆卸").length} 单`} detail="当前分页结果" icon={<Unplug className="h-4 w-4" />} tone="warning" /><MetricCard label="本页组装" value={`${records.filter((item) => item.type === "组装").length} 单`} detail="当前分页结果" icon={<Combine className="h-4 w-4" />} tone="success" /><MetricCard label="商品模板" value={`${references.products.length} 款`} detail="来自真实商品快照" icon={<PackageOpen className="h-4 w-4" />} /></MetricsRegion>
     {referenceQuery.isPending ? <Card><ErpLoadingState title="正在加载组装参考库存" /></Card> : referenceQuery.error ? <ErpPageError title="无法加载组装参考数据" description={(referenceQuery.error as Error).message} onRetry={() => void referenceQuery.refetch()} /> : <MainRegion variant="70-30"><MainRegion.Primary><AssemblyOperationForm handler={session.user.displayName} references={references} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} submitting={createMutation.isPending} error={createMutation.error instanceof Error ? createMutation.error.message : undefined} onSubmit={(values, reset) => createMutation.mutate({values, reset})} /></MainRegion.Primary><MainRegion.Secondary><RecentOperations records={records.slice(0, 6)} showProfit={session.permissions.showProfit} onView={setDetail} /></MainRegion.Secondary></MainRegion>}
     <ErpPageToolbar><ErpFilterBar actions={<Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultAssemblyFilters)}>重置筛选</Button>}><ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="搜索单号、SN、商品或配件" aria-label="搜索组装拆卸记录" /><Select value={filters.type} onValueChange={(type) => onFiltersChange({...filters, type: type as AssemblyOperationFilters["type"], page: 1})} options={[{value: "all", label: "全部类型"}, {value: "拆卸", label: "拆卸"}, {value: "组装", label: "组装"}]} className="w-36" aria-label="筛选操作类型" /><Input className="w-40" value={filters.handler} onChange={(event) => onFiltersChange({...filters, handler: event.target.value, page: 1})} placeholder="经办人精确筛选" aria-label="筛选经办人" /></ErpFilterBar></ErpPageToolbar>
