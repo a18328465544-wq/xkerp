@@ -5,6 +5,7 @@ import type { AppState } from "./store.ts";
 import { hashPassword, isPasswordHash } from "./security.ts";
 import type { CommissionMode, SystemUserAccount } from "../src/types.ts";
 import { applyCrmFoundationSchema } from "./crmSchema.ts";
+import {applyMarketQuoteCategorySchema} from "./marketQuoteCategorySchema.ts";
 import { applyOperationalProjectionSchema } from "./operationalSchema.ts";
 import { applyAccountingControlPlaneSchema, applyCommercialFoundationSchema, applyCommercialHardeningSchema } from "./commercialSchema.ts";
 import { DEFAULT_STORE_ID, DEFAULT_TENANT_ID } from "./commercialConstants.ts";
@@ -224,6 +225,7 @@ const postgresInitializer = createPostgresInitializer({
   applyCommercialFoundationSchema,
   applyCommercialHardeningSchema,
   applyAccountingControlPlaneSchema,
+  applyMarketQuoteCategorySchema,
   upgradePersistedUserPasswords,
   rollbackQuietly,
 });

@@ -315,6 +315,7 @@ export interface MarketQuote {
   productName: string;
   model: string;
   brand: string;
+  categoryId?: string;
   version: string;
   yestBuyPrice: number;
   todayBuyPrice: number;
@@ -380,6 +381,8 @@ export interface CustomerCard {
   company?: string;
   source: string;
   firstChannel?: string; // Aliases source in PartnerManager.tsx
+  /** Independent tenant-defined classification; does not replace customer level. */
+  categoryId?: string;
   type:
     | "个人买家客户"
     | "个人卖家客户"

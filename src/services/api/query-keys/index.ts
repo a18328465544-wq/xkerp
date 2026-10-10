@@ -68,6 +68,7 @@ export const queryKeys = {
   quotes: {
     all: () => ["quotes"] as const,
     list: (access: {showCost: boolean; showProfit: boolean}) => ["quotes", "list", access] as const,
+    categories: () => ["quotes", "categories"] as const,
   },
   assembly: {
     all: () => ["assembly"] as const,

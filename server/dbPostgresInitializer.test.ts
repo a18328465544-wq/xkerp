@@ -19,7 +19,7 @@ function fixture(failFirst = false) {
   const dependencies: PostgresInitializerDependencies = {getPool, collectionTables: [], applySchemaComments: noop,
     applyCrmFoundationSchema: noop, applyOperationalProjectionSchema: noop,
     applyCommercialFoundationSchema: noop, applyCommercialHardeningSchema: noop,
-    applyAccountingControlPlaneSchema: noop, upgradePersistedUserPasswords: noop, rollbackQuietly: rollbackTransactionQuietly};
+    applyAccountingControlPlaneSchema: noop, applyMarketQuoteCategorySchema: noop, upgradePersistedUserPasswords: noop, rollbackQuietly: rollbackTransactionQuietly};
   return {initialize: createPostgresInitializer(dependencies).initializePostgres, counts: () => ({connections, releases})};
 }
 

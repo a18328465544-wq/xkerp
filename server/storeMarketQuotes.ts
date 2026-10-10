@@ -31,12 +31,25 @@ export type MarketQuoteDependencies = {
 export function createMarketQuoteHelpers(dependencies: MarketQuoteDependencies) {
   const {state, nowStamp, storeDate, genId, systemActor, isStockExcludedStatus, addLog} = dependencies;
 
-  const updateMarketPrice = (quoteId: string, todayBuyPrice: number, todaySellPrice: number, remarks?: string) => {
+  const updateMarketPrice = (quoteId: string, todayBuyPrice: number, todaySellPrice: number, remarks?: string, categoryId?: string | null) => {
     let updatedQuote: MarketQuote | undefined;
+    let categoryOnlyUpdate = false;
     state.marketQuotes = state.marketQuotes.map((quote) => {
       if (quote.id !== quoteId) return quote;
       const previousBuyPrice = quote.refBuyPrice ?? quote.todayBuyPrice ?? quote.yestBuyPrice ?? 0;
       const previousSellPrice = quote.refSellPrice ?? quote.todaySellPrice ?? quote.maxPrice ?? 0;
+      const nextCategoryId = categoryId || undefined;
+      const categoryChanged = categoryId !== undefined && nextCategoryId !== (quote.categoryId || undefined);
+      if (categoryChanged && todayBuyPrice === previousBuyPrice && todaySellPrice === previousSellPrice) {
+        categoryOnlyUpdate = true;
+        updatedQuote = {
+          ...quote,
+          categoryId: nextCategoryId,
+          fluctuation: remarks || quote.fluctuation || quote.remarks,
+          remarks: remarks || quote.remarks,
+        };
+        return updatedQuote;
+      }
       const changeAmount = todayBuyPrice - previousBuyPrice;
       const time = nowStamp();
       const nextHistory = [
@@ -57,16 +70,26 @@ export function createMarketQuoteHelpers(dependencies: MarketQuoteDependencies) 
         trend: changeAmount > 0 ? "up" : changeAmount < 0 ? "down" : "stable",
         fluctuation: remarks || quote.fluctuation || quote.remarks,
         remarks: remarks || quote.remarks,
+        ...(categoryId !== undefined ? {categoryId: categoryId || undefined} : {}),
         updateTime: time,
         history: nextHistory,
       };
       return updatedQuote;
     });
     if (updatedQuote) {
-      state.inventory = state.inventory.map((card) => (card.productId === updatedQuote?.productId && !isStockExcludedStatus(card.status)
-        ? {...card, marketPrice: todayBuyPrice, estSellPrice: todaySellPrice, priceUpdatedAt: nowStamp(), priceSource: "行情参考"}
-        : card));
-      addLog(systemActor(), "价格参考", "更新当日参考价", updatedQuote.productName, `最新回收: ${todayBuyPrice}`, `最新销售: ${todaySellPrice}`);
+      if (!categoryOnlyUpdate) {
+        state.inventory = state.inventory.map((card) => (card.productId === updatedQuote?.productId && !isStockExcludedStatus(card.status)
+          ? {...card, marketPrice: todayBuyPrice, estSellPrice: todaySellPrice, priceUpdatedAt: nowStamp(), priceSource: "行情参考"}
+          : card));
+      }
+      addLog(
+        systemActor(),
+        "价格参考",
+        categoryOnlyUpdate ? "更新行情分类" : "更新当日参考价",
+        updatedQuote.productName,
+        categoryOnlyUpdate ? undefined : `最新回收: ${todayBuyPrice}`,
+        categoryOnlyUpdate ? updatedQuote.categoryId || "未分类" : `最新销售: ${todaySellPrice}`,
+      );
     }
     return updatedQuote ?? null;
   };
@@ -159,7 +182,7 @@ export function createMarketQuoteHelpers(dependencies: MarketQuoteDependencies) 
         created += 1;
         return;
       }
-      const next = updateMarketPrice(existing.id, Number(quote.refBuyPrice), Number(quote.refSellPrice), quote.fluctuation || quote.remarks);
+      const next = updateMarketPrice(existing.id, Number(quote.refBuyPrice), Number(quote.refSellPrice), quote.fluctuation || quote.remarks, quote.categoryId);
       if (!next) return;
       const importedAt = quote.updateTime || quote.date;
       const updatedQuote: MarketQuote = {...next, brand: quote.brand?.trim() || next.brand, updateTime: importedAt || next.updateTime, date: importedAt || next.date};

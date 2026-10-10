@@ -147,6 +147,8 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   if (path === "/api/gpu-sn/estimate/save") return ["inventory", "logs"];
   if (path === "/api/gpu-sn/parse") return null;
   if (startsWithAny(path, ["/api/customers"])) return ["customers", "logs"];
+  if (startsWithAny(path, ["/api/customer-categories"])) return ["logs"];
+  if (startsWithAny(path, ["/api/market-quote-categories"])) return ["logs"];
   if (startsWithAny(path, ["/api/vendors"])) return ["vendors", "logs"];
   if (startsWithAny(path, ["/api/users"])) return ["systemUsers", "logs"];
   if (startsWithAny(path, ["/api/logs"])) return ["logs"];
@@ -192,6 +194,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   if (method.toUpperCase() === "GET" && path === "/api/market-quotes") return ["marketQuotes", "inventory"];
   if (method.toUpperCase() === "GET" && path === "/api/vendors") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers/page") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/market-quote-categories") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers") return ["customers"];
   if (method.toUpperCase() === "GET" && path === "/api/finance/dashboard") return [];
   if (method.toUpperCase() === "GET" && path === "/api/finance/reconciliation") return [];

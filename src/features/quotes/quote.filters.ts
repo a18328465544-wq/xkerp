@@ -1,7 +1,8 @@
 import type {SortingState} from "@tanstack/react-table";
 import type {MarketQuoteFilters, MarketQuoteItem} from "@/src/types/quote";
 
-export const defaultQuoteFilters: MarketQuoteFilters = {keyword: "", brand: "all", trend: "all", page: 1, pageSize: 20};
+export const UNCLASSIFIED_QUOTE_CATEGORY = "__unclassified__";
+export const defaultQuoteFilters: MarketQuoteFilters = {keyword: "", brand: "all", categoryId: "all", trend: "all", page: 1, pageSize: 20};
 
 export function parseQuoteFilters(search: string): MarketQuoteFilters {
   const params = new URLSearchParams(search);
@@ -11,6 +12,7 @@ export function parseQuoteFilters(search: string): MarketQuoteFilters {
   return {
     keyword: params.get("keyword") || "",
     brand: params.get("brand") || "all",
+    categoryId: params.get("categoryId") || "all",
     trend: trend === "up" || trend === "down" || trend === "stable" ? trend : "all",
     page: Number.isInteger(page) && page > 0 ? page : 1,
     pageSize: [20, 50, 100].includes(pageSize) ? pageSize : 20,
@@ -21,6 +23,7 @@ export function quoteFiltersToSearch(filters: MarketQuoteFilters) {
   const params = new URLSearchParams();
   if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
   if (filters.brand !== "all") params.set("brand", filters.brand);
+  if (filters.categoryId !== "all") params.set("categoryId", filters.categoryId);
   if (filters.trend !== "all") params.set("trend", filters.trend);
   if (filters.page > 1) params.set("page", String(filters.page));
   if (filters.pageSize !== 20) params.set("pageSize", String(filters.pageSize));
@@ -33,9 +36,11 @@ export function filterQuotes(quotes: MarketQuoteItem[], filters: MarketQuoteFilt
   const keyword = normalized(filters.keyword);
   return quotes.filter((quote) => {
     if (filters.brand !== "all" && quote.brand !== filters.brand) return false;
+    if (filters.categoryId === UNCLASSIFIED_QUOTE_CATEGORY && quote.categoryId) return false;
+    if (filters.categoryId !== "all" && filters.categoryId !== UNCLASSIFIED_QUOTE_CATEGORY && quote.categoryId !== filters.categoryId) return false;
     if (filters.trend !== "all" && quote.trend !== filters.trend) return false;
     if (!keyword) return true;
-    const searchable = normalized([quote.id, quote.productName, quote.model, quote.brand, quote.version || "", quote.note || ""].join(" "));
+    const searchable = normalized([quote.id, quote.productName, quote.model, quote.brand, quote.version || "", quote.categoryName || "", quote.note || ""].join(" "));
     return keyword.split(" ").every((part) => searchable.includes(part));
   });
 }

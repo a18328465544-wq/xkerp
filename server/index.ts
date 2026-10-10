@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, dataFilePath, findActiveTenantMembership, findSystemUserById, findSystemUserByUsername, getAccountingEvent, getStateRevision, isAccountingPeriodClosed, listAccountingEvents, listAccountingReversalDocuments, listFinanceIntegrityAlerts, loadState, loadStateCollections, saveState, saveStateCollections, saveStateRecords, syncFinanceIntegrityAlertsInTransaction } from "./db.ts";
+import { acquireAuthWriteLock, acquireStateWriteLock, createDatabaseSessionStore, dataFilePath, findActiveTenantMembership, findSystemUserById, findSystemUserByUsername, getAccountingEvent, getStateRevision, isAccountingPeriodClosed, listAccountingEvents, listAccountingReversalDocuments, listFinanceIntegrityAlerts, loadState, loadStateCollections, saveState, saveStateCollections, saveStateRecords, syncFinanceIntegrityAlertsInTransaction, withDatabaseTransaction } from "./db.ts";
 import type { StateCollectionKey } from "./db.ts";
 import { createInitialState, createStoreActions, type AppState, type StoreActionContext } from "./store.ts";
 import { notifyFeishuMarketQuotePriceChanged, notifyFeishuSalesInvoiceCreated } from "./feishu.ts";
@@ -56,8 +56,11 @@ import { registerSalesProductCandidateRoutes } from "./routes/salesProductCandid
 import { registerSalesCustomerRoutes } from "./routes/salesCustomers.ts";
 import {registerSalesOutboundRoutes} from "./routes/salesOutbound.ts";
 import {registerCustomerDirectoryRoutes} from "./routes/customerDirectory.ts";
+import {registerCustomerCategoryRoutes} from "./routes/customerCategories.ts";
+import {registerMarketQuoteCategoryRoutes} from "./routes/marketQuoteCategories.ts";
 import { registerProductLedgerRoutes } from "./routes/productLedger.ts";
 import { registerMarketQuoteRoutes } from "./routes/marketQuotes.ts";
+import {listMarketQuoteCategories} from "./marketQuoteCategoryRepository.ts";
 import { registerCommercialRoutes } from "./routes/commercial.ts";
 import { registerAiDailySalesRoutes } from "./routes/aiDailySales.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
@@ -964,6 +967,21 @@ registerSalesProductCandidateRoutes(app, {requireMenu, getInventorySummary: (req
 registerSalesCustomerRoutes(app, {requireMenu});
 registerSalesOutboundRoutes(app, {requireMenu});
 registerCustomerDirectoryRoutes(app, {requireMenu, permissionsForRequest: (req) => getPermissionsForUser((req as AuthRequest).authUser)});
+registerCustomerCategoryRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+  actorForRequest: (req) => crmActor(req as AuthRequest),
+});
+registerMarketQuoteCategoryRoutes(app, {
+  requireMenu,
+  asyncRoute,
+  getState: () => state,
+  actions: (req) => actions(req as AuthRequest),
+  actorForRequest: (req) => crmActor(req as AuthRequest),
+  listCategories: (tenantId) => withDatabaseTransaction((client) => listMarketQuoteCategories(client, tenantId)),
+});
 registerOrderPoolRoutes(app, {
   requireMenu,
   asyncRoute,

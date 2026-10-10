@@ -3,6 +3,13 @@ export interface CustomerDirectoryResponseDto {
   meta?: unknown;
 }
 
+export interface CustomerCategoryDto {
+  id: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface CustomerMutationResponseDto {
   data?: unknown;
   stateMerge?: unknown;
@@ -18,6 +25,7 @@ export interface CustomerRecordRequestDto {
   type: string;
   firstChannel: string;
   source: string;
+  categoryId?: string | null;
   level: string;
   isCoreCustomer: boolean;
   riskReason?: string;

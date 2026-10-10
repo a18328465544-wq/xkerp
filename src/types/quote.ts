@@ -2,6 +2,13 @@
 export const quoteTrendValues = ["up", "down", "stable"] as const;
 export type QuoteTrend = typeof quoteTrendValues[number];
 
+export interface MarketQuoteCategory {
+  id: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface MarketQuote {
   id: string;
   date: string;
@@ -9,6 +16,7 @@ export interface MarketQuote {
   productName: string;
   model: string;
   brand: string;
+  categoryId?: string;
   version: string;
   yestBuyPrice: number;
   todayBuyPrice: number;
@@ -38,6 +46,8 @@ export interface MarketQuoteItem {
   productName: string;
   model: string;
   brand: string;
+  categoryId?: string;
+  categoryName?: string;
   version?: string;
   buyPrice?: number;
   sellPrice?: number;
@@ -61,6 +71,7 @@ export interface MarketQuoteSnapshot {
 export interface MarketQuoteFilters {
   keyword: string;
   brand: string;
+  categoryId: string;
   trend: "all" | QuoteTrend;
   page: number;
   pageSize: number;
@@ -69,6 +80,7 @@ export interface MarketQuoteFilters {
 export interface MarketQuoteFormValues {
   model: string;
   brand: string;
+  categoryId: string;
   buyPrice: number;
   sellPrice: number;
   trend: QuoteTrend;

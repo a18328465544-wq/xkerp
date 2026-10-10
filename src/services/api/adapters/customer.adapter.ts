@@ -1,5 +1,5 @@
-import type {CustomerDirectoryResponseDto, CustomerMutationResponseDto, CustomerRecordRequestDto} from "../dto/customer.dto";
-import {customerLevels, type CustomerDirectoryItem, type CustomerDirectorySnapshot, type CustomerLevel, type CustomerRecordFormValues} from "@/src/types/customer";
+import type {CustomerCategoryDto, CustomerDirectoryResponseDto, CustomerMutationResponseDto, CustomerRecordRequestDto} from "../dto/customer.dto";
+import {customerLevels, type CustomerCategory, type CustomerDirectoryItem, type CustomerDirectorySnapshot, type CustomerLevel, type CustomerRecordFormValues} from "@/src/types/customer";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -55,6 +55,9 @@ export function adaptCustomer(value: unknown, permissions: {showProfit: boolean}
     company: optionalText(dto.company),
     source: text(dto.firstChannel || dto.source, "未记录"),
     type: text(dto.type, "个人买家客户"),
+    categoryId: optionalText(dto.categoryId),
+    categoryName: optionalText(dto.categoryName),
+    categoryActive: typeof dto.categoryActive === "boolean" ? dto.categoryActive : undefined,
     level,
     suggestedLevel: dto.suggestedLevel === undefined ? undefined : normalizeLevel(dto.suggestedLevel),
     isCoreCustomer,
@@ -83,10 +86,12 @@ export function adaptCustomerDirectory(response: CustomerDirectoryResponseDto, p
   const summary = record(meta.summary);
   const rows = Array.isArray(state.items) ? state.items : Array.isArray(state.customers) ? state.customers : [];
   const customers = rows.map((item) => adaptCustomer(item, permissions)).filter((item) => Boolean(item.id));
+  const categories: CustomerCategory[] = Array.isArray(meta.categories) ? (meta.categories as CustomerCategoryDto[]).filter((item) => item && typeof item.id === "string" && typeof item.name === "string").map((item) => ({id: item.id, name: item.name, isActive: item.isActive !== false, sortOrder: numberValue(item.sortOrder)})) : [];
   return {
     customers,
     channels: Array.isArray(meta.channels) ? meta.channels.map((item) => text(item)).filter(Boolean) : Array.from(new Set(customers.map((item) => item.source).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
     types: Array.isArray(meta.types) ? meta.types.map((item) => text(item)).filter(Boolean) : Array.from(new Set(customers.map((item) => item.type).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    categories,
     levels: customerLevels.filter((level) => customers.some((item) => item.level === level)),
     page: Math.max(1, numberValueOr(meta.page, 1)),
     pageSize: Math.max(1, numberValueOr(meta.pageSize, Math.max(customers.length, 20))),
@@ -116,6 +121,7 @@ export function toCustomerCreateRequest(values: CustomerRecordFormValues): Custo
     type: values.type,
     firstChannel: values.source,
     source: values.source,
+    ...(values.categoryId ? {categoryId: values.categoryId} : {}),
     level: normalizedLevel(values),
     isCoreCustomer: values.isCoreCustomer,
     ...(values.riskReason.trim() ? {riskReason: values.riskReason.trim()} : {}),
@@ -133,6 +139,7 @@ export function toCustomerUpdateRequest(values: CustomerRecordFormValues): Custo
     type: request.type,
     firstChannel: request.firstChannel,
     source: request.source,
+    categoryId: values.categoryId || null,
     level: request.level,
     isCoreCustomer: request.isCoreCustomer,
     ...(request.riskReason ? {riskReason: request.riskReason} : {}),

@@ -1,6 +1,6 @@
 import type {PermissionModel} from "../endpoints/auth";
-import type {MarketQuoteCreateRequestDto, MarketQuoteSnapshotResponseDto, MarketQuoteUpdateRequestDto} from "../dto/quote.dto";
-import type {MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend} from "@/src/types/quote";
+import type {MarketQuoteCategoryDto, MarketQuoteCreateRequestDto, MarketQuoteSnapshotResponseDto, MarketQuoteUpdateRequestDto} from "../dto/quote.dto";
+import type {MarketQuoteCategory, MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend} from "@/src/types/quote";
 import {inventoryQuoteStatusValues} from "@/src/types/inventory";
 
 function record(value: unknown): Record<string, unknown> {
@@ -62,6 +62,7 @@ export function adaptMarketQuote(value: unknown, permissions: Pick<PermissionMod
     productName: text(dto.productName, text(dto.model, "未命名型号")),
     model: text(dto.model, text(dto.productName, "未命名型号")),
     brand: text(dto.brand, "未标注"),
+    categoryId: text(dto.categoryId) || undefined,
     version: text(dto.version) || undefined,
     buyPrice: permissions.showCost ? buyPrice : undefined,
     sellPrice: permissions.showProfit ? sellPrice : undefined,
@@ -89,12 +90,22 @@ export function adaptMarketQuoteSnapshot(response: MarketQuoteSnapshotResponseDt
   return {quotes, brands: Array.from(new Set(quotes.map((item) => item.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))};
 }
 
+export function adaptMarketQuoteCategories(value: unknown): MarketQuoteCategory[] {
+  const data = record(value);
+  const rows = Array.isArray(data.data) ? data.data : Array.isArray(value) ? value : [];
+  return rows.flatMap((raw) => {
+    const dto = record(raw) as unknown as MarketQuoteCategoryDto;
+    if (typeof dto.id !== "string" || typeof dto.name !== "string") return [];
+    return [{id: dto.id, name: dto.name, isActive: dto.isActive !== false, sortOrder: optionalNumber(dto.sortOrder) || 0}];
+  });
+}
+
 export function toMarketQuoteCreateRequest(values: MarketQuoteFormValues, date: string): MarketQuoteCreateRequestDto {
-  return {model: values.model.trim(), brand: values.brand.trim(), refBuyPrice: values.buyPrice, refSellPrice: values.sellPrice, trend: values.trend, ...(values.note.trim() ? {fluctuation: values.note.trim()} : {}), updateTime: date};
+  return {model: values.model.trim(), brand: values.brand.trim(), ...(values.categoryId.trim() ? {categoryId: values.categoryId.trim()} : {}), refBuyPrice: values.buyPrice, refSellPrice: values.sellPrice, trend: values.trend, ...(values.note.trim() ? {fluctuation: values.note.trim()} : {}), updateTime: date};
 }
 
 export function toMarketQuoteUpdateRequest(values: MarketQuoteFormValues): MarketQuoteUpdateRequestDto {
-  return {todayBuyPrice: values.buyPrice, todaySellPrice: values.sellPrice, ...(values.note.trim() ? {remarks: values.note.trim()} : {})};
+  return {todayBuyPrice: values.buyPrice, todaySellPrice: values.sellPrice, categoryId: values.categoryId.trim() || null, ...(values.note.trim() ? {remarks: values.note.trim()} : {})};
 }
 
 export function adaptMarketQuoteMutation(response: MarketQuoteSnapshotResponseDto, permissions: Pick<PermissionModel, "showCost" | "showProfit">) {

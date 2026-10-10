@@ -120,3 +120,15 @@ test("CRM deletion keeps identity guards and seed idempotent", () => {
   assert.equal(secondSeed.crmFollowUps.length, 0);
   assert.equal(state.customers.length, 1);
 });
+
+test("customer classification persists independently from customer grade and can be cleared", () => {
+  const state = makeState();
+  const {helpers} = makeHelpers(state);
+  const created = helpers.createCustomer({name: "分类测试客户", categoryId: "CC-long-term", level: "B级"});
+  assert.equal(created.categoryId, "CC-long-term");
+  assert.equal(created.level, "B级");
+
+  const updated = helpers.updateCrmCustomer(created.id, {categoryId: undefined});
+  assert.equal(updated.categoryId, undefined);
+  assert.equal(updated.level, "B级");
+});

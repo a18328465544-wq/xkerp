@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {adaptMarketQuoteSnapshot, toMarketQuoteCreateRequest, toMarketQuoteUpdateRequest} from "./quote.adapter";
+import {adaptMarketQuoteCategories, adaptMarketQuoteSnapshot, toMarketQuoteCreateRequest, toMarketQuoteUpdateRequest} from "./quote.adapter";
 
 const response = {data: {marketQuotes: [{id: "MQ-1", productId: "SP-1", productName: "华硕 RTX 4090", model: "RTX 4090", brand: "NVIDIA", refBuyPrice: 18000, refSellPrice: 19500, yestBuyPrice: 17500, changeAmount: 500, changeRatio: 2.86, trend: "up", history: [{date: "08-08", buyPrice: 17500, sellPrice: 19000}, {date: "08-09", buyPrice: 18000, sellPrice: 19500}]}], inventory: [{id: "KC-1", productId: "SP-1", status: "已入库", costPrice: 17000}, {id: "KC-2", productId: "SP-1", status: "已售出", costPrice: 16000}]}};
 
@@ -22,7 +22,12 @@ test("quote adapter removes price and history values without permissions", () =>
 });
 
 test("quote request adapters do not invent history or product ids", () => {
-  const values = {model: " RTX 4090 ", brand: " NVIDIA ", buyPrice: 18000, sellPrice: 19500, trend: "stable" as const, note: " 正常收售 "};
-  assert.deepEqual(toMarketQuoteCreateRequest(values, "2026-08-09"), {model: "RTX 4090", brand: "NVIDIA", refBuyPrice: 18000, refSellPrice: 19500, trend: "stable", fluctuation: "正常收售", updateTime: "2026-08-09"});
-  assert.deepEqual(toMarketQuoteUpdateRequest(values), {todayBuyPrice: 18000, todaySellPrice: 19500, remarks: "正常收售"});
+  const values = {model: " RTX 4090 ", brand: " NVIDIA ", categoryId: "MQC-gpu", buyPrice: 18000, sellPrice: 19500, trend: "stable" as const, note: " 正常收售 "};
+  assert.deepEqual(toMarketQuoteCreateRequest(values, "2026-08-09"), {model: "RTX 4090", brand: "NVIDIA", categoryId: "MQC-gpu", refBuyPrice: 18000, refSellPrice: 19500, trend: "stable", fluctuation: "正常收售", updateTime: "2026-08-09"});
+  assert.deepEqual(toMarketQuoteUpdateRequest(values), {todayBuyPrice: 18000, todaySellPrice: 19500, categoryId: "MQC-gpu", remarks: "正常收售"});
+});
+
+test("quote category adapter keeps active and inactive categories for editing existing references", () => {
+  const categories = adaptMarketQuoteCategories({data: [{id: "MQC-gpu", name: "显卡", isActive: true, sortOrder: 10}, {id: "MQC-old", name: "旧类", isActive: false}]});
+  assert.deepEqual(categories.map(({name, isActive}) => ({name, isActive})), [{name: "显卡", isActive: true}, {name: "旧类", isActive: false}]);
 });

@@ -1,6 +1,8 @@
 import type {Express, Request, RequestHandler} from "express";
 import {customerCreateDto, parseHttpDto, vendorCreateDto, vendorUpdateDto} from "../httpDto.ts";
 import {saveStateRecords, type StateRecordTransactionHook} from "../db.ts";
+import {DEFAULT_TENANT_ID} from "../commercialConstants.ts";
+import {assertCustomerCategoryAssignable} from "../customerCategoryRepository.ts";
 import {stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import type {createStoreActions} from "../store.ts";
 import type {CustomerCard, Vendor} from "../../src/types.ts";
@@ -36,10 +38,14 @@ export function registerPartnerMutationRoutes(app: Express, dependencies: Partne
         source: command.source || command.firstChannel,
       });
       const stateMerge = dependencies.customerCreateMerge(customer);
+      const tenantId = (req as PartnerRequest).tenantId || DEFAULT_TENANT_ID;
       await saveStateRecords(
         stateMergeRecords(stateMerge),
-        (client) => dependencies.persistCustomerAccount(client, req as PartnerRequest, customer),
-        (req as PartnerRequest).tenantId,
+        async (client) => {
+          await assertCustomerCategoryAssignable(client, tenantId, customer.categoryId);
+          await dependencies.persistCustomerAccount(client, req as PartnerRequest, customer);
+        },
+        tenantId,
       );
       res.status(201).json(okMerge(customer, stateMerge));
     }),

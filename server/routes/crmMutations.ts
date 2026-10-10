@@ -4,6 +4,8 @@ import {saveStateRecords, type StateRecordTransactionHook} from "../db.ts";
 import {NotFoundError} from "../errors.ts";
 import {syncCrmFollowUp, syncCrmQuote, syncCrmRequirement} from "../crmCommandRepository.ts";
 import {upsertCrmCustomerAccount} from "../crmAccountRepository.ts";
+import {DEFAULT_TENANT_ID} from "../commercialConstants.ts";
+import {assertCustomerCategoryAssignable} from "../customerCategoryRepository.ts";
 import {buildCustomerLeadPreview, normalizeCustomerLeadInput} from "../crmCustomerLead.ts";
 import {compactStateMerge, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import {storeDateTime} from "../../src/utils/storeTime.ts";
@@ -144,13 +146,19 @@ export function registerCrmMutationRoutes(app: Express, dependencies: CrmMutatio
       // Customer ownership is a controlled assignment. Normal CRM users cannot
       // silently transfer a customer through the API.
       if (authRequest.authUser?.role !== "老板") delete updates.owner;
-      const updated = dependencies.actions(req).updateCrmCustomer(req.params.id!, updates);
+      const {categoryId: categoryIdUpdate, ...customerBaseUpdates} = updates;
+      const customerUpdates: Partial<CustomerCard> = {...customerBaseUpdates};
+      if (categoryIdUpdate !== undefined) customerUpdates.categoryId = typeof categoryIdUpdate === "string" ? categoryIdUpdate : undefined;
+      const previousCustomer = dependencies.getState().customers.find((item) => item.id === req.params.id);
+      const updated = dependencies.actions(req).updateCrmCustomer(req.params.id!, customerUpdates);
       const stateMerge = customerRecordMerge(dependencies.getState(), updated);
       await saveStateRecords(
         stateMergeRecords(stateMerge),
-        (client) => updated
-          ? upsertCrmCustomerAccount(client, updated, "updated", dependencies.actorForRequest(authRequest))
-          : undefined,
+        async (client) => {
+          if (!updated) return;
+          await assertCustomerCategoryAssignable(client, authRequest.tenantId || DEFAULT_TENANT_ID, updated.categoryId, previousCustomer?.categoryId);
+          await upsertCrmCustomerAccount(client, updated, "updated", dependencies.actorForRequest(authRequest));
+        },
       );
       res.status(updated ? 200 : 404).json(okMerge(updated, stateMerge));
     }),

@@ -4,7 +4,7 @@ import test from "node:test";
 import { CRM_FOUNDATION_SCHEMA_VERSION, CRM_FOUNDATION_SQL } from "./crmSchema.ts";
 
 test("operator CRM migrations converge with the application-owned schema", () => {
-  const operatorSql = ["001_crm_foundation.sql", "003_crm_foundation_v2.sql"]
+  const operatorSql = ["001_crm_foundation.sql", "003_crm_foundation_v2.sql", "008_customer_categories.sql"]
     .map((fileName) => readFileSync(new URL(`./migrations/${fileName}`, import.meta.url), "utf8"))
     .join("\n");
 

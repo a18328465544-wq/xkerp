@@ -116,6 +116,7 @@ const customerMutationFields = {
   type: z.enum(customerTypeValues).default("个人买家客户"),
   firstChannel: optionalText(120).default("散客自荐"),
   source: optionalText(120),
+  categoryId: optionalText(120),
   level: z.enum(customerLevels).default("C级"),
   isCoreCustomer: z.boolean().default(false),
   riskReason: optionalText(500),
@@ -123,6 +124,16 @@ const customerMutationFields = {
   tags: z.array(requiredText("客户标签", 40)).max(50).default([]),
 };
 export const customerCreateDto = z.object(customerMutationFields).strict();
+export const customerCategoryCreateDto = z.object({name: requiredText("客户分类", 40)}).strict();
+export const customerCategoryUpdateDto = z.object({
+  name: requiredText("客户分类", 40).optional(),
+  isActive: z.boolean().optional(),
+}).strict().refine((value) => value.name !== undefined || value.isActive !== undefined, "请提供需要修改的分类内容");
+export const marketQuoteCategoryCreateDto = z.object({name: requiredText("行情分类", 40)}).strict();
+export const marketQuoteCategoryUpdateDto = z.object({
+  name: requiredText("行情分类", 40).optional(),
+  isActive: z.boolean().optional(),
+}).strict().refine((value) => value.name !== undefined || value.isActive !== undefined, "请提供需要修改的分类内容");
 
 const vendorMutationFields = {
   name: requiredText("同行名称", 120),
@@ -349,6 +360,7 @@ export const customerDirectoryListQueryDto = z.object({
   keyword: queryText(120),
   type: queryFilterEnum(customerTypeValues),
   channel: queryText(120),
+  categoryId: queryText(120),
   level: queryFilterEnum(customerLevels),
   sortKey: queryDefaultEnum(customerDirectorySortKeys, "lastDealTime"),
   sortDirection: queryDefaultEnum(["asc", "desc"] as const, "desc"),
@@ -908,6 +920,7 @@ export const crmCustomerUpdateDto = z.object({
   type: z.enum(customerTypeValues).optional(),
   firstChannel: optionalText(120),
   source: optionalText(120),
+  categoryId: z.union([optionalText(120), z.null()]).optional(),
   level: z.enum(customerLevels).optional(),
   isCoreCustomer: z.boolean().optional(),
   riskReason: optionalText(500),
@@ -1218,13 +1231,14 @@ export const assemblyCreateDto = z.object({
 export const marketQuoteCreateDto = z.object({
   model: requiredText("型号", 160),
   brand: requiredText("品牌", 120),
+  categoryId: optionalText(120),
   refBuyPrice: nonNegativeMoney,
   refSellPrice: nonNegativeMoney,
   trend: z.enum(quoteTrendValues),
   fluctuation: optionalText(300),
   updateTime: dateText,
 }).strict();
-export const marketQuoteUpdateDto = z.object({todayBuyPrice: nonNegativeMoney, todaySellPrice: nonNegativeMoney, remarks: optionalText(500)}).strict();
+export const marketQuoteUpdateDto = z.object({todayBuyPrice: nonNegativeMoney, todaySellPrice: nonNegativeMoney, categoryId: optionalText(120).nullable().optional(), remarks: optionalText(500)}).strict();
 export const marketQuoteImportDto = z.object({quotes: z.array(marketQuoteCreateDto).min(1, "请至少提供一条行情参考数据").max(2000, "单次最多导入 2000 条行情参考")}).strict();
 
 export const aftersalesCreateDto = z.object({

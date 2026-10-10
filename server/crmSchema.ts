@@ -7,7 +7,7 @@ import type { PoolClient } from "pg";
  * document source during migration. These relational tables are additive and
  * deliberately do not add foreign keys to the JSONB business tables yet.
  */
-export const CRM_FOUNDATION_SCHEMA_VERSION = "crm-foundation-v2";
+export const CRM_FOUNDATION_SCHEMA_VERSION = "crm-foundation-v3";
 
 export const CRM_FOUNDATION_SQL = `
   CREATE TABLE IF NOT EXISTS gpu_schema_migrations (
@@ -35,6 +35,19 @@ export const CRM_FOUNDATION_SQL = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
+  );
+
+  CREATE TABLE IF NOT EXISTS gpu_crm_customer_categories (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    updated_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS gpu_crm_account_roles (
@@ -261,6 +274,10 @@ export const CRM_FOUNDATION_SQL = `
   CREATE INDEX IF NOT EXISTS gpu_crm_accounts_name_idx
     ON gpu_crm_accounts (normalized_name, updated_at DESC)
     WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS gpu_crm_customer_categories_name_uq
+    ON gpu_crm_customer_categories (tenant_id, normalized_name);
+  CREATE INDEX IF NOT EXISTS gpu_crm_customer_categories_active_idx
+    ON gpu_crm_customer_categories (tenant_id, is_active, sort_order, name);
   CREATE INDEX IF NOT EXISTS gpu_crm_accounts_phone_idx
     ON gpu_crm_accounts (primary_phone)
     WHERE primary_phone IS NOT NULL AND deleted_at IS NULL;
