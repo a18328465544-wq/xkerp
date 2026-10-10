@@ -5,7 +5,7 @@ import {notify} from "@/src/utils/notification";
 import {Link, useNavigate} from "@tanstack/react-router";
 import {Button, Card, CardContent} from "@/src/components/ui";
 import {ChartMeta} from "@/src/components/ui/chart";
-import {BottomRegion, DashboardSection, ErpDashboardPageFrame, ErpEmptyState, ErpMetricCard, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
+import {DashboardSection, ErpDashboardPageFrame, ErpEmptyState, ErpMetricCard, ErpPageContent, ErpPageHeader, ErpStatusBadge, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {aiApi, queryKeys, stateApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
@@ -105,6 +105,13 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
     {icon: <XCircle className="h-4 w-4" />, label: "异常订单", value: `${stats.unpaidOrders + stats.pendingReturns} 项`, description: "欠款或退货待跟进", tone: stats.unpaidOrders + stats.pendingReturns ? "danger" : "success", action: () => navigate({to: "/sales"})},
   ];
   if (phone) return <ErpDashboardPageFrame><DashboardMobileWorkbench session={session} stats={stats} invoices={salesInvoices} onRefresh={onRefresh} /></ErpDashboardPageFrame>;
+  // Empty sections collapse into one quiet reminder card instead of three blank cards.
+  const aiEmpty = !aiLoading && !aiError && ai.length === 0;
+  const quietItems = [
+    !risks.length && {label: "库存风险", text: "暂无需要处理的库存", to: "/inventory"},
+    aiEmpty && {label: "AI 经营建议", text: "暂无新建议", to: "/ai-insights"},
+    !marketRows.length && {label: "今日行情", text: "暂无行情更新", to: "/quotes"},
+  ].filter((item): item is {label: string; text: string; to: string} => Boolean(item));
   return <ErpDashboardPageFrame>
     <ErpPageHeader title={`${greeting}，${session.user.displayName || "老板"}`} subtitle="专注经营每一天，让数据驱动增长" quickStatus={quickStatus} dateContent={<span className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs text-[var(--erp-color-text-secondary)]"><CalendarDays className="h-4 w-4" />{today}</span>} actions={<Button variant="secondary" size="sm" onClick={onRefresh}><RefreshCw className="h-4 w-4" />刷新</Button>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap-comfortable)]">
@@ -121,21 +128,22 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
           <ChartMeta id="dashboard-trend-summary" className="mt-2 border-t-0 pt-0" summary={trendSummary} updatedAt={today} />
           <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--erp-color-border)] pt-4 sm:grid-cols-4"><SummaryCell label="销售出库" value={`${stats.todaySalesCount} 张`} /><SummaryCell label="今日回收" value={`${stats.todayRecycleCount} 张`} /><SummaryCell label="今日入库成本" value={canSeeProfit ? formatCurrency(stats.todayInboundCost) : "无权查看"} /><SummaryCell label="在库预计利润" value={canSeeProfit ? formatCurrency(stats.estimatedProfit) : "无权查看"} tone="success" /></div>
         </DashboardSection>
-        <DashboardSection title="库存风险预警" description="优先处理占用资金和周转异常的库存" actions={<Link to="/inventory" className="text-xs font-semibold text-[var(--erp-color-primary)]">全部库存 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
+        {risks.length > 0 && <DashboardSection title="库存风险预警" description="优先处理占用资金和周转异常的库存" actions={<Link to="/inventory" className="text-xs font-semibold text-[var(--erp-color-primary)]">全部库存 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
           <div className="divide-y divide-[var(--erp-color-border)]">{risks.map((item, index) => <Link to="/inventory" key={item.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${index === 0 ? "bg-[var(--erp-color-danger)]" : index === 1 ? "bg-[var(--erp-color-warning)]" : "bg-[var(--erp-color-success)]"}`} /><span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--erp-color-text)]">{item.productName}</span><span className="text-xs text-[var(--erp-color-text-secondary)]">{storeDateDiffDays(item.entryTime, today)} 天</span><span className="w-24 text-right text-sm font-semibold text-[var(--erp-color-text)]">{canSeeProfit ? formatCurrency(item.estSellPrice || item.marketPrice || 0) : "—"}</span><ArrowRight className="h-4 w-4 text-[var(--erp-color-text-muted)]" /></Link>)}{!risks.length && <ErpEmptyState title="当前没有需要处理的库存风险" description="库存状态正常，继续关注库龄与行情变化。" />}</div>
-        </DashboardSection>
+        </DashboardSection>}
       </MainRegion.Primary>
       <MainRegion.Secondary className="space-y-5">
-        <DashboardSection title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-[var(--erp-color-primary)]" />AI 今日经营建议</span>} actions={<Link to="/ai-insights" className="text-xs font-semibold text-[var(--erp-color-primary)]">全部建议 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
+        <DashboardSection title="快捷操作" description="常用业务入口"><div className="grid grid-cols-2 gap-3"><QuickAction to="/sales/new" label="新建销售单" icon={<ClipboardList className="h-4 w-4" />} /><QuickAction to="/purchase/new" label="新建采购单" icon={<PackageCheck className="h-4 w-4" />} /><QuickAction to="/inventory" label="查询库存" icon={<Warehouse className="h-4 w-4" />} /><QuickAction to="/crm" label="客户管理" icon={<Boxes className="h-4 w-4" />} /></div></DashboardSection>
+        {quietItems.length > 0 && <DashboardSection title="今日提醒"><ul className="divide-y divide-[var(--erp-color-border)]">{quietItems.map((item) => <li key={item.label}><Link to={item.to} className="flex items-center justify-between gap-3 py-2.5 text-sm first:pt-0 last:pb-0"><span className="text-[var(--erp-color-text-secondary)]">{item.label}</span><span className="flex items-center gap-1 text-xs text-[var(--erp-color-text-muted)]">{item.text}<ArrowRight className="h-3.5 w-3.5" /></span></Link></li>)}</ul></DashboardSection>}
+        {!aiEmpty && <DashboardSection title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-[var(--erp-color-primary)]" />AI 今日经营建议</span>} actions={<Link to="/ai-insights" className="text-xs font-semibold text-[var(--erp-color-primary)]">全部建议 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
           <p className="mb-3 text-xs text-[var(--erp-color-text-muted)]">建议中的利润按出库日期计算，可能与开单毛利不同。</p>
           {aiLoading ? <div className="space-y-3"><div className="h-16 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /><div className="h-16 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /></div> : aiError ? <div className="space-y-3"><p className="text-xs text-[var(--erp-color-text-secondary)]">AI 建议暂时不可用，数据仍可正常查看。</p><Button size="sm" variant="secondary" onClick={onAiRetry}>重试</Button></div> : <div className="divide-y divide-[var(--erp-color-border)]">{ai.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"><Sparkles className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><ErpStatusBadge label={item.label} tone={toneForSeverity[item.severity]} /><span className="text-xs text-[var(--erp-color-text-muted)]">置信度 {item.confidence}%</span></div><p className="mt-1 text-sm font-semibold leading-5 text-[var(--erp-color-text)]">{item.title}</p><p className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{item.detail}</p></div></div>)}{!ai.length && <p className="text-sm text-[var(--erp-color-text-secondary)]">暂无经营建议。</p>}</div>}
-        </DashboardSection>
-        <DashboardSection title="今日行情" actions={<Link to="/quotes" className="text-xs font-semibold text-[var(--erp-color-primary)]">更多行情 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
+        </DashboardSection>}
+        {marketRows.length > 0 && <DashboardSection title="今日行情" actions={<Link to="/quotes" className="text-xs font-semibold text-[var(--erp-color-primary)]">更多行情 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
           <div className="space-y-3">{marketRows.map((quote) => { const sellPrice = canSeeProfit ? safeQuoteSellPrice(quote) : null; return <Link to="/quotes" key={quote.id} className="grid grid-cols-[minmax(0,1fr)_84px_56px] items-center gap-2"><span className="truncate text-sm font-semibold text-[var(--erp-color-text-secondary)]">{quote.model || quote.productName}</span><span className="text-right text-sm font-semibold text-[var(--erp-color-text)]">{sellPrice === null ? "无权查看" : formatCurrency(sellPrice)}</span><span className={`text-right text-xs font-semibold ${quote.changeRatio >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{quote.changeRatio >= 0 ? "↗" : "↘"} {Math.abs(quote.changeRatio).toFixed(1)}%</span></Link>; })}{!marketRows.length && <p className="py-4 text-center text-sm text-[var(--erp-color-text-muted)]">暂无行情数据</p>}</div>
-        </DashboardSection>
+        </DashboardSection>}
       </MainRegion.Secondary>
     </MainRegion>
-      <BottomRegion><DashboardSection title="快捷操作" description="常用业务入口"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><QuickAction to="/sales/new" label="新建销售单" icon={<ClipboardList className="h-4 w-4" />} /><QuickAction to="/purchase/new" label="新建采购单" icon={<PackageCheck className="h-4 w-4" />} /><QuickAction to="/inventory" label="查询库存" icon={<Warehouse className="h-4 w-4" />} /><QuickAction to="/crm" label="客户管理" icon={<Boxes className="h-4 w-4" />} /></div></DashboardSection></BottomRegion>
     </ErpPageContent>
   </ErpDashboardPageFrame>;
 }
