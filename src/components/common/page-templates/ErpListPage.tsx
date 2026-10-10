@@ -236,7 +236,8 @@ export function ErpListPage<TData>({
     {headerContent ?? <ErpPageHeader title={phoneTitleNode} subtitle={subtitle} quickStatus={quickStatus} actions={phoneHeaderActions || filterButton ? <>{filterButton}{phoneHeaderActions}</> : undefined} />}
     {headerContent && (filterButton || phoneHeaderActions) ? <div className="flex justify-end gap-2 md:hidden">{filterButton}{phoneHeaderActions}</div> : null}
     {tabs}
-    {metricsRegion}
+    {/* Phones keep list rows near the top; summary metrics stay on desktop (M13/M18). */}
+    {metricsContent}
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {tableNotice}
       {phoneTableContent ?? (table ? <ErpDataTable {...table} surface="plain" mobilePagination="compact" mobileToolbar={mobileToolbar} density={tableDensity} phone={phoneProp} compactViewport={phoneProp} /> : null)}

@@ -91,8 +91,7 @@ test("phone shows the count once, a filter button with its badge and column-buil
   assert.match(markup, /aria-pressed="true"[^>]*>核心 \/ S级/);
   assert.match(markup, /最近交易/);
   assert.match(markup, /erp-phone-record-title[^>]*>张三/);
-  assert.match(markup, /data-erp-component="mobile-summary"/);
-  assert.doesNotMatch(markup, /卡片A/, "phone metrics stay inside the closed summary sheet");
+  assert.doesNotMatch(markup, /data-erp-component="mobile-summary"|卡片A/, "summary metrics stay off phone lists");
   assert.doesNotMatch(markup, /舒适|紧凑|列显示|刷新/, "desktop table chrome stays off phones");
 });
 
