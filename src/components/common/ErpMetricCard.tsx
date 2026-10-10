@@ -1,9 +1,12 @@
 import {ArrowDownRight, ArrowUpRight} from "lucide-react";
 import type {ReactNode} from "react";
 import {Card, CardContent} from "@/src/components/ui";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 
 export type ErpMetricTone = "neutral" | "info" | "success" | "warning" | "danger";
 export type ErpMetricVariant = "default" | "compact";
+/** `responsive` is compact on phones and default elsewhere. */
+export type ErpMetricCardVariant = ErpMetricVariant | "responsive";
 export type ErpMetricValueSize = "large" | "medium" | "small";
 export type ErpMetricComparison = "higher-is-better" | "lower-is-better" | "neutral";
 
@@ -50,7 +53,7 @@ export function getErpMetricValueSize(value: string): ErpMetricValueSize {
 }
 
 /** Shared metric surface used by dashboards, analytics and finance pages. */
-export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant = "default", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName, supplementalContent}: {
+export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant: requestedVariant = "default", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName, supplementalContent}: {
   label: string;
   value: string;
   detail?: ReactNode;
@@ -58,7 +61,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   tone?: ErpMetricTone;
   valueTone?: ErpMetricTone | "muted";
   minHeight?: number;
-  variant?: ErpMetricVariant;
+  variant?: ErpMetricCardVariant;
   /** Optional override for exceptional values; normal cards use the length tier automatically. */
   valueSize?: ErpMetricValueSize;
   /** Direction and business meaning are separate; spending changes can stay neutral. */
@@ -68,6 +71,8 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   compareLabelClassName?: string;
   supplementalContent?: ReactNode;
 }) {
+  const phone = useErpPhone();
+  const variant: ErpMetricVariant = requestedVariant === "responsive" ? (phone ? "compact" : "default") : requestedVariant;
   const compact = variant === "compact";
   const resolvedValueSize = valueSize ?? getErpMetricValueSize(value);
   const hasComparison = compare !== undefined;
