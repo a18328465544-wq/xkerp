@@ -77,8 +77,7 @@ export function ErpRecordPage({title, subtitle, quickStatus, back, actions, phon
     </ErpDetailPageFrame>;
   }
 
-  const primary = actions.find((action) => action.phone === "primary" || action.phone === "both");
-  const more = actions.filter((action) => action.phone === "more" || action.phone === "both");
+  const {primary, more} = resolveRecordPageActions(actions);
   return <ErpDetailPageFrame className={className}>
     <ErpPageHeader title={title} quickStatus={[]} leading={<Button type="button" variant="ghost" size="iconTouch" aria-label={back.label} onClick={phoneBack}><ArrowLeft className="h-5 w-5" /></Button>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
@@ -96,6 +95,14 @@ export function ErpRecordPage({title, subtitle, quickStatus, back, actions, phon
       </div>
     </ErpDialogShell>
   </ErpDetailPageFrame>;
+}
+
+/** Phone placement: the first `primary`/`both` action is the bottom-bar button; `more`/`both` go into the 更多 sheet. */
+export function resolveRecordPageActions(actions: readonly ErpRecordPageAction[]) {
+  return {
+    primary: actions.find((action) => action.phone === "primary" || action.phone === "both"),
+    more: actions.filter((action) => action.phone === "more" || action.phone === "both"),
+  };
 }
 
 function DesktopAction({action}: {action: ErpRecordPageAction}) {
