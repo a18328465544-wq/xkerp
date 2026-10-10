@@ -69,6 +69,23 @@
 - **数量**：页面级手机分支从 122 处降到 59 处（改造前为 244 处），`useErpPhone` 页面从 26 个降到 6 个。
 - **已知问题（不是本轮引入的）**：`test:forms-browser` 中 `browser-purchase-draft-media.py`、`browser-order-submission.py`、`browser-return-amounts.py` 三个脚本在 main（`6fa7029` 起）就已失败，已单独记录待修。
 
+**第四阶段（2026-10-10）**：
+
+- **T14 开单页**：
+  - 新增 `ErpTransactionHeader`（开单页页头）。
+  - 新增 `ErpMobileWorkflowPhone` / `ErpMobileWorkflowDesktop`：在两步流程里按设备放置内容，每个表单字段仍然只挂载一次。
+  - `ErpSubmitBar` 新增 `phoneSubmitLabel`、`phoneSummary`。
+  - 销售开单已合入 main；采购开单在 `mobile/t14-purchase`。
+  - 两页在 390 / 1024 / 1440 下截图和改前完全一致。
+- **表单浏览器测试已修好**：
+  - `test:forms-browser` 全部通过（214 个场景），`test:mobile-browser` 通过。
+  - 失败原因是测试过时：采购账户叫「付款账户」；来源输入框的角色是组合框；手机附件在结算步骤里；库存扫码改成了底部主按钮。
+  - 开单提交和退货金额两个脚本改为只测电脑宽度，手机两步流程由 `test:mobile-browser` 覆盖。
+- **T16 样式清理**：删掉迁移后已经没有页面使用的选择器，放在 `mobile/css-cleanup`。库存相关的选择器等库存改动完成后再清。
+- **`ErpRecordPage` 补了单元测试**，测的是手机上操作的放置逻辑。
+- **待合入**：main 上另一项改动正在修改 `NewPurchaseOrderPage.tsx` 和 `globals.css`，还没提交。等它提交后，再把 `mobile/t14-purchase` 和 `mobile/css-cleanup` 变基合入。
+- **例外**：main 上现有 5 个；采购开单合入后剩 4 个，即首页、检测质检、销售出库、库存。
+
 **验证**：当前 `mobile-templates` 工作树前端类型检查与全量 lint 通过；当前代码快照的全量测试为 1595 通过、37 跳过、0 失败；当前工作树隔离预览的手机浏览器规则检查为 38 个页面 × 320/390px 全部通过；本地前端构建通过。没有执行生产部署。
 
 迁移时可以直接参考两个文件：
