@@ -1,22 +1,19 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryResult} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import type {ColumnDef} from "@tanstack/react-table";
 import {useNavigate} from "@tanstack/react-router";
-import {AlertCircle, AlertTriangle, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Banknote, Building2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, MoreHorizontal, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
+import {AlertTriangle, ArrowDownToLine, ArrowLeftRight, Banknote, Building2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, MoreHorizontal, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Select} from "@/src/components/ui";
-import {StackedStructureBar} from "@/src/components/ui/chart-primitives";
-import {ChartMeta} from "@/src/components/ui/chart";
-import {DashboardSection, ErpDataTable, ErpEmptyState, ErpFinancePageFrame, ErpFilterBar, ErpLoadingState, ErpMetricCard, ErpMobileRecordRow, MetricsRegion, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {ErpEmptyState, ErpFinancePageFrame, ErpFilterBar, ErpLoadingState, ErpMetricCard, MetricsRegion, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, financeAccountsApi, queryKeys} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api/invalidation";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {useErpDesktop} from "@/src/hooks/useErpViewport";
 import type {AuthSession} from "@/src/services/api/endpoints/auth";
-import {financeAccountTypes, type FinanceAccountCollection, type FinanceAccountCreateValues, type FinanceAccountItem, type FinanceAccountLedgerItem, type FinanceAccountReconcileValues} from "@/src/types/finance-account";
+import {financeAccountTypes, type FinanceAccountCollection, type FinanceAccountCreateValues, type FinanceAccountItem, type FinanceAccountReconcileValues} from "@/src/types/finance-account";
 import {FinanceAccountCreateDialog, FinanceAccountDeleteDialog, FinanceAccountReconcileDialog} from "../components/FinanceAccountDialogs";
 import {FinanceAccountDetailDrawer} from "../components/FinanceAccountDetailDrawer";
 import {defaultFinanceAccountFilters, filterFinanceAccounts, financeAccountFiltersToSearch, parseFinanceAccountFilters} from "../finance-account.filters";
@@ -66,22 +63,18 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
   const canTransfer = capabilities.menu("account_transfer");
   const canCollect = capabilities.menu("payment_in");
   const canDelete = session.permissions.canDelete;
-  const desktop = useErpDesktop();
   const summary = useMemo(() => summarizeFinanceAccounts(accounts), [accounts]);
   const matchingFilters = useMemo(() => filterFinanceAccounts(accounts, filters), [accounts, filters]);
   const filtered = useMemo(() => matchingFilters.filter((account) => quickStatus === "all" || financeAccountStatusKey(account) === quickStatus), [matchingFilters, quickStatus]);
   const distribution = useMemo(() => buildDistribution(accounts), [accounts]);
   const statusCounts = useMemo(() => countFinanceAccountStatuses(accounts), [accounts]);
-  const statusRows = useMemo(() => buildAccountStatuses(accounts), [accounts]);
-  const exceptions = useMemo(() => buildExceptions(accounts), [accounts]);
   const anomalies = useMemo(() => buildAnomalies(accounts), [accounts]);
   const accountLedgerQuery = useQuery({queryKey: queryKeys.finance.accountLedger(detail?.id || ""), queryFn: ({signal}) => financeAccountsApi.ledger(detail?.id || "", 1, 20, signal), enabled: active && Boolean(detail && canViewLedger), retry: false});
-  const recentLedgerQuery = useQuery({queryKey: queryKeys.finance.accountLedger("__recent__"), queryFn: ({signal}) => financeAccountsApi.ledger("", 1, 6, signal), enabled: active && Boolean(canViewLedger && !desktop), retry: false});
 
   useEffect(() => {
-    const unauthorized = [accountLedgerQuery.error, recentLedgerQuery.error].some((error) => error instanceof ApiError && error.isUnauthorized);
+    const unauthorized = [accountLedgerQuery.error].some((error) => error instanceof ApiError && error.isUnauthorized);
     if (unauthorized) onAuthExpired();
-  }, [accountLedgerQuery.error, recentLedgerQuery.error, onAuthExpired]);
+  }, [accountLedgerQuery.error, onAuthExpired]);
 
   const invalidate = async () => invalidateErpDomains(queryClient, ["finance", "state", "sales", "purchase"]);
   const handleError = (error: Error) => {
@@ -109,13 +102,10 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
   const openCreate = () => {createMutation.reset(); setCreateOpen(true);};
   const refreshAll = async () => {
     const requests: Array<Promise<unknown>> = [query.refetch()];
-    if (canViewLedger && !desktop) {
-      requests.push(recentLedgerQuery.refetch());
-      if (detail) requests.push(accountLedgerQuery.refetch());
-    }
+    if (canViewLedger && detail) requests.push(accountLedgerQuery.refetch());
     await Promise.all(requests);
   };
-  const refreshing = query.isFetching || (canViewLedger && (accountLedgerQuery.isFetching || (!desktop && recentLedgerQuery.isFetching)));
+  const refreshing = query.isFetching || (canViewLedger && accountLedgerQuery.isFetching);
   const exportAccounts = () => {
     const rows = [
       ["账户编号", "账户名称", "账户类型", "归属", "平台 / 银行", "账面余额", "可用余额", "冻结金额", "状态"],
@@ -133,7 +123,7 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
   return <ErpFinancePageFrame>
     <FinanceAccountsHeader accounts={accounts} loading={refreshing} onRefresh={() => void refreshAll()} onCreate={openCreate} onTransfer={canTransfer ? () => void navigate({to: "/finance/transfers"}) : undefined} onReconcile={() => void navigate({to: "/finance/closing"})} canViewReconciliation={capabilities.menu("finance")} onLedger={canViewLedger ? () => void navigate({to: "/finance/ledger"}) : undefined} onExport={exportAccounts} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-    {desktop ? <div className="min-w-0 space-y-4">
+<div className="min-w-0 space-y-4">
       <SummaryCards summary={summary} accountCount={accounts.length} desktop distribution={distribution} negativeAccountCount={accounts.filter((account) => account.enabled && account.balance < 0).length} />
       <ErpPageToolbar>
         <ErpFilterBar className="bg-[var(--erp-color-surface)]" actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant={advancedOpen ? "secondary" : "ghost"} onClick={() => setAdvancedOpen((value) => !value)}><Settings2 className="h-4 w-4" />更多筛选</Button><Button type="button" size="sm" variant="ghost" onClick={resetFilters}><RefreshCw className="h-4 w-4" />重置</Button></div>}>
@@ -147,23 +137,7 @@ function FinanceAccountsContent({session, query, filters, onFiltersChange, onAut
       {filtered.length !== accounts.length && <div className="flex items-center gap-1 px-1 text-xs text-[var(--erp-color-text-secondary)]">已筛选 {filtered.length} / {accounts.length} 个账户 <Button type="button" size="xs" variant="ghost" className="h-auto px-1 font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={resetFilters}>清空筛选</Button></div>}
       {anomalies.length > 0 && <AccountAnomalyNotice rows={anomalies} onOpen={() => void navigate({to: "/finance/closing"})} />}
       <AccountCards accounts={filtered} onCreate={openCreate} onView={(account) => setDetailId(account.id)} onCollect={(account) => void navigate({to: "/finance/income", search: {accountId: account.id}})} onTransfer={(account) => void navigate({to: "/finance/transfers", search: {fromAccountId: account.id}})} onLedger={(account) => void navigate({to: "/finance/ledger", search: {accountId: account.id}})} canCollect={canCollect} canTransfer={canTransfer} canViewLedger={canViewLedger} showCreateCard={false} />
-    </div> : <div className="grid min-w-0 gap-4">
-      <section aria-label="资金账户列表" className="min-w-0 space-y-4">
-        <SummaryCards summary={summary} accountCount={accounts.length} />
-        <ErpPageToolbar>
-        <ErpFilterBar className="bg-[var(--erp-color-surface)]" actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant={advancedOpen ? "secondary" : "ghost"} onClick={() => setAdvancedOpen((value) => !value)}><Settings2 className="h-4 w-4" />更多筛选</Button><Button type="button" size="sm" variant="ghost" onClick={resetFilters}><RefreshCw className="h-4 w-4" />重置</Button></div>}>
-          <ErpSearchInput className="min-w-[220px] flex-1" value={filters.keyword} onChange={(event) => updateFilters({keyword: event.target.value})} placeholder="搜索账户名称、账号或备注..." aria-label="搜索资金账户" />
-          <Select className="w-36" value={filters.type} onValueChange={(type) => updateFilters({type: type as typeof filters.type})} options={[{value: "all", label: "全部类型"}, ...financeAccountTypes.map((value) => ({value, label: value}))]} aria-label="筛选账户类型" />
-          <Select className="w-32" value={filters.status} onValueChange={(status) => updateFilters({status: status as typeof filters.status})} options={[{value: "all", label: "全部状态"}, {value: "enabled", label: "启用账户"}, {value: "pending", label: "待核对账户"}, {value: "disabled", label: "停用账户"}, {value: "difference", label: "存在差额"}]} aria-label="筛选账户状态" />
-          {advancedOpen && <><Input className="w-32" value={filters.owner} onChange={(event) => updateFilters({owner: event.target.value})} placeholder="账户归属" aria-label="筛选账户归属" /><Input className="w-32" value={filters.platform} onChange={(event) => updateFilters({platform: event.target.value})} placeholder="平台 / 银行" aria-label="筛选平台或银行" /></>}
-        </ErpFilterBar>
-        </ErpPageToolbar>
-        {filtered.length !== accounts.length && <div className="flex items-center gap-1 px-1 text-xs text-[var(--erp-color-text-secondary)]">已筛选 {filtered.length} / {accounts.length} 个账户 <Button type="button" size="xs" variant="ghost" className="h-auto px-1 font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={resetFilters}>清空筛选</Button></div>}
-        <AccountCards accounts={filtered} onCreate={openCreate} onView={(account) => setDetailId(account.id)} onCollect={(account) => void navigate({to: "/finance/income", search: {accountId: account.id}})} onTransfer={(account) => void navigate({to: "/finance/transfers", search: {fromAccountId: account.id}})} onLedger={(account) => void navigate({to: "/finance/ledger", search: {accountId: account.id}})} canCollect={canCollect} canTransfer={canTransfer} canViewLedger={canViewLedger} />
-        <RecentChangesCard available={canViewLedger} rows={recentLedgerQuery.data?.items || []} loading={canViewLedger && recentLedgerQuery.isPending} error={canViewLedger ? recentLedgerQuery.error : null} onRetry={() => {if (canViewLedger) void recentLedgerQuery.refetch();}} onRowClick={(row) => setDetailId(row.accountId)} onViewAll={() => void navigate({to: "/finance/ledger"})} />
-      </section>
-      <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start"><DistributionCard {...distribution} /><AccountStatusCard rows={statusRows} /><ExceptionsCard exceptions={exceptions} pendingCount={statusRows.find((row) => row.key === "pending")?.value || 0} onViewPending={() => updateFilters({status: "pending"})} /><QuickActionsCard onTransfer={canTransfer ? () => void navigate({to: "/finance/transfers"}) : undefined} onCollect={canCollect ? () => void navigate({to: "/finance/income"}) : undefined} onLedger={canViewLedger ? () => void navigate({to: "/finance/ledger"}) : undefined} onReports={exportAccounts} onCreate={openCreate} /></aside>
-    </div>}
+    </div>
     
     <FinanceAccountDetailDrawer account={detail} canViewLedger={canViewLedger} canDelete={canDelete} ledgerQuery={accountLedgerQuery} onClose={() => setDetailId(null)} onOpenLedger={() => void navigate({to: "/finance/ledger"})} onReconcile={() => {if (detail) {reconcileMutation.reset(); setReconcileId(detail.id);}}} onDelete={() => {if (detail) setDeleteId(detail.id);}} />
     <FinanceAccountCreateDialog open={createOpen} pending={createMutation.isPending} error={createMutation.error?.message} onOpenChange={setCreateOpen} onSubmit={async (values) => {await createMutation.mutateAsync(values);}} />
@@ -188,7 +162,7 @@ function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCre
   const quickStatus: QuickStatusItemData[] = [
     {icon: <FileCheck2 className="h-4 w-4" />, label: "对账状态", value: reconciliation.label, tone: reconciliation.tone, description: reconciliation.description},
   ];
-  return <ErpPageHeader title="资金账户" quickStatus={desktop ? undefined : quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>{desktop && onLedger && <Button type="button" size="sm" variant="secondary" onClick={onLedger}><FileText className="h-4 w-4" />查看流水</Button>}{desktop && <FinanceAccountsMoreMenu onTransfer={onTransfer} onReconcile={canViewReconciliation ? onReconcile : undefined} onExport={onExport} /> }<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
+  return <ErpPageHeader title="资金账户" quickStatus={desktop ? undefined : quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>{onLedger && <Button type="button" size="sm" variant="secondary" onClick={onLedger}><FileText className="h-4 w-4" />查看流水</Button>}{desktop ? <FinanceAccountsMoreMenu onTransfer={onTransfer} onReconcile={canViewReconciliation ? onReconcile : undefined} onExport={onExport} /> : <>{onTransfer && <Button type="button" size="sm" variant="secondary" onClick={onTransfer}><ArrowLeftRight className="h-4 w-4" />资金调拨</Button>}{canViewReconciliation && onReconcile && <Button type="button" size="sm" variant="secondary" onClick={onReconcile}><FileCheck2 className="h-4 w-4" />对账管理</Button>}{onExport && <Button type="button" size="sm" variant="secondary" onClick={onExport}><Download className="h-4 w-4" />导出账户</Button>}</>}<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
 }
 
 function FinanceAccountsMoreMenu({onTransfer, onReconcile, onExport}: {onTransfer?: () => void; onReconcile?: () => void; onExport?: () => void}) {
@@ -263,38 +237,12 @@ function CardAction({label, icon, onClick, disabled}: {label: string; icon: Reac
   return <Button type="button" size="xs" variant="ghost" className="h-7 gap-0.5 whitespace-nowrap rounded-[var(--erp-radius-sm)] px-1 text-xs font-semibold text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)]" onClick={(event) => {event.stopPropagation(); onClick();}} disabled={disabled}>{icon}{label}</Button>;
 }
 
-const recentLedgerColumns: ColumnDef<FinanceAccountLedgerItem, unknown>[] = [
-  {id: "time", header: "交易时间", accessorFn: (row) => formatLedgerDateTime(row.time), cell: (info) => <span className="erp-data-number text-xs text-[var(--erp-color-text-secondary)]">{info.getValue<string>()}</span>},
-  {id: "account", header: "账户", accessorFn: (row) => row.accountName, cell: (info) => <span className="font-semibold">{info.getValue<string>()}</span>},
-  {id: "businessType", header: "交易类型", accessorFn: (row) => row.businessType},
-  {id: "direction", header: "交易方向", accessorFn: (row) => row.changeAmount >= 0 ? "收入" : "支出", cell: (info) => <span className={`font-semibold ${info.row.original.changeAmount >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}>{info.getValue<string>()}</span>},
-  {id: "amount", header: "金额(元)", accessorFn: (row) => row.changeAmount, cell: (info) => {const amount = info.getValue<number>(); return <span className={`erp-data-number font-semibold ${amount >= 0 ? "text-[var(--erp-color-income)]" : "text-[var(--erp-color-expense)]"}`}>{amount >= 0 ? "+" : "−"}{formatMoney(Math.abs(amount))}</span>; }},
-  {id: "party", header: "对方账户/备注", accessorFn: (row) => row.party || row.customerName || row.supplierName || row.remarks || "—", cell: (info) => <span className="block max-w-[170px] truncate text-[var(--erp-color-text-secondary)]">{info.getValue<string>()}</span>},
-  {id: "document", header: "单号", accessorFn: (row) => row.relatedDocNo || "—", cell: (info) => <span className="erp-data-number text-[var(--erp-color-text-secondary)]">{info.getValue<string>()}</span>},
-];
 
-function RecentChangesCard({available = true, rows, loading, error, onRetry, onRowClick, onViewAll}: {available?: boolean; rows: FinanceAccountLedgerItem[]; loading: boolean; error: Error | null; onRetry: () => void; onRowClick: (row: FinanceAccountLedgerItem) => void; onViewAll: () => void}) {
-  return <DashboardSection title={<span>最近资金变动 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {rows.length} 笔</span></span>} actions={<Button type="button" size="sm" variant="ghost" onClick={onViewAll} disabled={!available}>查看全部</Button>} className="overflow-hidden p-0">{available ? <ErpDataTable surface="plain" mobilePagination="compact" columns={recentLedgerColumns} data={rows} getRowId={(row) => row.id} loading={loading} fetching={loading} error={error} errorTitle="资金变动加载失败" emptyTitle="暂无资金变动" emptyDescription="创建收入、支出或调拨后，最近变动会显示在这里。" onRetry={onRetry} onRowClick={onRowClick} ariaLabel="最近资金变动" mobileRow={(row) => <ErpMobileRecordRow title={row.businessType || row.accountName} subtitle={row.accountName} meta={`${formatLedgerDateTime(row.time)} · ${row.party || row.customerName || row.supplierName || row.remarks || "—"}`} statusPlacement="title" status={<ErpStatusBadge label={row.changeAmount >= 0 ? "收入" : "支出"} tone={row.changeAmount >= 0 ? "success" : "danger"} />} amount={`${row.changeAmount >= 0 ? "+" : "−"}${formatMoney(Math.abs(row.changeAmount))}`} amountLabel={row.changeAmount >= 0 ? "收入" : "支出"} onOpen={() => onRowClick(row)} />} density="compact" stickyHeader total={rows.length} /> : <ErpEmptyState title="资金变动需要权限" description="当前账号没有查看账户流水的权限。" />}</DashboardSection>;
-}
 
-function DistributionCard({rows, positiveTotal, netBalance}: ReturnType<typeof buildDistribution>) {
-  return <Card><div className="border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">正余额资金分布</h2></div><div className="min-w-0 space-y-3 p-4">{positiveTotal > 0 ? <><p className="text-xs text-[var(--erp-color-text-muted)]">仅统计启用且余额大于 0 的账户，不包含负余额。</p><StackedStructureBar className="w-full" segments={rows.map((row) => ({id: row.id, label: row.name, value: row.value, color: financeChartCategoryColor(row.id)}))} ariaLabel="正余额资金分布图" showLabels={false} /><div className="space-y-2">{rows.map((row) => <div key={row.id} className="flex items-center justify-between gap-2 text-xs"><span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor: financeChartCategoryColor(row.id)}} /><span className="break-words">{row.name}</span></span><span className="shrink-0 erp-data-number text-[var(--erp-color-text-secondary)]">{formatPercent(row.value, positiveTotal)}</span></div>)}</div></> : <ErpEmptyState title="暂无正余额资金" description="当前没有启用且余额大于 0 的账户。" />}</div><ChartMeta className="mx-4 mb-3" summary={`正余额资金 ${formatMoney(positiveTotal)} · 净余额 ${formatMoney(netBalance)}`} updatedAt={storeDate()} /></Card>;
-}
 
-function AccountStatusCard({rows}: {rows: StatusRow[]}) {
-  return <Card><div className="border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">账户状态概览</h2></div><div className="space-y-3 p-4">{rows.map((row) => <div key={row.key} className="flex items-center justify-between gap-3 text-xs"><span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${row.dot}`} />{row.label}</span><span className="font-semibold">{row.value} 个</span></div>)}</div></Card>;
-}
 
-function ExceptionsCard({exceptions, pendingCount, onViewPending}: {exceptions: ExceptionRow[]; pendingCount: number; onViewPending: () => void}) {
-  return <Card><div className="flex items-center justify-between border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">异常提醒</h2><Button type="button" size="xs" variant="ghost" className="h-auto px-0 text-xs font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={onViewPending}>查看全部</Button></div><div className="space-y-3 p-4">{exceptions.map((exception) => <div key={exception.key} className="flex items-start gap-2"><span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${exception.tone === "warning" ? "bg-[var(--erp-color-warning-soft)] text-[var(--erp-color-warning)]" : "bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"}`}>{exception.tone === "warning" ? <AlertTriangle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}</span><div className="min-w-0"><p className="text-xs font-semibold">{exception.title}</p><p className="mt-0.5 text-xs text-[var(--erp-color-text-muted)]">{exception.description}</p></div></div>)}{pendingCount > 0 && <Button type="button" size="xs" variant="ghost" className="h-auto px-0 text-xs font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={onViewPending}>查看待核对账户 →</Button>}</div></Card>;
-}
 
-function QuickActionsCard({onTransfer, onCollect, onLedger, onReports, onCreate}: {onTransfer?: () => void; onCollect?: () => void; onLedger?: () => void; onReports: () => void; onCreate: () => void}) {
-  const actions = [{label: "资金调拨", icon: <ArrowLeftRight className="h-4 w-4" />, onClick: onTransfer}, {label: "账户收款", icon: <ArrowDownToLine className="h-4 w-4" />, onClick: onCollect}, {label: "资金划转", icon: <ArrowUpFromLine className="h-4 w-4" />, onClick: onTransfer}, {label: "对账管理", icon: <FileCheck2 className="h-4 w-4" />, onClick: onLedger}, {label: "导出账户", icon: <Download className="h-4 w-4" />, onClick: onReports}, {label: "新增账户", icon: <WalletCards className="h-4 w-4" />, onClick: onCreate}];
-  return <Card><div className="border-b border-[var(--erp-color-border)] px-4 py-3"><h2 className="text-sm font-semibold">快捷操作</h2></div><div className="grid grid-cols-3 gap-3 p-4">{actions.map((action) => <Button key={action.label} type="button" size="sm" variant="ghost" className="h-auto min-h-[70px] flex-col gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] px-2 text-xs font-semibold text-[var(--erp-color-text-secondary)] hover:border-[var(--erp-color-primary)] hover:bg-[var(--erp-color-info-soft)] hover:text-[var(--erp-color-primary)]" onClick={action.onClick} disabled={!action.onClick}>{action.icon}{action.label}</Button>)}</div></Card>;
-}
 
-type StatusRow = {key: string; label: string; value: number; dot: string};
 type ExceptionRow = {key: string; title: string; description: string; tone: "info" | "warning"};
 
 function buildDistribution(accounts: FinanceAccountItem[]) {
@@ -309,21 +257,7 @@ function buildDistribution(accounts: FinanceAccountItem[]) {
   };
 }
 
-function buildAccountStatuses(accounts: FinanceAccountItem[]): StatusRow[] {
-  const abnormal = accounts.filter((account) => account.difference !== undefined && Math.abs(account.difference) > 0.009).length;
-  const frozen = accounts.filter((account) => account.frozenAmount > 0).length;
-  const pending = accounts.filter((account) => account.enabled && account.actualBalance === undefined && account.frozenAmount <= 0 && !(account.difference !== undefined && Math.abs(account.difference) > 0.009)).length;
-  const normal = Math.max(0, accounts.length - abnormal - frozen - pending);
-  return [{key: "normal", label: "正常账户", value: normal, dot: "bg-[var(--erp-color-success)]"}, {key: "pending", label: "待核对账户", value: pending, dot: "bg-[var(--erp-color-warning)]"}, {key: "abnormal", label: "异常账户", value: abnormal, dot: "bg-[var(--erp-color-danger)]"}, {key: "frozen", label: "已冻结账户", value: frozen, dot: "bg-[var(--erp-color-text-muted)]"}];
-}
 
-function buildExceptions(accounts: FinanceAccountItem[]): ExceptionRow[] {
-  const difference = accounts.filter((account) => account.difference !== undefined && Math.abs(account.difference) > 0.009);
-  const pending = accounts.filter(isPendingAccount);
-  if (difference.length) return difference.slice(0, 2).map((account) => ({key: account.id, title: `${account.name} 存在实盘差额`, description: `差额 ${formatMoney(account.difference || 0)}，建议尽快核对。`, tone: "warning"}));
-  if (pending.length) return [{key: "pending", title: `${pending.length} 个账户待核对`, description: "请记录实盘余额后确认对账状态。", tone: "warning"}, {key: "reconcile", title: "建议定期对账", description: "账户尚未完成本期实盘核对。", tone: "info"}];
-  return [{key: "healthy", title: "暂无异常账户", description: "所有账户状态正常。", tone: "info"}, {key: "reconcile", title: "建议定期对账", description: "上次对账状态已平衡。", tone: "info"}];
-}
 
 function buildAnomalies(accounts: FinanceAccountItem[]): ExceptionRow[] {
   return accounts
@@ -354,6 +288,4 @@ function accountIcon(type: FinanceAccountItem["type"]) {
 }
 
 function formatMoney(value: number) {return new Intl.NumberFormat("zh-CN", {style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);}
-function formatPercent(value: number, total: number) {return total ? `${((value / total) * 100).toFixed(1)}%` : "0.0%";}
-function formatLedgerDateTime(value: string) {return formatStoreDateTime(value);}
 function csvCell(value: unknown) {const text = String(value ?? ""); return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;}
