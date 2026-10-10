@@ -9,8 +9,8 @@ import {crmApi, refreshErpAfterDocument} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {QuickCaptureConfirmInput, QuickCaptureParseResult, QuickCaptureSourceType} from "@/src/types/crm";
 import {useWorkspaceTabActivity, useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
-import {VoiceEntryControl} from "@/src/features/voice/VoiceEntryControl";
-import {appendVoiceTranscript as appendRecognizedText} from "@/src/features/voice/voiceTranscript";
+import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
+import {appendVoiceTranscript as appendRecognizedText} from "@/src/lib/voiceTranscript";
 
 const sourceOptions = [{value: "manual", label: "手工录入"}, {value: "chat", label: "聊天记录"}, {value: "voice", label: "语音转写"}] satisfies Array<{value: QuickCaptureSourceType; label: string}>;
 

@@ -30,7 +30,7 @@ import {hasWorkflowErrors, workflowBlockedReason} from "@/src/components/common/
 import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWorkflow";
 import {formatCurrency} from "@/src/lib/format";
-import {VoiceEntryControl} from "@/src/features/voice/VoiceEntryControl";
+import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 const salesChannels: SalesChannel[] = ["到店", "闲鱼", "抖音", "小红书", "B站", "微信私域", "同行网店"];

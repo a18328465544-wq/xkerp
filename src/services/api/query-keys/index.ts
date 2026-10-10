@@ -37,6 +37,7 @@ export const queryKeys = {
     insights: () => ["ai", "insights"] as const,
     dailySalesSummary: (date: string) => ["ai", "daily-sales-summary", date] as const,
   },
+  voice: {status: () => ["voice", "status"] as const},
   purchase: {
     all: () => ["purchase"] as const,
     list: (access: {userId: string; showCost: boolean; showProfit: boolean}, filters?: unknown) => ["purchase", "list", access, filters] as const,

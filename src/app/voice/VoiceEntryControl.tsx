@@ -2,16 +2,14 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {FileText, Loader2, Mic} from "lucide-react";
 import {Button} from "@/src/components/ui";
+import {queryKeys, voiceApi, type VoiceStatus} from "@/src/services/api";
 import type {VoiceParseResult, VoiceScene} from "@/src/types/voice";
-import {voiceApi, type VoiceStatus} from "./voiceApi";
-import {VoiceCaptureButton, type VoiceCaptureMode, type VoiceRecorderSnapshot} from "./VoiceCaptureButton";
-import {VoiceDraftPanel} from "./VoiceDraftPanel";
-
-const voiceStatusQueryKey = ["voice", "status"] as const;
+import {VoiceCaptureButton, type VoiceCaptureMode, type VoiceRecorderSnapshot} from "@/src/features/voice/VoiceCaptureButton";
+import {VoiceDraftPanel} from "@/src/features/voice/VoiceDraftPanel";
 
 export function useVoiceStatus() {
   return useQuery<VoiceStatus>({
-    queryKey: voiceStatusQueryKey,
+    queryKey: queryKeys.voice.status(),
     queryFn: ({signal}) => voiceApi.status(signal),
     staleTime: 60_000,
     retry: false,

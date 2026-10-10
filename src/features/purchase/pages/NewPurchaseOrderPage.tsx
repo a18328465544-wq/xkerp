@@ -34,7 +34,7 @@ import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWorkflow";
 import {formatCurrency} from "@/src/lib/format";
 import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
-import {VoiceEntryControl} from "@/src/features/voice/VoiceEntryControl";
+import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 

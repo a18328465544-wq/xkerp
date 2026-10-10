@@ -25,6 +25,8 @@ export {assemblyApi, toAssemblyQueryParams} from "./assembly";
 export {customersApi} from "./customers";
 export {vendorsApi} from "./vendors";
 export {aftersalesApi} from "./aftersales";
+export {voiceApi} from "./voice";
+export type {VoiceParseInput, VoiceStatus} from "./voice";
 export {orderPoolApi} from "./order-pool";
 export {financeApi} from "./finance";
 export {financeAccountsApi} from "./finance-accounts";
