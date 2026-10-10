@@ -11,6 +11,7 @@ export interface VoiceDraftPanelProps {
   onReparse: () => void;
   onClose: () => void;
   pending?: boolean;
+  statusText?: string;
   error?: string | null;
   children?: ReactNode;
 }
@@ -20,11 +21,13 @@ export interface VoiceDraftTranscriptEditorProps {
   transcript: string;
   onTranscriptChange: (value: string) => void;
   error?: string | null;
+  statusText?: string;
   children?: ReactNode;
 }
 
-export function VoiceDraftTranscriptEditor({sceneLabel, transcript, onTranscriptChange, error, children}: VoiceDraftTranscriptEditorProps) {
+export function VoiceDraftTranscriptEditor({sceneLabel, transcript, onTranscriptChange, error, statusText, children}: VoiceDraftTranscriptEditorProps) {
   return <div className="space-y-4">
+    {statusText && <p role="status" aria-live="polite" className="text-sm text-[var(--erp-color-text-secondary)]">{statusText}</p>}
     <section className="space-y-2">
       <label htmlFor="voice-draft-transcript" className="text-sm font-medium text-[var(--erp-color-text)]">识别文字 · {sceneLabel}</label>
       <Textarea id="voice-draft-transcript" value={transcript} onChange={(event) => onTranscriptChange(event.target.value)} rows={4} maxLength={2_000} className="text-base sm:text-sm" aria-describedby="voice-draft-audio-disclosure" />
@@ -35,10 +38,10 @@ export function VoiceDraftTranscriptEditor({sceneLabel, transcript, onTranscript
   </div>;
 }
 
-export function VoiceDraftPanel({open, sceneLabel, transcript, onTranscriptChange, onReparse, onClose, pending = false, error, children}: VoiceDraftPanelProps) {
+export function VoiceDraftPanel({open, sceneLabel, transcript, onTranscriptChange, onReparse, onClose, pending = false, statusText, error, children}: VoiceDraftPanelProps) {
   const phone = useErpPhone();
   const description = "识别文字可以修改。录音会发送至当前配置的语音识别服务，不保存音频；草稿仅在你确认后写入业务单据。";
-  const body = <VoiceDraftTranscriptEditor sceneLabel={sceneLabel} transcript={transcript} onTranscriptChange={onTranscriptChange} error={error}>{children}</VoiceDraftTranscriptEditor>;
+  const body = <VoiceDraftTranscriptEditor sceneLabel={sceneLabel} transcript={transcript} onTranscriptChange={onTranscriptChange} error={error} statusText={statusText}>{children}</VoiceDraftTranscriptEditor>;
   const footer = <Button type="button" variant="primary" disabled={pending || !transcript.trim()} loading={pending} onClick={onReparse}>{pending ? "解析中…" : "重新解析"}</Button>;
 
   if (phone) return <ErpDialogShell open={open} onOpenChange={(next) => {if (!next) onClose();}} title="语音录入草稿" description={description} size="lg" mobilePresentation="sheet" pending={pending} footer={footer}>{body}</ErpDialogShell>;

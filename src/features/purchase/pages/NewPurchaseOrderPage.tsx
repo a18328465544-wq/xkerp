@@ -34,6 +34,7 @@ import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWorkflow";
 import {formatCurrency} from "@/src/lib/format";
 import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
+import {VoiceEntryControl} from "@/src/features/voice/VoiceEntryControl";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 
@@ -290,7 +291,7 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           </ErpFormSection></>;
   return <ErpTransactionPageFrame className="erp-order-entry-page">
     <ErpTransactionHeader title="进货与回收" phoneTitle="采购开单" subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" back={{label: "返回采购单据", fallback: "/purchase", onDesktopBack: leaveDesktop}} pending={createMutation.isPending}
-      actions={<><GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></>}
+      actions={<><GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button><VoiceEntryControl scene="purchase" /></>}
       phoneActions={<div className="flex items-center gap-2"><span className="erp-order-draft-label">草稿 · 切页保留</span><GpuSnDateLookupButton label="SN 查询" /></div>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">表单已重置为下一张采购单；如需处理 SN、成色或库位，请从检测质检入口进入。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}

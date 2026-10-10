@@ -100,6 +100,8 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
       aria-label={label}
       aria-pressed={recording}
       aria-describedby={recorder.error ? "voice-capture-error" : undefined}
+      aria-keyshortcuts={mode === "toggle" ? "Alt+V" : undefined}
+      data-voice-entry-trigger
       title={mode === "toggle" ? "语音录入（Alt+V）" : "按住说话，向上滑动取消"}
       className={cn(mode === "hold" && "min-h-[var(--erp-mobile-touch-size)] touch-none select-none [-webkit-touch-callout:none]", recording && "text-white", className)}
       onClick={mode === "toggle" ? toggle : undefined}
