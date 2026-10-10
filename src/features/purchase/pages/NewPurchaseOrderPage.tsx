@@ -1,15 +1,13 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
-import {usePhoneBackAction} from "@/src/hooks/usePhoneBack";
 import {useNavigate} from "@tanstack/react-router";
-import {ArrowLeft, ClipboardList} from "lucide-react";
+import {ClipboardList} from "lucide-react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
-import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpProductTemplateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
+import {ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpProductTemplateDialog, ErpStatusBadge, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary} from "@/src/components/common";
 import {ApiError, createIdempotencyKey, productsApi, purchaseApi, queryKeys, refreshErpAfterDocument} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -30,7 +28,7 @@ import {derivePurchaseCapabilities} from "../purchase.permissions";
 import {useValidatedFormSubmit} from "@/src/components/common/useValidatedFormSubmit";
 import {createSubmissionIdentity} from "@/src/services/api/submissionIdentity";
 import {useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
-import {ErpMobileWorkflow, ErpMobileWorkflowSection} from "@/src/components/common";
+import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpMobileWorkflowDesktop, ErpMobileWorkflowPhone, ErpTransactionHeader} from "@/src/components/common";
 import {hasWorkflowErrors, workflowBlockedReason} from "@/src/components/common/mobileWorkflowValidation";
 import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {ErpMobileWorkflowEditButton} from "@/src/components/common/ErpMobileWorkflow";
@@ -61,7 +59,6 @@ export function NewPurchaseOrderPage() {
 
 function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthExpired: () => void}) {
   const {active} = useWorkspaceTabActivity();
-  const phone = useErpPhone();
   const [settlementEntry, setSettlementEntry] = useState<PaymentEntryFeedback>({ready: true});
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -276,14 +273,13 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
   });
   const submitError = submission.feedback || serverError;
 
-  const phoneBack = usePhoneBackAction("/purchase");
-  const leave = () => {if (phone) phoneBack(); else void navigate({to: "/purchase"});};
+  const leaveDesktop = () => void navigate({to: "/purchase"});
 
   if (referenceQuery.isPending || !referenceData) return <Card><ErpLoadingState title="正在加载采购基础数据" description="正在读取商品、来源、结算账户和现有仓位候选。" /></Card>;
   if (referenceQuery.error) return <ErpPageError title="无法加载采购基础数据" description={errorText(referenceQuery.error)} onRetry={() => void referenceQuery.refetch()} />;
 
   const accountError = !canReadSettlementAccounts ? "当前账号没有结算账户读取权限" : undefined;
-  const purchaseExtraFields = <>{phone && <ErpFormSection title="采购物流"><label className="block text-sm font-semibold md:col-span-3">快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" placeholder="SF / YT / JD..." /></label></ErpFormSection>}
+  const purchaseExtraFields = <><ErpMobileWorkflowPhone><ErpFormSection title="采购物流"><label className="block text-sm font-semibold md:col-span-3">快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" placeholder="SF / YT / JD..." /></label></ErpFormSection></ErpMobileWorkflowPhone>
           <ErpFormSection title="采购备注与图片附件" description="集中记录谈价、包装、来源说明，并上传外观、快递或回收凭证。">
             <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
               <label className="block min-w-0 text-sm font-semibold">采购备注<Textarea {...register("remarks")} className="mt-2 min-h-32" placeholder="记录谈价、包装、来源或批量回收说明" /></label>
@@ -292,9 +288,10 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
               </div>
             </div>
           </ErpFormSection></>;
-  const backAction = <Button type="button" variant={phone ? "ghost" : "secondary"} size={phone ? "iconTouch" : "md"} aria-label="返回采购单据" disabled={createMutation.isPending} onClick={leave}><ArrowLeft className="h-4 w-4" />{!phone && "返回采购单据"}</Button>;
   return <ErpTransactionPageFrame className="erp-order-entry-page">
-    <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader density="default" title={phone ? "采购开单" : "进货与回收"} subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" leading={phone ? backAction : undefined} actions={!phone ? <>{backAction}<GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></> : <div className="flex items-center gap-2"><span className="erp-order-draft-label">草稿 · 切页保留</span><GpuSnDateLookupButton label="SN 查询" /></div>} /></CardContent></Card>
+    <ErpTransactionHeader title="进货与回收" phoneTitle="采购开单" subtitle="先创建采购单，再到检测质检确认物理商品信息和入库结果。" back={{label: "返回采购单据", fallback: "/purchase", onDesktopBack: leaveDesktop}} pending={createMutation.isPending}
+      actions={<><GpuSnDateLookupButton label="查询 SN 日期" /><Button type="button" variant="secondary" onClick={() => setPasteOpen(true)} disabled={createMutation.isPending || !canReadProducts}><ClipboardList className="h-4 w-4" />批量粘贴</Button></>}
+      phoneActions={<div className="flex items-center gap-2"><span className="erp-order-draft-label">草稿 · 切页保留</span><GpuSnDateLookupButton label="SN 查询" /></div>} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {successMessage && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-semibold text-[var(--erp-color-success)]">{successMessage}</p><p className="mt-1 text-xs text-[var(--erp-color-success)]">表单已重置为下一张采购单；如需处理 SN、成色或库位，请从检测质检入口进入。</p></div><ErpStatusBadge label="已提交" tone="success" /></CardContent></Card>}
     {submitError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-danger-soft)]"><CardContent className="flex items-start justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm text-[var(--erp-color-danger)]">{submitError}</p>{conflictError && <p className="mt-1 text-xs text-[var(--erp-color-danger)]">余额或来源可能已变化；表单内容已保留，请核对后重试。</p>}</div><Button type="button" size="icon" variant="ghost" onClick={() => {submission.clearFeedback(); setServerError(null); setConflictError(false);}} aria-label="关闭错误提示">×</Button></CardContent></Card>}
@@ -308,11 +305,11 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
       <ErpTransactionColumns>
         <ErpTransactionPrimary>
           <ErpMobileWorkflowSection step={0}>
-          <Card className={phone ? "erp-order-partner" : undefined}><CardContent>
+          <Card className="erp-order-partner"><CardContent>
             <div className="grid items-start gap-3 md:grid-cols-12">
               <div className="hidden min-w-0 md:block md:col-span-3"><p className="flex items-center justify-between gap-1 text-sm font-semibold">单据编号<span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--erp-color-primary)]">未入库</span></p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 break-all erp-data-number text-xs font-semibold text-[var(--erp-color-text)]">{referenceData.nextInvoiceNo}</span></div></div>
               <div className="min-w-0 md:col-span-6"><PurchaseSourcePicker compact selected={selectedSource} options={referenceData.sources} disabled={createMutation.isPending} loading={sourceSearchQuery.isFetching} canReadCustomers={canReadCustomers} canReadVendors={canReadVendors} canCreateCustomer={canCreateCustomer} canCreateVendor={canCreateVendor} onKeywordChange={setSourceKeyword} onSelect={selectSource} onClear={clearSource} onOpenCreateCustomer={(initialName) => setPartnerCreate({target: "customer", initialName: initialName || ""})} onOpenCreateVendor={(initialName) => setPartnerCreate({target: "vendor", initialName: initialName || ""})} /></div>
-              {!phone && <label className="block text-sm font-semibold md:col-span-3">快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" placeholder="SF / YT / JD..." /></label>}
+              <ErpMobileWorkflowDesktop><label className="block text-sm font-semibold md:col-span-3">快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" placeholder="SF / YT / JD..." /></label></ErpMobileWorkflowDesktop>
             </div>
           </CardContent></Card>
           </ErpMobileWorkflowSection>
@@ -320,12 +317,12 @@ function PurchaseOrderForm({session, onAuthExpired}: {session: AuthSession; onAu
           <PurchaseLineItemsTable control={control} fields={fields} items={values.items || []} products={referenceData.products} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} canCreateProduct={canCreateProduct} disabled={createMutation.isPending} productsLoading={Boolean(productKeyword.trim()) && (productKeyword.trim() !== debouncedProductKeyword || productSearchQuery.isFetching)} onProductKeywordChange={setProductKeyword} onProductSelect={selectProduct} onProductClear={clearProduct} onAdd={() => append(createPurchaseLineDefaults())} onRemove={remove} onOpenCreateProduct={openProductCreate} />
           </ErpMobileWorkflowSection>
           <ErpMobileWorkflowSection step={1}>
-          {!phone && purchaseExtraFields}
+          <ErpMobileWorkflowDesktop>{purchaseExtraFields}</ErpMobileWorkflowDesktop>
           </ErpMobileWorkflowSection>
         </ErpTransactionPrimary>
         <ErpTransactionSecondary>
           <ErpMobileWorkflowSection step={1}>
-          <Card className={phone ? "erp-order-checkout" : undefined}><CardContent className="space-y-4 p-4">{phone && <section className="erp-order-review"><div><span>{selectedSource?.name || "请选择来源"}</span><ErpMobileWorkflowEditButton disabled={createMutation.isPending} /></div><details><summary>{summary.totalCount} 件商品 · 查看明细</summary>{(values.items || []).filter((item) => item.productId).map((item, index) => <p key={index}><span>{item.productName}</span><span className="erp-data-number">×{item.quantity}</span></p>)}</details></section>}<PurchasePaymentSection disabled={createMutation.isPending} embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} resetKey={editorScope.current} onReadinessChange={setSettlementEntry} />{phone ? <details className="erp-phone-order-extras"><summary>金额明细</summary><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></details> : <div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">进货财务汇总</h2><span className="erp-data-number text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div>}<p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p>{phone && <details className="erp-phone-order-extras"><summary>物流、备注与图片（可选）</summary>{purchaseExtraFields}</details>}<ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : quantityError || settlementEntry.reason || issues[0]?.message || "请完善当前必填信息"} summary={phone ? <><strong className="erp-data-number">{canEnterPurchaseCost ? formatCurrency(summary.totalCost) : "—"}</strong><small>{summary.totalCount} 件 · 提交后待检测</small></> : undefined} submitting={createMutation.isPending || submission.validating} onCancel={leave} submitLabel={phone ? "提交采购单" : "确认提交 · 等待检测入库"}>{!phone && <span>经办人：{operatorName}</span>}</ErpSubmitBar></CardContent></Card>
+          <Card className="erp-order-checkout"><CardContent className="space-y-4 p-4"><ErpMobileWorkflowPhone><section className="erp-order-review"><div><span>{selectedSource?.name || "请选择来源"}</span><ErpMobileWorkflowEditButton disabled={createMutation.isPending} /></div><details><summary>{summary.totalCount} 件商品 · 查看明细</summary>{(values.items || []).filter((item) => item.productId).map((item, index) => <p key={index}><span>{item.productName}</span><span className="erp-data-number">×{item.quantity}</span></p>)}</details></section></ErpMobileWorkflowPhone><PurchasePaymentSection disabled={createMutation.isPending} embedded compact control={control} setValue={setValue} totalCost={summary.totalCost} sourcePartnerType={sourcePartnerType} vendorCreditAvailable={vendorCreditAvailable} accounts={referenceData.settlementAccounts} accountsLoading={referenceQuery.isFetching} accountsError={accountError} accountDisabled={!canReadSettlementAccounts} onRetryAccounts={() => void referenceQuery.refetch()} canEnterCost={canEnterPurchaseCost} resetKey={editorScope.current} onReadinessChange={setSettlementEntry} /><ErpMobileWorkflowPhone><details className="erp-phone-order-extras"><summary>金额明细</summary><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></details></ErpMobileWorkflowPhone><ErpMobileWorkflowDesktop><div className="border-t border-[var(--erp-color-border)] pt-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">进货财务汇总</h2><span className="erp-data-number text-xs text-[var(--erp-color-text-secondary)]">{summary.totalCount} 件</span></div><PurchaseAmountSummary embedded summary={summary} settlement={settlement} canEnterCost={canEnterPurchaseCost} showProfit={permissions.showProfit} /></div></ErpMobileWorkflowDesktop><p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] px-3 py-2 text-xs leading-5 text-[var(--erp-color-primary)]">SN、成色、质保、最终库位与库存状态统一在检测质检阶段确认。</p><ErpMobileWorkflowPhone><details className="erp-phone-order-extras"><summary>物流、备注与图片（可选）</summary>{purchaseExtraFields}</details></ErpMobileWorkflowPhone><ErpSubmitBar embedded compact showCancel={false} dirty={isDirty} canSubmit={canSubmit} blockedReason={mediaState.pending ? "图片仍在上传" : mediaState.failed ? "存在上传失败的图片" : quantityError || settlementEntry.reason || issues[0]?.message || "请完善当前必填信息"} phoneSummary={<><strong className="erp-data-number">{canEnterPurchaseCost ? formatCurrency(summary.totalCost) : "—"}</strong><small>{summary.totalCount} 件 · 提交后待检测</small></>} submitting={createMutation.isPending || submission.validating} onCancel={leaveDesktop} submitLabel="确认提交 · 等待检测入库" phoneSubmitLabel="提交采购单"><ErpMobileWorkflowDesktop><span>经办人：{operatorName}</span></ErpMobileWorkflowDesktop></ErpSubmitBar></CardContent></Card>
           </ErpMobileWorkflowSection>
         </ErpTransactionSecondary>
       </ErpTransactionColumns>
