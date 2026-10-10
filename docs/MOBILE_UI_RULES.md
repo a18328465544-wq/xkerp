@@ -71,6 +71,10 @@
 - **M27** 按钮进入加载状态时保留原有宽度（`Button loading`），不得因为把文案换成「保存中…」而让按钮变宽变窄。[人工]
 - **M25** 浮层：简短确认用居中对话框，少量选项用底部面板，大表单和搜索用全屏页面。[人工]
 
+## 6.1 页面结构
+
+- **M28** 业务页面（`src/features/*/pages/*.tsx`）不调用 `useErpPhone()`，不写「手机一份、电脑一份」的分支。手机和电脑两种布局由模板决定：列表页用 `ErpListPage`，详情抽屉用 `ErpRecordDetail`，开单页用 `ErpMobileWorkflow`。还没迁移的页面登记在 `scripts/mobile-rules-allowlist.json` 的 `pageViewport` 里，每项写明原因和对应任务；页面迁移完成后必须从清单里移除，否则检查失败。[lint]
+
 ## 7. 验收
 
 1. `npm run lint`：包含本文所有标 [lint] 的规则。

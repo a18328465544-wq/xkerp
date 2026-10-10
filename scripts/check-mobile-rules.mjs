@@ -4,6 +4,7 @@
 // M19 user-facing copy carries no implementation language
 // M20 product name only comes from src/config/brand.ts
 // M23 feature pages do not hand-roll fixed bottom bars
+// M28 pages do not branch on the phone viewport; templates own both layouts
 // Real exceptions go to scripts/mobile-rules-allowlist.json with a reason.
 import fs from "node:fs";
 import path from "node:path";
@@ -133,6 +134,18 @@ for (const file of UI_ROOTS.flatMap(walkFiles)) {
   visit(sourceFile);
 }
 
+// M28: the allowlist may only shrink. A migrated page must leave the list.
+const viewportAllow = new Map((allowlist.pageViewport || []).map((item) => [item.file, item]));
+for (const file of walkFiles("src/features").filter((candidate) => /^src\/features\/[^/]+\/pages\/[^/]+\.tsx$/.test(candidate))) {
+  const branches = /\buseErpPhone\(/.test(fs.readFileSync(path.join(projectRoot, file), "utf8"));
+  const entry = viewportAllow.get(file);
+  if (branches && !entry) failures.push(`[M28] ${file} 页面不要自己判断手机（useErpPhone），请改用 ErpListPage / ErpRecordDetail / ErpMobileWorkflow`);
+  if (entry && !entry.reason) failures.push(`[M28] ${file} 例外缺少 reason`);
+  if (!branches && entry) failures.push(`[M28] ${file} 已不再判断手机，请从 mobile-rules-allowlist.json 的 pageViewport 中移除`);
+  viewportAllow.delete(file);
+}
+for (const file of viewportAllow.keys()) failures.push(`[M28] 允许清单中的 ${file} 不存在，请移除`);
+
 for (const file of ["index.html", "public/manifest.webmanifest"]) {
   const text = fs.readFileSync(path.join(projectRoot, file), "utf8");
   for (const alias of BRAND_ALIASES) if (text.includes(alias)) failures.push(`[M20] ${file} 出现品牌别名「${alias}」`);
@@ -143,4 +156,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("手机端规则检查通过：M17 状态标签、M18 数据卡数量、M19 文案、M20 品牌、M23 底部固定栏。");
+console.log(`手机端规则检查通过：M17 状态标签、M18 数据卡数量、M19 文案、M20 品牌、M23 底部固定栏、M28 页面不判断手机（例外 ${(allowlist.pageViewport || []).length} 个）。`);

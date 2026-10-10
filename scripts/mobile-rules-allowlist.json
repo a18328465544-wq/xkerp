@@ -11,5 +11,111 @@
   "quickStatus": [],
   "metrics": [],
   "dock": [],
-  "browser": []
+  "browser": [],
+  "pageViewport": [
+    {
+      "file": "src/features/aftersales/pages/AftersalesWorkspacePage.tsx",
+      "reason": "工作台页面待评估（T12）"
+    },
+    {
+      "file": "src/features/ai/pages/AiInsightsPage.tsx",
+      "reason": "分析页只需保证数据卡与图表单列（T13）"
+    },
+    {
+      "file": "src/features/assembly/pages/AssemblyWorkspacePage.tsx",
+      "reason": "工作台页面待评估（T12）"
+    },
+    {
+      "file": "src/features/crm/pages/CrmWorkspacePage.tsx",
+      "reason": "工作台页面待评估（T12）"
+    },
+    {
+      "file": "src/features/dashboard/pages/DashboardPage.tsx",
+      "reason": "看板页只需保证数据卡与图表单列（T13）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceAccountsPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceClosingPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceCommissionPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceCustomerFundsPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceDashboardPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceExpensePage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceIncomePage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceLedgerPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceProfitPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceReturnReconcilePage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/finance/pages/FinanceTransfersPage.tsx",
+      "reason": "财务页手机版式待重新设计后再迁移 ErpListPage（T9 已撤销）"
+    },
+    {
+      "file": "src/features/inspections/pages/InspectionWorkspacePage.tsx",
+      "reason": "工作台页面待评估（T12）"
+    },
+    {
+      "file": "src/features/inventory/pages/InventoryListPage.tsx",
+      "reason": "库存单卡/SN 与型号汇总的领域表格，手机分支待收拢（T8 例外）"
+    },
+    {
+      "file": "src/features/purchase/pages/NewPurchaseOrderPage.tsx",
+      "reason": "开单页剩余分支待收拢进 ErpMobileWorkflow（T14）"
+    },
+    {
+      "file": "src/features/purchase/pages/PurchaseDetailPage.tsx",
+      "reason": "单据详情待迁移 ErpRecordDetail（T11）"
+    },
+    {
+      "file": "src/features/quotes/pages/MarketQuotesPage.tsx",
+      "reason": "分析页只需保证数据卡与图表单列（T13）"
+    },
+    {
+      "file": "src/features/sales/pages/NewSalesOrderPage.tsx",
+      "reason": "开单页剩余分支待收拢进 ErpMobileWorkflow（T14）"
+    },
+    {
+      "file": "src/features/sales/pages/SalesDetailPage.tsx",
+      "reason": "单据详情待迁移 ErpRecordDetail（T11）"
+    },
+    {
+      "file": "src/features/sales/pages/SalesListPage.tsx",
+      "reason": "销售详情抽屉待迁移 ErpRecordDetail（T11）"
+    },
+    {
+      "file": "src/features/sales/pages/SalesOutboundPage.tsx",
+      "reason": "工作台页面待评估（T12）"
+    },
+    {
+      "file": "src/features/settings/pages/BackupPage.tsx",
+      "reason": "备份页仅一处手机文案分支，待迁移"
+    }
+  ]
 }
