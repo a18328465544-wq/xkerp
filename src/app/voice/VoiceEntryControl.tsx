@@ -7,6 +7,7 @@ import type {VoiceParseResult, VoiceResolvedScene, VoiceScene} from "@/src/types
 import {VoiceCaptureButton, type VoiceCaptureMode, type VoiceRecorderSnapshot} from "@/src/features/voice/VoiceCaptureButton";
 import {VoiceDraftPanel} from "@/src/features/voice/VoiceDraftPanel";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
+import {isVoiceEntryShortcut} from "./voiceShortcut";
 
 export function useVoiceStatus() {
   return useQuery<VoiceStatus>({
@@ -163,7 +164,7 @@ export function VoiceEntryControl({scene, mode = "toggle", label, compactTrigger
   useEffect(() => {
     if (mode !== "toggle") return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key.toLowerCase() !== "v") return;
+      if (!isVoiceEntryShortcut(event)) return;
       event.preventDefault();
       rootRef.current?.querySelector<HTMLButtonElement>("[data-voice-entry-trigger]")?.click();
     };
