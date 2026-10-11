@@ -1,4 +1,4 @@
-"""Local-only mobile model row typography, action position and navigation QA."""
+"""Local-only model row: inline quantities, readonly metadata and footer actions."""
 import json
 import os
 from pathlib import Path
@@ -26,7 +26,7 @@ MODELS = [{"key": str(index), "productName": name, "category": category, "brand"
 
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch()
-    for width in (320, 390, 1440):
+    for width in (320, 390, 430, 768, 1024, 1440):
         context = browser.new_context(viewport={"width": width, "height": 844 if width < 768 else 960}, is_mobile=width < 768, has_touch=width < 768)
         page = context.new_page()
         _, writes, errors = fixture["attach"](page)
@@ -41,15 +41,20 @@ with sync_playwright() as playwright:
                 category = row.locator('.erp-inventory-model-phone-subtitle')
                 action = row.locator('.erp-inventory-model-phone-cards-action')
                 counts = row.locator('.erp-inventory-model-phone-counts')
-                assert category.bounding_box()["y"] + category.bounding_box()["height"] <= action.bounding_box()["y"]
-                assert action.bounding_box()["y"] + action.bounding_box()["height"] <= counts.bounding_box()["y"]
+                ledger = row.locator('.erp-inventory-model-phone-ledger-action')
+                assert category.bounding_box()["y"] + category.bounding_box()["height"] <= counts.bounding_box()["y"]
+                assert counts.bounding_box()["y"] + counts.bounding_box()["height"] <= action.bounding_box()["y"]
                 assert action.bounding_box()["height"] >= 44
+                assert ledger.bounding_box()["height"] >= 44
+                assert abs(action.bounding_box()["y"] - ledger.bounding_box()["y"]) <= 1
                 assert abs(action.bounding_box()["x"] - category.bounding_box()["x"]) <= 1
-                value = row.locator('.erp-inventory-model-phone-quantity-value > span').first
-                unit = row.locator('.erp-inventory-model-phone-quantity-unit')
-                assert value.evaluate("e => getComputedStyle(e).fontSize") == "20px"
-                assert unit.evaluate("e => getComputedStyle(e).fontSize") == "13px"
+                value = category.locator('.erp-inventory-model-phone-quantity-value')
+                assert value.evaluate("e => getComputedStyle(e).fontSize") == "16px"
                 assert value.evaluate("e => getComputedStyle(e).fontWeight") == "600"
+                expect(value).to_have_text(str(MODELS[index]["totalCount"]))
+                expect(row.get_by_text("待检 0", exact=True)).to_have_count(0)
+                expect(row.get_by_text("锁定 0", exact=True)).to_have_count(0)
+                expect(row.locator('.erp-inventory-model-phone-end')).to_have_count(0)
             assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
             page.screenshot(path=str(OUT / f"models-{width}.png"))
             rows.first.screenshot(path=str(OUT / f"model-card-{width}.png"))
@@ -59,10 +64,18 @@ with sync_playwright() as playwright:
             assert params.get("view") != ["models"]
             assert params.get("keyword") == [MODELS[0]["productName"]]
             expect(page.get_by_role("dialog")).to_have_count(0)
+        elif width < 1024:
+            # Tablets retain the shared column projection, not the phone row.
+            expect(rows.first).not_to_be_visible()
+            expect(page.get_by_role("group", name="型号库存汇总排序")).to_be_visible()
+            expect(page.get_by_role("button", name="出入明细", exact=True).first).to_be_visible()
+            expect(page.get_by_role("button", name="查看单卡", exact=True).first).to_be_visible()
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            page.screenshot(path=str(OUT / f"models-{width}.png"))
         else:
             expect(rows.first).not_to_be_visible()
             expect(page.get_by_role("table", name="型号库存汇总")).to_be_visible()
-            page.screenshot(path=str(OUT / "models-1440.png"))
+            page.screenshot(path=str(OUT / f"models-{width}.png"))
         assert not writes, writes
         assert not errors, errors
         print(f"PASS {width}px model typography / action position / navigation", flush=True)

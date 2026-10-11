@@ -54,7 +54,7 @@ elif customer_scenario == "empty":
 # Inventory scenarios only prove rendering and parameter wiring, not production
 # search/SQL or balances. All mutations remain blocked by this preview server.
 inventory_scenario = os.environ.get("ERP_INVENTORY_QA_SCENARIO", "baseline")
-if inventory_scenario not in {"baseline", "design", "stress", "many", "empty"}:
+if inventory_scenario not in {"baseline", "design", "stress", "many", "empty", "models"}:
     raise ValueError("Invalid inventory QA scenario")
 sample_inventory = [fixture["STOCK"]]
 if inventory_scenario in {"design", "stress", "many"}:
@@ -74,6 +74,18 @@ if inventory_scenario in {"design", "stress", "many"}:
         sample_inventory = [{**sample_inventory[index % 6], "id": f"KC-PAGE-{index}", "sn": f"QA-PAGE-{index+1:02d}"} for index in range(25)]
 elif inventory_scenario == "empty":
     sample_inventory = []
+
+# Opt-in fixtures for the approved model-row layout; never used by the app/API.
+model_layout_samples = [
+    ("三星 990PRO 2T 盒装 PCIe 4.0 x4，NVMe 2.0", "硬盘", 1, 1, 0, 0, 0, ["配件待检测区"]),
+    ("华硕 RTX5090 夜神OC 32G", "显卡", 126, 120, 4, 2, 0, ["A区货架-01", "待检测区"]),
+    ("超长商品名称完整换行显卡规格与型号 官方盒装 24G", "显卡", 10000, 10000, 0, 0, 0, ["成都仓库 A区超长货架名称 第01层"]),
+    ("已售出型号（包含历史库存）", "显卡", 124, 0, 0, 0, 124, []),
+    ("零库存型号", "CPU", 0, 0, 0, 0, 0, []),
+]
+model_layout_rows = [{"key": f"MODEL-LAYOUT-{index}", "productName": name, "category": category, "brand": "本地测试", "model": name, "version": "", "vram": "", "totalCount": total, "availableCount": available, "pendingCount": pending, "lockedCount": locked, "soldCount": sold, "repairCount": 0, "warehouseLocation": locations[0] if locations else "", "warehouseLocations": locations, "lastEntryTime": "2026-10-11"} for index, (name, category, total, available, pending, locked, sold, locations) in enumerate(model_layout_samples)]
+if inventory_scenario == "models":
+    sample_inventory = [{**fixture["STOCK"], "id": "KC-MODEL-LAYOUT", "productId": "P-MODEL-LAYOUT", "productName": model_layout_rows[0]["productName"], "name": model_layout_rows[0]["productName"], "category": "硬盘", "model": "990PRO", "warehouseLocation": "配件待检测区"}]
 
 def inventory_rows(params):
     keyword = params.get("keyword", [""])[0].casefold()
@@ -136,6 +148,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/__model-quantity-compare":
+            # Normalize the selected 930px mock to the real 390 CSS-px capture.
+            html = '''<!doctype html><meta charset="utf-8"><title>Model quantity design QA</title><style>body{margin:0;background:#eef0f4;font:14px system-ui}main{display:flex;gap:20px;padding:16px}section{width:390px}h1{font-size:14px}img{display:block;width:390px}.crop{position:relative;overflow:hidden;height:170px;background:white}.crop img{position:absolute}.source{top:-219px}.implementation{top:-252px}</style><main><section><h1>Selected reference · normalized to 390px</h1><div class="crop"><img class="source" src="/__qa/model-quantity-selected.png"></div><h1>Full reference</h1><img src="/__qa/model-quantity-selected.png"></section><section><h1>Implementation · 390 × 844 · local fixtures</h1><div class="crop"><img class="implementation" src="/__qa/model-quantity-final-390.jpg"></div><h1>Full implementation</h1><img src="/__qa/model-quantity-final-390.jpg"></section></main>'''
+            self.respond(html.encode(), kind="text/html; charset=utf-8")
+            return
         if path == "/__inventory-compare":
             html = '''<!doctype html><meta charset="utf-8"><title>Inventory mobile QA comparison</title><style>body{margin:0;background:#e8edf3;font:14px system-ui}main{display:flex;gap:24px;padding:20px}section{width:390px}h1{font-size:14px}img{display:block;width:390px;height:auto}</style><main><section><h1>Selected Option 2 · shared visual language, not inventory mock</h1><img src="/__customer-reference.png"></section><section><h1>Inventory implementation · local synthetic data · 390×844</h1><img src="/__qa/inv-final-390.jpg"></section></main>'''
             self.respond(html.encode(), kind="text/html; charset=utf-8")
@@ -247,7 +264,11 @@ class Handler(BaseHTTPRequestHandler):
                     page, page_size = int(params.get("page", ["1"])[0]), int(params.get("pageSize", ["20"])[0])
                     data = {"data": rows[(page-1)*page_size:page*page_size], "meta": {"total": len(rows), "page": page, "pageSize": page_size}}
             elif path == "/api/inventory/summary":
-                if inventory_scenario == "baseline":
+                if inventory_scenario == "models":
+                    params = parse_qs(urlparse(self.path).query)
+                    keyword, category = params.get("keyword", [""])[0].casefold(), params.get("category", [""])[0]
+                    data = {"data": [row for row in model_layout_rows if (not keyword or keyword in row["productName"].casefold()) and (not category or category == row["category"]) and (params.get("includeSold", ["false"])[0] == "true" or not row["soldCount"])]}
+                elif inventory_scenario == "baseline":
                     data = {"data": [{**fixture["PRODUCT"], "key": fixture["PRODUCT"]["id"], "productName": fixture["PRODUCT"]["name"], "warehouseLocation": "A区货架01", "warehouseLocations": ["A区货架01"], "totalCount": 3, "availableCount": 1, "pendingCount": 2, "lockedCount": 0, "soldCount": 0, "repairCount": 0, "totalCost": 300, "totalEstSell": 450, "avgCost": 100, "avgEstSell": 150, "estimatedProfit": 150}]}
                 else:
                     rows = inventory_rows(parse_qs(urlparse(self.path).query))
