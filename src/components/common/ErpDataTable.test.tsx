@@ -25,6 +25,17 @@ test("client-side sorting reorders data rows", () => {
   assert.ok(markup.indexOf(">30<") < markup.indexOf(">10<"));
 });
 
+test("compact phone paging can omit a repeated total without changing the default pager", () => {
+  const shared = {columns, data: [{id: "r", amount: 0}], page: 1, pageSize: 20, total: 49, phone: true, compactViewport: true, mobilePagination: "compact" as const};
+  const standard = renderToStaticMarkup(<ErpDataTable {...shared} />);
+  const compact = renderToStaticMarkup(<ErpDataTable {...shared} mobilePaginationShowTotal={false} />);
+  assert.match(standard, /共 49 条/);
+  assert.doesNotMatch(compact, /共 49 条/);
+  assert.match(compact, /上一页/);
+  assert.match(compact, /下一页/);
+  assert.match(compact, /第.*1.*3.*页/);
+});
+
 test("expanded cards retain their disclosure even after every hidden field is shown", () => {
   assert.deepEqual(resolveMobileCardDetails(12, 4, false), {hiddenCount: 8, visibleCount: 4});
   assert.deepEqual(resolveMobileCardDetails(12, 4, true), {hiddenCount: 8, visibleCount: 12});

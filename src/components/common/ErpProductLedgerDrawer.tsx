@@ -13,6 +13,8 @@ import {ErpDetailDrawer} from "./ErpDetailDrawer";
 import {ErpStatusBadge} from "./ErpStatusBadge";
 import {formatStoreDateTime} from "@/src/utils/storeTime";
 import {productDisplayName, productIdentityParts} from "@/src/lib/productName";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
+import {ErpProductLedgerMobile} from "./ErpProductLedgerMobile";
 
 export interface ProductLedgerSubject {
   key: string;
@@ -115,6 +117,7 @@ function createColumns(onOpenDocument: ((row: ProductLedgerRow) => void) | undef
 }
 
 export function ErpProductLedgerDrawer({open, subject, subjects = [], filters, page, loading, fetching, error, onRetry, onFiltersChange, onResetFilters, onPageChange, onPageSizeChange, onOpenChange, onSubjectChange, onOpenDocument}: ProductLedgerDrawerProps) {
+  const phone = useErpPhone();
   const columns = useMemo(() => createColumns(onOpenDocument), [onOpenDocument]);
   const range: DateRangeValue = {startDate: filters.startDate, endDate: filters.endDate};
   const identity = subject ? subjectIdentity(subject) : "";
@@ -122,6 +125,8 @@ export function ErpProductLedgerDrawer({open, subject, subjects = [], filters, p
   const subjectOptions = useMemo(() => mergeProductLedgerSubjects(subject, subjects), [subject, subjects]);
   const rows = page?.rows || [];
   const hasActiveFilters = Boolean(filters.documentNo || filters.createdBy || filters.documentType || filters.startDate || filters.endDate);
+
+  if (phone) return <ErpProductLedgerMobile key={subject?.key || "none"} open={open} subject={subject} subjects={subjectOptions} columns={columns} filters={filters} page={page} loading={loading} fetching={fetching} error={error} onRetry={onRetry} onFiltersChange={onFiltersChange} onResetFilters={onResetFilters} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onOpenChange={onOpenChange} onSubjectChange={onSubjectChange} onOpenDocument={onOpenDocument} />;
 
   return <ErpDetailDrawer open={open} onOpenChange={onOpenChange} modal={false} title={subjectLabel || "型号出入库明细"} description={identity || "按型号汇总查看库存单据"} resizable allowFullWidth drawerKey="product-ledger" defaultWidth={820} minWidth={640} maxWidth={1100}>
     {!subject ? <div className="p-2 text-sm text-[var(--erp-color-text-secondary)]">未选择商品型号</div> : <div className="space-y-4">

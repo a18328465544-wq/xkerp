@@ -84,6 +84,26 @@ model_layout_samples = [
     ("零库存型号", "CPU", 0, 0, 0, 0, 0, []),
 ]
 model_layout_rows = [{"key": f"MODEL-LAYOUT-{index}", "productName": name, "category": category, "brand": "本地测试", "model": name, "version": "", "vram": "", "totalCount": total, "availableCount": available, "pendingCount": pending, "lockedCount": locked, "soldCount": sold, "repairCount": 0, "warehouseLocation": locations[0] if locations else "", "warehouseLocations": locations, "lastEntryTime": "2026-10-11"} for index, (name, category, total, available, pending, locked, sold, locations) in enumerate(model_layout_samples)]
+ledger_scenario = os.environ.get("ERP_LEDGER_QA_SCENARIO", "baseline")
+if ledger_scenario not in {"baseline", "design", "stress", "empty", "error", "restricted"}:
+    raise ValueError("Invalid ledger QA scenario")
+if ledger_scenario != "baseline":
+    model_layout_rows[0].update({"productName": "华硕 RTX5090 夜神OC 32G", "category": "显卡", "brand": "华硕", "model": "RTX5090", "version": "夜神OC", "vram": "32G", "totalCount": 10})
+ledger_samples = [
+    ("采购入库", "JH-20261007-003", "增加", 1, 42500, "", "示例供应商 A", "店员 A", "2026-10-07 14:26"),
+    ("销售出库", "XS-20261006-012", "减少", -1, 46800, "示例客户 A", "", "店员 B", "2026-10-06 17:10"),
+    ("销售退货", "XT-20261005-002", "增加", 1, 45800, "示例客户 B", "", "店员 A", "2026-10-05 10:42"),
+    ("采购入库", "JH-20261004-008", "增加", 2, 85000, "", "示例供应商 B", "店员 B", "2026-10-04 11:36"),
+    ("采购退货", "CT-20261003-001", "减少", -1, 42500, "", "示例供应商 A", "店员 A", "2026-10-03 09:18"),
+]
+ledger_rows = [{"id": f"LEDGER-QA-{i}", "documentType": kind, "documentNo": no, "operationType": operation, "quantity": quantity, "amount": amount, "unitPrice": amount / abs(quantity), "customerName": customer, "supplierName": supplier, "createdBy": creator, "operatedAt": time, "storeName": "本地验收", "productRemarks": "仅本地合成数据", "documentRemarks": ""} for i, (kind, no, operation, quantity, amount, customer, supplier, creator, time) in enumerate(ledger_samples)]
+if ledger_scenario == "stress":
+    ledger_rows[0].update({"documentNo": "JH-20261007-000000000000000000003", "amount": 123456789.12, "supplierName": "用于窄屏验收的超长供应商完整名称", "createdBy": "超长制单人姓名"})
+    ledger_rows[1].update({"quantity": 0, "amount": 0, "operationType": "锁定"})
+if ledger_scenario == "restricted":
+    for row in ledger_rows:
+        row.pop("amount", None)
+        row.pop("unitPrice", None)
 if inventory_scenario == "models":
     sample_inventory = [{**fixture["STOCK"], "id": "KC-MODEL-LAYOUT", "productId": "P-MODEL-LAYOUT", "productName": model_layout_rows[0]["productName"], "name": model_layout_rows[0]["productName"], "category": "硬盘", "model": "990PRO", "warehouseLocation": "配件待检测区"}]
 
@@ -150,6 +170,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/__ledger-compare":
+            html = '''<!doctype html><meta charset="utf-8"><title>Ledger design QA</title><style>body{margin:0;background:#eef0f4;font:14px system-ui}main{display:flex;gap:20px;padding:16px}section{width:390px}h1{font-size:14px}img{display:block;width:390px}.crop{position:relative;overflow:hidden;height:230px}.crop img{position:absolute;top:-170px}</style><main><section><h1>Selected design · 390 CSS px</h1><img src="/__qa/ledger-selected.png"><h1>Record detail</h1><div class="crop"><img src="/__qa/ledger-selected.png"></div></section><section><h1>Implementation · local synthetic records</h1><img src="/__qa/ledger-final-390.jpg"><h1>Record detail</h1><div class="crop"><img src="/__qa/ledger-final-390.jpg"></div></section></main>'''
+            self.respond(html.encode(), kind="text/html; charset=utf-8")
+            return
         if path == "/__model-quantity-compare":
             # Normalize the selected 930px mock to the real 390 CSS-px capture.
             html = '''<!doctype html><meta charset="utf-8"><title>Model quantity design QA</title><style>body{margin:0;background:#eef0f4;font:14px system-ui}main{display:flex;gap:20px;padding:16px}section{width:390px}h1{font-size:14px}img{display:block;width:390px}.crop{position:relative;overflow:hidden;height:170px;background:white}.crop img{position:absolute}.source{top:-219px}.implementation{top:-252px}</style><main><section><h1>Selected reference · normalized to 390px</h1><div class="crop"><img class="source" src="/__qa/model-quantity-selected.png"></div><h1>Full reference</h1><img src="/__qa/model-quantity-selected.png"></section><section><h1>Implementation · 390 × 844 · local fixtures</h1><div class="crop"><img class="implementation" src="/__qa/model-quantity-final-390.jpg"></div><h1>Full implementation</h1><img src="/__qa/model-quantity-final-390.jpg"></section></main>'''
@@ -257,6 +281,22 @@ class Handler(BaseHTTPRequestHandler):
                 data = {"data": state, "meta": meta}
             elif path == "/api/gpu_erp/finance/settlement-ledger":
                 data = {"data": state["settlementLedger"], "meta": meta}
+            elif path == "/api/inventory/product-ledger" and ledger_scenario != "baseline":
+                if ledger_scenario == "error":
+                    self.respond({"error": "本地验收读取失败"}, 503)
+                    return
+                params = parse_qs(urlparse(self.path).query)
+                rows = [] if ledger_scenario == "empty" else [row for row in ledger_rows if all(not params.get(key, [""])[0] or params[key][0] in row[key] for key in ("documentNo", "createdBy", "documentType")) and (not params.get("startDate", [""])[0] or row["operatedAt"][:10] >= params["startDate"][0]) and (not params.get("endDate", [""])[0] or row["operatedAt"][:10] <= params["endDate"][0])]
+                page, size = int(params.get("page", ["1"])[0]), int(params.get("pageSize", ["20"])[0])
+                total = 49 if len(rows) == len(ledger_rows) and rows else len(rows)
+                # Distinct read-only identities let UI acceptance detect stale
+                # page/model data without connecting to any business database.
+                if params.get("productSkuId", [""])[0] != "MODEL-LAYOUT-0":
+                    rows = [{**row, "id": row["id"] + "-ALT", "documentNo": "ALT-" + row["documentNo"]} for row in rows[:1]]
+                    total = len(rows)
+                elif page > 1:
+                    rows = [{**row, "id": row["id"] + f"-PAGE-{page}", "documentNo": row["documentNo"] + f"-P{page}"} for row in rows]
+                data = {"data": {"rows": rows, "total": total, "page": page, "pageSize": size, "totalPages": max(1, (total + size - 1) // size)}}
             elif path == "/api/inventory/items":
                 if inventory_scenario == "baseline":
                     data = {"data": [fixture["STOCK"]], "meta": meta}

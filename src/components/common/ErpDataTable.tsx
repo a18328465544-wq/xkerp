@@ -100,6 +100,8 @@ export interface ErpDataTableProps<TData> {
   mobileToolbar?: (controls: {openSorting: () => void; sortLabel: string; descending: boolean | undefined}) => ReactNode;
   /** Small phone pager; page-size selection belongs in the owning filter sheet. */
   mobilePagination?: "full" | "compact";
+  /** Avoid repeating a total already shown in a domain-owned phone toolbar. */
+  mobilePaginationShowTotal?: boolean;
   /** Opt-in windowing for large client-side pages. Server pagination remains the primary guard. */
   virtualized?: boolean;
   virtualRowHeight?: number;
@@ -153,6 +155,7 @@ export function ErpDataTable<TData>({
   mobileSorting = true,
   mobileToolbar,
   mobilePagination = "full",
+  mobilePaginationShowTotal = true,
   virtualized = false,
   virtualRowHeight = 56,
   phone: phoneProp,
@@ -397,7 +400,7 @@ export function ErpDataTable<TData>({
           <Button type="button" className="flex-1 justify-center" size="sm" variant="ghost" disabled={page <= 1} onClick={() => onPageChange?.(page - 1)}>
             <ChevronLeft className="h-4 w-4" />上一页
           </Button>
-          <span className="shrink-0 px-2 text-center text-xs tabular-nums text-[var(--erp-color-text-secondary)]">第 {page} / {totalPages} 页{total !== undefined && ` · 共 ${total} 条`}</span>
+          <span className="shrink-0 px-2 text-center text-xs tabular-nums text-[var(--erp-color-text-secondary)]">第 {page} / {totalPages} 页{mobilePaginationShowTotal && total !== undefined && ` · 共 ${total} 条`}</span>
           <Button type="button" className="flex-1 justify-center" size="sm" variant={page < totalPages ? "secondary" : "ghost"} disabled={page >= totalPages} onClick={() => onPageChange?.(page + 1)}>
             下一页<ChevronRight className="h-4 w-4" />
           </Button>

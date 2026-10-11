@@ -1379,6 +1379,9 @@ input[inputmode="numeric"] {
   .erp-dialog-viewport:has([data-mobile-presentation="dialog"]) { align-items: center; padding: var(--erp-space-4); }
   .erp-dialog-viewport > .erp-dialog-popup[data-mobile-presentation="dialog"] { width: 100%; max-width: 28rem; border-radius: var(--erp-radius-xl); margin-bottom: 0; }
   .erp-dialog-viewport:not(.erp-drawer-viewport) { bottom: var(--erp-phone-keyboard-inset); }
+  /* Drawers with a pinned footer need the same visible-viewport boundary as
+     sheets; otherwise a footer search/action remains behind the iOS keyboard. */
+  .erp-drawer-viewport:has(> [data-erp-component="detail-drawer"] > [data-erp-region="drawer-footer"]) { top: var(--erp-phone-viewport-offset-top, 0px); bottom: var(--erp-phone-keyboard-inset); min-height: 0; }
   /* iOS can pan the visual viewport when the keyboard opens. Keep modal
      surfaces anchored to that visible origin as well as its resized bottom,
      so headers and pinned search fields remain inside the usable screen. */
@@ -1502,6 +1505,11 @@ input[inputmode="numeric"] {
   [data-phone-header="true"] > button { order: -1; flex-shrink: 0; }
   [data-phone-header="true"] > div { flex: 1; }
   [data-phone-header="true"] [role="heading"] { white-space: normal; }
+  [data-phone-header="true"][data-has-header-actions="true"] { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--erp-space-2); }
+  [data-phone-header="true"][data-has-header-actions="true"] > div:first-child { grid-column: 2; grid-row: 1; text-align: center; }
+  [data-phone-header="true"][data-has-header-actions="true"] > button { grid-column: 1; grid-row: 1; justify-self: start; }
+  [data-phone-header="true"][data-has-header-actions="true"] > [data-erp-region="drawer-header-actions"] { grid-column: 3; grid-row: 1; justify-self: end; }
+  [data-phone-header="true"] [data-erp-region="drawer-header-actions"] button { padding-inline: var(--erp-space-2); font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); }
   .erp-phone-category-strip { display: flex; overflow-x: auto; gap: var(--erp-space-1); overscroll-behavior-x: contain; scrollbar-width: none; }
   .erp-phone-category-strip > button { flex-shrink: 0; border-radius: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); }
   .erp-phone-category-strip > button[aria-pressed="true"] { color: var(--erp-color-primary); box-shadow: inset 0 -2px var(--erp-color-primary); }
@@ -2158,6 +2166,36 @@ input[inputmode="numeric"] {
   .erp-entity-thumbnail[data-avatar-tone="green"] { background: var(--erp-color-success-soft); color: var(--erp-color-success); }
   .erp-entity-thumbnail[data-avatar-tone="amber"] { background: var(--erp-color-warning-soft); color: var(--erp-color-warning); }
   .erp-entity-thumbnail[data-avatar-tone="neutral"] { background: var(--erp-color-surface-muted); color: var(--erp-color-text-secondary); }
+  /* Model ledger: one identity, direct document facts, shared drawer search/footer. */
+  [data-erp-region="drawer-body"].erp-ledger-phone-body { padding: 0; }
+  .erp-product-ledger-phone { min-width: 0; }
+  .erp-ledger-identity { padding: var(--erp-space-4) var(--erp-mobile-content-inset) var(--erp-space-2); }
+  .erp-ledger-identity h3 { font-size: var(--erp-text-lg); font-weight: var(--erp-font-medium); line-height: var(--erp-line-base); overflow-wrap: anywhere; }
+  .erp-ledger-identity p { margin-top: var(--erp-space-1); font-size: var(--erp-text-sm); color: var(--erp-color-text-secondary); font-variant-numeric: tabular-nums; }
+  .erp-ledger-toolbar { display: flex; min-height: var(--erp-mobile-touch-size); align-items: center; justify-content: space-between; padding-inline: var(--erp-mobile-content-inset); border-bottom: 1px solid var(--erp-color-border-soft); gap: var(--erp-space-1); font-size: var(--erp-text-sm); color: var(--erp-color-text-secondary); }
+  .erp-ledger-toolbar > div { display: flex; min-width: 0; }
+  .erp-ledger-toolbar button { padding-inline: var(--erp-space-2); font-size: var(--erp-text-sm); font-weight: var(--erp-font-regular); gap: var(--erp-space-1); }
+  [data-erp-region="drawer-header-actions"] .erp-ledger-subject-action, .erp-ledger-toolbar .erp-ledger-time-sort { color: var(--erp-color-primary); }
+  .erp-product-ledger-phone .erp-phone-record { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content); gap: calc(var(--erp-space-1) / 2) var(--erp-space-2); align-items: center; padding: var(--erp-space-3) var(--erp-mobile-content-inset); border-radius: 0; background: var(--erp-color-surface); }
+  .erp-product-ledger-phone .erp-phone-record:active { background: var(--erp-color-surface-muted); }
+  .erp-ledger-row-state [data-erp-region="badge"] { padding-block: calc(var(--erp-space-1) / 2); }
+  .erp-product-ledger-phone .erp-phone-record-image { display: none; }
+  .erp-product-ledger-phone :is(.erp-phone-record-body, .erp-phone-record-heading) { display: contents; }
+  .erp-ledger-row-state { grid-column: 1; grid-row: 1; display: flex; flex-wrap: wrap; gap: var(--erp-space-1) var(--erp-space-2); align-items: center; font-size: var(--erp-text-xs); color: var(--erp-color-text-secondary); }
+  .erp-ledger-row-state [data-direction="增加"] { color: var(--erp-color-success); }
+  .erp-product-ledger-phone .erp-phone-record-title { grid-column: 1 / -1; grid-row: 2; white-space: normal; overflow: visible; overflow-wrap: anywhere; font-size: var(--erp-text-base); font-weight: var(--erp-font-regular); font-variant-numeric: tabular-nums; line-height: var(--erp-line-base); }
+  .erp-product-ledger-phone .erp-phone-record-subtitle { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: wrap; gap: var(--erp-space-1) var(--erp-space-3); white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: var(--erp-line-xs); }
+  .erp-ledger-row-creator { color: var(--erp-color-text-muted); }
+  .erp-product-ledger-phone .erp-phone-record-meta { grid-column: 1 / -1; grid-row: 4; white-space: normal; overflow: visible; line-height: var(--erp-line-xs); }
+  .erp-product-ledger-phone .erp-phone-record-end { grid-column: 2; grid-row: 1; display: flex; flex-direction: row; gap: var(--erp-space-1); min-width: 0; max-width: none; font-size: var(--erp-text-base); }
+  .erp-product-ledger-phone .erp-phone-record-end > .erp-data-number { white-space: normal; overflow-wrap: anywhere; font-size: var(--erp-text-base); }
+  .erp-product-ledger-phone .erp-phone-record-end > svg { flex-shrink: 0; }
+  .erp-product-ledger-phone .erp-phone-pagination > button { border: 0; box-shadow: none; background: var(--erp-color-surface-muted); color: var(--erp-color-primary); }
+  .erp-product-ledger-phone .erp-phone-pagination > button:disabled { color: var(--erp-color-text-secondary); }
+  .erp-ledger-refresh-error { display: flex; align-items: center; padding-inline: var(--erp-mobile-content-inset); gap: var(--erp-space-2); color: var(--erp-color-danger); font-size: var(--erp-text-xs); }
+  .erp-ledger-refresh-error > span { flex: 1; overflow-wrap: anywhere; }
+  .erp-ledger-sort-options > button { display: flex; width: 100%; justify-content: space-between; text-align: left; padding-block: var(--erp-space-3); border-radius: 0; white-space: normal; border-bottom: 1px solid var(--erp-color-border-soft); }
+  .erp-ledger-sort-options small { display: block; margin-top: var(--erp-space-1); font-size: var(--erp-text-xs); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); }
   .erp-phone-record-image { border: 0; background: transparent; }
   .erp-phone-record-image:has([data-kind="customer"]) { border-radius: var(--erp-radius-pill); }
   .erp-phone-record-title { color: var(--erp-color-text); font-weight: var(--erp-font-medium); }
