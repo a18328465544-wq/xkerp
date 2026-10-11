@@ -41,6 +41,8 @@ export interface SelectProps {
   "aria-invalid"?: boolean;
   "aria-required"?: boolean;
   className?: string;
+  /** Optional trigger-only content; option labels and selected identity stay unchanged. */
+  renderValue?: (option: SelectOption | null) => ReactNode;
   /** Compact controls are intended for filter/tool-bar contexts (36px). */
   density?: "default" | "compact";
   /** Alias used by existing design-system guidance: sm maps to compact. */
@@ -82,7 +84,7 @@ export function shouldShowQuickCreateAction({hasSelection, searchLoading}: {
  * Keep option data at the feature boundary and keep popup styling here so
  * business pages never fall back to browser-native selects.
  */
-export function Select({value, options, selectedOption, onValueChange, placeholder = "请选择", disabled, required, name, id, "aria-label": ariaLabel, "aria-describedby": ariaDescribedBy, "aria-invalid": ariaInvalid, "aria-required": ariaRequired, className, density = "default", size = "md", searchable = false, searchPlaceholder, emptyText = "没有找到匹配项", searchLoading = false, onSearchValueChange, shouldFilter = true, searchFilter, searchResultLimit = 60, onClear, quickCreateAction, phoneDialogTitle, phoneOpenRequest, hidePhoneTrigger, onPhoneOpenChange}: SelectProps) {
+export function Select({value, options, selectedOption, onValueChange, placeholder = "请选择", disabled, required, name, id, "aria-label": ariaLabel, "aria-describedby": ariaDescribedBy, "aria-invalid": ariaInvalid, "aria-required": ariaRequired, className, renderValue, density = "default", size = "md", searchable = false, searchPlaceholder, emptyText = "没有找到匹配项", searchLoading = false, onSearchValueChange, shouldFilter = true, searchFilter, searchResultLimit = 60, onClear, quickCreateAction, phoneDialogTitle, phoneOpenRequest, hidePhoneTrigger, onPhoneOpenChange}: SelectProps) {
   const phone = useErpPhone();
   const hasCustomWidth = hasBaseWidthUtilityClass(className);
   const compact = density === "compact" || size === "sm";
@@ -202,7 +204,10 @@ export function Select({value, options, selectedOption, onValueChange, placehold
       aria-invalid={ariaInvalid}
       aria-required={required || ariaRequired}
     >
-      <BaseSelect.Value className="min-w-0 truncate" placeholder={placeholder}>{(selectedValue) => selected && selected.value === selectedValue ? selected.label : options.find((option) => option.value === selectedValue)?.label ?? placeholder}</BaseSelect.Value>
+      <BaseSelect.Value className="min-w-0 truncate" placeholder={placeholder}>{(selectedValue) => {
+        const option = selected && selected.value === selectedValue ? selected : options.find((item) => item.value === selectedValue) ?? null;
+        return renderValue ? renderValue(option) : option?.label ?? placeholder;
+      }}</BaseSelect.Value>
       <BaseSelect.Icon className="shrink-0 text-[var(--erp-color-text-muted)]">
         <ChevronDown className="h-4 w-4" aria-hidden="true" />
       </BaseSelect.Icon>

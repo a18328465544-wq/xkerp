@@ -14,6 +14,20 @@ test("an explicit empty-string filter option keeps its All label", () => {
   assert.doesNotMatch(markup, /请选择/);
 });
 
+test("Select supports a trigger-only field label without changing option identity", () => {
+  const options = [{value: "", label: "全部分类"}, {value: "显卡", label: "显卡"}];
+  const markup = renderToStaticMarkup(<Select value="" options={options} onValueChange={() => undefined} renderValue={(option) => <span><span>商品分类</span><span>{option?.label}</span></span>} />);
+  assert.match(markup, /商品分类<\/span><span>全部分类/);
+  assert.doesNotMatch(markup, /请选择/);
+  assert.deepEqual(options.map((option) => option.value), ["", "显卡"]);
+});
+
+test("custom Select value rendering ignores a stale selected option", () => {
+  const markup = renderToStaticMarkup(<Select value="显卡" selectedOption={{value: "CPU", label: "旧值"}} options={[{value: "显卡", label: "显卡"}]} onValueChange={() => undefined} renderValue={(option) => <span>分类：{option?.label}</span>} />);
+  assert.match(markup, /分类：显卡/);
+  assert.doesNotMatch(markup, /旧值/);
+});
+
 test("an empty entity without an empty-string option retains its placeholder", () => {
   const markup = renderToStaticMarkup(<Select value="" options={[{value: "account", label: "现金"}]} placeholder="选择付款账户" onValueChange={() => undefined} />);
   assert.match(markup, /选择付款账户/);

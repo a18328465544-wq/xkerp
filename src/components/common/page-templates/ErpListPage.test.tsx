@@ -39,6 +39,20 @@ test("desktop keeps header, metrics, filter bar, then the table card", () => {
   assert.doesNotMatch(markup, /erp-list-phone-title|data-phone-layout/);
 });
 
+test("a specialized filter sheet is phone-only and does not replace desktop filters", () => {
+  let calls = 0;
+  const phoneFilterSheet: ErpListPageProps<Row>["phoneFilterSheet"] = ({open}) => {calls += 1; return <div>专用筛选面板：{String(open)}</div>;};
+  const desktop = renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneFilterSheet={phoneFilterSheet} />);
+  assert.equal(calls, 0);
+  assert.match(desktop, /客户等级/);
+  assert.doesNotMatch(desktop, /专用筛选面板/);
+  const phone = renderToStaticMarkup(<ErpListPage {...props} phone phoneFilterSheet={phoneFilterSheet} />);
+  assert.equal(calls, 1);
+  assert.match(phone, /专用筛选面板：false/);
+  assert.match(phone, /aria-label="客户筛选"/);
+  assert.doesNotMatch(phone, /客户筛选与操作/);
+});
+
 test("desktop can preserve a legacy plain table and its result summary", () => {
   const markup = renderToStaticMarkup(<ErpListPage {...props} phone={false} desktopTableSection={false} desktopResultsSummary={<span>共 37 条</span>} />);
   assert.match(markup, /共 37 条/);

@@ -114,6 +114,8 @@ export interface ErpListPageProps<TData> {
   pagination?: ErpListPagePagination;
   /** Extra read-only content at the end of the phone filter sheet. */
   sheetExtra?: ReactNode;
+  /** Domain-specific phone filtering. The original desktop fields are untouched. */
+  phoneFilterSheet?: (controls: {open: boolean; onOpenChange: (open: boolean) => void}) => ReactNode;
   /** Drawers and dialogs owned by the page. */
   overlays?: ReactNode;
   /** True while a page overlay is open; hides the phone dock (M24). */
@@ -170,6 +172,7 @@ export function ErpListPage<TData>({
   table,
   pagination,
   sheetExtra,
+  phoneFilterSheet,
   overlays,
   overlayOpen = false,
   className,
@@ -212,8 +215,8 @@ export function ErpListPage<TData>({
   const sheetFilterCount = countActiveErpFilterFields(filters) + additionalActiveFilterCount;
   const phoneCount = loading ? "正在加载…" : loadError ? "加载失败" : countLabel?.(total);
   const phoneTitleNode = <span className="erp-list-phone-title">{phoneTitle}{phoneCount ? <small>{phoneCount}</small> : null}</span>;
-  const hasSheet = filters.length > 0 || actions.length > 0 || pageActions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange);
-  const filterButton = hasSheet ? <Button type="button" variant="secondary" size="sm" onClick={() => setSheetOpen(true)} aria-label={`${phoneTitle}筛选与操作`}><SlidersHorizontal className="h-4 w-4" />筛选{sheetFilterCount > 0 && <span className="tabular-nums">{sheetFilterCount}</span>}</Button> : undefined;
+  const hasSheet = Boolean(phoneFilterSheet) || filters.length > 0 || actions.length > 0 || pageActions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange);
+  const filterButton = hasSheet ? <Button type="button" variant="secondary" size="sm" onClick={() => setSheetOpen(true)} aria-label={phoneFilterSheet ? `${phoneTitle}筛选` : `${phoneTitle}筛选与操作`}><SlidersHorizontal className="h-4 w-4" />筛选{sheetFilterCount > 0 && <span className="tabular-nums">{sheetFilterCount}</span>}</Button> : undefined;
   const mobileToolbar: ErpDataTableProps<TData>["mobileToolbar"] = ({openSorting, sortLabel, descending}) => <div className="erp-list-toolbar">
     {quickFilters.length > 0 && <div className="erp-list-quick-filters" role="group" aria-label={`${phoneTitle}快捷筛选`}>{quickFilters.slice(0, 4).map((item) => <Button key={item.label} type="button" variant={item.active ? "primary" : "ghost"} aria-pressed={item.active} onClick={item.onSelect}>{item.label}</Button>)}</div>}
     <Button type="button" variant="ghost" className="erp-list-sort" aria-label={`${phoneTitle}排序`} onClick={openSorting}><span>{sortLabel || defaultSortLabel}</span>{descending === undefined ? <ChevronDown className="h-4 w-4" /> : descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}</Button>
@@ -226,7 +229,8 @@ export function ErpListPage<TData>({
       {tableNotice}
       {phoneTableContent ?? (table ? <ErpDataTable {...table} surface="plain" mobilePagination="compact" mobileToolbar={mobileToolbar} density={tableDensity} phone={phoneProp} compactViewport={phoneProp} /> : null)}
       {searchInput && <ErpMobileActionDock hidden={overlayOpen || sheetOpen} ariaLabel={`${phoneTitle}搜索`} primaryAction={(phonePrimaryAction || primaryAction) ? <Button type="button" variant="primary" disabled={(phonePrimaryAction || primaryAction)?.disabled} onClick={(phonePrimaryAction || primaryAction)?.onClick}>{(phonePrimaryAction || primaryAction)?.icon}{(phonePrimaryAction || primaryAction)?.label}</Button> : undefined}>{searchInput}</ErpMobileActionDock>}
-      {hasSheet && <ErpDialogShell open={sheetOpen} onOpenChange={setSheetOpen} title={`${phoneTitle}筛选与操作`} mobilePresentation="sheet" footer={<>{resetButton}<Button type="button" variant="primary" onClick={() => setSheetOpen(false)}>查看结果</Button></>}>
+      {phoneFilterSheet?.({open: sheetOpen, onOpenChange: setSheetOpen})}
+      {hasSheet && !phoneFilterSheet && <ErpDialogShell open={sheetOpen} onOpenChange={setSheetOpen} title={`${phoneTitle}筛选与操作`} mobilePresentation="sheet" footer={<>{resetButton}<Button type="button" variant="primary" onClick={() => setSheetOpen(false)}>查看结果</Button></>}>
         <div className="space-y-4">
           <ErpFilterFields fields={filters} layout="sheet" />
           {onPageSizeChange && <Select aria-label="每页条数" value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))} options={createErpPageSizeOptions(phonePageSizeOptions)} />}

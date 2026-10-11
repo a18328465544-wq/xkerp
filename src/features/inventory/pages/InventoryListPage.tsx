@@ -1,10 +1,11 @@
-import {InventoryModelMobileRecord} from "@/src/features/inventory/components/InventoryModelMobileRecord";
 import {InventoryMobileRecord} from "@/src/features/inventory/components/InventoryMobileRecord";
+import {InventoryModelMobileRecord} from "@/src/features/inventory/components/InventoryModelMobileRecord";
+import {InventoryFilterSheet} from "@/src/features/inventory/components/InventoryFilterSheet";
 import {keepPreviousData, useQuery, type UseQueryResult} from "@tanstack/react-query";
 import {ArrowDown, ArrowUp, Boxes, ChevronDown, ImageOff, LockKeyhole, Plus, ScanLine, ShieldAlert, Warehouse} from "lucide-react";
 import {countActiveErpFilterFields, ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpEmptyState, ErpEntityThumbnail, ErpListPage, ErpMetricCard, ErpProductLedgerDrawer, ErpSegmentedControl, ErpStatusBadge, ErpTableResultsBar, MetricsRegion, type ErpFilterField, type ErpListTableProps, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
-import {Button, Card} from "@/src/components/ui";
+import {Button, Card, Select} from "@/src/components/ui";
 import {ErpBarcodeScannerDialog, ErpDialogShell, ErpLoadingState, ErpPageError} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
@@ -325,6 +326,9 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
       <div className="space-y-2 py-2">
         {warehouseTasks.map((item) => <Link key={item.id} to={item.path} onClick={() => setActionsOpen(false)} className="flex h-12 items-center gap-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-4 text-sm font-medium text-[var(--erp-color-text)] transition-colors hover:bg-[var(--erp-color-surface-muted)]"><item.icon className="h-5 w-5 text-[var(--erp-color-primary)]" /><span>{item.id === "inspections" ? "质检入库" : "扫码出库"}</span></Link>)}
         <Button type="button" variant="ghost" className="!h-12 w-full justify-start gap-3 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] px-4 text-sm font-medium" onClick={() => {setActionsOpen(false); setStatsOpen(true);}}><Boxes className="h-5 w-5 text-[var(--erp-color-text-secondary)]" /><span>库存统计</span></Button>
+        {view === "cards" && <Button type="button" variant="secondary" className="w-full" aria-pressed={selectionMode} onClick={() => {setSelectionMode(!selectionMode); setRowSelection({}); setActionsOpen(false);}}>{selectionMode ? "结束选择" : "选择库存"}</Button>}
+        <Select aria-label="每页条数" value={String(filters.pageSize)} options={[20, 50, 100].map((size) => ({value: String(size), label: `${size} 条/页`}))} onValueChange={(value) => pagination.onPageSizeChange?.(Number(value))} />
+        <Button variant="secondary" className="w-full" disabled={listQuery.isFetching || modelSummaryQuery.isFetching} onClick={onRefresh}>刷新库存</Button>
       </div>
     </ErpDialogShell>
     <ErpDialogShell open={phone && statsOpen} onOpenChange={setStatsOpen} title="库存视图与统计" mobilePresentation="sheet"><InventoryViewSwitcher view={view} onChange={(next) => {onChangeView(next); setStatsOpen(false);}} /><div className="mt-4"><MetricsRegion>{inventoryMetrics}</MetricsRegion></div></ErpDialogShell>
@@ -343,12 +347,13 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     loadError={currentError}
     quickStatus={phone ? undefined : quickStatus}
     desktopHeaderActions={<InventoryViewSwitcher view={view} onChange={onChangeView} />}
-    phoneHeaderActions={warehouseTasks.length ? <Button type="button" variant="secondary" size="icon" aria-label="库存作业与快捷操作" onClick={() => setActionsOpen(true)}><Plus className="h-4 w-4" /></Button> : undefined}
+    phoneHeaderActions={<Button type="button" variant="secondary" size="icon" aria-label="库存作业与快捷操作" onClick={() => setActionsOpen(true)}><Plus className="h-4 w-4" /></Button>}
     phonePrimaryAction={{label: "扫码", icon: <ScanLine className="h-4 w-4" />, onClick: () => setScanOpen(true)}}
     tabs={<><div className="erp-inventory-phone-views md:hidden"><InventoryViewSwitcher view={view} onChange={onChangeView} /></div><nav className="erp-phone-category-strip md:hidden" aria-label="库存分类"><Button type="button" variant="ghost" aria-pressed={!filters.category} onClick={() => updateFilter({category: ""})}>全部</Button>{inventoryCategories.map((category) => <Button key={category} type="button" variant="ghost" aria-pressed={filters.category === category} onClick={() => updateFilter({category})}>{category}</Button>)}</nav></>}
     metrics={inventoryMetrics}
     search={{value: filters.keyword, onChange: (keyword) => updateFilter({keyword}), label: "搜索库存", placeholder: "搜索 SN、商品、品牌、型号", phonePlaceholder: "搜索型号 / SN / 库存编号"}}
     filters={filterFields}
+    phoneFilterSheet={({open, onOpenChange}) => <InventoryFilterSheet open={open} onOpenChange={onOpenChange} filters={filters} fields={filterFields} onApply={commitFilters} />}
     onResetFilters={() => commitFilters(defaultInventoryFilters)}
     additionalActiveFilterCount={additionalActiveFilterCount}
     defaultSortLabel="入库时间"
@@ -362,7 +367,6 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     tableDensity={density}
     phonePageSizeOptions={[20, 50, 100]}
     pagination={pagination}
-    sheetExtra={view === "cards" ? <Button type="button" variant="secondary" className="w-full" aria-pressed={selectionMode} onClick={() => {setSelectionMode(!selectionMode); setRowSelection({});}}>{selectionMode ? "结束选择" : "选择库存"}</Button> : undefined}
     overlayOpen={Boolean(statsOpen || scanOpen || actionsOpen || detailId || ledgerOpen)}
     overlays={overlays}
     className="erp-inventory-directory"

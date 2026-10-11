@@ -44,7 +44,7 @@
   2. `mobileToolbar`：左侧最多 4 个快捷筛选，右侧放排序按钮。
   3. 列表：`ErpDataTable` 传 `surface="plain"`、`mobilePagination="compact"`、`mobileRow`；每一行用 `ErpMobileRecordRow` 渲染，平铺成一整块白色列表面，行与行之间用细分隔线。
   4. 底部：`ErpMobileActionDock`，放搜索框，加上最多 1 个主操作。
-  5. 高级筛选条件、每页条数、刷新入口都放进 `ErpDialogShell mobilePresentation="sheet"` 打开的筛选面板。
+  5. 高级筛选条件用 `ErpDialogShell mobilePresentation="sheet"`。默认模板包含每页条数和刷新；专用筛选面板通过 `ErpListPage.phoneFilterSheet` 接入，只放筛选条件，每页条数、刷新、批量选择放既有作业面板。库存筛选采用单行选择项，打开时创建草稿，点「应用筛选」才提交，关闭不修改查询；重置只清空筛选条件，保留搜索、排序与每页条数。
   - 功能页面使用 `ErpDataTable` 时必须传 `mobileRow`（函数或 `"columns"`），或者显式传 `mobileMode="table"` 并写明原因。[lint，由 `check-ui-contracts` 检查]
   - 手机上不得出现：刷新按钮、列设置 / 列显示、舒适 / 紧凑密度切换、「查看其余 N 项」、通用卡片（`data-erp-region="mobile-card-header"`）。[浏览器]
 - **M14 开单页**（采购、销售、退货、编辑）：分成「客户 / 来源与商品 → 结算」两步，未显示的步骤保持挂载；每件商品用 `ErpMobileOrderLine` 编辑；底部用 `ErpSubmitBar` 显示合计和**唯一**的主操作；物流、质保、备注、附件折叠在结算步骤里。[人工]
