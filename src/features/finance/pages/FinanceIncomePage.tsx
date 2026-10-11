@@ -30,10 +30,8 @@ import {
   ErpLoadingState,
   ErpMobileRecordRow,
   ErpPageError,
-  ErpStatusBadge,
   MetricsRegion,
-  type QuickStatusItemData,
-} from "@/src/components/common";
+  type QuickStatusItemData,} from "@/src/components/common";
 import {
   ApiError,
   createIdempotencyKey,
@@ -418,7 +416,7 @@ function FinanceIncomeContent({
       table={{
         title: "收入明细",
         description: "点击行查看凭证与登记详情；采购退款属于采购退货结算，不计入其他收入。",
-        actions: <ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />,
+        count: `共 ${collection.total} 笔`,
         table: {
           columns,
           data: collection.items,

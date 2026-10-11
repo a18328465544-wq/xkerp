@@ -1,5 +1,5 @@
 import {ArrowDownRight, ArrowUpRight} from "lucide-react";
-import type {ReactNode} from "react";
+import {createContext, useCallback, useContext, useId, useLayoutEffect, useMemo, useState, type ReactNode} from "react";
 import {Card, CardContent} from "@/src/components/ui";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 
@@ -57,6 +57,34 @@ export function getErpMetricValueSize(value: string): ErpMetricValueSize {
   return "small";
 }
 
+const valueSizeOrder: ErpMetricValueSize[] = ["large", "medium", "small"];
+
+/** The smallest tier wins, so the longest value still fits its card. */
+export function getErpMetricGroupValueSize(sizes: readonly ErpMetricValueSize[]): ErpMetricValueSize | undefined {
+  return sizes.length ? valueSizeOrder[Math.max(...sizes.map((size) => valueSizeOrder.indexOf(size)))] : undefined;
+}
+
+type MetricGroup = {size?: ErpMetricValueSize; register: (id: string, size: ErpMetricValueSize | null) => void};
+const MetricGroupContext = createContext<MetricGroup | null>(null);
+
+/**
+ * One value size per metric group: a grid mixing 「1 个」 and 「¥10,000.00」
+ * renders both at the smaller tier so the row reads as aligned. Cards register
+ * their own tier, so page-local wrappers around ErpMetricCard join the group too.
+ */
+export function ErpMetricGroup({children}: {children: ReactNode}) {
+  const [sizes, setSizes] = useState<Record<string, ErpMetricValueSize>>({});
+  const register = useCallback((id: string, size: ErpMetricValueSize | null) => setSizes((current) => {
+    if ((current[id] ?? null) === size) return current;
+    const next = {...current};
+    if (size) next[id] = size; else delete next[id];
+    return next;
+  }), []);
+  const size = getErpMetricGroupValueSize(Object.values(sizes));
+  const group = useMemo(() => ({size, register}), [size, register]);
+  return <MetricGroupContext.Provider value={group}>{children}</MetricGroupContext.Provider>;
+}
+
 /** Shared metric surface used by dashboards, analytics and finance pages. */
 export function ErpMetricCard({label, value, detail, icon, tone = "neutral", valueTone = "neutral", minHeight, variant: requestedVariant = "responsive", valueSize, compare, compareMeaning = "higher-is-better", compareLabel = "较昨日", compareLabelClassName, supplementalContent}: {
   label: string;
@@ -80,7 +108,16 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   const variant: ErpMetricVariant = requestedVariant === "responsive" ? (phone ? "compact" : "default") : requestedVariant;
   const compact = variant === "compact";
   const resolvedValueTone = valueTone !== "muted" && isZeroMetricValue(value) ? "neutral" : valueTone;
-  const resolvedValueSize = valueSize ?? getErpMetricValueSize(value);
+  const group = useContext(MetricGroupContext);
+  const ownValueSize = valueSize ?? getErpMetricValueSize(value);
+  const id = useId();
+  const register = group?.register;
+  useLayoutEffect(() => {
+    if (!register || valueSize) return;
+    register(id, ownValueSize);
+    return () => register(id, null);
+  }, [register, id, ownValueSize, valueSize]);
+  const resolvedValueSize = valueSize ?? group?.size ?? ownValueSize;
   const hasComparison = compare !== undefined;
   const hasFooter = detail !== undefined || hasComparison;
   const valueFont = `--erp-font-metric-${compact ? "compact" : "primary"}-${resolvedValueSize}`;

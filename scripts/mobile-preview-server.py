@@ -103,7 +103,9 @@ def inventory_rows(params):
 # auto (default) prefers the local Vite on 127.0.0.1:3010 whenever it answers:
 # only that path injects the draft fixtures, so screenshots stay comparable.
 # Without Vite it serves dist/, but never a dist/ older than src/.
-# ERP_PREVIEW_SOURCE=dist or =vite forces one side.
+# ERP_PREVIEW_SOURCE=dist or =vite forces one side. ERP_PREVIEW_VITE_PORT picks
+# the Vite port, so a worktree never previews another checkout's Vite on 3010.
+vite_origin = f"http://127.0.0.1:{int(os.environ.get('ERP_PREVIEW_VITE_PORT', '3010'))}"
 preview_source = os.environ.get("ERP_PREVIEW_SOURCE", "auto")
 if preview_source not in {"auto", "dist", "vite"}:
     raise ValueError("Invalid ERP_PREVIEW_SOURCE")
@@ -119,7 +121,7 @@ def serve_build(build):
     now = time.monotonic()
     if now - _build_check["at"] > 2:
         try:
-            with urlopen("http://127.0.0.1:3010/", timeout=1):
+            with urlopen(vite_origin + "/", timeout=1):
                 vite_up = True
         except Exception:
             vite_up = False
@@ -128,7 +130,7 @@ def serve_build(build):
         fresh = newest <= index.stat().st_mtime
         _build_check.update(at=now, use=fresh and not vite_up)
         if _build_check["reported"] != _build_check["use"]:
-            print("预览使用 dist/ 构建产物" if _build_check["use"] else ("预览使用本地 Vite（127.0.0.1:3010）" if vite_up else "dist/ 比源码旧，且本地 Vite 未启动"), flush=True)
+            print("预览使用 dist/ 构建产物" if _build_check["use"] else (f"预览使用本地 Vite（{vite_origin}）" if vite_up else "dist/ 比源码旧，且本地 Vite 未启动"), flush=True)
             _build_check["reported"] = _build_check["use"]
     return _build_check["use"]
 
@@ -293,7 +295,7 @@ class Handler(BaseHTTPRequestHandler):
                     target = build / "index.html"
                 self.respond(target.read_bytes(), kind=mimetypes.guess_type(target)[0] or "application/octet-stream")
                 return
-            with urlopen("http://127.0.0.1:3010" + self.path, timeout=20) as response:
+            with urlopen(vite_origin + self.path, timeout=20) as response:
                 body = response.read()
                 kind = response.headers.get("Content-Type", "text/plain")
             if path == "/src/hooks/useWorkspaceTabRuntime.tsx":

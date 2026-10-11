@@ -179,7 +179,7 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
   };
   const openCreateOrder = () => {createMutation.reset(); setCreateOpen(true);};
   const desktopTable = <MainRegion variant="70-30" className="lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
-    <DashboardSection title="协同订单列表" description="主状态表达阶段，待办标签说明卡点；行内可直接认领或完成，点击订单查看完整协作上下文。" actions={<ErpStatusBadge label={`共 ${collection.total} 单`} tone="info" />}>
+    <DashboardSection title="协同订单列表" description="主状态表达阶段，待办标签说明卡点；行内可直接认领或完成，点击订单查看完整协作上下文。" count={`共 ${collection.total} 单`}>
       <ErpDataTable {...table} mobileRow={table.mobileRow} surface="card" mobilePagination="compact" density="compact" />
     </DashboardSection>
     <OrderPoolSidePanel order={selected} session={session} collaboratorOptions={collaboratorOptions} collaboratorOptionsLoading={collaboratorQuery.isPending || collaboratorQuery.isFetching} pending={updateMutation.isPending} onClaim={claimOrder} onAssign={assignOrder} onRelease={releaseOrder} onPause={pauseOrder} onResume={resumeOrder} onComplete={completeOrder} onOpenDetails={() => {if (selected) openDetails(selected);}} />

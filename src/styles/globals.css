@@ -625,7 +625,6 @@ input[inputmode="numeric"] {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
 }
 [data-page-frame="finance"] [data-erp-component="metrics-region"] > section {
-  border-radius: var(--erp-radius-lg);
   box-shadow: var(--erp-shadow-metric);
 }
 [data-page-frame="finance"] [data-erp-component="metrics-region"] > section > div {
@@ -1546,14 +1545,14 @@ input[inputmode="numeric"] {
   }
   [data-erp-component="page-header"] { padding: 0; border: 0; background: transparent; box-shadow: none; }
   [data-erp-region="quick-status"], [data-erp-region="page-subtitle"] { display: none; }
-  .erp-phone-section-title { margin-block: var(--erp-space-4) var(--erp-space-2); font-size: var(--erp-mobile-section-title); font-weight: var(--erp-font-medium); }
+  .erp-phone-section-title { margin-block: var(--erp-space-4) var(--erp-space-2); font-size: var(--erp-mobile-section-title); font-weight: var(--erp-font-semibold); }
   /* Title + trailing link on one baseline; the title's own margin moves to the row. */
   .erp-phone-section-header { display: flex; align-items: center; justify-content: space-between; margin-block: var(--erp-space-4) var(--erp-space-2); }
   .erp-phone-section-header > .erp-phone-section-title { margin: 0; }
   /* M8: document number and date stay on one line. */
   .erp-phone-recent > span { min-width: 0; }
   .erp-phone-recent small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .erp-phone-menu { margin-top: var(--erp-space-3); border-radius: var(--erp-radius-lg); background: var(--erp-color-surface); overflow: hidden; }
+  .erp-phone-menu { margin-top: var(--erp-space-3); border-radius: var(--erp-radius-card); background: var(--erp-color-surface); overflow: hidden; }
   .erp-phone-menu-row { display: flex; align-items: center; gap: var(--erp-space-3); min-height: var(--erp-mobile-touch-size); padding: var(--erp-space-3); font-size: var(--erp-text-base); border-bottom: 1px solid var(--erp-color-border-soft); }
   .erp-phone-menu-row > span { flex: 1; min-width: 0; }
   .erp-phone-menu-row > svg { flex-shrink: 0; color: var(--erp-color-primary); }
@@ -1609,7 +1608,7 @@ input[inputmode="numeric"] {
   .erp-transaction-line-items [data-erp-region="card-content"] { padding: var(--erp-space-2); }
   .erp-transaction-line-items-cards { gap: 0; }
   .erp-phone-home-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-2); }
-  .erp-phone-home-heading h1 { font-size: var(--erp-text-xl); font-weight: var(--erp-font-semibold); }
+  .erp-phone-home-heading h1 { font-size: var(--erp-mobile-page-title); font-weight: var(--erp-font-semibold); }
   .erp-phone-period {
     display: inline-flex;
     align-items: center;
@@ -1640,7 +1639,7 @@ input[inputmode="numeric"] {
   }
   .erp-phone-sales-summary {
     border: 0;
-    border-radius: var(--erp-radius-xl);
+    border-radius: var(--erp-radius-card);
     background: var(--erp-phone-hero-bg);
     color: var(--erp-phone-hero-text);
     box-shadow: var(--erp-phone-hero-shadow);
@@ -1686,7 +1685,7 @@ input[inputmode="numeric"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     background: var(--erp-color-surface);
-    border-radius: var(--erp-radius-lg);
+    border-radius: var(--erp-radius-card);
     border: 1px solid var(--erp-color-border-soft);
     box-shadow: var(--erp-phone-card-shadow);
     overflow: hidden;

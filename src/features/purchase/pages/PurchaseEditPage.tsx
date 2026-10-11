@@ -1,13 +1,13 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useNavigate} from "@tanstack/react-router";
-import {ArrowLeft, LockKeyhole, ShieldCheck} from "lucide-react";
+import { LockKeyhole, ShieldCheck} from "lucide-react";
 import {useEffect, useMemo, useState, type FormEvent} from "react";
 import {Controller, useFieldArray, useForm, useWatch, type FieldPath} from "react-hook-form";
 import {notify} from "@/src/utils/notification";
 import {useAuth} from "@/src/app/auth";
-import {Button, Card, CardContent, Input, Textarea} from "@/src/components/ui";
-import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpDatePicker, ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpPageHeader, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog} from "@/src/components/common";
+import { Card, CardContent, Input, Textarea} from "@/src/components/ui";
+import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpMobileWorkflowTotal, ErpDatePicker, ErpFormSection, ErpLoadingState, ErpPageContent, ErpPageError, ErpTransactionHeader, ErpSubmitBar, ErpTransactionColumns, ErpTransactionPageFrame, ErpTransactionPrimary, ErpTransactionSecondary, ErpUnsavedChangesDialog} from "@/src/components/common";
 import {ApiError, purchaseApi, queryKeys} from "@/src/services/api";
 import type {AuthSession} from "@/src/services/api";
 import type {PurchaseDetail, PurchaseFormValues, PurchaseProductOption, PurchaseReferenceData, PurchaseSourceOption} from "@/src/types/purchase";
@@ -219,10 +219,10 @@ function PurchaseEditForm({detail, policy, referenceData: initialReferenceData, 
   const blocker = useWorkspaceTabBlocker(formState.isDirty);
 
   return <ErpTransactionPageFrame>
-    <Card className="border-[var(--erp-color-border-strong)]"><CardContent className="p-3"><ErpPageHeader title={`编辑采购单 ${invoice.invoiceNo}`} subtitle={policy.summary} actions={<Button type="button" variant="secondary" onClick={leave}><ArrowLeft className="h-4 w-4" />返回详情</Button>} /></CardContent></Card>
+    <ErpTransactionHeader title={`编辑采购单 ${invoice.invoiceNo}`} phoneTitle="编辑采购单" subtitle={policy.summary} back={{label: "返回详情", fallback: `/purchase/${invoice.id}`, onDesktopBack: leave}} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
       {serverError && <Card role="alert" className="border-[var(--erp-color-danger)] bg-[var(--erp-color-danger-soft)]"><CardContent className="p-4 text-sm text-[var(--erp-color-danger)]">{serverError}</CardContent></Card>}
-      <ErpMobileWorkflow resetKey={invoice.id} pending={mutation.isPending} steps={[{label: "编辑信息"}, {label: "核对与保存"}]} summary={fullMode ? `${summary.totalCount} 件 · ${formatCurrency(summary.totalCost)}` : "仅修改物流与备注"} errorStep={serverError ? 1 : undefined}>
+      <ErpMobileWorkflow resetKey={invoice.id} pending={mutation.isPending} steps={[{label: "编辑信息"}, {label: "核对与保存"}]} summary={fullMode ? <ErpMobileWorkflowTotal amount={formatCurrency(summary.totalCost)} detail={`共 ${summary.totalCount} 件`} /> : "仅修改物流与备注"} errorStep={serverError ? 1 : undefined}>
       <form onSubmit={(event: FormEvent<HTMLFormElement>) => {void handleSubmit(submit)(event);}}>
         <ErpTransactionColumns>
           <ErpTransactionPrimary>

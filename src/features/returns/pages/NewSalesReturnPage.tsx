@@ -1,12 +1,12 @@
 import {createSubmissionIdentity} from "@/src/services/api/submissionIdentity";
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
-import {ArrowLeft, LockKeyhole, LogIn, RefreshCw} from "lucide-react";
+import { LockKeyhole, LogIn, RefreshCw} from "lucide-react";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
-import {Link, useNavigate} from "@tanstack/react-router";
+import { useNavigate} from "@tanstack/react-router";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
-import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
+import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpMobileWorkflowTotal, ErpDatePicker, ErpFormSection, ErpPageContent, ErpPageError, ErpTransactionHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, queryKeys, refreshErpAfterDocument, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -127,7 +127,7 @@ function SalesReturnForm({session, invoices, inventory, referenceUpdatedAt, refr
   const blocker = useWorkspaceTabBlocker(dirty);
 
   return <ErpTransactionPageFrame className="max-w-[1300px]">
-    <ErpPageHeader title="新建销售退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联已出库销售单和原库存卡片，退款沿用原路退款规则。</span><ErpStatusBadge label="原路退款" tone="info" /></span>} actions={<Link to="/sales/returns" className="inline-flex h-9 items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-white px-3 text-xs font-semibold max-md:h-11 max-md:text-sm"><ArrowLeft className="h-4 w-4" />返回销售退货</Link>} />
+    <ErpTransactionHeader title="新建销售退货" subtitle={<span className="flex flex-wrap items-center gap-2"><span>必须关联已出库销售单和原库存卡片，退款沿用原路退款规则。</span><ErpStatusBadge label="原路退款" tone="info" /></span>} back={{label: "返回销售退货", fallback: "/sales/returns", onDesktopBack: () => void navigate({to: "/sales/returns"})}} pending={pending} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
     {refreshError && <Card role="alert" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-warning-soft)]"><CardContent className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm text-[var(--erp-color-warning)]"><span>基础数据刷新失败，当前表单和上次数据已保留。{refreshError}</span><Button type="button" variant="secondary" onClick={onRetry}>重试刷新</Button></CardContent></Card>}
     {success && <Card role="status" className="border-[var(--erp-color-border-strong)] bg-[var(--erp-color-success-soft)]"><CardContent className="p-4 text-sm font-semibold text-[var(--erp-color-success)]">{success}</CardContent></Card>}
@@ -136,7 +136,7 @@ function SalesReturnForm({session, invoices, inventory, referenceUpdatedAt, refr
       {label: "原单", ready: Boolean(selectedInvoice), blockedReason: "请选择已出库销售单"},
       {label: "商品", ready: !amountIssue && Boolean(isDocumentReturn ? batchLines.length === invoiceLines.length && batchLines.length > 0 : selectedItem && selectedCard), blockedReason: amountIssue || "请选择可追溯的退货商品"},
       {label: "确认"},
-    ]} summary={<span className="erp-data-number">退款 {formatCurrency(returnAmount)}</span>}>
+    ]} summary={<ErpMobileWorkflowTotal amount={formatCurrency(returnAmount)} detail={`退款 · ${isDocumentReturn ? batchLines.length : selectedItem && selectedCard ? 1 : 0} 件`} />}>
     <form noValidate onSubmit={submit.onSubmit} aria-busy={pending}>
       <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5">
       <ErpMobileWorkflowSection step={0}>

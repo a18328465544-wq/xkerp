@@ -1,9 +1,7 @@
 import type {ColumnDef, VisibilityState} from "@tanstack/react-table";
 import {Button} from "@/src/components/ui";
 import {ErpColumnVisibilityMenu} from "@/src/components/common";
-import {ErpDialogShell} from "@/src/components/common";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
-import {useState} from "react";
 
 type FinanceTableControlsProps<TData> = {
   columns: ColumnDef<TData, unknown>[];
@@ -13,7 +11,10 @@ type FinanceTableControlsProps<TData> = {
   onDensityChange: (value: "comfortable" | "compact") => void;
 };
 
-/** Shared finance table preferences control; it contains no finance data rules. */
+/**
+ * Shared finance table preferences control; it contains no finance data rules.
+ * Phones render card rows, so column and density settings are desktop chrome (M13).
+ */
 export function FinanceTableControls<TData>({
   columns,
   visibility,
@@ -22,8 +23,8 @@ export function FinanceTableControls<TData>({
   onDensityChange,
 }: FinanceTableControlsProps<TData>) {
   const phone = useErpPhone();
-  const [open, setOpen] = useState(false);
-  const controls = (
+  if (phone) return null;
+  return (
     <div className="flex items-center gap-2">
       <ErpColumnVisibilityMenu columns={columns} visibility={visibility} onVisibilityChange={onVisibilityChange} />
       <div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5">
@@ -46,5 +47,4 @@ export function FinanceTableControls<TData>({
       </div>
     </div>
   );
-  return phone ? <><Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>列表设置</Button><ErpDialogShell open={open} onOpenChange={setOpen} title="列表设置" mobilePresentation="sheet">{controls}</ErpDialogShell></> : controls;
 }

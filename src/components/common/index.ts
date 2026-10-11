@@ -5,7 +5,7 @@ export {ErpCheckboxField, ErpRadioField, ErpRadioGroup, type ErpCheckboxFieldPro
 export {ErpDetailFact, ErpDetailFactGrid, type ErpDetailFactProps} from "./ErpDetailFact";
 export {ErpEntityThumbnail} from "./ErpEntityThumbnail";
 export {ErpDialogShell, type ErpDialogShellProps, type ErpDialogSize} from "./ErpDialogShell";
-export {ErpMobileWorkflow, ErpMobileWorkflowDesktop, ErpMobileWorkflowPhone, ErpMobileWorkflowSection, type ErpMobileWorkflowStep} from "./ErpMobileWorkflow";
+export {ErpMobileWorkflow, ErpMobileWorkflowDesktop, ErpMobileWorkflowPhone, ErpMobileWorkflowSection, ErpMobileWorkflowTotal, type ErpMobileWorkflowStep} from "./ErpMobileWorkflow";
 export {ErpMobileSummary} from "./ErpMobileSummary";
 export {ErpMobileRecordRow} from "./ErpMobileRecordRow";
 export {ErpMobileActionDock} from "./ErpMobileActionDock";
@@ -28,6 +28,7 @@ export {ErpDatePicker} from "./ErpDatePicker";
 export {ErpDateTimePicker, type ErpDateTimePickerProps} from "./ErpDateTimePicker";
 export {defaultDateRangePresets, ErpDateRangePicker, type DateRangePresetOption, type ErpDateRangePickerProps} from "./ErpDateRangePicker";
 export {ErpAiDrawer} from "./ErpAiDrawer";
+export {ErpDisclosureCard} from "./ErpDisclosureCard";
 export {ErpEmptyState} from "./ErpEmptyState";
 export {ErpFilterBar} from "./ErpFilterBar";
 export {ErpFormSection} from "./ErpFormSection";

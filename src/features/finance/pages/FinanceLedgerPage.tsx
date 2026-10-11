@@ -242,7 +242,8 @@ function LedgerTableCard({rows, summary, total, page, pageSize, query, columns, 
 
   return (
     <DashboardSection
-      title={<span>流水明细 <span className="ml-1 text-xs font-normal text-[var(--erp-color-text-muted)]">共 {total} 条</span></span>}
+      title="流水明细"
+      count={`共 ${total} 条`}
       // Column and density settings are desktop chrome (MOBILE_UI_RULES M13).
       actions={<div className="max-md:hidden"><TableControls columns={columns} visibility={columnVisibility} onVisibilityChange={onColumnVisibilityChange} density={density} onDensityChange={onDensityChange} /></div>}
       className="overflow-hidden p-0"

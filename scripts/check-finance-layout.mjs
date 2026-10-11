@@ -8,7 +8,7 @@ const pagesRoot = path.join(root, "src/features/finance/pages");
 const allowlistPath = path.join(root, "scripts/finance-layout-allowlist.json");
 const allowlist = JSON.parse(fs.readFileSync(allowlistPath, "utf8"));
 const metricTag = /^(?:Erp)?Metric(?:Card)?$|^(?:FinanceEntry|Finance)?Metric$|^SummaryCard$/;
-const foldedMetricRegion = /^(?:details|FinanceMoreMetrics|MoreMetrics)$/;
+const foldedMetricRegion = /^(?:details|ErpDisclosureCard|FinanceMoreMetrics|MoreMetrics)$/;
 const fixedAsideGrid = /(?:lg|xl|2xl):grid-cols-\[minmax\(0,1fr\)_[0-9.]+(?:px|rem|vw)\]/g;
 const failures = [];
 

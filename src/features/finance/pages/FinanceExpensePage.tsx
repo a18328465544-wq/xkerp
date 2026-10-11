@@ -31,10 +31,8 @@ import {
   ErpLoadingState,
   ErpMobileRecordRow,
   ErpPageError,
-  ErpStatusBadge,
   MetricsRegion,
-  type QuickStatusItemData,
-} from "@/src/components/common";
+  type QuickStatusItemData,} from "@/src/components/common";
 import {
   ApiError,
   createIdempotencyKey,
@@ -430,7 +428,7 @@ function FinanceExpenseContent({
       table={{
         title: "支出明细",
         description: "点击行查看凭证；客户退款、提成等自动支出只能从原业务流程调整。",
-        actions: <ErpStatusBadge label={`共 ${collection.total} 笔`} tone="info" />,
+        count: `共 ${collection.total} 笔`,
         table: {
           columns,
           data: collection.items,

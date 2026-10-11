@@ -67,6 +67,7 @@ function jsxName(node) {
 function isInsideFoldedMetricRegion(node) {
   for (let current = node.parent; current; current = current.parent) {
     if (jsxName(current) === "details" && /<summary\b[^>]*>[\s\S]*?更多指标[\s\S]*?<\/summary>/.test(current.getText())) return true;
+    if (jsxName(current) === "ErpDisclosureCard" && /\btitle="更多指标"/.test(current.getText())) return true;
   }
   return false;
 }

@@ -55,6 +55,11 @@ export function ErpMobileWorkflow({steps, children, summary, phoneAction, pendin
   </div></Context.Provider>;
 }
 
+/** Phone step-bar total: the amount reads first, quantity or document kind underneath. */
+export function ErpMobileWorkflowTotal({amount, detail}: {amount: ReactNode; detail?: ReactNode}) {
+  return <span className="erp-order-action-total"><strong className="erp-data-number">{amount}</strong>{detail != null && <small>{detail}</small>}</span>;
+}
+
 export function ErpMobileWorkflowSection({step, children}: {step: number; children: ReactNode}) {
   const workflow = useContext(Context);
   return <div data-erp-region="mobile-workflow-section" data-workflow-step={step} hidden={workflow?.phone && workflow.step !== step || undefined}>{children}</div>;

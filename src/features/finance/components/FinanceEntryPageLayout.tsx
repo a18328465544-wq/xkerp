@@ -12,6 +12,7 @@ import {FinanceTableRegion} from "./FinanceTableRegion";
 
 interface FinanceEntryTable<TData> {
   title: ReactNode;
+  count?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   table: ErpDataTableProps<TData> & {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
-import {ErpMetricCard, getErpMetricValueSize, isZeroMetricValue, metricComparisonTone} from "./ErpMetricCard";
+import {ErpMetricCard, getErpMetricGroupValueSize, getErpMetricValueSize, isZeroMetricValue, metricComparisonTone} from "./ErpMetricCard";
 
 test("ErpMetricCard exposes the shared card anatomy and semantic value tone", () => {
   const markup = renderToStaticMarkup(<ErpMetricCard label="今日收入" value="¥68,800" detail="昨日 ¥61,200" tone="success" valueTone="success" compare={12.4} />);
@@ -56,4 +56,11 @@ test("zero amounts and counts read neutral even when a tone is requested", () =>
   const money = renderToStaticMarkup(<ErpMetricCard label="冻结资金" value="¥200.00" valueTone="warning" />);
   assert.match(zero, /text-\[var\(--erp-color-text\)\]/);
   assert.match(money, /text-\[var\(--erp-color-risk\)\]/);
+});
+
+test("a metric group renders every value at its smallest member tier", () => {
+  assert.equal(getErpMetricGroupValueSize(["large", "small", "medium"]), "small");
+  assert.equal(getErpMetricGroupValueSize(["large", "medium"]), "medium");
+  assert.equal(getErpMetricGroupValueSize(["large"]), "large");
+  assert.equal(getErpMetricGroupValueSize([]), undefined);
 });

@@ -304,7 +304,7 @@ function FinanceClosingContent({
       <FinanceTableRegion
         title="已保存日结"
         description="点击记录查看应收、应付、销售与采购摘要。"
-        actions={<div className="flex items-center gap-2"><ErpStatusBadge label={`第 ${report.meta.page} 页 · ${report.pageRows.length} 条`} tone="info" /><FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} /></div>}
+        count={`共 ${report.meta.total} 条`} actions={<FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} />}
         table={{
           columns,
           data: report.pageRows,

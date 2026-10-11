@@ -1,6 +1,7 @@
 import {useId, type ReactNode} from "react";
 import {ChevronDown, ChevronUp} from "lucide-react";
 import {
+  ErpDisclosureCard,
   ErpFinancePageFrame,
   ErpPageContent,
 } from "@/src/components/common";
@@ -51,10 +52,7 @@ export function FinanceDetailPageLayout({header, tabs, filters, metrics, beforeT
       <ErpPageContent className="space-y-[var(--erp-page-gap)]">
         {beforeTable && !foldBeforeTable && <div data-finance-layout-slot="before-table">{beforeTable}</div>}
         <div data-finance-layout-slot="table">{table}</div>
-        {foldBeforeTable && <details data-finance-layout-slot="before-table" className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-[var(--erp-color-text)]">{phoneFoldBeforeTable}</summary>
-          <div className="mt-3 space-y-4">{beforeTable}</div>
-        </details>}
+        {foldBeforeTable && <div data-finance-layout-slot="before-table"><ErpDisclosureCard title={phoneFoldBeforeTable}><div className="space-y-4">{beforeTable}</div></ErpDisclosureCard></div>}
         {analysis && (
           <FinanceAnalysisDisclosure
             key={analysis.preferenceKey}
