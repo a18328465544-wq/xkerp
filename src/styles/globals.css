@@ -1940,23 +1940,23 @@ input[inputmode="numeric"] {
   .erp-inventory-directory .erp-phone-record-end > .erp-data-number { font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); }
   .erp-inventory-directory .erp-phone-record-end > svg { grid-column: 2; grid-row: 1 / 3; align-self: center; }
   .erp-inventory-directory .erp-phone-record-wrapper:has(.erp-phone-record-select) .erp-phone-record { padding-right: calc(var(--erp-space-4) + var(--erp-mobile-touch-size)); }
-  .erp-inventory-model-phone-row { display: grid; grid-template-columns: var(--erp-mobile-touch-size) minmax(0, 1fr) max-content; align-items: start; gap: var(--erp-space-2); padding: var(--erp-mobile-row-inset) var(--erp-mobile-content-inset); border-bottom: 1px solid var(--erp-color-border-soft); background: var(--erp-color-surface); }
+  .erp-inventory-model-phone-row { display: grid; grid-template-columns: var(--erp-mobile-touch-size) minmax(0, 1fr); align-items: start; gap: var(--erp-space-2); padding: var(--erp-mobile-row-inset) var(--erp-mobile-content-inset); border-bottom: 1px solid var(--erp-color-border-soft); background: var(--erp-color-surface); }
   .erp-inventory-model-phone-thumbnail { width: var(--erp-mobile-touch-size); min-width: var(--erp-mobile-touch-size); height: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); padding: 0; border-radius: var(--erp-radius-md); }
   .erp-inventory-model-phone-thumbnail .erp-entity-thumbnail { width: 100%; height: 100%; }
   .erp-inventory-model-phone-content { display: flex; flex-direction: column; min-width: 0; gap: var(--erp-space-1); }
-  .erp-inventory-model-phone-title { width: 100%; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; justify-content: flex-start; padding: 0; text-align: left; font-size: var(--erp-text-base); line-height: var(--erp-line-base); font-weight: var(--erp-font-medium); white-space: normal; overflow-wrap: anywhere; }
-  .erp-inventory-model-phone-subtitle { display: flex; align-items: center; flex-wrap: wrap; gap: var(--erp-space-1); min-width: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); line-height: var(--erp-line-base); }
-  .erp-inventory-model-phone-cards-action { align-self: flex-start; justify-content: flex-start; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-primary); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); white-space: nowrap; }
-  .erp-inventory-model-phone-cards-action > svg { width: 14px; height: 14px; }
-  .erp-inventory-model-phone-meta { display: flex; width: 100%; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-text-secondary); text-align: left; font-size: var(--erp-text-sm); line-height: var(--erp-line-base); white-space: normal; }
+  .erp-inventory-model-phone-title { width: 100%; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; flex-direction: column; align-items: stretch; justify-content: center; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-text); text-align: left; font-size: var(--erp-text-base); line-height: var(--erp-line-base); font-weight: var(--erp-font-medium); white-space: normal; overflow-wrap: anywhere; }
+  .erp-inventory-model-phone-name { min-width: 0; }
+  .erp-inventory-model-phone-subtitle { display: flex; align-items: center; flex-wrap: wrap; gap: var(--erp-space-1); min-width: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); line-height: var(--erp-line-base); font-weight: var(--erp-font-regular); }
+  .erp-inventory-model-phone-meta { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: var(--erp-space-1); color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); line-height: var(--erp-line-base); }
   .erp-inventory-model-phone-counts { display: flex; flex-wrap: wrap; column-gap: var(--erp-space-2); row-gap: var(--erp-space-1); }
   .erp-inventory-model-phone-counts > span { white-space: nowrap; }
   .erp-inventory-model-phone-location { max-width: 100%; overflow-wrap: anywhere; }
-  .erp-inventory-model-phone-end { display: flex; align-items: center; gap: var(--erp-space-1); }
-  .erp-inventory-model-phone-quantity { display: flex; min-width: 0; flex-direction: column; align-items: flex-end; justify-content: center; gap: var(--erp-space-1); white-space: nowrap; }
-  .erp-inventory-model-phone-quantity-label { color: var(--erp-color-text-secondary); font-size: var(--erp-text-xs); line-height: var(--erp-line-xs); }
-  .erp-inventory-model-phone-quantity-value { display: inline-flex; align-items: baseline; gap: var(--erp-space-1); color: var(--erp-color-text); font-size: var(--erp-text-2xl); line-height: var(--erp-line-sm); font-weight: var(--erp-font-semibold); font-variant-numeric: tabular-nums; }
-  .erp-inventory-model-phone-quantity-unit { color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); font-weight: var(--erp-font-regular); }
+  .erp-inventory-model-phone-quantity { display: inline-flex; align-items: baseline; gap: var(--erp-space-1); white-space: nowrap; }
+  .erp-inventory-model-phone-quantity-value { color: var(--erp-color-text); font-size: var(--erp-text-lg); line-height: var(--erp-line-sm); font-weight: var(--erp-font-semibold); font-variant-numeric: tabular-nums; }
+  .erp-inventory-model-phone-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--erp-space-2); min-width: 0; }
+  .erp-inventory-model-phone-cards-action, .erp-inventory-model-phone-ledger-action { min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; gap: var(--erp-space-1); padding: 0; font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); white-space: nowrap; }
+  .erp-inventory-model-phone-cards-action { color: var(--erp-color-primary); }
+  .erp-inventory-model-phone-ledger-action { color: var(--erp-color-text-secondary); }
   .erp-inventory-phone-search { display: flex; gap: var(--erp-space-2); width: 100%; }
   .erp-inventory-phone-search > [data-erp-component="search-input"] { flex: 1; min-width: 0; }
   .erp-inventory-phone-search input { min-height: var(--erp-mobile-touch-size); }

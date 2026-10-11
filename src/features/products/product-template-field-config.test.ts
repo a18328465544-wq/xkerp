@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {getProductTemplateFields} from "@/src/components/common/productTemplateFieldConfig";
+import {productCategoryValues} from "@/src/types/core";
 
 test("product template fields are category-aware while staying within API fields", () => {
   const gpu = getProductTemplateFields("显卡");
@@ -12,8 +13,7 @@ test("product template fields are category-aware while staying within API fields
 });
 
 test("all category field configurations expose required identity fields", () => {
-  const categories = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"] as const;
-  categories.forEach((category) => {
+  productCategoryValues.forEach((category) => {
     const fields = getProductTemplateFields(category);
     assert.equal(fields.some((item) => item.key === "brand" && item.required), true, category);
     assert.equal(fields.some((item) => item.key === "model" && item.required), true, category);

@@ -4,6 +4,7 @@ import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {ErpEntityThumbnail, customerAvatarIdentity} from "./ErpEntityThumbnail";
 import {ErpMobileRecordRow} from "./ErpMobileRecordRow";
+import {productCategoryValues} from "@/src/types/core";
 
 test("customer initials are name-derived, Unicode-safe and independent of customer grade", () => {
   assert.equal(customerAvatarIdentity("  星河硬件  ").initial, "星");
@@ -26,15 +27,15 @@ test("vendor thumbnails identify supplier archives accessibly", () => {
   assert.match(html, /aria-hidden="true">星/);
 });
 
-test("all twelve ERP product categories use honest icon fallbacks", () => {
-  const categories = ["显卡", "CPU", "主板", "内存", "硬盘", "电源", "散热", "机箱", "整机", "显示器", "组装拆卸", "其他配件"];
-  for (const category of categories) {
+test("all canonical ERP product categories use honest icon fallbacks", () => {
+  for (const category of productCategoryValues) {
     const html = renderToStaticMarkup(<ErpEntityThumbnail name="真实商品" category={category} />);
     assert.match(html, new RegExp(`暂无商品图片 · ${category}`));
     assert.match(html, /<svg/);
     assert.doesNotMatch(html, /<img/);
   }
   assert.match(renderToStaticMarkup(<ErpEntityThumbnail category="未知类目" />), /lucide-package/);
+  assert.match(renderToStaticMarkup(<ErpEntityThumbnail category="组装拆卸" />), /lucide-package/);
 });
 
 test("supplied real photos and caller icons remain supported without duplicate images", () => {

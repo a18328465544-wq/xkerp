@@ -1,8 +1,8 @@
 import {useState, type ReactNode} from "react";
-import {CircuitBoard, Computer, Cpu, Fan, HardDrive, MemoryStick, Monitor, Package, PcCase, PlugZap, Wrench} from "lucide-react";
+import {CircuitBoard, Computer, Cpu, Fan, HardDrive, MemoryStick, Monitor, Package, PcCase, PlugZap} from "lucide-react";
 import {cn} from "@/src/lib/cn";
 
-const categoryIcons = {"显卡": CircuitBoard, "CPU": Cpu, "主板": CircuitBoard, "内存": MemoryStick, "硬盘": HardDrive, "电源": PlugZap, "散热": Fan, "机箱": PcCase, "整机": Computer, "显示器": Monitor, "组装拆卸": Wrench, "其他配件": Package};
+const categoryIcons = {"显卡": CircuitBoard, "CPU": Cpu, "主板": CircuitBoard, "内存": MemoryStick, "硬盘": HardDrive, "电源": PlugZap, "散热": Fan, "机箱": PcCase, "整机": Computer, "显示器": Monitor, "其他配件": Package};
 const avatarTones = ["blue", "green", "amber", "neutral"] as const;
 
 /** Name-derived decoration only: it never represents a customer's grade or risk. */

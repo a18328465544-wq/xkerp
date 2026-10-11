@@ -32,7 +32,6 @@ export const productTemplateFieldConfig: Record<ProductCategory, readonly Produc
   机箱: [brand(), model("型号", "如：联力 O11D"), field("version", "尺寸 / 兼容规格", "如：ATX、中塔")],
   整机: [brand(), model("型号 / 配置", "如：游戏主机 4090"), version("配置 / 系列", "如：旗舰款、定制机"), vram("关键规格", "如：i9 / 64G / 4TB")],
   显示器: [brand(), model("型号", "如：ROG PG32UCDM"), field("version", "分辨率 / 刷新率", "如：4K 240Hz"), vram("尺寸 / 面板", "如：32 英寸 OLED")],
-  组装拆卸: [brand(), model("型号 / 名称", "如：定制工作站"), version("配置 / 系列", "如：拆机配件"), vram("关键规格", "如：按实际规格填写")],
   其他配件: [brand(), model("型号 / 名称", "如：配件名称"), version("版本 / 系列", "如：官方盒装"), vram()],
 };
 
