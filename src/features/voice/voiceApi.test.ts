@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {ApiError} from "@/src/services/api/errors";
 import {voiceApi} from "./voiceApi";
 
 const originalFetch = globalThis.fetch;
@@ -61,6 +62,18 @@ test("voice parse sends scene and transcript only to the read-only draft route",
     assert.equal(calls[0]?.url, "/api/voice/parse");
     assert.equal(calls[0]?.init?.method, "POST");
     assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), {text: "回收一张 4090", scene: "purchase"});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("voice parse preserves the per-user rate-limit code and retry message", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({error: {code: "VOICE_RATE_LIMITED", message: "语音解析请求过于频繁，请稍后再试"}}), {status: 429, headers: {"content-type": "application/json"}});
+  try {
+    await assert.rejects(() => voiceApi.parse({text: "采购一张 4090", scene: "purchase"}), (error: unknown) => error instanceof ApiError
+      && error.status === 429
+      && error.code === "VOICE_RATE_LIMITED"
+      && /稍后再试/.test(error.message));
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -9,9 +9,11 @@ const first: PurchaseProductOption = {id: "P-1", name: "华硕 RTX 4090 猛禽 2
 const second: PurchaseProductOption = {...first, id: "P-2", name: "微星 RTX 4090 猛禽 24G", brand: "微星"};
 const options = {defaults: createPurchaseLineDefaults(), products: [first, second], canEnterCost: true, canEnterEstimatedSell: true};
 
-test("voice purchase lines enter the shared preview with condition, box, repair, quantity and price", () => {
+test("voice purchase lines enter the shared preview when reference prices are permission-hidden", () => {
   const draft: VoicePurchaseLineDraft = {productQuery: "4090 猛禽", candidates: [first], productId: first.id, quantity: 2, buyPrice: 7_800, condition: "99新", fullBox: false, repaired: true};
   const [row] = createPurchasePasteRowsFromVoice([draft], options);
+  assert.equal("refBuyPrice" in first, false);
+  assert.equal("refSellPrice" in first, false);
   assert.equal(row?.line.productId, first.id);
   assert.equal(row?.line.quantity, 2);
   assert.equal(row?.line.buyPrice, 7_800);

@@ -8,6 +8,7 @@ import {VoiceCaptureButton, type VoiceCaptureMode, type VoiceRecorderSnapshot} f
 import {VoiceDraftPanel} from "@/src/features/voice/VoiceDraftPanel";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
+import {voiceParseFailureMessage} from "./voiceErrors";
 import {isVoiceEntryShortcut} from "./voiceShortcut";
 
 export function useVoiceStatus() {
@@ -71,7 +72,7 @@ export function VoiceEntryControl({scene, mode = "toggle", label, compactTrigger
       setParsed(result);
       setStatusText("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "解析失败，请改用文字输入后重试。");
+      setError(voiceParseFailureMessage(cause));
       setStatusText("");
     } finally {
       setBusy(false);
