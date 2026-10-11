@@ -7,6 +7,7 @@ import type {VoiceParseResult, VoiceResolvedScene, VoiceScene} from "@/src/types
 import {VoiceCaptureButton, type VoiceCaptureMode, type VoiceRecorderSnapshot} from "@/src/features/voice/VoiceCaptureButton";
 import {VoiceDraftPanel} from "@/src/features/voice/VoiceDraftPanel";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
+import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {isVoiceEntryShortcut} from "./voiceShortcut";
 
 export function useVoiceStatus() {
@@ -41,6 +42,7 @@ export function VoiceEntryControl({scene, mode = "toggle", label, compactTrigger
   const rootRef = useRef<HTMLDivElement>(null);
   const status = useVoiceStatus();
   const phone = useErpPhone();
+  const {active: workspaceTabActive} = useWorkspaceTabActivity();
   const [open, setOpen] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [parsed, setParsed] = useState<VoiceParseResult | null>(null);
@@ -162,15 +164,15 @@ export function VoiceEntryControl({scene, mode = "toggle", label, compactTrigger
   }, [onTextFallback]);
 
   useEffect(() => {
-    if (mode !== "toggle") return;
+    if (mode !== "toggle" || !workspaceTabActive) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isVoiceEntryShortcut(event)) return;
+      if (!isVoiceEntryShortcut(event, workspaceTabActive)) return;
       event.preventDefault();
       rootRef.current?.querySelector<HTMLButtonElement>("[data-voice-entry-trigger]")?.click();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mode]);
+  }, [mode, workspaceTabActive]);
 
   const sceneLabel = scene === "auto" ? "快捷录入" : scene === "purchase" ? "采购单" : scene === "sales" ? "销售单" : "客户线索";
   const asrEnabled = status.data?.asrEnabled === true;

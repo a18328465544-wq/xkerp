@@ -18,6 +18,11 @@ test("voice shortcut recognizes macOS Option+V by physical key code", () => {
   assert.equal(isVoiceEntryShortcut(optionV()), true);
 });
 
+test("voice shortcut only responds from the active workspace tab", () => {
+  assert.equal(isVoiceEntryShortcut(optionV(), true), true);
+  assert.equal(isVoiceEntryShortcut(optionV(), false), false);
+});
+
 test("voice shortcut rejects modified, repeated, or already handled events", () => {
   assert.equal(isVoiceEntryShortcut(optionV({code: "KeyA"})), false);
   assert.equal(isVoiceEntryShortcut(optionV({ctrlKey: true})), false);
