@@ -56,6 +56,9 @@ function cleanRawText(value: unknown) {
 function optionalNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   const normalized = String(value).replace(/[,，￥¥\s]/g, "");
+  // Whole spoken amounts first: "一万五" and the mixed "1万5" both mean 15000.
+  const spoken = parseVoiceAmount(normalized);
+  if (spoken !== undefined) return spoken;
   const match = normalized.match(/(-?\d+(?:\.\d+)?)(万|千)?/);
   if (match) {
     const base = Number(match[1]);
@@ -63,7 +66,7 @@ function optionalNumber(value: unknown) {
     const multiplier = match[2] === "万" ? 10000 : match[2] === "千" ? 1000 : 1;
     return Math.round(base * multiplier * 100) / 100;
   }
-  return parseVoiceAmount(normalized);
+  return undefined;
 }
 
 function optionalPositiveNumber(value: unknown) {
@@ -146,6 +149,8 @@ function findQqIds(text: string) {
 
 function findCustomerName(text: string) {
   const patterns = [
+    // Spoken entry: "加个客户王五，…" / "新客户刘哥 …".
+    /(?:加个客户|加一个客户|新客户|新增客户|记一下客户|添加客户|加客户)\s*[：:]?\s*([\u4e00-\u9fa5]{2,4}?)(?=\s|，|,|。|$|电话|手机|微信|在|是|想|要|有|，)/,
     /(?:我叫|叫)\s*[：:]?\s*([\u4e00-\u9fa5]{2,6})(?=\s|，|,|。|$)/,
     /(?:客户|联系人|姓名)\s*[：:]\s*([\u4e00-\u9fa5]{2,6})(?=\s|，|,|。|$)/,
     /^([\u4e00-\u9fa5]{2,4})(?:总|老板|哥|姐)[，,：:]/,
@@ -167,6 +172,9 @@ function findCity(text: string) {
 
 function findPrice(text: string, labels: string[]) {
   const label = labels.join("|");
+  const spoken = text.match(new RegExp(`(?:${label})\\s*[：:]?\\s*(?:大概|大约|在|是)?\\s*([零〇一二两三四五六七八九十百千万点\\d.]+)`, "i"));
+  const spokenValue = spoken?.[1] ? optionalNumber(spoken[1]) : undefined;
+  if (spokenValue !== undefined) return spokenValue;
   const match = text.match(new RegExp(`(?:${label})[^0-9]{0,10}([0-9][0-9,，]*(?:\\.[0-9]+)?)(万|千)?`, "i"));
   return match ? optionalNumber(`${match[1]}${match[2] || ""}`) : undefined;
 }

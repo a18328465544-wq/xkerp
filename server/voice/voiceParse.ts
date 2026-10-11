@@ -319,6 +319,12 @@ function salesPriceIssues(lines: SalesLine[], state: VoiceParseContext, options:
   return issues;
 }
 
+/** "先付了两万" / "定金三千" → the amount actually handed over for a partial payment. */
+function partialPaidAmount(text: string) {
+  const match = text.match(new RegExp(`(?:先付了?|付了|定金|首付|预付)\\s*${MONEY_NUMBER}\\s*(?:元|块)?`));
+  return match?.[1] ? parseVoiceAmount(match[1]) : undefined;
+}
+
 function purchasePayment(text: string, lines: PurchaseLine[], money: VoiceMoney | undefined) {
   const method = inferVoicePaymentMethod(text);
   const status = inferVoicePaidStatus(text);
@@ -326,7 +332,8 @@ function purchasePayment(text: string, lines: PurchaseLine[], money: VoiceMoney 
   const lineTotal = lines.every((line) => line.buyPrice !== undefined)
     ? roundMoney(lines.reduce((total, line) => total + (line.buyPrice || 0) * line.quantity, 0))
     : undefined;
-  const paidAmount = status === "已付款" ? (money?.kind === "total" ? money.value : lineTotal) : undefined;
+  const paidAmount = status === "已付款" ? (money?.kind === "total" ? money.value : lineTotal)
+    : status === "部分付款" ? partialPaidAmount(text) : undefined;
   return {
     ...(method && purchasePaymentMethodValues.includes(method as never) ? {method} : {}),
     ...(status ? {status} : {}),
@@ -571,7 +578,7 @@ function mergeModelDraft(model: VoiceModelOutput, fallback: VoiceParseResult, st
     const lineTotal = lines.every((line) => line.buyPrice !== undefined)
       ? roundMoney(lines.reduce((total, line) => total + (line.buyPrice || 0) * line.quantity, 0))
       : undefined;
-    const paidAmount = status === "已付款" ? lineTotal : undefined;
+    const paidAmount = status === "已付款" ? lineTotal : status === "部分付款" ? partialPaidAmount(fallback.transcript) : undefined;
     issues.push(...purchasePriceIssues(lines, state, options));
     result.purchase = {
       ...(sourceType ? {sourceType} : {}),

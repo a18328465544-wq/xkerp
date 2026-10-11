@@ -167,3 +167,22 @@ test("quick capture rejects empty and oversized input", async () => {
     (error: unknown) => error instanceof QuickCaptureValidationError && error.code === "CRM_QUICK_CAPTURE_TEXT_TOO_LONG",
   );
 });
+
+test("spoken new-customer phrasing yields the bare name and a spoken budget", async () => {
+  const result = await parseQuickCaptureText(
+    { rawText: "加个客户王五，电话13812345678，闲鱼来的，想买一张4090，预算一万五", sourceType: "voice" },
+    { products: [product], customers: [] },
+    { enableAi: false },
+  );
+  assert.equal(result.fields.customerName, "王五");
+  assert.equal(result.fields.phone, "13812345678");
+  assert.equal(result.fields.expectedPrice, 15_000);
+  assert.ok(result.confidence > 1 && result.confidence <= 100, "confidence is reported on a 0-100 scale");
+  const mixed = await parseQuickCaptureText(
+    { rawText: "新客户刘哥，预算1万5", sourceType: "voice" },
+    { products: [product], customers: [] },
+    { enableAi: false },
+  );
+  assert.equal(mixed.fields.customerName, "刘哥");
+  assert.equal(mixed.fields.expectedPrice, 15_000);
+});

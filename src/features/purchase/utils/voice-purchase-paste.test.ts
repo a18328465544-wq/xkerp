@@ -24,8 +24,16 @@ test("voice purchase lines enter the shared preview when reference prices are pe
   assert.equal(row?.status, "warning");
 });
 
-test("multiple voice candidates remain unselected until the user chooses one", () => {
-  const draft: VoicePurchaseLineDraft = {productQuery: "4090 猛禽", candidates: [first, second], productId: first.id, quantity: 1, buyPrice: 7_800};
+test("the server's unique full match is selected even when partial candidates are listed", () => {
+  // The voice API sets productId only when exactly one catalogue entry matches every spoken token.
+  const draft: VoicePurchaseLineDraft = {productQuery: "华硕 4090 猛禽", candidates: [first, second], productId: first.id, quantity: 1, buyPrice: 7_800};
+  const [row] = createPurchasePasteRowsFromVoice([draft], options);
+  assert.equal(row?.line.productId, first.id);
+  assert.notEqual(row?.status, "needs-confirmation");
+});
+
+test("multiple voice candidates without a server match remain unselected until the user chooses one", () => {
+  const draft: VoicePurchaseLineDraft = {productQuery: "4090 猛禽", candidates: [first, second], quantity: 1, buyPrice: 7_800};
   const [row] = createPurchasePasteRowsFromVoice([draft], options);
   assert.equal(row?.line.productId, "");
   assert.equal(row?.status, "needs-confirmation");

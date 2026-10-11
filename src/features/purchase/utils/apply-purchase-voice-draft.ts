@@ -13,6 +13,8 @@ export interface ApplyPurchaseVoiceDraftInput {
   existingRemarks: string;
   vendorCreditAppliedAmount: number;
   append: UseFieldArrayAppend<PurchaseFormValues, "items">;
+  /** Removes untouched placeholder rows so voice lines are not appended below empty ones. */
+  remove?: (indexes: number[]) => void;
   setValue: UseFormSetValue<PurchaseFormValues>;
   resetPaymentSection: () => void;
 }
@@ -24,8 +26,16 @@ export interface ApplyPurchaseVoiceDraftResult {
 
 const dirty = {shouldDirty: true, shouldValidate: true} as const;
 
+/** A line the user never touched: no product, price, estimate or remark. */
+export function isBlankPurchaseLine(line: PurchaseLineFormValue) {
+  return !line.productId && !line.productName?.trim() && !(line.buyPrice > 0) && !(line.estSellPrice > 0) && !line.remarks?.trim();
+}
+
 /** Apply only after the user confirms rows in PurchasePasteDrawer. */
-export function applyPurchaseVoiceDraftToForm({purchase, transcript, rows, existingItems, existingRemarks, vendorCreditAppliedAmount, append, setValue, resetPaymentSection}: ApplyPurchaseVoiceDraftInput): ApplyPurchaseVoiceDraftResult {
+export function applyPurchaseVoiceDraftToForm({purchase, transcript, rows, existingItems: currentItems, existingRemarks, vendorCreditAppliedAmount, append, remove, setValue, resetPaymentSection}: ApplyPurchaseVoiceDraftInput): ApplyPurchaseVoiceDraftResult {
+  const blankIndexes = remove && rows.length ? currentItems.flatMap((line, index) => isBlankPurchaseLine(line) ? [index] : []) : [];
+  if (remove && blankIndexes.length) remove(blankIndexes);
+  const existingItems = currentItems.filter((_line, index) => !blankIndexes.includes(index));
   append(rows);
 
   const text = transcript.trim();

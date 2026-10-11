@@ -29,6 +29,9 @@ export function PurchasePaymentSection({control, setValue, totalCost, sourcePart
   const maxPaid = Math.max(0, totalCost - credit);
   const [mode, setMode] = useState<PaymentEntryMode>(() => isPaid ? "full" : inferPaymentEntryMode(paidAmount, maxPaid, false));
   const lastReset = useRef(resetKey);
+  // Set when a reset re-derives the mode: the amount sync below must wait one render for the new
+  // mode, otherwise a preset partial amount (e.g. from a voice draft) is overwritten by the old "full" mode.
+  const modeResetPending = useRef(false);
   const settlement = calculatePurchaseSettlement(totalCost, paidAmount, credit);
   const maxCredit = sourcePartnerType === "vendor" ? Math.min(Math.max(0, vendorCreditAvailable || 0), Math.max(0, totalCost - (mode === "full" ? 0 : paidAmount))) : 0;
   const feedback = paymentEntryFeedback(mode, paidAmount, maxPaid, "付款");
@@ -36,9 +39,15 @@ export function PurchasePaymentSection({control, setValue, totalCost, sourcePart
   useEffect(() => {
     if (lastReset.current === resetKey) return;
     lastReset.current = resetKey;
-    setMode(isPaid ? "full" : inferPaymentEntryMode(paidAmount, maxPaid, false));
-  }, [isPaid, maxPaid, paidAmount, resetKey]);
+    const nextMode = isPaid ? "full" : inferPaymentEntryMode(paidAmount, maxPaid, false);
+    if (nextMode !== mode) modeResetPending.current = true;
+    setMode(nextMode);
+  }, [isPaid, maxPaid, mode, paidAmount, resetKey]);
   useEffect(() => {
+    if (modeResetPending.current) {
+      modeResetPending.current = false;
+      return;
+    }
     if (disabled || mode === "partial") return;
     const amount = mode === "full" ? maxPaid : 0;
     if (paidAmount !== amount) setValue("paidAmount", amount, {shouldDirty: totalCost > 0, shouldValidate: true});

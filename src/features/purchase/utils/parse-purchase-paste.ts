@@ -937,7 +937,10 @@ export function createPurchasePasteRowsFromVoice(lines: readonly VoicePurchaseLi
       ...(draft.buyPrice === undefined ? {} : {buyPrice: draft.buyPrice}),
       ...(draft.remarks ? {remarks: draft.remarks} : {}),
     };
-    const voiceCandidateProductIds = Array.from(new Set(draft.candidates
+    // The server sets productId only for a unique full match; honour it instead of re-asking the
+    // user to choose among the partial candidates listed alongside it.
+    const matchedProductId = draft.productId && options.products.some((product) => product.id === draft.productId) ? draft.productId : undefined;
+    const voiceCandidateProductIds = matchedProductId ? [matchedProductId] : Array.from(new Set(draft.candidates
       .map((candidate) => candidate.id)
       .filter((id) => options.products.some((product) => product.id === id))));
     const row: PurchasePasteRow = {

@@ -3,7 +3,7 @@ import test from "node:test";
 import type {UseFieldArrayAppend, UseFormSetValue} from "react-hook-form";
 import type {SalesCustomerOption, SalesFormValues, SalesInventoryCandidate, SalesLineFormValue, SalesProductCandidate} from "@/src/types/sales";
 import {createSalesLineDefaults} from "./sales.defaults";
-import {applySalesVoiceDraftToForm, type SalesVoiceLineSelection} from "./sales.voice-draft";
+import {applySalesVoiceDraftToForm, isBlankSalesLine, type SalesVoiceLineSelection} from "./sales.voice-draft";
 
 const customer: SalesCustomerOption = {id: "C-1", name: "张三", partnerType: "customer", contact: "13800000000", selectable: true};
 const product: SalesProductCandidate = {id: "P-4090", productId: "P-4090", productName: "华硕 RTX 4090 猛禽 24G", category: "显卡", brand: "华硕", model: "RTX 4090", version: "猛禽", vram: "24G", condition: "出库核验", warehouse: "A区", inventoryStatus: "可售库存", inventoryQuantity: 2, reservedQuantity: 0, availableQuantity: 2, costPrice: 17_000, estimatedSellPrice: 19_000, entryTime: "2026-10-01", inventoryDays: 10, saleable: true};
@@ -56,4 +56,10 @@ test("sales voice helper blocks conflicting duplicate models before touching the
 
 test("sales voice helper does not duplicate a model already in the form", () => {
   assert.throws(() => runApply({existingItems: [{...createSalesLineDefaults(), productId: product.productId}]}), /已在当前草稿中/);
+});
+
+test("untouched sales placeholder rows are recognised so voice lines can replace them", () => {
+  assert.equal(isBlankSalesLine(createSalesLineDefaults("店保半年")), true);
+  assert.equal(isBlankSalesLine({...createSalesLineDefaults(), productId: "P-1", productName: "RTX 4090"}), false);
+  assert.equal(isBlankSalesLine({...createSalesLineDefaults(), sellPrice: 100}), false);
 });

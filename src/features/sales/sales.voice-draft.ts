@@ -122,3 +122,8 @@ export function applySalesVoiceDraftToForm({sales, transcript, customer, selecti
 
   return {rows, candidates, note, subtotal};
 }
+
+/** A line the user never touched: no stock card, product, price or remark. */
+export function isBlankSalesLine(line: SalesLineFormValue) {
+  return !line.inventoryId && !line.productId && !line.productName?.trim() && !(line.sellPrice > 0) && !line.remarks?.trim();
+}

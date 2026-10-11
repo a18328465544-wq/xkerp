@@ -34,7 +34,7 @@ import {formatCurrency} from "@/src/lib/format";
 import {VoiceEntryControl} from "@/src/app/voice/VoiceEntryControl";
 import {useVoiceDraftHandoff} from "@/src/app/voice/useVoiceDraftHandoff";
 import {VoiceHandoffConflictDialog} from "@/src/app/voice/VoiceHandoffConflictDialog";
-import {applySalesVoiceDraftToForm, type SalesVoiceLineSelection} from "@/src/features/sales/sales.voice-draft";
+import {applySalesVoiceDraftToForm, isBlankSalesLine, type SalesVoiceLineSelection} from "@/src/features/sales/sales.voice-draft";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
 const salesChannels: SalesChannel[] = ["到店", "闲鱼", "抖音", "小红书", "B站", "微信私域", "同行网店"];
@@ -437,13 +437,17 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       return {draft: line.draft, product, inventory};
     });
     const inferredChannel = voiceSelectedCustomer.partnerType === "vendor" ? "同行网店" : salesChannels.find((channel) => channel === voiceSelectedCustomer.source);
-    const startIndex = getValues("items").length;
+    // Voice lines replace the untouched placeholder rows instead of landing below them.
+    const currentItems = getValues("items");
+    const blankIndexes = selections.length ? currentItems.flatMap((line, index) => isBlankSalesLine(line) ? [index] : []) : [];
+    if (blankIndexes.length) remove(blankIndexes);
+    const startIndex = currentItems.length - blankIndexes.length;
     const applied = applySalesVoiceDraftToForm({
       sales: {...salesDraft, channel: salesDraft.channel || inferredChannel},
       transcript,
       customer: voiceSelectedCustomer,
       selections,
-      existingItems: getValues("items"),
+      existingItems: currentItems.filter((_line, index) => !blankIndexes.includes(index)),
       existingRemarks: getValues("remarks"),
       append,
       setValue,

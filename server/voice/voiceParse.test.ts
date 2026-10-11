@@ -169,7 +169,7 @@ test("total prices are spread per card and paid amounts use the spoken total", a
   assert.ok(result.issues.some((issue) => issue.field === "buyPrice" && /总价/.test(issue.message)));
   const partial = await parseVoiceText({text: "同行拿货李四一张 4090 猛禽，每张一万八，先付了五千", scene: "purchase", state: context});
   assert.equal(partial.purchase?.payment?.status, "部分付款");
-  assert.equal(partial.purchase?.payment?.paidAmount, undefined);
+  assert.equal(partial.purchase?.payment?.paidAmount, 5_000);
 });
 
 test("cost hints are only produced for users who may see cost", async () => {

@@ -3,7 +3,7 @@ import test from "node:test";
 import type {UseFieldArrayAppend, UseFormSetValue} from "react-hook-form";
 import type {PurchaseFormValues, PurchaseLineFormValue} from "@/src/types/purchase";
 import {createPurchaseLineDefaults} from "../purchase.defaults";
-import {applyPurchaseVoiceDraftToForm} from "./apply-purchase-voice-draft";
+import {applyPurchaseVoiceDraftToForm, isBlankPurchaseLine} from "./apply-purchase-voice-draft";
 
 const row: PurchaseLineFormValue = {...createPurchaseLineDefaults(), productId: "P-1", productName: "RTX 4090", quantity: 2, buyPrice: 7_800};
 
@@ -48,4 +48,19 @@ test("voice notes that exceed the purchase remarks limit are not silently trunca
   const result = applyPurchaseVoiceDraftToForm({purchase: {partner: {query: "", candidates: []}, lines: []}, transcript: "话".repeat(1_001), rows: [row], existingItems: [], existingRemarks: "", vendorCreditAppliedAmount: 0, append, setValue, resetPaymentSection: () => undefined});
   assert.equal(result.note, "too-long");
   assert.equal(calls.some(([field]) => field === "remarks"), false);
+});
+
+test("voice rows replace untouched placeholder rows instead of landing below them", () => {
+  const calls: Array<[string, unknown]> = [];
+  const append = ((value: PurchaseLineFormValue[]) => calls.push(["append", value])) as unknown as UseFieldArrayAppend<PurchaseFormValues, "items">;
+  const setValue = ((field: string, value: unknown) => calls.push([field, value])) as unknown as UseFormSetValue<PurchaseFormValues>;
+  const filled = {...createPurchaseLineDefaults(), productId: "P-9", productName: "RTX 3060", buyPrice: 1_000};
+  const existingItems = [createPurchaseLineDefaults(), filled, createPurchaseLineDefaults()];
+  applyPurchaseVoiceDraftToForm({purchase: {partner: {query: "", candidates: []}, lines: [], payment: {status: "已付款"}}, transcript: "", rows: [row], existingItems, existingRemarks: "", vendorCreditAppliedAmount: 0, append, remove: (indexes) => calls.push(["remove", indexes]), setValue, resetPaymentSection: () => undefined});
+  assert.deepEqual(calls[0], ["remove", [0, 2]]);
+  assert.equal(calls[1]?.[0], "append");
+  // The paid total covers the kept line plus the voice row, not the removed placeholders.
+  assert.ok(calls.some(([field, value]) => field === "paidAmount" && value === 1_000 + 15_600));
+  assert.equal(isBlankPurchaseLine(createPurchaseLineDefaults()), true);
+  assert.equal(isBlankPurchaseLine(filled), false);
 });
