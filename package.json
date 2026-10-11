@@ -42,6 +42,7 @@
     "test:mobile-entry-browser": "python3 scripts/browser-mobile-entry-scroll.py",
     "test:controls-browser": "python3 scripts/browser-control-contracts.py",
     "test:barcode-browser": "python3 scripts/browser-barcode-scanner.py",
+    "test:barcode-camera-controls": "python3 scripts/browser-barcode-camera-controls.py",
     "test:barcode-browser:production": "BARCODE_SMOKE_PRODUCTION=1 python3 scripts/browser-barcode-scanner.py",
     "check:visual": "node scripts/check-visual-regression.mjs",
     "restore:drill": "bash scripts/pg_restore_drill.sh",
