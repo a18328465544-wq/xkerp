@@ -41,8 +41,7 @@ function AppShellContent({children}: {children: ReactNode}) {
 
   const onPullRefresh = useCallback(async () => {
     try {
-      await queryClient.refetchQueries({type: "active"});
-      notify.success("数据已更新");
+      await queryClient.refetchQueries({type: "active"}, {throwOnError: true});
     } catch {
       notify.error("刷新失败，请稍后重试");
     }

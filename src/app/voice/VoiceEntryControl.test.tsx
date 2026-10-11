@@ -30,3 +30,13 @@ test("global voice entry keeps a compact, accessible text fallback when ASR is u
   assert.match(html, /aria-label="打开语音快捷录入（当前使用文字输入）"/);
   assert.match(html, /语音快捷录入（未配置识别服务，点击后可输入文字）/);
 });
+
+test("phone global text fallback is an explicit full-width draft action", () => {
+  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  client.setQueryData(["voice", "status"], {asrEnabled: false, aiEnabled: false, maxSeconds: 30});
+  const html = renderToStaticMarkup(createElement(QueryClientProvider, {client}, createElement(VoiceEntryControl, {scene: "auto", mode: "hold", label: "按住说话"})));
+  assert.match(html, /输入文字生成草稿/);
+  assert.match(html, /min-h-12 w-full/);
+  assert.doesNotMatch(html, /改用文字/);
+  assert.doesNotMatch(html, /按住说话/);
+});

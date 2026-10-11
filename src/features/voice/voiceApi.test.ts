@@ -9,7 +9,7 @@ test("voice status reads the authenticated feature fallback contract", async () 
   const calls: Array<{url: string; init?: RequestInit}> = [];
   globalThis.fetch = async (input, init) => {
     calls.push({url: String(input), init});
-    return new Response(JSON.stringify({asrEnabled: false, aiEnabled: false, maxSeconds: 30}), {status: 200, headers: {"content-type": "application/json"}});
+    return new Response(JSON.stringify({data: {asrEnabled: false, aiEnabled: false, maxSeconds: 30}}), {status: 200, headers: {"content-type": "application/json"}});
   };
   try {
     assert.deepEqual(await voiceApi.status(), {asrEnabled: false, aiEnabled: false, maxSeconds: 30});
@@ -23,7 +23,7 @@ test("voice transcribe posts only a WAV blob to the read-only route", async () =
   const calls: Array<{url: string; init?: RequestInit}> = [];
   globalThis.fetch = async (input, init) => {
     calls.push({url: String(input), init});
-    return new Response(JSON.stringify({text: "回收一张 4090", durationMs: 2300, provider: "mock"}), {status: 200, headers: {"content-type": "application/json"}});
+    return new Response(JSON.stringify({data: {text: "回收一张 4090", durationMs: 2300, provider: "mock"}}), {status: 200, headers: {"content-type": "application/json"}});
   };
   try {
     const audio = new Blob([new Uint8Array([1, 2, 3])], {type: "audio/wav"});

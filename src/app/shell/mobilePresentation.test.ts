@@ -22,6 +22,17 @@ test("only actually open overlays hide phone navigation", () => {
   assert.doesNotMatch(css, /body:has\(\[role="dialog"\], \[role="listbox"\]/);
 });
 
+test("portaled phone tab panels reserve navigation and safe area without shell-local tokens", () => {
+  const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
+  const rule = css.match(/\.erp-dialog-viewport:has\(\[data-mobile-presentation="tab"\]\)\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(rule, /bottom:\s*calc\(var\(--erp-mobile-nav-height\) \+ var\(--erp-safe-bottom\)\)/);
+  assert.doesNotMatch(rule, /var\(--erp-mobile-bottom-offset\)/);
+  assert.match(css, /\.erp-dialog-popup\[data-mobile-presentation="tab"\] > \[data-erp-region="dialog-body"\].*overscroll-behavior-y: contain/);
+  assert.match(css, /body:has\(\[data-erp-shell\]\[data-phone-keyboard="open"\]\).*bottom: var\(--erp-phone-keyboard-inset\)/);
+  const navRule = css.match(/\.erp-mobile-bottom-nav\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(navRule, /min-height:\s*calc\(var\(--erp-mobile-nav-height\) \+ var\(--erp-safe-bottom\)\)/);
+});
+
 test("phone select matcher has no runtime dependency on its parent selector", () => {
   const source = readFileSync(new URL("../../components/ui/phone-search-select.tsx", import.meta.url), "utf8");
   assert.match(source, /import type \{SelectProps\} from "\.\/select"/);

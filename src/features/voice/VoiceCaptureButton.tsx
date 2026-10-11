@@ -129,7 +129,7 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
     : recording ? <Square className="h-3.5 w-3.5" aria-hidden="true" /> : <Mic className="h-4 w-4" aria-hidden="true" />;
   const label = cancelArmed ? "松开取消" : recording ? mode === "hold" ? "松开结束" : "结束录音" : triggerLabel || (mode === "hold" ? "按住说话" : "语音录入");
 
-  return <div className="inline-flex min-w-0 flex-col items-start gap-1" data-erp-component="voice-capture">
+  return <div className={cn("inline-flex min-w-0 flex-col items-start gap-1", mode === "hold" && "w-full")} data-erp-component="voice-capture">
     <Button
       type="button"
       variant={recording ? "warning" : "secondary"}

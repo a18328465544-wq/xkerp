@@ -84,7 +84,7 @@ def run_case(browser, width, scene):
     if phone:
         page.get_by_role("button", name="开单", exact=True).click()
         entry = page.locator('[data-erp-component="voice-entry-control"]').last
-        entry.get_by_role("button", name="改用文字", exact=True).click()
+        entry.get_by_role("button", name="输入文字生成草稿", exact=True).click()
     else:
         page.get_by_role("button", name="打开语音快捷录入（当前使用文字输入）", exact=True).click()
 

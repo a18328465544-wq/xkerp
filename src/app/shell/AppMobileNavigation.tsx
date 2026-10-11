@@ -51,7 +51,7 @@ export function AppMobileNavigation({onProfileVisibilityChange}: {onProfileVisib
     </nav>
     <ErpDialogShell open={Boolean(panel)} onOpenChange={(open) => {if (!open) setPanel(null);}} title={panel === "entry" ? "开单与作业" : "我的"} size="lg" modal={false} mobilePresentation="tab">
       {panel === "more" && <><div className="erp-phone-profile"><UserRound className="h-10 w-10 shrink-0" /><div className="min-w-0 flex-1"><h2>{session?.user.displayName || session?.user.username}</h2><p className="flex items-center gap-2"><span>{session?.user.role || "员工"}</span><span className="text-xs text-[var(--erp-color-text-muted)]">v{appVersion}</span></p></div></div><ErpSearchInput value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索其他已授权功能" aria-label="查找手机功能" /></>}
-      {panel === "entry" && <section className="mb-4 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-3"><h3 className="mb-2 text-sm font-semibold text-[var(--erp-color-text)]">语音快捷录入</h3><GlobalVoiceEntry mode="hold" /></section>}
+      {panel === "entry" && <section className="mb-4 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] p-3"><h3 className="mb-2 text-sm font-semibold text-[var(--erp-color-text)]">快捷录入</h3><GlobalVoiceEntry mode="hold" /></section>}
       {panel === "entry" ? entrySections.map((section) => <section key={section.title}><h3 className="erp-phone-section-title">{section.title}</h3>{menu(section.items)}</section>) : sections.map((section) => {
         const isExpanded = Boolean(expandedGroups[section.title]);
         const visibleItems = keyword.trim() || isExpanded ? section.items : section.items.slice(0, 4);

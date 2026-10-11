@@ -11,3 +11,11 @@ test("voice draft panel keeps the transcript editable and explains the save boun
   assert.match(html, /只有点击原表单的确认提交后/);
   assert.match(html, /草稿预览/);
 });
+
+test("text fallback editor does not pretend to record audio and retains the confirmation boundary", () => {
+  const html = renderToStaticMarkup(<VoiceDraftTranscriptEditor textOnly sceneLabel="快捷录入" transcript="" onTranscriptChange={() => undefined} />);
+  assert.match(html, /录入文字/);
+  assert.match(html, /输入或粘贴采购、销售或客户信息/);
+  assert.match(html, /只有点击原表单的确认提交后才会保存业务数据/);
+  assert.doesNotMatch(html, /录音仅用于识别/);
+});

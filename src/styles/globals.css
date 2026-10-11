@@ -1228,8 +1228,8 @@ input[inputmode="numeric"] {
     z-index: var(--erp-layer-tab-navigation);
     inset-inline: 0;
     bottom: 0;
-    min-height: var(--erp-mobile-nav-height);
-    padding: var(--erp-space-1) var(--erp-space-2) max(var(--erp-space-1), env(safe-area-inset-bottom));
+    min-height: calc(var(--erp-mobile-nav-height) + var(--erp-safe-bottom));
+    padding: var(--erp-space-1) var(--erp-space-2) max(var(--erp-space-1), var(--erp-safe-bottom));
     border-top: 1px solid var(--erp-mobile-bottom-nav-border);
     background: var(--erp-mobile-bottom-nav-bg);
     backdrop-filter: blur(16px);
@@ -1480,8 +1480,13 @@ input[inputmode="numeric"] {
   .erp-phone-select-trigger > button > svg { flex-shrink: 0; color: var(--erp-color-text-muted); }
   .erp-dialog-viewport:has(.erp-phone-selector) { align-items: stretch; padding: 0; top: 0; }
   .erp-dialog-viewport:has(.erp-phone-selector) > .erp-phone-selector { max-height: var(--erp-phone-visible-height); }
-  .erp-dialog-viewport:has([data-mobile-presentation="tab"]) { inset-inline: 0; top: 0; bottom: var(--erp-mobile-bottom-offset); padding: 0; min-height: 0; align-items: stretch; }
+  /* Tab panels are portaled outside AppShell: shell-local bottom-offset does
+     not inherit here. Reserve the real navigation area, so the scroll body
+     cannot mistake rows covered by the navigation for visible content. */
+  .erp-dialog-viewport:has([data-mobile-presentation="tab"]) { inset-inline: 0; top: 0; bottom: calc(var(--erp-mobile-nav-height) + var(--erp-safe-bottom)); padding: 0; min-height: 0; align-items: stretch; }
+  body:has([data-erp-shell][data-phone-keyboard="open"]) .erp-dialog-viewport:has([data-mobile-presentation="tab"]) { top: var(--erp-phone-viewport-offset-top, 0px); bottom: var(--erp-phone-keyboard-inset); }
   .erp-dialog-viewport > .erp-dialog-popup[data-mobile-presentation="tab"] { width: 100%; height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+  .erp-dialog-popup[data-mobile-presentation="tab"] > [data-erp-region="dialog-body"] { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
   .erp-phone-logout { background: var(--erp-color-danger-soft); color: var(--erp-color-danger); }
   .erp-phone-selector { display: flex; flex-direction: column; width: 100%; max-width: none; height: var(--erp-phone-visible-height); max-height: var(--erp-phone-visible-height); border: 0; border-radius: 0; background: var(--erp-color-surface); }
   .erp-phone-selector-header { display: flex; flex-shrink: 0; align-items: center; gap: var(--erp-space-2); min-height: var(--erp-mobile-nav-height); padding: var(--erp-space-2); border-bottom: 1px solid var(--erp-color-border); font-size: var(--erp-mobile-section-title); font-weight: var(--erp-font-medium); }
@@ -1935,7 +1940,23 @@ input[inputmode="numeric"] {
   .erp-inventory-directory .erp-phone-record-end > .erp-data-number { font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); }
   .erp-inventory-directory .erp-phone-record-end > svg { grid-column: 2; grid-row: 1 / 3; align-self: center; }
   .erp-inventory-directory .erp-phone-record-wrapper:has(.erp-phone-record-select) .erp-phone-record { padding-right: calc(var(--erp-space-4) + var(--erp-mobile-touch-size)); }
-  .erp-inventory-phone-model > button:last-child { display: flex; margin-left: auto; margin-right: var(--erp-space-4); color: var(--erp-color-primary); }
+  .erp-inventory-model-phone-row { display: grid; grid-template-columns: var(--erp-mobile-touch-size) minmax(0, 1fr) max-content; align-items: start; gap: var(--erp-space-2); padding: var(--erp-mobile-row-inset) var(--erp-mobile-content-inset); border-bottom: 1px solid var(--erp-color-border-soft); background: var(--erp-color-surface); }
+  .erp-inventory-model-phone-thumbnail { width: var(--erp-mobile-touch-size); min-width: var(--erp-mobile-touch-size); height: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); padding: 0; border-radius: var(--erp-radius-md); }
+  .erp-inventory-model-phone-thumbnail .erp-entity-thumbnail { width: 100%; height: 100%; }
+  .erp-inventory-model-phone-content { display: flex; flex-direction: column; min-width: 0; gap: var(--erp-space-1); }
+  .erp-inventory-model-phone-title { width: 100%; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; justify-content: flex-start; padding: 0; text-align: left; font-size: var(--erp-text-base); line-height: var(--erp-line-base); font-weight: var(--erp-font-medium); white-space: normal; overflow-wrap: anywhere; }
+  .erp-inventory-model-phone-subtitle { display: flex; align-items: center; flex-wrap: wrap; gap: var(--erp-space-1); min-width: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); line-height: var(--erp-line-base); }
+  .erp-inventory-model-phone-cards-action { align-self: flex-start; justify-content: flex-start; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-primary); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); white-space: nowrap; }
+  .erp-inventory-model-phone-cards-action > svg { width: 14px; height: 14px; }
+  .erp-inventory-model-phone-meta { display: flex; width: 100%; min-width: 0; min-height: var(--erp-mobile-touch-size); height: auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-text-secondary); text-align: left; font-size: var(--erp-text-sm); line-height: var(--erp-line-base); white-space: normal; }
+  .erp-inventory-model-phone-counts { display: flex; flex-wrap: wrap; column-gap: var(--erp-space-2); row-gap: var(--erp-space-1); }
+  .erp-inventory-model-phone-counts > span { white-space: nowrap; }
+  .erp-inventory-model-phone-location { max-width: 100%; overflow-wrap: anywhere; }
+  .erp-inventory-model-phone-end { display: flex; align-items: center; gap: var(--erp-space-1); }
+  .erp-inventory-model-phone-quantity { display: flex; min-width: 0; flex-direction: column; align-items: flex-end; justify-content: center; gap: var(--erp-space-1); white-space: nowrap; }
+  .erp-inventory-model-phone-quantity-label { color: var(--erp-color-text-secondary); font-size: var(--erp-text-xs); line-height: var(--erp-line-xs); }
+  .erp-inventory-model-phone-quantity-value { display: inline-flex; align-items: baseline; gap: var(--erp-space-1); color: var(--erp-color-text); font-size: var(--erp-text-2xl); line-height: var(--erp-line-sm); font-weight: var(--erp-font-semibold); font-variant-numeric: tabular-nums; }
+  .erp-inventory-model-phone-quantity-unit { color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); font-weight: var(--erp-font-regular); }
   .erp-inventory-phone-search { display: flex; gap: var(--erp-space-2); width: 100%; }
   .erp-inventory-phone-search > [data-erp-component="search-input"] { flex: 1; min-width: 0; }
   .erp-inventory-phone-search input { min-height: var(--erp-mobile-touch-size); }
