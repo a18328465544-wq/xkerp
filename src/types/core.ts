@@ -1,6 +1,9 @@
 /** Shared domain primitives used by feature-specific models and adapters. */
 
-/** Canonical product categories shared by UI forms, adapters and HTTP DTOs. */
+/**
+ * Canonical physical product categories shared by UI forms, adapters and HTTP DTOs.
+ * Assembly/disassembly is a business operation, never a product category.
+ */
 export const productCategoryValues = [
   "显卡",
   "CPU",
@@ -12,11 +15,14 @@ export const productCategoryValues = [
   "机箱",
   "整机",
   "显示器",
-  "组装拆卸",
   "其他配件",
 ] as const;
 
 export type ProductCategory = (typeof productCategoryValues)[number];
+
+export function isProductCategory(value: unknown): value is ProductCategory {
+  return productCategoryValues.includes(value as ProductCategory);
+}
 
 /** Canonical physical-condition values used by inventory and purchase flows. */
 export const inventoryConditionValues = [

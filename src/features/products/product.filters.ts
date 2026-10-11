@@ -1,4 +1,5 @@
 import type {ProductLibraryFilters, ProductLibraryItem} from "@/src/types/product";
+import {isProductCategory} from "@/src/types/core";
 import {productSearchMatches} from "@/src/utils/productSearch";
 
 export const defaultProductFilters: ProductLibraryFilters = {keyword: "", category: "all", brand: "all", page: 1, pageSize: 20};
@@ -7,9 +8,10 @@ export function parseProductFilters(search: string): ProductLibraryFilters {
   const params = new URLSearchParams(search);
   const page = Number(params.get("page"));
   const pageSize = Number(params.get("pageSize"));
+  const category = params.get("category") || "all";
   return {
     keyword: params.get("keyword") || "",
-    category: params.get("category") || "all",
+    category: isProductCategory(category) ? category : "all",
     brand: params.get("brand") || "all",
     page: Number.isInteger(page) && page > 0 ? page : 1,
     pageSize: [20, 50, 100].includes(pageSize) ? pageSize : 20,

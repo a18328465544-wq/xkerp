@@ -22,6 +22,15 @@ test("inventory URL filters round-trip without losing supported state", () => {
   assert.equal(parsed.sortDirection, "asc");
 });
 
+test("assembly is not restored as an inventory category but remains an inventory status", () => {
+  const filters = parseInventoryFilters(`?category=${encodeURIComponent("组装拆卸")}&keyword=4090&status=已组装&pageSize=50`);
+  assert.equal(filters.category, "");
+  assert.equal(filters.keyword, "4090");
+  assert.equal(filters.status, "已组装");
+  assert.equal(filters.pageSize, 50);
+  assert.equal(toInventoryQueryParams(filters).has("category"), false);
+});
+
 test("inventory API query sends the filters supported by the database page", () => {
   const params = toInventoryQueryParams({...defaultInventoryFilters, keyword: "RTX 4090", category: "显卡", model: "RTX 4090", condition: "99新", entryStart: "2026-01-01", brand: "华硕", supplierName: "渠道商", page: 2, pageSize: 50, sortKey: "entryTime", sortDirection: "desc"});
   assert.equal(params.get("keyword"), "RTX 4090");

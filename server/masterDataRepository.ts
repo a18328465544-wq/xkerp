@@ -1,5 +1,6 @@
 import type {ProductTemplate, Vendor} from "../src/types.ts";
 import {inventoryStockStatusValues} from "../src/types/inventory.ts";
+import {isProductCategory} from "../src/types/core.ts";
 import {withDatabaseTransaction} from "./db.ts";
 import {productSearchSql} from "./productSearchSql.ts";
 
@@ -101,6 +102,6 @@ export async function listProductPage(filters: ProductPageFilters = {}, options:
       return data;
     });
     const summary = aggregate.rows[0];
-    return {data: {products}, meta: {page: page.page, pageSize: page.pageSize, total: Number(summary?.total || 0), summary: {stockedTemplates: Number(summary?.stocked_templates || 0), stockUnits: Number(summary?.stock_units || 0)}, facets: {categories: Array.from(new Set(facets.rows.map((row) => row.category).filter(Boolean))), brands: Array.from(new Set(facets.rows.map((row) => row.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))}}};
+    return {data: {products}, meta: {page: page.page, pageSize: page.pageSize, total: Number(summary?.total || 0), summary: {stockedTemplates: Number(summary?.stocked_templates || 0), stockUnits: Number(summary?.stock_units || 0)}, facets: {categories: Array.from(new Set(facets.rows.map((row) => row.category).filter(isProductCategory))), brands: Array.from(new Set(facets.rows.map((row) => row.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))}}};
   });
 }

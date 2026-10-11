@@ -1,7 +1,7 @@
 import type {PermissionModel} from "../endpoints/auth";
 import type {ProductLibraryResponseDto, ProductTemplateRequestDto} from "../dto/product.dto";
 import type {ProductLibraryItem, ProductLibrarySnapshot, ProductTemplateFormValues} from "@/src/types/product";
-import {productCategoryValues} from "@/src/types/core";
+import {productCategoryValues, isProductCategory} from "@/src/types/core";
 import type {ProductCategory} from "@/src/types/core";
 import {buildProductTemplateName} from "@/src/lib/productName";
 
@@ -69,7 +69,7 @@ export function adaptProductLibrary(response: ProductLibraryResponseDto, permiss
   const total = Math.max(0, number(meta.total));
   return {
     products,
-    categories: Array.isArray(facets.categories) ? facets.categories.map(category) : Array.from(new Set(products.map((item) => item.category))),
+    categories: Array.from(new Set(Array.isArray(facets.categories) ? facets.categories.filter(isProductCategory) : products.map((item) => item.category))),
     brands: Array.isArray(facets.brands) ? facets.brands.map((item) => text(item)).filter(Boolean) : Array.from(new Set(products.map((item) => item.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")),
     ...(response.meta ? {meta: {page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), summary: {stockedTemplates: Math.max(0, number(summary.stockedTemplates)), stockUnits: Math.max(0, number(summary.stockUnits))}}} : {}),
   };

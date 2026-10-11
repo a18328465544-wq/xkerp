@@ -16,3 +16,13 @@ test("product filtering searches identity fields without touching raw DTO", () =
   assert.equal(filterProducts([product], {...parseProductFilters(""), keyword: "猛禽 24g"}).length, 1);
   assert.equal(filterProducts([product], {...parseProductFilters(""), category: "CPU"}).length, 0);
 });
+
+test("old operation-category URLs reset only the unsupported category", () => {
+  const filters = parseProductFilters(`?category=${encodeURIComponent("组装拆卸")}&keyword=4090&brand=华硕&pageSize=50`);
+  assert.equal(filters.category, "all");
+  assert.equal(filters.keyword, "4090");
+  assert.equal(filters.brand, "华硕");
+  assert.equal(filters.pageSize, 50);
+  assert.equal(productFiltersToSearch(filters).has("category"), false);
+  assert.equal(parseProductFilters("?category=整机").category, "整机");
+});

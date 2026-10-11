@@ -17,3 +17,11 @@ test("product request is generated only by the request adapter", () => {
   assert.deepEqual(request.imageUrls, ["/api/media/assets/1"]);
   assert.equal(request.remarks, "重点检查");
 });
+
+test("historical operation labels cannot reintroduce categories through server facets", () => {
+  const categories = ["显卡", "组装拆卸", "CPU", "显卡", "未知分类"];
+  const response = {data: {products: []}, meta: {facets: {categories}}};
+  const result = adaptProductLibrary(response, {showCost: false, showProfit: false});
+  assert.deepEqual(result.categories, ["显卡", "CPU"]);
+  assert.deepEqual(categories, ["显卡", "组装拆卸", "CPU", "显卡", "未知分类"]);
+});
