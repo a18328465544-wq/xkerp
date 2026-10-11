@@ -4,6 +4,7 @@ import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
 import {createVoiceVad} from "./voiceVad";
 import {useVoiceRecorder, type VoiceRecorderState} from "./useVoiceRecorder";
+import {isVoiceCaptureDisabled, resolveHoldReleaseIntent} from "./voiceCaptureState";
 
 export type VoiceCaptureMode = "toggle" | "hold";
 export interface VoiceRecorderSnapshot {state: VoiceRecorderState; elapsedMs: number; level: number}
@@ -31,9 +32,12 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
   const [cancelArmed, setCancelArmed] = useState(false);
   const pointerStartRef = useRef<{id: number; y: number} | null>(null);
   const releaseIntentRef = useRef<"stop" | "cancel" | null>(null);
+  const startPendingRef = useRef(false);
+  const recordingRef = useRef(false);
   const vadRef = useRef(createVoiceVad());
   const recording = recorder.state === "recording";
-  const controlDisabled = disabled || busy || recorder.state === "starting" || recorder.state === "stopping";
+  const controlUnavailable = disabled || busy || recorder.state === "starting" || recorder.state === "stopping";
+  const buttonDisabled = isVoiceCaptureDisabled(mode, recorder.state, disabled, busy);
 
   useEffect(() => {onRecorderChange?.({state: recorder.state, elapsedMs: recorder.elapsedMs, level: recorder.level});}, [onRecorderChange, recorder.elapsedMs, recorder.level, recorder.state]);
 
@@ -46,28 +50,39 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
   }, [mode, recording, recorder.elapsedMs, recorder.level, recorder.stop]);
 
   const begin = async () => {
-    if (controlDisabled || recording) return;
+    if (controlUnavailable || recording || startPendingRef.current) return;
+    startPendingRef.current = true;
+    releaseIntentRef.current = null;
     const result = await recorder.start();
-    if (!result.ok) onUnavailable?.(result.reason);
-    else if (mode === "hold" && releaseIntentRef.current) {
+    startPendingRef.current = false;
+    if (!result.ok) {
+      releaseIntentRef.current = null;
+      recordingRef.current = false;
+      onUnavailable?.(result.reason);
+    } else {
+      recordingRef.current = true;
+    }
+    if (result.ok && mode === "hold" && releaseIntentRef.current) {
       const intent = releaseIntentRef.current;
       releaseIntentRef.current = null;
+      recordingRef.current = false;
       if (intent === "cancel") void recorder.cancel();
       else void recorder.stop();
     }
   };
 
   const toggle = () => {
-    if (controlDisabled) return;
+    if (controlUnavailable) return;
     if (recording) void recorder.stop();
     else void begin();
   };
 
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (mode !== "hold" || controlDisabled || event.button !== 0) return;
+    if (mode !== "hold" || controlUnavailable || event.button !== 0) return;
     event.preventDefault();
     pointerStartRef.current = {id: event.pointerId, y: event.clientY};
     releaseIntentRef.current = null;
+    recordingRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     setCancelArmed(false);
     void begin();
@@ -81,17 +96,33 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
     if (shouldCancel) event.preventDefault();
   };
 
-  const finishHold = (event: PointerEvent<HTMLButtonElement>, cancel: boolean) => {
+  const finishHold = (event: Pick<globalThis.PointerEvent, "pointerId" | "preventDefault">, cancel: boolean) => {
     const start = pointerStartRef.current;
-    if (!start || start.id !== event.pointerId) return;
+    const intent = resolveHoldReleaseIntent(start?.id ?? null, event.pointerId, cancel);
+    if (!intent) return;
     event.preventDefault();
     pointerStartRef.current = null;
     setCancelArmed(false);
-    const intent = cancel ? "cancel" : "stop";
-    if (recorder.state !== "recording") releaseIntentRef.current = intent;
-    else if (intent === "cancel") void recorder.cancel();
-    else void recorder.stop();
+    if (recorder.state !== "recording" && !recordingRef.current) releaseIntentRef.current = intent;
+    else {
+      releaseIntentRef.current = null;
+      recordingRef.current = false;
+      if (intent === "cancel") void recorder.cancel();
+      else void recorder.stop();
+    }
   };
+
+  useEffect(() => {
+    if (mode !== "hold") return;
+    const onPointerUp = (event: globalThis.PointerEvent) => finishHold(event, false);
+    const onPointerCancel = (event: globalThis.PointerEvent) => finishHold(event, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerCancel, true);
+    return () => {
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
+    };
+  }, [mode, recorder.state]);
 
   const icon = mode === "hold"
     ? recording ? <MicOff className="h-4 w-4" aria-hidden="true" /> : <Mic className="h-4 w-4" aria-hidden="true" />
@@ -102,7 +133,7 @@ export function VoiceCaptureButton({mode, maxSeconds, disabled = false, busy = f
     <Button
       type="button"
       variant={recording ? "warning" : "secondary"}
-      disabled={controlDisabled}
+      disabled={buttonDisabled}
       aria-label={label}
       aria-pressed={recording}
       aria-describedby={recorder.error ? "voice-capture-error" : undefined}
