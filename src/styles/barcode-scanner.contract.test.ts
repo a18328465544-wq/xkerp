@@ -52,9 +52,18 @@ test("portrait preview fitting preserves default full frames; cropping requires 
 
 test("camera controls reuse the accessible segmented control without fake tap-to-focus", () => {
   assert.match(scanner, /ErpSegmentedControl label="扫码放大倍数"/);
-  assert.match(scanner, /disabled=\{starting \|\| photoPending \|\| zoomPending\}/);
-  assert.match(scanner, /cameras.length > 1 && <Button/);
+  assert.match(scanner, /disabled=\{!cameraReady \|\| Boolean\(error\) \|\| starting \|\| decoderPreparing \|\| photoPending \|\| zoomPending\}/);
+  assert.match(scanner, /aria-hidden=\{cameras.length < 2 \? true : undefined\}/);
   assert.doesNotMatch(scanner, /onClick=.*focusDistance/);
+});
+
+test("startup controls occupy their final geometry before the first frame", () => {
+  assert.doesNotMatch(scanner, /cameraReady && !error && <div[^>]*barcode-camera-controls/);
+  assert.match(scanner, /className=\{cameras.length > 1 \? undefined : "invisible"\}/);
+  assert.match(scanner, /waitForBarcodeCameraPreview\(video, previewController.signal\)/);
+  assert.match(scanner, /onPreparing: \(preparing\) => \{if \(isActive\(\)\) setDecoderPreparing\(preparing\)/);
+  assert.match(scanner, /\(starting \|\| !cameraReady\) && !error/);
+  assert.ok(scanner.indexOf("if (track) void enableBarcodeAutofocus(track)") < scanner.indexOf("waitForBarcodeCameraPreview(video, previewController.signal)"));
 });
 
 test("unavailable camera cannot display a misleading active aiming guide", () => {

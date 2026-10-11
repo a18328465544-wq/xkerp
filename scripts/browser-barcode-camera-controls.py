@@ -120,6 +120,7 @@ with sync_playwright() as p:
                     assert page.evaluate('window.__cameraQA.stops') == 2
                     page.get_by_role('button', name='打开扫码', exact=True).click()
                     expect(group).to_be_visible()
+                    expect(one).to_be_enabled()
                     assert page.evaluate("window.__cameraQA.media[2].video.deviceId.exact") == 'back2'
                     expect(one).to_have_attribute('aria-pressed', 'true')
                     page.get_by_role('dialog').get_by_role('button', name='关闭', exact=True).last.click()
