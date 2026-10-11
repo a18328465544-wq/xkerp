@@ -7,17 +7,26 @@ export function barcodeFrameSize(width: number, height: number) {
   return {width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale))};
 }
 
-/** Keep full barcode quiet zones; resize the frame without cropping its edges. */
+export function barcodeFrameCrop(width: number, height: number, zoom = 1) {
+  if (!barcodeFrameSize(width, height)) return null;
+  const scale = Number.isFinite(zoom) ? Math.max(1, Math.min(2, zoom)) : 1;
+  const cropWidth = width / scale, cropHeight = height / scale;
+  return {x: (width - cropWidth) / 2, y: (height - cropHeight) / 2, width: cropWidth, height: cropHeight};
+}
+
+/** Full frame by default. Explicit digital zoom crops before downsampling so
+ * small distant labels retain their original pixels, including quiet zones. */
 export function createBarcodeFrameReader() {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", {willReadFrequently: true});
   if (!context) throw new Error("当前浏览器无法读取扫码画面，请使用手动输入。");
-  return (video: HTMLVideoElement) => {
-    const size = barcodeFrameSize(video.videoWidth, video.videoHeight);
-    if (!size || video.readyState < 2) return null;
+  return (video: HTMLVideoElement, zoom = 1) => {
+    const crop = barcodeFrameCrop(video.videoWidth, video.videoHeight, zoom);
+    const size = crop && barcodeFrameSize(crop.width, crop.height);
+    if (!crop || !size || video.readyState < 2) return null;
     canvas.width = size.width;
     canvas.height = size.height;
-    context.drawImage(video, 0, 0, size.width, size.height);
+    context.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, size.width, size.height);
     return context.getImageData(0, 0, size.width, size.height);
   };
 }

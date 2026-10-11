@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
+import {barcodeFrameCrop} from "../components/common/barcodeScannerFrames";
 
 const scanner = readFileSync(new URL("../components/common/ErpBarcodeScannerDialog.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./globals.css", import.meta.url), "utf8");
@@ -30,18 +31,30 @@ test("barcode aiming guide is wide, centered and does not intercept camera inter
 test("full-frame video, QR compatibility, fallback input and session cleanup stay intact", () => {
   assert.match(css, /\.erp-barcode-video\s*\{[^}]*object-fit: cover;[^}]*object-position: center/);
   assert.doesNotMatch(css, /\.erp-barcode-video\s*\{[^}]*object-fit: contain/);
-  assert.match(scanner, /deliverActiveBarcode\(video, \(source\) => decoder!\.detect\(source\)/);
+  assert.match(scanner, /const useCrop = cropZoom > 1 && \+\+frameIndex % 4 !== 0/);
+  assert.match(scanner, /const source = useCrop \? readZoomFrame!\(video, cropZoom\) : video/);
+  assert.match(scanner, /deliverActiveBarcode\(source, \(frame\) => decoder!\.detect\(frame\)/);
   assert.match(scanner, /"qr_code", "code_128"/);
   assert.match(scanner, /photoScanRef\.current\?\.\(file\)/);
   assert.match(scanner, /deliverCodeRef\.current\?\.\(manualCode\.trim\(\)\)/);
   assert.match(scanner, /ownedStream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
 });
 
-test("portrait preview fitting never crops the decoder input", () => {
+test("portrait preview fitting preserves default full frames; cropping requires explicit zoom", () => {
   const frames = readFileSync(new URL("../components/common/barcodeScannerFrames.ts", import.meta.url), "utf8");
-  assert.match(frames, /barcodeFrameSize\(video.videoWidth, video.videoHeight\)/);
-  assert.match(frames, /context.drawImage\(video, 0, 0, size.width, size.height\)/);
+  assert.match(frames, /\(video: HTMLVideoElement, zoom = 1\)/);
+  assert.match(frames, /barcodeFrameCrop\(video.videoWidth, video.videoHeight, zoom\)/);
+  assert.match(frames, /context.drawImage\(video, crop.x, crop.y, crop.width, crop.height, 0, 0, size.width, size.height\)/);
+  assert.deepEqual(barcodeFrameCrop(720, 1280), {x: 0, y: 0, width: 720, height: 1280});
+  assert.deepEqual(barcodeFrameCrop(1280, 720), {x: 0, y: 0, width: 1280, height: 720});
   assert.doesNotMatch(scanner, /detect\([^)]*getBoundingClientRect/);
+});
+
+test("camera controls reuse the accessible segmented control without fake tap-to-focus", () => {
+  assert.match(scanner, /ErpSegmentedControl label="扫码放大倍数"/);
+  assert.match(scanner, /disabled=\{starting \|\| photoPending \|\| zoomPending\}/);
+  assert.match(scanner, /cameras.length > 1 && <Button/);
+  assert.doesNotMatch(scanner, /onClick=.*focusDistance/);
 });
 
 test("unavailable camera cannot display a misleading active aiming guide", () => {
