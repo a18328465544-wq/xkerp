@@ -74,7 +74,7 @@ with sync_playwright() as p:
                     try:
                         page.goto(BASE + path)
                         page.wait_for_load_state("networkidle")
-                        page.get_by_role("button", name=opener, exact=True).click()
+                        page.get_by_role("button", name=opener, exact=True).first.click()  # empty lists repeat the header action
                         form = page.locator("#" + form_id)
                         if editor == "product":
                             form.locator('input[name="brand"]').fill("本地品牌")
@@ -99,7 +99,7 @@ with sync_playwright() as p:
                         elif mode == "close-reopen":
                             page.get_by_role("dialog").get_by_role("button", name="取消", exact=True).click()
                             expect(form).to_have_count(0)
-                            page.get_by_role("button", name=opener, exact=True).click()
+                            page.get_by_role("button", name=opener, exact=True).first.click()  # empty lists repeat the header action
                             form.locator('textarea[name="remarks"]').fill("新表单备注")
                         elif mode == "double":
                             form.evaluate("form => form.requestSubmit()")

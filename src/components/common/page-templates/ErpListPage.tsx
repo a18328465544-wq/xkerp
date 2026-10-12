@@ -246,7 +246,9 @@ export function ErpListPage<TData>({
   const hasSheet = Boolean(phoneFilterSheet) || filters.length > 0 || actions.length > 0 || pageActions.length > 0 || Boolean(onRefresh) || Boolean(onPageSizeChange);
   const documentPresentation = phonePresentation === "documents";
   const dockAction = phonePrimaryAction || primaryAction;
-  const emptyAction = table?.emptyAction ?? (primaryAction && <Button type="button" variant="primary" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.label}</Button>);
+  const dockShowsPrimary = Boolean(searchInput && dockAction && (!documentPresentation || phoneActionPlacement === "dock"));
+  // The dock already carries the primary action on screen; the empty state does not repeat it.
+  const emptyAction = table?.emptyAction ?? (!dockShowsPrimary && primaryAction ? <Button type="button" variant="primary" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.label}</Button> : undefined);
   const filterButton = hasSheet ? <Button type="button" variant="secondary" size="sm" onClick={() => setSheetOpen(true)} aria-label={phoneFilterSheet || documentPresentation ? `${phoneTitle}筛选` : `${phoneTitle}筛选与操作`}><SlidersHorizontal className="h-4 w-4" />筛选{sheetFilterCount > 0 && <span className="tabular-nums">{sheetFilterCount}</span>}</Button> : undefined;
   const mobileToolbar: ErpDataTableProps<TData>["mobileToolbar"] = ({openSorting, sortLabel, descending}) => <div className="erp-list-toolbar">
     {quickFilters.length > 0 && <div className="erp-list-quick-filters" role="group" aria-label={`${phoneTitle}快捷筛选`}>{quickFilters.slice(0, 4).map((item) => <Button key={item.label} type="button" variant={item.active ? "primary" : "ghost"} aria-pressed={item.active} onClick={item.onSelect}>{item.label}</Button>)}</div>}
@@ -258,14 +260,15 @@ export function ErpListPage<TData>({
   </PageFrame>;
   return <PageFrame className={cn("erp-list-page", documentPresentation && "erp-document-list", className)} data-phone-layout="thumb">
     <ErpPageHeader phone={phone} phoneActionsMode={documentPresentation ? "inline" : "collapse"} title={phoneTitleNode} subtitle={subtitle} quickStatus={quickStatus} actions={phoneHeaderActions || filterButton || documentPresentation ? <>{filterButton}{phoneHeaderActions}{documentPresentation && phoneActionPlacement !== "dock" && primaryAction && <Button type="button" variant="ghost" size="iconTouch" aria-label={primaryAction.label} title={primaryAction.label} disabled={primaryAction.disabled} onClick={primaryAction.onClick}><Plus className="h-5 w-5" /></Button>}{documentPresentation && (actions.length > 0 || pageActions.length > 0 || onRefresh || onPageSizeChange) && <Button type="button" variant="ghost" size="iconTouch" aria-label={`${phoneTitle}更多操作`} title="更多操作" onClick={() => setWorkOpen(true)}><MoreHorizontal className="h-5 w-5" /></Button>}</> : undefined} />
-    {tabs}
+    {/* The thumb layout bleeds rows to the screen edge; everything above the rows keeps the 16px gutter. */}
+    {tabs && <div className="px-[var(--erp-mobile-content-inset)]">{tabs}</div>}
     {/* Phones keep list rows near the top; summary metrics stay on desktop (M13/M18). */}
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-      {phoneMetrics}
-      {tableNotice}
-      {phoneWorkflow && <details ref={workflowRef} open={workflowOpen} onToggle={(event) => setWorkflowOpen(event.currentTarget.open)} className="erp-document-workflow"><summary>{phoneWorkflow.title}</summary>{phoneWorkflow.content}</details>}
+      {phoneMetrics && <div className="px-[var(--erp-mobile-content-inset)]">{phoneMetrics}</div>}
+      {tableNotice && <div className="px-[var(--erp-mobile-content-inset)]">{tableNotice}</div>}
+      {phoneWorkflow && <details ref={workflowRef} open={workflowOpen} onToggle={(event) => setWorkflowOpen(event.currentTarget.open)} className="group erp-document-workflow"><summary className="flex list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">{phoneWorkflow.title}<ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" /></summary>{phoneWorkflow.content}</details>}
       {phoneTableContent ?? (table ? <ErpDataTable {...table} emptyAction={emptyAction} surface="plain" mobilePagination="compact" mobilePaginationShowTotal={!documentPresentation} mobileToolbar={mobileToolbar} density={tableDensity} phone={phoneProp} compactViewport={phoneProp} /> : null)}
-      {phoneAfterTable}
+      {phoneAfterTable && <div className="px-[var(--erp-mobile-content-inset)]">{phoneAfterTable}</div>}
       {searchInput && <ErpMobileActionDock hidden={overlayOpen || sheetOpen || workOpen || Boolean(workflowOpen && phoneWorkflow?.actionLabel)} ariaLabel={`${phoneTitle}搜索`} primaryAction={(!documentPresentation || phoneActionPlacement === "dock") && dockAction ? <Button type="button" variant="primary" disabled={dockAction.disabled} onClick={dockAction.onClick}>{dockAction.icon}{dockAction.label}</Button> : phoneWorkflow?.actionLabel && !workflowOpen ? <Button type="button" variant="primary" onClick={() => {setWorkflowOpen(true); requestAnimationFrame(() => workflowRef.current?.scrollIntoView({block: "start"}));}}>{phoneWorkflow.actionLabel}</Button> : undefined}>{searchInput}</ErpMobileActionDock>}
       {documentPresentation && <ErpDialogShell open={workOpen} onOpenChange={setWorkOpen} title={`${phoneTitle}操作`} mobilePresentation="sheet"><div className="grid gap-3">{onPageSizeChange && <Select aria-label="每页条数" value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))} options={createErpPageSizeOptions(phonePageSizeOptions)} />}{[...pageActions, ...actions].map((action) => <Button key={action.label} type="button" variant="secondary" disabled={action.disabled} onClick={() => {setWorkOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>)}{onRefresh && <Button type="button" variant="secondary" disabled={refreshing} onClick={() => {setWorkOpen(false); onRefresh();}}>刷新</Button>}{sheetExtra}</div></ErpDialogShell>}
       {phoneFilterSheet?.({open: sheetOpen, onOpenChange: setSheetOpen})}

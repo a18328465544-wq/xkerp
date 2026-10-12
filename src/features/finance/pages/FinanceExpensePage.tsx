@@ -279,7 +279,7 @@ function FinanceExpenseContent({
         title: "支出登记", countLabel: (total) => `${total} 笔记录`, loading: expenseQuery.isPending, loadError: Boolean(expenseQuery.error && !loadedCollection),
         tableTitle: "支出明细", overlayOpen: Boolean(detail || dialogOpen || deleting),
         search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索支出登记", placeholder: "搜索编号、对象或备注"},
-        primaryAction: {label: "新增支出", onClick: openCreate, disabled: !canReadAccounts},
+        primaryAction: {label: "登记支出", onClick: openCreate, disabled: !canReadAccounts},
         actions: [{label: "导出本页", onClick: exportRows}], onRefresh: () => void expenseQuery.refetch(), refreshing: expenseQuery.isFetching,
         filters: [
           {kind: "select", key: "businessType", label: "业务类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...[...financeExpenseCategories, ...legacyFinanceExpenseCategories].map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
@@ -334,7 +334,7 @@ function FinanceExpenseContent({
           {label: "支出登记", path: "/finance/expense", visible: createCapabilities(session).menu("payment_out")},
         ],
       }}
-      metrics={<MetricsRegion mobileCollapseAfter={4}>
+      metrics={<MetricsRegion>
         <FinanceEntryMetric
           label="筛选支出"
           value={formatCurrency(collection.totalAmount)}

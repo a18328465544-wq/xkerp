@@ -2307,5 +2307,6 @@ input[inputmode="numeric"] {
   .erp-document-workflow > summary + * { margin-bottom: var(--erp-space-3); }
   .erp-document-actions { display: flex; width: 100%; gap: var(--erp-space-2); }
   .erp-document-actions > button { min-height: var(--erp-mobile-option-height); }
-  .erp-document-actions > button:last-of-type { flex: 1; }
+  /* 更多 and the primary (a button or a detail link) split the bar evenly. */
+  .erp-document-actions > :is(button, a) { flex: 1; min-width: 0; padding-inline: var(--erp-space-3); }
 }

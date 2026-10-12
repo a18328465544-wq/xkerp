@@ -173,10 +173,12 @@ test("list section counts use the shared gray inline tally without a status dot"
   assert.doesNotMatch(markup, /label="共 37 条"/);
 });
 
-test("empty lists offer the already-authorized creation action on both projections", () => {
+test("empty lists offer the already-authorized creation action once per screen", () => {
   for (const phone of [false, true]) {
     const markup = renderToStaticMarkup(<ErpListPage {...props} phone={phone} table={{...props.table!, data: [], total: 0}} />);
-    assert.match(markup, /data-erp-component="empty-state"[\s\S]*新建客户/);
+    // Phones already show 新建客户 in the search dock, so the empty state does not repeat it.
+    if (phone) assert.doesNotMatch(markup, /data-erp-component="empty-state"[\s\S]*新建客户/);
+    else assert.match(markup, /data-erp-component="empty-state"[\s\S]*新建客户/);
     const restricted = renderToStaticMarkup(<ErpListPage {...props} phone={phone} primaryAction={undefined} table={{...props.table!, data: [], total: 0}} />);
     assert.doesNotMatch(restricted, /新建客户/);
   }

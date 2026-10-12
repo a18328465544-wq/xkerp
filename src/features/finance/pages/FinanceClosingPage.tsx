@@ -343,7 +343,8 @@ function FinanceClosingContent({
       />
     </div>}
   >
-    <div id="finance-closing-health" className="scroll-mt-6">{reconciliationQuery.data ? <FinanceReconciliationPanel report={reconciliationQuery.data} /> : <DashboardSection title="账务体检" description="尚未运行账户、收付款与退货链一致性检查。"><div className="flex items-center justify-between gap-3"><ErpEmptyState density="compact" title="等待检查" description="运行检查后，结果将在这里展开。" /><Button type="button" size="sm" variant="secondary" disabled={reconciliationQuery.isFetching} onClick={() => void reconciliationQuery.refetch()}>检查账务</Button></div></DashboardSection>}</div>
+    {/* On phones this renders inside the edge-to-edge document list, so it restores the 16px gutter itself. */}
+    <div id="finance-closing-health" className="scroll-mt-6 max-md:px-[var(--erp-mobile-content-inset)]">{reconciliationQuery.data ? <FinanceReconciliationPanel report={reconciliationQuery.data} /> : <DashboardSection title="账务体检" description="尚未运行账户、收付款与退货链一致性检查。"><div className="flex items-center justify-between gap-3"><ErpEmptyState density="compact" title="等待检查" description="运行检查后，结果将在这里展开。" /><Button type="button" size="sm" variant="secondary" disabled={reconciliationQuery.isFetching} onClick={() => void reconciliationQuery.refetch()}>检查账务</Button></div></DashboardSection>}</div>
     <FinanceClosingDetailDrawer item={detail} onClose={() => setDetail(null)} />
   </FinanceDetailPageLayout>;
 }

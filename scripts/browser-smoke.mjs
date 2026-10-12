@@ -418,7 +418,7 @@ try {
   expectPage(`
     await page.goto(${baseLiteral} + "/products");
     await page.getByRole("heading", {name: "商品库"}).waitFor();
-    await page.getByRole("button", {name: "新建模板"}).click();
+    await page.locator('[data-erp-component="page-header"]').getByRole("button", {name: "新建模板"}).click();
     const productDialog = page.getByRole("dialog");
     await productDialog.getByRole("heading", {name: "新建商品规格模板"}).waitFor();
     const productDialogBounds = await productDialog.boundingBox();
@@ -484,13 +484,14 @@ try {
     cli(["resize", String(width), String(height)]);
     expectPage(`
       await page.goto(${baseLiteral} + "/finance/income");
-      await page.getByRole("heading", {name: "其他收支", exact: true}).waitFor();
+      // Phones title the document list after the active tab (收入登记 + count); desktop keeps 其他收支.
+      await page.getByRole("heading", {name: /^(其他收支|收入登记)/}).waitFor();
       let trigger = page.getByRole("button", {name: "收入日期范围", exact: true});
       if (await page.evaluate(() => window.matchMedia("(max-width: 767px)").matches)) {
         await page.getByRole("button", {name: /筛选/}).click();
-        const filters = page.getByRole("dialog", {name: "筛选条件"});
+        const filters = page.getByRole("dialog", {name: "筛选收入登记"});
         await filters.waitFor({state: "visible"});
-        trigger = filters.getByRole("button", {name: "收入日期范围", exact: true});
+        trigger = filters.getByRole("button", {name: "日期范围", exact: true});
       }
       await trigger.click();
       const dialog = page.getByRole("dialog").filter({has: page.getByRole("textbox", {name: "自然语言日期", exact: true})});
@@ -573,17 +574,18 @@ try {
   // language parsing, which are easy to regress while sharing filter bars.
   expectPage(`
     await page.goto(${baseLiteral} + "/finance/income");
-    await page.locator('[data-erp-region="filter-toggle"]').click();
-    const financeFilterDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "筛选条件"})});
-    await financeFilterDialog.getByRole("button", {name: "收入日期范围"}).click();
+    // Finance document lists use the draft filter sheet: edits apply only on 应用筛选.
+    await page.getByRole("button", {name: "收入登记筛选"}).click();
+    const financeFilterDialog = page.getByRole("dialog", {name: "筛选收入登记"});
+    await financeFilterDialog.getByRole("button", {name: "日期范围"}).click();
     const dateDialog = page.getByRole("dialog").filter({has: page.getByRole("textbox", {name: "自然语言日期", exact: true})});
     await dateDialog.getByRole("textbox", {name: "自然语言日期"}).fill("2026-08-01 至 2026-08-31");
     await dateDialog.getByRole("button", {name: "解析"}).click();
-    if (await dateDialog.getByRole("textbox", {name: "开始日期"}).inputValue() !== "2026-08-01") throw new Error("natural language start date was not parsed");
-    if (await dateDialog.getByRole("textbox", {name: "结束日期"}).inputValue() !== "2026-08-31") throw new Error("natural language end date was not parsed");
+    if (await dateDialog.getByRole("textbox", {name: "日期范围开始"}).inputValue() !== "2026-08-01") throw new Error("natural language start date was not parsed");
+    if (await dateDialog.getByRole("textbox", {name: "日期范围结束"}).inputValue() !== "2026-08-31") throw new Error("natural language end date was not parsed");
     await dateDialog.getByRole("button", {name: "应用"}).click();
     await dateDialog.waitFor({state: "hidden"});
-    await financeFilterDialog.getByRole("button", {name: "查看结果"}).click();
+    await financeFilterDialog.getByRole("button", {name: "应用筛选"}).click();
     await financeFilterDialog.waitFor({state: "hidden"});
   `);
   screenshot("mobile-finance-date-picker.png");
@@ -593,7 +595,8 @@ try {
   expectPage(`
     await page.goto(${baseLiteral} + "/inventory?view=models");
     await page.getByRole("heading", {name: "库存"}).waitFor();
-    await page.getByRole("button", {name: "查看 RTX E2E"}).click();
+    // Model rows expose thumbnail, title and quantity buttons; open the ledger by its exact label.
+    await page.getByRole("button", {name: "查看 RTX E2E 出入明细", exact: true}).first().click();
     const mobileLedgerDrawer = page.getByRole("dialog");
     await mobileLedgerDrawer.getByRole("heading", {name: "RTX E2E"}).waitFor();
     const mobileLedgerBounds = await mobileLedgerDrawer.boundingBox();

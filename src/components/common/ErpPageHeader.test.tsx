@@ -29,3 +29,10 @@ test("desktop keeps a primary and export while preserving all other action props
   assert.equal((result.more[0] as typeof refresh).props.onClick, handler);
   assert.equal((result.more[1] as typeof remove).props.disabled, true);
 });
+
+test("desktop keeps view switches and other non-button controls visible", () => {
+  function ViewSwitch() { return <div role="radiogroup">单卡 / 型号</div>; }
+  const result = resolveDesktopPageActions(<><ViewSwitch /><Button>刷新</Button></>);
+  assert.equal(result.inline.length, 1);
+  assert.equal(result.more.length, 1);
+});

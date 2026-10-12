@@ -278,7 +278,7 @@ function FinanceIncomeContent({
         title: "收入登记", countLabel: (total) => `${total} 笔记录`, loading: incomeQuery.isPending, loadError: Boolean(incomeQuery.error && !loadedCollection),
         tableTitle: "收入明细", overlayOpen: Boolean(detail || dialogOpen || deleting),
         search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索收入登记", placeholder: "搜索编号、对象或备注"},
-        primaryAction: {label: "新增收入", onClick: openCreate, disabled: !canReadAccounts},
+        primaryAction: {label: "登记收入", onClick: openCreate, disabled: !canReadAccounts},
         actions: [{label: "导出本页", onClick: exportRows}], onRefresh: () => void incomeQuery.refetch(), refreshing: incomeQuery.isFetching,
         filters: [
           {kind: "select", key: "businessType", label: "业务类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...financeIncomeCategories.map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
@@ -333,7 +333,7 @@ function FinanceIncomeContent({
           {label: "支出登记", path: "/finance/expense", visible: createCapabilities(session).menu("payment_out")},
         ],
       }}
-      metrics={<MetricsRegion mobileCollapseAfter={4}>
+      metrics={<MetricsRegion>
         <FinanceEntryMetric
           label="筛选收入"
           value={formatCurrency(collection.totalAmount)}

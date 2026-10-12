@@ -43,7 +43,11 @@ export function resolvePhonePageActions(actions: ReactNode): ReactNode[] {
   return Children.toArray(actions).flatMap((child) => isValidElement<{children?: ReactNode}>(child) && (child.type === Fragment || child.type === "div") ? resolvePhonePageActions(child.props.children) : [child]);
 }
 
-/** Keep one primary and exports inline; preserve every remaining handler in More. */
+/**
+ * Keep one primary and exports inline; plain secondary buttons move into More.
+ * Anything else (view switches, lookup widgets) is page navigation or a
+ * self-contained control and stays visible.
+ */
 export function resolveDesktopPageActions(actions: ReactNode) {
   const items = resolvePhonePageActions(actions);
   let primaryFound = false;
@@ -54,7 +58,8 @@ export function resolveDesktopPageActions(actions: ReactNode) {
     const text = props ? Children.toArray(props.children).filter((child): child is string => typeof child === "string").join("") : "";
     if ((props?.variant === "primary" || /^(新建|新增|创建)/.test(text)) && !primaryFound) {primaryFound = true; inline.push(item);}
     else if (props?.["data-erp-action"] === "export" || text.includes("导出")) inline.push(item);
-    else more.push(item);
+    else if (isValidElement(item) && item.type === Button) more.push(item);
+    else inline.push(item);
   }
   return {inline, more};
 }

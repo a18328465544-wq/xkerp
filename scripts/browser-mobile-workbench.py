@@ -256,7 +256,7 @@ with sync_playwright() as p:
                     page.get_by_role("textbox", name="销售出库扫码枪输入").fill(STOCK["sn"])
                     page.get_by_role("button", name="追加扫码内容", exact=True).click()
                     expect(page.get_by_role("button", name="扫码确认出库", exact=True)).to_be_enabled()
-                    page.get_by_role("button", name="返回待出库单据", exact=True).click()
+                    page.get_by_role("button", name="返回单据列表", exact=True).click()
                     page.get_by_role("button", name="查看 " + ORDER["invoiceNo"], exact=True).click()
                     expect(page.get_by_role("textbox", name="已扫描库存 ID / SN")).to_have_value(STOCK["sn"])
                 if width == 390:

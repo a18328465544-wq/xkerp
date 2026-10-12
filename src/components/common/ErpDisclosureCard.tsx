@@ -1,6 +1,7 @@
 import type {ReactNode} from "react";
 import {ChevronDown} from "lucide-react";
 import {cn} from "@/src/lib/cn";
+import {ErpPhoneMetricLimit} from "./ErpMetricPresentation";
 
 /**
  * Folded secondary content (「更多指标」「毛利分析与趋势」). Matches the finance
@@ -15,6 +16,7 @@ export function ErpDisclosureCard({title, children, className}: {title: ReactNod
         <span className="group-open:hidden">展开</span><span className="hidden group-open:inline">收起</span>
       </span>
     </summary>
-    <div className="min-w-0 pt-3">{children}</div>
+    {/* Folded content is already opt-in; metric grids inside must not fold a second time. */}
+    <div className="min-w-0 pt-3"><ErpPhoneMetricLimit.Provider value={0}>{children}</ErpPhoneMetricLimit.Provider></div>
   </details>;
 }

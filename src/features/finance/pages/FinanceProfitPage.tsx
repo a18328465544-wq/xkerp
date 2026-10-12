@@ -109,7 +109,8 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
       <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} density="compact" triggerClassName="sm:w-36" startAriaLabel="利润开始日期" endAriaLabel="利润结束日期" ariaLabel="利润日期范围" />
     </AnalyticsToolbar>}
     metrics={<div className="space-y-3">
-      <MetricsRegion>
+      {/* Four core metrics stay visible; the rest already live in 更多指标, so no second fold. */}
+      <MetricsRegion mobileCollapseAfter={4}>
         <ErpMetricCard label="销售额" value={metricValue(formatCurrency(report.summary.revenue))} icon={<CircleDollarSign className="h-4 w-4" />} tone="info" />
         <ErpMetricCard label="销售毛利" value={metricValue(session.permissions.showProfit && report.summary.profit !== undefined ? formatCurrency(report.summary.profit) : "—")} detail={session.permissions.showProfit ? "销售额 − 商品成本" : "当前账号无利润权限"} icon={<TrendingUp className="h-4 w-4" />} tone={report.summary.profit !== undefined && report.summary.profit < 0 ? "danger" : "success"} />
         <ErpMetricCard label="毛利率" value={metricValue(session.permissions.showProfit && report.summary.margin !== undefined ? `${(report.summary.margin * 100).toFixed(2)}%` : "—")} detail="销售毛利 ÷ 销售额" icon={<BarChart3 className="h-4 w-4" />} tone="success" />

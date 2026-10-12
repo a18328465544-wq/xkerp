@@ -81,7 +81,7 @@ function AssemblyContent({session, filters, onFiltersChange, listQuery, referenc
     <AssemblyDetail record={detail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} onClose={() => setDetail(null)} />
     <DeleteAssemblyDialog record={deleting} pending={deleteMutation.isPending} onClose={() => setDeleting(null)} onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}} />
     </>}
-    table={{columns, data: records, getRowId: (row) => row.id, loading: listQuery.isPending, fetching: listQuery.isFetching, error: listQuery.error, onRetry: () => void listQuery.refetch(), onRowClick: setDetail,
+    table={{columns, data: records, getRowId: (row) => row.id, emptyTitle: "暂无组装拆卸记录", emptyDescription: "新建组装或拆卸后会在这里显示。", loading: listQuery.isPending, fetching: listQuery.isFetching, error: listQuery.error, onRetry: () => void listQuery.refetch(), onRowClick: setDetail,
       mobileSorting: false, manualSorting: true, page: filters.page, pageSize: filters.pageSize, total: listQuery.data?.total ?? 0, onPageChange: (page) => onFiltersChange({...filters, page}), onPageSizeChange: (pageSize) => onFiltersChange({...filters, pageSize, page: 1}),
       mobileRow: (item) => <ErpDocumentRecordRow documentNo={item.id} status={<ErpStatusBadge label={item.type} tone={item.type === "拆卸" ? "warning" : "info"} />} handler={item.handler} date={item.time?.slice(0, 10)} quantity={`${(item.type === "拆卸" ? item.afterParts : item.beforeParts).length} 个配件`} summary={item.type === "拆卸" ? item.beforeProductName : item.afterProductName} amount={access.showProfit ? formatCurrency(assemblyOperationValue(item)) : undefined} amountLabel={item.type === "拆卸" ? "总成本" : "总价值"} onOpen={() => setDetail(item)} />,
     }}

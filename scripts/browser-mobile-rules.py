@@ -38,7 +38,8 @@ AUDIT = r"""() => {
   const W = innerWidth;
   const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && r.right > 0 && r.left < W && s.visibility !== "hidden" && Number(s.opacity) > 0.05; };
   const label = (el) => ((el.innerText || el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.value || "").trim().replace(/\s+/g, " ").slice(0, 24));
-  const exempt = (el) => el.closest('[role="grid"], [data-erp-component*="calendar"], thead, .erp-skip-link, [data-erp-touch-exempt], .erp-table-desktop-view, [role="separator"], .erp-phone-chip');
+  // aria-hidden form proxies (Base UI select inputs) and content of closed <details> are not touch targets.
+  const exempt = (el) => el.closest('[role="grid"], [data-erp-component*="calendar"], thead, .erp-skip-link, [data-erp-touch-exempt], .erp-table-desktop-view, [role="separator"], .erp-phone-chip, [aria-hidden="true"]') || (el.closest("details:not([open])") && !el.closest("summary"));
   const out = {overflow: document.documentElement.scrollWidth > W + 1, targets: [], inputs: [], tiny: [], chrome: [], generic: 0};
   for (const el of document.querySelectorAll('button, a[href], [role="button"], [role="combobox"], [role="tab"], input:not([type="hidden"]), select, textarea')) {
     if (!visible(el) || exempt(el)) continue;

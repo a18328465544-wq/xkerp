@@ -14,7 +14,9 @@ export function MetricsRegion({className, style, children, mobileCollapseAfter, 
   const [expanded, setExpanded] = useState(false);
   const phoneFromHook = useErpPhone();
   const phone = phoneProp ?? phoneFromHook;
-  const limit = useContext(ErpPhoneMetricLimit) ?? mobileCollapseAfter;
+  const frameLimit = useContext(ErpPhoneMetricLimit);
+  // An explicit page value wins over the frame default (finance phones show two).
+  const limit = mobileCollapseAfter ?? frameLimit;
   const items = availableMetricItems(children);
   const shouldCollapse = Boolean(phone && limit && items.length > limit);
   const visibleItems = shouldCollapse && !expanded ? items.slice(0, limit) : items;
