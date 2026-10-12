@@ -26,6 +26,8 @@ localhost ports and be reached through Nginx by domain name.
 
 ## Rules
 
+本次手机搜索区本地验收（2026-10-12）：`127.0.0.1:3020` 为隔离只读数据预览，代理当前工作树 `127.0.0.1:5175` Vite；`127.0.0.1:5176` 仅临时验证本地构建产物，验收后关闭。三者均不开放公网，不占用生产服务。
+
 - Keep frontend/static sites behind Nginx.
 - Keep backend APIs bound to `127.0.0.1`.
 - Allocate ports in pairs: even for frontend, odd for API.

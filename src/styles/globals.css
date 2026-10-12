@@ -1204,6 +1204,9 @@ input[inputmode="numeric"] {
   body:has([data-erp-component="mobile-action-dock"]:not([hidden]):has([data-erp-region="mobile-action-primary"])) [data-erp-shell] {
     --erp-phone-dock-height: calc(var(--erp-mobile-search-action-height) + var(--erp-space-2));
   }
+  body:has([data-erp-component="mobile-action-dock"][data-erp-dock-layout="search"]:not(:has([data-erp-region="mobile-action-primary"]))) [data-erp-shell] {
+    --erp-phone-dock-height: calc(var(--erp-mobile-search-height) + var(--erp-space-4) + 1px);
+  }
   body:has([data-erp-component="submit-bar"]:not([hidden])) [data-erp-shell] {
     --erp-phone-dock-height: 64px;
   }
@@ -2012,6 +2015,23 @@ input[inputmode="numeric"] {
     border-top: 1px solid var(--erp-color-border-soft);
   }
   [data-erp-region="mobile-action-primary"] > button { width: 100%; min-height: var(--erp-mobile-dock-button-height); font-size: var(--erp-text-base); }
+  /* Opt-in search + icon action. Real creation/submission actions keep their
+     original dock; only this compact mode drops the duplicate flow spacer. */
+  [data-erp-region="mobile-action-spacer"][data-erp-dock-layout="search"] { display: none; }
+  [data-erp-component="mobile-action-dock"][data-erp-dock-layout="search"] { padding-block: var(--erp-space-2); }
+  [data-erp-component="mobile-action-dock"][data-erp-dock-layout="search"] [data-erp-search-action="true"] {
+    display: flex;
+    align-items: center;
+    height: var(--erp-mobile-search-height);
+    border: 1px solid var(--erp-color-border);
+    border-radius: var(--erp-radius-lg);
+    background: var(--erp-color-surface);
+  }
+  [data-erp-dock-layout="search"] [data-erp-search-action="true"]:focus-within { border-color: var(--erp-color-primary); }
+  [data-erp-dock-layout="search"] [data-erp-region="search-field"] { height: 100%; }
+  [data-erp-dock-layout="search"] [data-erp-region="search-field"] > input { height: 100%; border: 0; background: transparent; }
+  [data-erp-dock-layout="search"] [data-erp-region="search-action"] { display: flex; align-items: center; flex-shrink: 0; padding-right: 1px; }
+  [data-erp-dock-layout="search"] [data-erp-region="search-action"] > button { width: var(--erp-mobile-touch-size); height: var(--erp-mobile-touch-size); min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
   [data-phone-keyboard="open"] [data-erp-region="mobile-action-primary"] { display: none; }
   body:has([role="dialog"][data-open]:not([data-mobile-presentation="tab"]), .erp-option-popup[data-open], .erp-popover-surface[data-open]) [data-erp-component="mobile-action-dock"] { display: none; }
   .erp-list-page[data-phone-layout="thumb"] { margin-inline: calc(0px - var(--erp-space-4)); width: calc(100% + var(--erp-space-8)); max-width: none; }

@@ -20,6 +20,8 @@ export interface SearchInputProps extends Omit<InputProps, "className" | "type" 
   onClear?: () => void;
   clearLabel?: string;
   icon?: ReactNode;
+  /** Independent trailing action; never wraps the input in a clickable label. */
+  trailingAction?: ReactNode;
 }
 
 function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
@@ -35,6 +37,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
   onClear,
   clearLabel = "清除搜索",
   icon,
+  trailingAction,
   value,
   defaultValue,
   onChange,
@@ -71,8 +74,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
     onChange?.(event);
   };
 
-  return (
-    <div data-erp-component="search-input" data-erp-search-clear={showClear || undefined} className={cn("erp-search-input-shell relative min-w-0 max-w-full", className)}>
+  const field = <>
       <span aria-hidden="true" data-erp-search-icon="true" className="pointer-events-none absolute left-3 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center text-[var(--erp-color-text-muted)]">
         {icon ?? <Search aria-hidden="true" className="h-4 w-4" />}
       </span>
@@ -103,6 +105,11 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
           <X aria-hidden="true" className="h-4 w-4" />
         </Button>
       ) : null}
+  </>;
+
+  return (
+    <div data-erp-component="search-input" data-erp-search-clear={showClear || undefined} data-erp-search-action={trailingAction ? true : undefined} className={cn("erp-search-input-shell relative min-w-0 max-w-full", className)}>
+      {trailingAction ? <><div data-erp-region="search-field" className="relative min-w-0 flex-1">{field}</div><div data-erp-region="search-action">{trailingAction}</div></> : field}
     </div>
   );
 });

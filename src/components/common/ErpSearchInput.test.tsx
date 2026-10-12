@@ -3,6 +3,7 @@ import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {ErpSearchInput} from "./ErpSearchInput";
 import {SearchInput} from "../ui/search-input";
+import {Button} from "../ui/button";
 
 test("ERP and UI selectors share exactly one search primitive", () => {
   assert.equal(ErpSearchInput, SearchInput);
@@ -27,4 +28,17 @@ test("ErpSearchInput exposes a clear affordance only for a non-empty value", () 
   assert.doesNotMatch(emptyMarkup, /清除搜索/);
   assert.match(filledMarkup, /清除搜索/);
   assert.match(filledMarkup, /aria-label="清除搜索"/);
+});
+
+test("a trailing action is a separate button, outside the editable/clear field", () => {
+  const markup = renderToStaticMarkup(<ErpSearchInput value="000123" onChange={() => undefined} aria-label="搜索库存" trailingAction={<Button type="button" aria-label="扫码" title="扫码" size="iconTouch" variant="ghost">图标</Button>} />);
+  assert.match(markup, /data-erp-search-action="true"/);
+  assert.match(markup, /data-erp-region="search-field"[\s\S]*?value="000123"[\s\S]*?aria-label="清除搜索"[\s\S]*?data-erp-region="search-action"/);
+  assert.match(markup, /data-erp-region="search-action"><button(?=[^>]*aria-label="扫码")(?=[^>]*type="button")[^>]*>/);
+  assert.doesNotMatch(markup, /<label/);
+});
+
+test("ordinary searches do not receive a trailing-action shell", () => {
+  const markup = renderToStaticMarkup(<ErpSearchInput value="4090" onChange={() => undefined} aria-label="搜索商品" />);
+  assert.doesNotMatch(markup, /data-erp-search-action|data-erp-region="search-(field|action)"/);
 });

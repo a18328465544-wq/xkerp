@@ -30,6 +30,14 @@ const props: ErpListPageProps<Row> = {
   table: {columns, data: [{id: "c1", name: "张三", balance: 12}], getRowId: (row) => row.id, mobileRow: "columns", total: 37, page: 1, pageSize: 20, onPageChange: noop, onPageSizeChange: noop},
 };
 
+test("phone search actions cannot change desktop search or creation actions", () => {
+  const original = renderToStaticMarkup(<ErpListPage {...props} phone={false} />);
+  const withScan = renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneSearchAction={{label: "扫码", onClick: noop, icon: <span>扫码图标</span>}} />);
+  assert.equal(withScan, original);
+  assert.match(withScan, /新建客户/);
+  assert.doesNotMatch(withScan, /扫码图标|data-erp-search-action/);
+});
+
 test("a domain-owned phone More trigger can stay inline without another action sheet", () => {
   const headerActions = <Button aria-label="库存更多" onClick={noop}>库存更多</Button>;
   const inline = renderToStaticMarkup(<ErpListPage {...props} phone phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);

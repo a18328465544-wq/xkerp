@@ -104,6 +104,8 @@ export interface ErpListPageProps<TData> {
   phoneHeaderActionsMode?: "collapse" | "inline";
   /** Phone dock action when it differs from the desktop primary action. */
   phonePrimaryAction?: ErpListPageAction;
+  /** Optional icon action inside the phone search field (e.g. existing barcode scan). */
+  phoneSearchAction?: ErpListPageAction;
   /** Secondary actions: desktop filter bar, phone filter sheet. */
   actions?: readonly ErpListPageAction[];
   /** Page-level secondary actions (e.g. 办理销售退货): desktop header, phone filter sheet. */
@@ -181,6 +183,7 @@ export function ErpListPage<TData>({
   phoneHeaderActions,
   phoneHeaderActionsMode,
   phonePrimaryAction,
+  phoneSearchAction,
   actions = [],
   pageActions = [],
   onRefresh,
@@ -222,7 +225,7 @@ export function ErpListPage<TData>({
   const pageActionButtons = pageActions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={() => {setSheetOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>);
   const actionButtons = actions.map((action) => <Button key={action.label} type="button" size="sm" variant="secondary" disabled={action.disabled} onClick={() => {setSheetOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>);
   const refreshButton = onRefresh ? <Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}><RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />刷新</Button> : null;
-  const searchInput = search ? <ErpSearchInput className={phone ? "w-full" : "min-w-64 flex-1"} value={search.value} onChange={(event) => search.onChange(event.target.value)} placeholder={phone ? search.phonePlaceholder ?? search.placeholder : search.placeholder} aria-label={search.label} /> : null;
+  const searchInput = search ? <ErpSearchInput className={phone ? "w-full" : "min-w-64 flex-1"} value={search.value} onChange={(event) => search.onChange(event.target.value)} placeholder={phone ? search.phonePlaceholder ?? search.placeholder : search.placeholder} aria-label={search.label} trailingAction={phone && phoneSearchAction ? <Button type="button" size="iconTouch" variant="ghost" aria-label={phoneSearchAction.label} title={phoneSearchAction.label} disabled={phoneSearchAction.disabled} onMouseDown={(event) => event.preventDefault()} onClick={phoneSearchAction.onClick}>{phoneSearchAction.icon}</Button> : undefined} /> : null;
   const metricsRegion = (metrics?.length ? <ErpMobileSummary phone={phone}><MetricsRegion>{metrics}</MetricsRegion></ErpMobileSummary> : null);
   const activeTags: ErpActiveFilterTag[] = [
     ...(search?.value ? [{key: "search", label: `搜索：${search.value}`, onRemove: () => search.onChange("")}] : []),
@@ -281,7 +284,7 @@ export function ErpListPage<TData>({
       {phoneWorkflow && <details ref={workflowRef} open={workflowOpen} onToggle={(event) => setWorkflowOpen(event.currentTarget.open)} className="group erp-document-workflow"><summary className="flex list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">{phoneWorkflow.title}<ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" /></summary>{phoneWorkflow.content}</details>}
       {phoneTableContent ?? (table ? <ErpDataTable {...table} emptyAction={emptyAction} surface="plain" mobilePagination="compact" mobilePaginationShowTotal={!documentPresentation} mobileToolbar={mobileToolbar} density={tableDensity} phone={phoneProp} compactViewport={phoneProp} /> : null)}
       {phoneAfterTable && <div className="px-[var(--erp-mobile-content-inset)]">{phoneAfterTable}</div>}
-      {searchInput && <ErpMobileActionDock hidden={overlayOpen || sheetOpen || workOpen || Boolean(workflowOpen && phoneWorkflow?.actionLabel)} ariaLabel={`${phoneTitle}搜索`} primaryAction={(!documentPresentation || phoneActionPlacement === "dock") && dockAction ? <Button type="button" variant="primary" disabled={dockAction.disabled} onClick={dockAction.onClick}>{dockAction.icon}{dockAction.label}</Button> : phoneWorkflow?.actionLabel && !workflowOpen ? <Button type="button" variant="primary" onClick={() => {setWorkflowOpen(true); requestAnimationFrame(() => workflowRef.current?.scrollIntoView({block: "start"}));}}>{phoneWorkflow.actionLabel}</Button> : undefined}>{searchInput}</ErpMobileActionDock>}
+      {searchInput && <ErpMobileActionDock hidden={overlayOpen || sheetOpen || workOpen || Boolean(workflowOpen && phoneWorkflow?.actionLabel)} layout={phoneSearchAction ? "search" : "stacked"} ariaLabel={`${phoneTitle}搜索`} primaryAction={(!documentPresentation || phoneActionPlacement === "dock") && dockAction ? <Button type="button" variant="primary" disabled={dockAction.disabled} onClick={dockAction.onClick}>{dockAction.icon}{dockAction.label}</Button> : phoneWorkflow?.actionLabel && !workflowOpen ? <Button type="button" variant="primary" onClick={() => {setWorkflowOpen(true); requestAnimationFrame(() => workflowRef.current?.scrollIntoView({block: "start"}));}}>{phoneWorkflow.actionLabel}</Button> : undefined}>{searchInput}</ErpMobileActionDock>}
       {documentPresentation && <ErpDialogShell open={workOpen} onOpenChange={setWorkOpen} title={`${phoneTitle}操作`} mobilePresentation="sheet"><div className="grid gap-3">{onPageSizeChange && <Select aria-label="每页条数" value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))} options={createErpPageSizeOptions(phonePageSizeOptions)} />}{[...pageActions, ...actions].map((action) => <Button key={action.label} type="button" variant="secondary" disabled={action.disabled} onClick={() => {setWorkOpen(false); action.onClick();}}>{action.icon}{action.label}</Button>)}{onRefresh && <Button type="button" variant="secondary" disabled={refreshing} onClick={() => {setWorkOpen(false); onRefresh();}}>刷新</Button>}{sheetExtra}</div></ErpDialogShell>}
       {phoneFilterSheet?.({open: sheetOpen, onOpenChange: setSheetOpen})}
       {documentPresentation && !phoneFilterSheet && sheetOpen && onApplyPhoneFilters && <ErpDocumentFilterSheet title={`筛选${phoneTitle}`} fields={filters} onClose={() => setSheetOpen(false)} onApply={onApplyPhoneFilters} />}

@@ -349,7 +349,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     desktopHeaderActions={<InventoryViewSwitcher view={view} onChange={onChangeView} />}
     phoneHeaderActionsMode="inline"
     phoneHeaderActions={<Button type="button" variant="ghost" size="iconTouch" aria-label="更多页面操作" title="库存作业与快捷操作" onClick={() => setActionsOpen(true)}><MoreHorizontal className="h-5 w-5" /></Button>}
-    phonePrimaryAction={{label: "扫码", icon: <ScanLine className="h-4 w-4" />, onClick: () => setScanOpen(true)}}
+    phoneSearchAction={{label: "扫码", icon: <ScanLine className="h-4 w-4" />, onClick: () => setScanOpen(true)}}
     tabs={<nav className="erp-phone-category-strip md:hidden" aria-label="库存分类"><Button type="button" variant="ghost" aria-pressed={!filters.category} onClick={() => updateFilter({category: ""})}>全部</Button>{inventoryCategories.map((category) => <Button key={category} type="button" variant="ghost" aria-pressed={filters.category === category} onClick={() => updateFilter({category})}>{category}</Button>)}</nav>}
     metrics={inventoryMetrics}
     search={{value: filters.keyword, onChange: (keyword) => updateFilter({keyword}), label: "搜索库存", placeholder: "搜索 SN、商品、品牌、型号", phonePlaceholder: "搜索型号 / SN / 库存编号"}}

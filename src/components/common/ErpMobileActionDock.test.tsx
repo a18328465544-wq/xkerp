@@ -20,3 +20,11 @@ test("dock follows shared keyboard/nav offsets and cannot cover an open modal", 
   assert.match(css, /body:has\([^\n]*\[data-open\][^\n]*\) \[data-erp-component="mobile-action-dock"\] \{ display: none/);
   assert.match(css, /mobile-action-spacer"\] \{ height: calc\(var\(--erp-mobile-search-action-height\)/);
 });
+
+test("compact search docks reserve only the combined field, without a second flow spacer", () => {
+  assert.match(source, /layout = "stacked"/);
+  assert.match(source, /data-erp-dock-layout=\{layout\}/);
+  assert.match(css, /mobile-action-spacer"\]\[data-erp-dock-layout="search"\] \{ display: none/);
+  assert.match(css, /--erp-phone-dock-height: calc\(var\(--erp-mobile-search-height\) \+ var\(--erp-space-4\) \+ 1px\)/);
+  assert.match(css, /search-action"\] > button \{[^\n]*width: var\(--erp-mobile-touch-size\)[^\n]*height: var\(--erp-mobile-touch-size\)/);
+});
