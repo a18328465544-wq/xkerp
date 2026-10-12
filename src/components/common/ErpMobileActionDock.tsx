@@ -4,7 +4,7 @@ import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 
 /** A phone-only presentation slot. The feature still owns search, permissions,
  * mutation state and overlays; inactive keep-alive pages never expose a dock. */
-export function ErpMobileActionDock({children, primaryAction, layout = "stacked", hidden = false, ariaLabel = "快捷操作"}: {
+export function ErpMobileActionDock({children, primaryAction, layout = "search", hidden = false, ariaLabel = "快捷操作"}: {
   children: ReactNode;
   primaryAction?: ReactNode;
   layout?: "stacked" | "search";

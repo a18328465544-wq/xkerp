@@ -42,7 +42,7 @@ export interface FinanceEntryPageLayoutProps<TData> {
  */
 export function FinanceEntryPageLayout<TData>({header, tabs, metrics, filters, table, children, phoneDocumentList}: FinanceEntryPageLayoutProps<TData>) {
   const phone = useErpPhone();
-  if (phone && phoneDocumentList) return <ErpListPage {...phoneDocumentList} phonePresentation="documents" phoneActionPlacement="dock" phoneMetrics={metrics} pageFrame="finance" table={table.table} tabs={tabs && <FinanceSectionTabs label={tabs.label} items={tabs.items} />}  overlays={children} />;
+  if (phone && phoneDocumentList) return <ErpListPage {...phoneDocumentList} phonePresentation="documents" phoneMetrics={metrics} pageFrame="finance" table={table.table} tabs={tabs && <FinanceSectionTabs label={tabs.label} items={tabs.items} />}  overlays={children} />;
   return (
     <ErpFinancePageFrame>
       <ErpPageHeader {...header} />

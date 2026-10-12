@@ -41,7 +41,7 @@ export interface FinanceDetailPageLayoutProps<TData = unknown> {
  */
 export function FinanceDetailPageLayout<TData = unknown>({header, tabs, filters, metrics, beforeTable, phoneFoldBeforeTable, table, analysis, children, phoneDocumentList}: FinanceDetailPageLayoutProps<TData>) {
   const phone = useErpPhone();
-  if (phone && phoneDocumentList) return <ErpListPage {...phoneDocumentList} phonePresentation="documents" phoneActionPlacement="dock" phoneMetrics={metrics} pageFrame="finance" tabs={tabs && <FinanceSectionTabs label={tabs.label} items={tabs.items} />} sheetExtra={phoneDocumentList.sheetExtra} phoneAfterTable={<>{beforeTable && <ErpDisclosureCard title={phoneFoldBeforeTable || "分析"}>{beforeTable}</ErpDisclosureCard>}{analysis && <FinanceAnalysisDisclosure title={analysis.title} preferenceKey={analysis.preferenceKey}>{analysis.children}</FinanceAnalysisDisclosure>}</>} overlays={children} />;
+  if (phone && phoneDocumentList) return <ErpListPage {...phoneDocumentList} phonePresentation="documents" phoneMetrics={metrics} pageFrame="finance" tabs={tabs && <FinanceSectionTabs label={tabs.label} items={tabs.items} />} sheetExtra={phoneDocumentList.sheetExtra} phoneAfterTable={<>{beforeTable && <ErpDisclosureCard title={phoneFoldBeforeTable || "分析"}>{beforeTable}</ErpDisclosureCard>}{analysis && <FinanceAnalysisDisclosure title={analysis.title} preferenceKey={analysis.preferenceKey}>{analysis.children}</FinanceAnalysisDisclosure>}</>} overlays={children} />;
   const foldBeforeTable = Boolean(phone && phoneFoldBeforeTable && beforeTable);
   return (
     <ErpFinancePageFrame>

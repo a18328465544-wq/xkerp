@@ -50,7 +50,7 @@
   2. `mobileToolbar`：左侧快捷筛选是一行可横向滑动的选择胶囊（`ErpChoiceChips layout="scroll"`，不截断），右侧放排序按钮。
      库存页按 2026-10-12 确认图例：标题下先放实物分类横条；下一行左侧放紧凑视图分段、右侧复用原排序入口。库存统计收入顶部「更多 → 库存统计」，既有统计弹层和库存作业保留，不单独占首屏整行。
   3. 列表：`ErpDataTable` 传 `surface="plain"`、`mobilePagination="compact"`、`mobileRow`；每一行用 `ErpMobileRecordRow` 渲染，平铺成一整块白色列表面，行与行之间用细分隔线。
-  4. 底部：`ErpMobileActionDock`，放搜索框，加上最多 1 个主操作。搜索型扫码按 2026-10-12 方案三使用 `ErpListPage.phoneSearchAction`，复用 `ErpSearchInput.trailingAction` 将原事件放在搜索框内部右侧，不能再放一整行蓝色扫码按钮。组合搜索高 `--erp-mobile-search-height`（48px），圆角 `--erp-radius-lg`（12px），左右 16px；扫码为独立 ghost 图标按钮，44×44px、20px 图标。不抢输入焦点、不遮住清除或文字区域；固定栏和列表留位沿用共享键盘/安全区机制。此配置仅用于有现成搜索型扫码动作的页面，不把新建、提交等主操作缩成图标；未配置页面和桌面搜索外观保持不变。
+  4. 底部：所有套用列表模板的手机页统一使用 `ErpMobileActionDock layout="search"`，仅保留一行搜索框，高 `--erp-mobile-search-height`（48px），圆角 `--erp-radius-lg`（12px），左右 16px。原新建/登记动作在页头显示带原名称、禁用状态和回调的图标入口；原组装表单展开入口同样放页头，不删除表单或提交动作。专门的录入/核验仍保留原工作流和 `ErpSubmitBar`，不得把真正的提交混进搜索框。已有搜索型扫码使用 `ErpListPage.phoneSearchAction`，复用 `ErpSearchInput.trailingAction` 将原事件放在框内右侧；无扫码能力时不添加假入口，也不留空槽。扫码为独立 ghost 图标按钮，44×44px、20px 图标。不抢输入焦点、不遮住清除或文字区域；固定栏和列表留位沿用共享键盘/安全区机制。手机选择器/表单内搜索及桌面搜索不受此底部规则影响。
   5. 高级筛选条件用 `ErpDialogShell mobilePresentation="sheet"`。固定的短枚举（字段写 `phoneControl: "chips"`）显示为选择胶囊，全部选项一眼看全；其余选择字段显示为选择行「标签 … 值 ›」，点开底部列表，超过 12 项带搜索。默认模板包含每页条数和刷新；专用筛选面板通过 `ErpListPage.phoneFilterSheet` 接入，只放筛选条件，每页条数、刷新、批量选择放既有作业面板。库存筛选采用单行选择项，打开时创建草稿，点「应用筛选」才提交，关闭不修改查询；重置只清空筛选条件，保留搜索、排序与每页条数。
   - 功能页面使用 `ErpDataTable` 时必须传 `mobileRow`（函数或 `"columns"`），或者显式传 `mobileMode="table"` 并写明原因。[lint，由 `check-ui-contracts` 检查]
   - 手机上不得出现：刷新按钮、列设置 / 列显示、舒适 / 紧凑密度切换、「查看其余 N 项」、通用卡片（`data-erp-region="mobile-card-header"`）。[浏览器]

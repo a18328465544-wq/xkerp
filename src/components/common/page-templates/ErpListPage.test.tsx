@@ -38,12 +38,36 @@ test("phone search actions cannot change desktop search or creation actions", ()
   assert.doesNotMatch(withScan, /扫码图标|data-erp-search-action/);
 });
 
+test("standard phone lists expose original creation as a header icon, not a second dock row", () => {
+  const phoneAction = {label: "新增线索", onClick: noop, disabled: true};
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone phonePrimaryAction={phoneAction} />);
+  assert.match(markup, /<button(?=[^>]*data-erp-phone-action="primary")(?=[^>]*aria-label="新增线索")(?=[^>]*disabled)[^>]*>/);
+  assert.doesNotMatch(markup, /aria-label="新建客户"|aria-label="更多页面操作"/);
+  const restricted = renderToStaticMarkup(<ErpListPage {...props} phone primaryAction={undefined} />);
+  assert.doesNotMatch(restricted, /data-erp-phone-action="primary"/);
+});
+
+test("phone workflow keeps the existing form and exposes its original expansion in the header", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone primaryAction={undefined} phoneWorkflow={{title: "原组装表单", actionLabel: "新建组装 / 拆卸", content: <textarea aria-label="原组装备注" />}} />);
+  assert.match(markup, /data-erp-phone-action="workflow"/);
+  assert.match(markup, /aria-label="新建组装 \/ 拆卸"/);
+  assert.equal(markup.match(/aria-label="原组装备注"/g)?.length, 1);
+});
+
+test("a dedicated task can explicitly keep a primary dock without changing desktop markup", () => {
+  const header = renderToStaticMarkup(<ErpListPage {...props} phone />);
+  const dock = renderToStaticMarkup(<ErpListPage {...props} phone phoneActionPlacement="dock" />);
+  assert.match(header, /data-erp-phone-action="primary"/);
+  assert.doesNotMatch(dock, /data-erp-phone-action="primary"/);
+  assert.equal(renderToStaticMarkup(<ErpListPage {...props} phone={false} />), renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneActionPlacement="dock" />));
+});
+
 test("a domain-owned phone More trigger can stay inline without another action sheet", () => {
   const headerActions = <Button aria-label="库存更多" onClick={noop}>库存更多</Button>;
   const inline = renderToStaticMarkup(<ErpListPage {...props} phone phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);
   assert.match(inline, /aria-label="库存更多"/);
   assert.doesNotMatch(inline, /aria-label="更多页面操作"/);
-  const unchanged = renderToStaticMarkup(<ErpListPage {...props} phone phoneHeaderActions={headerActions} />);
+  const unchanged = renderToStaticMarkup(<ErpListPage {...props} phone primaryAction={undefined} phoneHeaderActions={headerActions} />);
   assert.match(unchanged, /aria-label="更多页面操作"/);
   const desktop = renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);
   assert.doesNotMatch(desktop, /库存更多/);
@@ -206,7 +230,7 @@ test("list section counts use the shared gray inline tally without a status dot"
 test("empty lists offer the already-authorized creation action once per screen", () => {
   for (const phone of [false, true]) {
     const markup = renderToStaticMarkup(<ErpListPage {...props} phone={phone} table={{...props.table!, data: [], total: 0}} />);
-    // Phones already show 新建客户 in the search dock, so the empty state does not repeat it.
+    // Phones already show 新建客户 in the header, so the empty state does not repeat it.
     if (phone) assert.doesNotMatch(markup, /data-erp-component="empty-state"[\s\S]*新建客户/);
     else assert.match(markup, /data-erp-component="empty-state"[\s\S]*新建客户/);
     const restricted = renderToStaticMarkup(<ErpListPage {...props} phone={phone} primaryAction={undefined} table={{...props.table!, data: [], total: 0}} />);

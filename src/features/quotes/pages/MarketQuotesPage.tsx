@@ -121,7 +121,7 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
     {overlays}
     </ErpPageContent>
   </ErpAnalyticsPageFrame>;
-  return <ErpListPage title="行情参考" phonePresentation="documents" phoneActionPlacement="dock" pageFrame="analytics" desktopPageContent={desktopContent}
+  return <ErpListPage title="行情参考" phonePresentation="documents" pageFrame="analytics" desktopPageContent={desktopContent}
     countLabel={(count) => `${count} 款`} loading={query.isPending} loadError={Boolean(query.error && !query.data)}
     tableTitle="行情参考明细" table={table}
     search={{value: filters.keyword, label: "搜索行情", placeholder: "搜索型号、品牌或说明", onChange: (keyword) => onFiltersChange({...filters, keyword, page: 1})}}

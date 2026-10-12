@@ -2015,10 +2015,12 @@ input[inputmode="numeric"] {
     border-top: 1px solid var(--erp-color-border-soft);
   }
   [data-erp-region="mobile-action-primary"] > button { width: 100%; min-height: var(--erp-mobile-dock-button-height); font-size: var(--erp-text-base); }
-  /* Opt-in search + icon action. Real creation/submission actions keep their
-     original dock; only this compact mode drops the duplicate flow spacer. */
+  /* Shared phone list search. Creation moves to the header; task submission
+     bars remain separate. Only this mode drops the duplicate flow spacer. */
   [data-erp-region="mobile-action-spacer"][data-erp-dock-layout="search"] { display: none; }
   [data-erp-component="mobile-action-dock"][data-erp-dock-layout="search"] { padding-block: var(--erp-space-2); }
+  [data-erp-dock-layout="search"] [data-erp-component="search-input"] { height: var(--erp-mobile-search-height); }
+  [data-erp-dock-layout="search"] [data-erp-component="search-input"]:not([data-erp-search-action]) input { height: var(--erp-mobile-search-height); border-radius: var(--erp-radius-lg); }
   [data-erp-component="mobile-action-dock"][data-erp-dock-layout="search"] [data-erp-search-action="true"] {
     display: flex;
     align-items: center;
