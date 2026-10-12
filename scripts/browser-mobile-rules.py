@@ -45,7 +45,11 @@ AUDIT = r"""() => {
     if (!visible(el) || exempt(el)) continue;
     let box = el;
     if (el.matches('input[type="checkbox"], input[type="radio"]')) box = el.closest("label") || el;
-    const r = box.getBoundingClientRect();
+    const rect = box.getBoundingClientRect();
+    // A transparent ::after overlay (see the phone hit-area rule) extends the clickable box.
+    const after = getComputedStyle(box, "::after");
+    const grow = (side) => after.content !== "none" && after.position === "absolute" ? Math.max(0, -parseFloat(after[side]) || 0) : 0;
+    const r = {width: rect.width + grow("left") + grow("right"), height: rect.height + grow("top") + grow("bottom")};
     const iconOnly = !(el.innerText || "").trim() && el.tagName === "BUTTON";
     if (r.height < 43.5 || (iconOnly && r.width < 43.5)) out.targets.push(`${label(el) || el.tagName}（${Math.round(r.width)}×${Math.round(r.height)}）`);
     if (el.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea') && !el.readOnly && parseFloat(getComputedStyle(el).fontSize) < 16) out.inputs.push(`${label(el) || "输入框"}（${getComputedStyle(el).fontSize}）`);

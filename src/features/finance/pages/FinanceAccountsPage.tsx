@@ -208,7 +208,7 @@ function AccountStatusFilters({counts, value, onChange}: {counts: ReturnType<typ
     {key: "frozen", label: "冻结", count: counts.frozen},
     {key: "disabled", label: "停用", count: counts.disabled},
   ];
-  return <div role="group" aria-label="按资金账户状态筛选" className="flex flex-wrap items-center gap-1 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1">
+  return <div role="group" aria-label="按资金账户状态筛选" className="flex flex-wrap items-center gap-1 max-md:gap-y-2 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1">
     {items.map((item) => <Button key={item.key} type="button" size="sm" variant={value === item.key ? "secondary" : "ghost"} aria-pressed={value === item.key} onClick={() => onChange(item.key)} className="gap-1.5">
       {item.label}<span className="erp-data-number text-xs text-[var(--erp-color-text-muted)]">{item.count}</span>
     </Button>)}

@@ -74,7 +74,7 @@ test("order template keeps fixed touch areas and one summary-primary action rhyt
   assert.match(phone, /\.erp-mobile-order-line-extra \{ border: 0; border-radius: 0;[^}]+background: transparent;/);
   assert.match(phone, /\.erp-order-payment \{ gap: var\(--erp-mobile-section-gap\);/);
   assert.match(phone, /\.erp-order-entry-page \[data-erp-component="submit-bar"\]\[data-phone-order-submit="true"\] \{[^}]+grid-template-columns: minmax\(0, 1fr\) auto;/);
-  assert.match(phone, /drawer-footer"\]\) \[data-erp-button-variant="primary"\] \{ min-height: var\(--erp-mobile-primary-height\);/);
+  assert.match(phone, /\[data-erp-component="submit-bar"\],[^{]+drawer-footer"\], \.erp-form-actions\) \[data-erp-control="button"\] \{ min-height: var\(--erp-mobile-dock-button-height\);/);
 });
 
 test("visual polish uses phone-only tokens, quiet summaries and restrained selection", () => {

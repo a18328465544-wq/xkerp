@@ -12,13 +12,22 @@ test("phone controls share root geometry with portals and reuse the existing typ
   assert.match(phone, /@media \(max-width: 767px\)\s*\{[\s\S]*?:root\s*\{\s*--erp-control-height: var\(--erp-mobile-touch-size\);\s*--erp-control-height-filter: var\(--erp-mobile-touch-size\);\s*--erp-control-height-compact: var\(--erp-mobile-touch-size\);/);
   assert.match(tokens, /--erp-mobile-primary-height: var\(--erp-space-12\)/);
   assert.match(tokens, /--erp-mobile-icon-size: var\(--erp-space-5\)/);
-  assert.match(phone, /data-erp-button-variant="primary"\][^}]+min-height: var\(--erp-mobile-primary-height\); font-size: var\(--erp-text-base\)/);
+  assert.match(phone, /drawer-footer"\], \.erp-form-actions\) \[data-erp-control="button"\] \{ min-height: var\(--erp-mobile-dock-button-height\); font-size: var\(--erp-text-base\)/);
+});
+
+test("phone buttons look 36px in content and 44px in fixed bars, with a 44px hit area", () => {
+  assert.match(tokens, /--erp-mobile-button-height: calc\(var\(--erp-space-8\) \+ var\(--erp-space-1\)\)/);
+  assert.match(tokens, /--erp-mobile-dock-button-height: var\(--erp-mobile-touch-size\)/);
+  assert.match(phone, /\.erp-main-content button:not\(\[data-erp-control="button"\]\)/);
+  assert.match(css, /@layer components \{\s*@media \(max-width: 767px\) \{\s*\[data-erp-control="button"\] \{ position: relative; \}\s*\[data-erp-control="button"\]::after \{ content: ""; position: absolute; inset: min\(0px, calc\(\(100% - var\(--erp-mobile-touch-size\)\) \/ 2\)\) 0; \}/);
+  assert.match(css, /button\[data-erp-button-size\^="icon"\]::after \{ inset: min\(0px, calc\(\(100% - var\(--erp-mobile-touch-size\)\) \/ 2\)\); \}/);
+  assert.match(phone, /\[data-erp-region="mobile-action-primary"\] > button \{ width: 100%; min-height: var\(--erp-mobile-dock-button-height\)/);
 });
 
 test("header icon buttons cannot inherit the generic zero-width action minimum", () => {
   assert.match(css, /page-actions"\] > :not\(\[data-erp-button-size\^="icon"\]\)/);
   assert.doesNotMatch(css, /page-actions"\] > \* \{\s*min-width: 0/);
-  assert.match(phone, /page-actions"\] > button\[data-erp-button-size\^="icon"\] \{ width: var\(--erp-mobile-touch-size\); min-width: var\(--erp-mobile-touch-size\)/);
+  assert.match(phone, /page-actions"\] > button\[data-erp-button-size\^="icon"\] \{ width: var\(--erp-mobile-button-height\); min-width: var\(--erp-mobile-button-height\)/);
 });
 
 test("dialog footer owns its padding outside the body instead of using inline negative margins", () => {
@@ -54,7 +63,7 @@ test("mobile shared controls use semantic tokens, including choices outside page
   for (const token of ["control-height", "option-height", "input-text", "choice-size", "textarea-height"]) assert.ok(tokens.includes(`--erp-mobile-${token}:`));
   assert.match(tokens, /--erp-mobile-control-height: var\(--erp-mobile-touch-size\)/);
   assert.match(tokens, /--erp-mobile-input-text: var\(--erp-text-lg\)/);
-  assert.match(phone, /data-erp-control="button"\] \{ height: auto; min-height: var\(--erp-mobile-control-height\)/);
+  assert.match(phone, /data-erp-control="button"\] \{ height: auto; min-height: var\(--erp-mobile-button-height\)/);
   assert.match(phone, /data-erp-component="textarea"\] \{ min-height: var\(--erp-mobile-textarea-height\)/);
   assert.match(phone, /data-erp-component="radio-field"\]\) > input \{ width: var\(--erp-mobile-choice-size\)/);
   assert.match(phone, /label > input:is\(\[type="checkbox"\], \[type="radio"\]\) \{ width: var\(--erp-mobile-choice-size\); height: var\(--erp-mobile-choice-size\); flex-shrink: 0/);

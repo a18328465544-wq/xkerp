@@ -1264,7 +1264,7 @@ input[inputmode="numeric"] {
   [data-erp-component="page-header"] { gap: var(--erp-space-2); }
   [data-erp-region="page-actions"] { gap: var(--erp-space-2); }
   [data-erp-component="input"], [data-erp-component="select"], textarea { font-size: var(--erp-text-lg); }
-  .erp-main-content button, .erp-mobile-bottom-nav a { min-height: var(--erp-mobile-touch-size); }
+  .erp-main-content button:not([data-erp-control="button"]), .erp-mobile-bottom-nav a { min-height: var(--erp-mobile-touch-size); }
 
   .erp-mobile-summary-trigger { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-2); }
   [data-erp-component="mobile-summary"] { display: block; }
@@ -1518,7 +1518,7 @@ input[inputmode="numeric"] {
   [data-phone-header="true"][data-has-header-actions="true"] > [data-erp-region="drawer-header-actions"] { grid-column: 3; grid-row: 1; justify-self: end; }
   [data-phone-header="true"] [data-erp-region="drawer-header-actions"] button { padding-inline: var(--erp-space-2); font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); }
   .erp-phone-category-strip { display: flex; overflow-x: auto; gap: var(--erp-space-1); overscroll-behavior-x: contain; scrollbar-width: none; }
-  .erp-phone-category-strip > button { flex-shrink: 0; border-radius: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); }
+  .erp-phone-category-strip > button { flex-shrink: 0; min-height: var(--erp-mobile-touch-size); border-radius: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); }
   .erp-phone-category-strip > button[aria-pressed="true"] { color: var(--erp-color-primary); box-shadow: inset 0 -2px var(--erp-color-primary); }
   [data-phone-detail="inventory"] > section:first-child > div:first-child { height: 12rem; background: var(--erp-color-surface); }
   [data-phone-detail="inventory"] > section:first-child > div[data-phone-image-empty="true"]:first-child { height: var(--erp-space-16); }
@@ -1618,7 +1618,7 @@ input[inputmode="numeric"] {
   .erp-phone-order-image { width: var(--erp-space-12); height: var(--erp-space-12); object-fit: contain; border-radius: var(--erp-radius-md); }
   .erp-phone-stepper { display: inline-flex; align-items: center; gap: var(--erp-space-1); border-radius: var(--erp-radius-md); background: var(--erp-color-surface-muted); }
   .erp-phone-stepper > span { min-width: var(--erp-space-5); text-align: center; font-size: var(--erp-text-base); }
-  .erp-phone-stepper button { min-width: var(--erp-mobile-touch-size); }
+  .erp-phone-stepper button { min-width: var(--erp-mobile-touch-size); align-self: stretch; }
   .erp-transaction-line-items { container-type: normal; border: 0; border-radius: var(--erp-radius-lg); }
   .erp-transaction-line-items [data-erp-region="card-content"] { padding: var(--erp-space-2); }
   .erp-transaction-line-items-cards { gap: 0; }
@@ -1864,7 +1864,7 @@ input[inputmode="numeric"] {
   [data-erp-component="page-header"] [data-erp-region="page-actions"] > * { width: auto; }
   /* Shared control contract, including controls rendered through a portal.
      Calendar cells and status badges are not ordinary form controls. */
-  [data-erp-control="button"] { height: auto; min-height: var(--erp-mobile-control-height); max-width: 100%; font-size: var(--erp-text-base); line-height: var(--erp-line-base); white-space: normal; overflow-wrap: anywhere; }
+  [data-erp-control="button"] { height: auto; min-height: var(--erp-mobile-button-height); max-width: 100%; font-size: var(--erp-text-base); line-height: var(--erp-line-base); white-space: normal; overflow-wrap: anywhere; }
   :is([data-erp-component="input"], [data-erp-component="amount-input"]) { min-width: 0; min-height: var(--erp-mobile-control-height); font-size: var(--erp-mobile-input-text); }
   [data-erp-component="textarea"] { min-height: var(--erp-mobile-textarea-height); font-size: var(--erp-mobile-input-text); }
   :is([data-erp-component="checkbox-field"], [data-erp-component="radio-field"]) { min-height: var(--erp-mobile-control-height); align-items: center; gap: var(--erp-space-2); }
@@ -1876,9 +1876,9 @@ input[inputmode="numeric"] {
   .erp-calendar .erp-calendar-day { height: var(--erp-mobile-touch-size); }
   .erp-calendar .erp-calendar-day-button { width: 100%; min-width: 0; height: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
   .erp-calendar nav button { width: var(--erp-mobile-touch-size); height: var(--erp-mobile-touch-size); }
-  :is(.erp-dialog-popup, .erp-date-popover, .erp-phone-selector) button { min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
-  button[data-erp-button-size^="icon"] { min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
-  [data-erp-component="page-header"] [data-erp-region="page-actions"] > button[data-erp-button-size^="icon"] { width: var(--erp-mobile-touch-size); min-width: var(--erp-mobile-touch-size); }
+  :is(.erp-dialog-popup, .erp-date-popover, .erp-phone-selector) button:not([data-erp-control="button"]) { min-width: var(--erp-mobile-touch-size); min-height: var(--erp-mobile-touch-size); }
+  button[data-erp-button-size^="icon"] { min-width: var(--erp-mobile-button-height); min-height: var(--erp-mobile-button-height); }
+  [data-erp-component="page-header"] [data-erp-region="page-actions"] > button[data-erp-button-size^="icon"] { width: var(--erp-mobile-button-height); min-width: var(--erp-mobile-button-height); }
   button[data-erp-button-size^="icon"] > svg { width: var(--erp-mobile-icon-size); height: var(--erp-mobile-icon-size); }
   [data-erp-component="search-input"][data-erp-search-clear="true"] input { padding-right: calc(var(--erp-mobile-touch-size) + var(--erp-space-2)); }
   [data-erp-component="select"]:not([data-variant="search"]) { height: auto; min-height: var(--erp-mobile-touch-size); padding-block: var(--erp-space-2); }
@@ -1893,7 +1893,8 @@ input[inputmode="numeric"] {
   /* This footer is already outside the scroll body. Legacy negative margins
      belong to inline form actions, not this shared fixed chrome. */
   [data-erp-component="dialog-shell"] > [data-erp-region="dialog-footer"] { position: static; width: auto; margin: 0; padding: var(--erp-space-3) var(--erp-space-4) max(var(--erp-space-3), var(--erp-safe-bottom)); align-items: center; }
-  :is(.erp-mobile-workflow-actions, .erp-phone-detail-actions, .erp-inspection-submit, [data-phone-order-submit="true"], [data-erp-region="dialog-footer"], [data-erp-region="drawer-footer"]) [data-erp-button-variant="primary"] { min-height: var(--erp-mobile-primary-height); font-size: var(--erp-text-base); }
+  /* Fixed bottom action bars: every button in the bar shares one 44px height. */
+  :is(.erp-mobile-workflow-actions, .erp-phone-detail-actions, .erp-inspection-submit, [data-erp-component="submit-bar"], [data-erp-region="dialog-footer"], [data-erp-region="drawer-footer"], .erp-form-actions) [data-erp-control="button"] { min-height: var(--erp-mobile-dock-button-height); font-size: var(--erp-text-base); }
   :is(.erp-mobile-workflow-actions, .erp-phone-detail-actions, .erp-inspection-submit, [data-erp-region="dialog-footer"]) button { white-space: normal; line-height: var(--erp-line-sm); }
   .erp-segmented-control button { min-width: 0; padding-inline: var(--erp-space-2); font-size: var(--erp-text-base); white-space: normal; }
   :is(.erp-main-content, .erp-dialog-popup) label:has(> input:is([type="checkbox"], [type="radio"])) { min-height: var(--erp-mobile-touch-size); }
@@ -1976,7 +1977,7 @@ input[inputmode="numeric"] {
   .erp-inventory-phone-search > [data-erp-component="search-input"] { flex: 1; min-width: 0; }
   .erp-inventory-phone-search input { min-height: var(--erp-mobile-touch-size); }
   .erp-inventory-phone-actions { display: flex; gap: var(--erp-space-2); }
-  .erp-inventory-phone-actions > :is(a, button) { display: flex; flex: 1; align-items: center; justify-content: center; gap: var(--erp-space-2); min-height: var(--erp-mobile-primary-height); border: 1px solid var(--erp-color-border); border-radius: var(--erp-radius-control); font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); background: var(--erp-color-surface); }
+  .erp-inventory-phone-actions > :is(a, button) { display: flex; flex: 1; align-items: center; justify-content: center; gap: var(--erp-space-2); min-height: var(--erp-mobile-dock-button-height); border: 1px solid var(--erp-color-border); border-radius: var(--erp-radius-control); font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); background: var(--erp-color-surface); }
   .erp-inventory-phone-actions > a:first-child { color: var(--erp-color-surface); background: var(--erp-color-primary); border-color: transparent; }
   .erp-inventory-phone-filters label > .sr-only { position: static; display: block; width: auto; height: auto; overflow: visible; clip: auto; clip-path: none; margin: 0 0 var(--erp-space-2); font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); color: var(--erp-color-text-secondary); white-space: normal; }
   .erp-inventory-directory [data-erp-component="mobile-action-dock"]::after { content: ""; position: absolute; inset-inline: 0; top: 100%; height: var(--erp-mobile-bottom-offset); background: var(--erp-color-surface); pointer-events: none; }
@@ -2007,7 +2008,7 @@ input[inputmode="numeric"] {
     background: var(--erp-color-surface);
     border-top: 1px solid var(--erp-color-border-soft);
   }
-  [data-erp-region="mobile-action-primary"] > button { width: 100%; min-height: var(--erp-mobile-primary-height); font-size: var(--erp-text-base); }
+  [data-erp-region="mobile-action-primary"] > button { width: 100%; min-height: var(--erp-mobile-dock-button-height); font-size: var(--erp-text-base); }
   [data-phone-keyboard="open"] [data-erp-region="mobile-action-primary"] { display: none; }
   body:has([role="dialog"][data-open]:not([data-mobile-presentation="tab"]), .erp-option-popup[data-open], .erp-popover-surface[data-open]) [data-erp-component="mobile-action-dock"] { display: none; }
   .erp-list-page[data-phone-layout="thumb"] { margin-inline: calc(0px - var(--erp-space-4)); width: calc(100% + var(--erp-space-8)); max-width: none; }
@@ -2016,7 +2017,9 @@ input[inputmode="numeric"] {
   .erp-list-phone-title small { display: block; margin-top: var(--erp-space-1); font-size: var(--erp-text-sm); font-weight: var(--erp-font-regular); color: var(--erp-color-text-secondary); }
   .erp-list-page[data-phone-layout="thumb"] [data-erp-component="data-table"] { border: 0; border-radius: 0; box-shadow: none; }
   :is(.erp-customer-list-toolbar, .erp-list-toolbar) { display: flex; align-items: center; gap: var(--erp-space-2); padding: 0 var(--erp-space-4) var(--erp-space-3); background: var(--erp-color-canvas); }
-  .erp-list-quick-filters { display: flex; min-width: 0; gap: var(--erp-space-1); }
+  .erp-customer-list-toolbar.erp-inventory-phone-toolbar { padding-top: var(--erp-space-1); }
+  /* Room for the 44px hit area of 36px buttons inside a scrolling row. */
+  .erp-list-quick-filters { display: flex; min-width: 0; gap: var(--erp-space-1); padding-block: var(--erp-space-1); }
   .erp-list-quick-filters > button { padding-inline: var(--erp-space-3); white-space: nowrap; }
   :is(.erp-customer-sort, .erp-list-sort) { margin-left: auto; min-width: 0; max-width: 42%; padding-inline: var(--erp-space-2); color: var(--erp-color-text-secondary); }
   :is(.erp-customer-sort, .erp-list-sort) > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
@@ -2309,7 +2312,18 @@ input[inputmode="numeric"] {
   .erp-document-workflow > summary { min-height: var(--erp-mobile-touch-size); padding-block: var(--erp-space-3); font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); color: var(--erp-color-primary); cursor: pointer; }
   .erp-document-workflow > summary + * { margin-bottom: var(--erp-space-3); }
   .erp-document-actions { display: flex; width: 100%; gap: var(--erp-space-2); }
-  .erp-document-actions > button { min-height: var(--erp-mobile-option-height); }
+  .erp-document-actions > button { min-height: var(--erp-mobile-dock-button-height); }
   /* 更多 and the primary (a button or a detail link) split the bar evenly. */
   .erp-document-actions > :is(button, a) { flex: 1; min-width: 0; padding-inline: var(--erp-space-3); }
+}
+
+/* Phone hit area: a button may look smaller than 44px; this transparent
+   overlay extends its clickable box to 44px without changing layout. Layered
+   so utilities (absolute buttons, custom ::after) and page rules still win. */
+@layer components {
+  @media (max-width: 767px) {
+    [data-erp-control="button"] { position: relative; }
+    [data-erp-control="button"]::after { content: ""; position: absolute; inset: min(0px, calc((100% - var(--erp-mobile-touch-size)) / 2)) 0; }
+    button[data-erp-button-size^="icon"]::after { inset: min(0px, calc((100% - var(--erp-mobile-touch-size)) / 2)); }
+  }
 }
