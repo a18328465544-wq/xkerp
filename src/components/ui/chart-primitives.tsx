@@ -144,6 +144,18 @@ function seriesColor(item: ChartSeries) {
   return item.color || chartTokens.chartPrimary;
 }
 
+export function hasEnoughTrendData(data: readonly ChartDatum[], xKey: string, series: readonly ChartSeries[]) {
+  const dates = new Set(data.filter((row) => visibleSeries(series).some((item) => {
+    const value = (row as Record<string, unknown>)[item.dataKey];
+    return typeof value === "number" && Number.isFinite(value);
+  })).map((row) => (row as Record<string, unknown>)[xKey]).filter((value) => value != null && value !== ""));
+  return dates.size >= 2;
+}
+
+function InsufficientTrend({className, ariaLabel}: {className?: string; ariaLabel: string}) {
+  return <div role="status" aria-label={ariaLabel} className={cn("flex h-full min-h-28 flex-col items-center justify-center gap-2 text-sm text-[var(--erp-color-text-secondary)]", className)}><span>数据不足</span><span className="text-xs">至少需要两个有效日期的数据才能显示趋势。</span></div>;
+}
+
 /** A low-noise multi-series line chart for detail pages. */
 export function TrendLineChart({
   data,
@@ -164,6 +176,7 @@ export function TrendLineChart({
   const chartConfig = resolvedChartConfig(activeSeries, config);
   const curveType = resolveTrendChartCurve(curve);
   const showDots = shouldShowTrendChartDots(data.length);
+  if (!hasEnoughTrendData(data, xKey, series)) return <InsufficientTrend className={className} ariaLabel={ariaLabel} />;
   return <ChartContainer config={chartConfig} className={cn("h-full", className)} role="img" aria-label={ariaLabel}>
     <LineChart data={data} margin={{top: 12, right: 10, left: -12, bottom: 0}}>
       <CartesianGrid stroke={chartTokens.chartGrid} strokeDasharray="4 4" vertical={false} />
@@ -216,6 +229,7 @@ export function AreaTrendChart({
   // faint: it adds the reference visual language without turning the area
   // into a saturated block or changing the chart's data semantics.
   const patternPrefix = React.useId().replace(/:/g, "");
+  if (!hasEnoughTrendData(data, xKey, series)) return <InsufficientTrend className={className} ariaLabel={ariaLabel} />;
   return <ChartContainer config={chartConfig} className={cn("h-full", className)} role="img" aria-label={ariaLabel}>
     <AreaChart data={data} margin={{top: 12, right: 10, left: -12, bottom: 0}}>
       <defs>

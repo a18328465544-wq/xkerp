@@ -58,6 +58,7 @@ export interface ErpDataTableProps<TData> {
   errorTitle?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyAction?: ReactNode;
   onRetry?: () => void;
   onRowClick?: (row: TData) => void;
   manualSorting?: boolean;
@@ -125,6 +126,7 @@ export function ErpDataTable<TData>({
   errorTitle = "数据加载失败",
   emptyTitle = "暂无数据",
   emptyDescription,
+  emptyAction,
   onRetry,
   onRowClick,
   manualSorting = false,
@@ -272,7 +274,7 @@ export function ErpDataTable<TData>({
   if (error && data.length === 0) {
     return wrapState(<ErpEmptyState density={density === "compact" ? "compact" : "default"} title={errorTitle} description={error.message} action={onRetry ? <Button size="sm" onClick={onRetry}>重试</Button> : undefined} />);
   }
-  if (!data.length) return wrapState(<ErpEmptyState density={density === "compact" ? "compact" : "default"} title={emptyTitle} description={emptyDescription} />);
+  if (!data.length) return wrapState(<ErpEmptyState density={density === "compact" ? "compact" : "default"} title={emptyTitle} description={emptyDescription} action={emptyAction} />);
 
   const totalPages = total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize));
   const rowPadding = density === "compact" ? "px-3 py-2" : "px-4 py-3";

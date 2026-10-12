@@ -12,6 +12,12 @@ const props: ErpRecordDetailProps = {
   ],
 };
 
+test("phone-only migration preserves legacy desktop markup verbatim, including zero", () => {
+  const legacy = <section>原桌面 <span>¥0</span></section>;
+  assert.equal(renderToStaticMarkup(<ErpRecordDetail {...props} desktopContent={legacy} phone={false} />), renderToStaticMarkup(legacy));
+  assert.doesNotMatch(renderToStaticMarkup(<ErpRecordDetail {...props} desktopContent={legacy} phone />), /原桌面/);
+});
+
 test("phones get identity, sections in order and folded extras", () => {
   const markup = renderToStaticMarkup(<ErpRecordDetail {...props} phone />);
   assert.match(markup, /data-phone-detail="document"/);

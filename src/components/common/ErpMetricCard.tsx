@@ -1,5 +1,6 @@
 import {ArrowDownRight, ArrowUpRight} from "lucide-react";
-import {createContext, useCallback, useContext, useId, useLayoutEffect, useMemo, useState, type ReactNode} from "react";
+import {createContext, isValidElement, useCallback, useContext, useId, useLayoutEffect, useMemo, useState, type ReactNode} from "react";
+import {flattenChildren} from "@/src/lib/flattenChildren";
 import {Card, CardContent} from "@/src/components/ui";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 
@@ -47,6 +48,21 @@ const valueSizeClasses: Record<ErpMetricVariant, Record<ErpMetricValueSize, stri
 /** Zero amounts and counts read neutral (MOBILE_UI_RULES M22): 「¥0.00」「0 人」「0 款」. */
 export function isZeroMetricValue(value: string) {
   return /^[-+]?[¥￥]?[-+]?0+(?:\.0+)?(?:%|[\u4e00-\u9fff]{1,2}|[a-zA-Z]{1,3})?$/.test(value.replace(/[\s,]/g, ""));
+}
+
+/** Missing data is not zero; unavailable metric cards do not reserve space. */
+export function hasErpMetricValue(value: unknown): boolean {
+  if (value == null || typeof value === "number" && !Number.isFinite(value)) return false;
+  return !["", "—", "–", "-", "--", "无权限", "未授权"].includes(String(value).trim());
+}
+
+export function availableMetricItems(children: ReactNode) {
+  return flattenChildren(children).filter((item) => !isValidElement<{value?: unknown; label?: unknown}>(item) || !("value" in item.props && "label" in item.props) || hasErpMetricValue(item.props.value));
+}
+
+export function usefulMetricDetail(detail: ReactNode): ReactNode {
+  if (typeof detail !== "string") return detail;
+  return /^(按)?当前筛选(结果|汇总|范围)?$|^参考价格上涨$/.test(detail.trim()) ? undefined : detail;
 }
 
 /** Keep the card geometry stable and scale only the value typography by length. */
@@ -105,6 +121,8 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   supplementalContent?: ReactNode;
 }) {
   const phone = useErpPhone();
+  const available = hasErpMetricValue(value);
+  const displayedDetail = usefulMetricDetail(detail);
   const variant: ErpMetricVariant = requestedVariant === "responsive" ? (phone ? "compact" : "default") : requestedVariant;
   const compact = variant === "compact";
   const resolvedValueTone = valueTone !== "muted" && isZeroMetricValue(value) ? "neutral" : valueTone;
@@ -113,13 +131,14 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
   const id = useId();
   const register = group?.register;
   useLayoutEffect(() => {
-    if (!register || valueSize) return;
+    if (!register || valueSize || !available) return;
     register(id, ownValueSize);
     return () => register(id, null);
-  }, [register, id, ownValueSize, valueSize]);
+  }, [register, id, ownValueSize, valueSize, available]);
+  if (!available) return null;
   const resolvedValueSize = valueSize ?? group?.size ?? ownValueSize;
   const hasComparison = compare !== undefined;
-  const hasFooter = detail !== undefined || hasComparison;
+  const hasFooter = displayedDetail !== undefined || hasComparison;
   const valueFont = `--erp-font-metric-${compact ? "compact" : "primary"}-${resolvedValueSize}`;
   const fittedFont = `min(var(${valueFont}), max(var(--erp-text-sm), calc((100cqi - var(--erp-space-10)) / ${Math.max(1, value.trim().replace(/\s+/g, "").length * 0.65)})))`;
   return <Card data-erp-component="metric-card" data-density={compact ? "compact" : "default"} data-value-size={resolvedValueSize}>
@@ -128,7 +147,7 @@ export function ErpMetricCard({label, value, detail, icon, tone = "neutral", val
         <p data-erp-region="metric-label" className={`text-xs font-medium text-[var(--erp-color-text-secondary)] ${icon ? "pr-10" : ""}`}>{label}</p>
         <p data-erp-region="metric-value" data-value-size={resolvedValueSize} title={value} style={{fontSize: fittedFont}} className={`${compact ? "mt-1" : "mt-2"} ${valueSizeClasses[variant][resolvedValueSize]} ${valueToneClasses[resolvedValueTone]} erp-data-number min-w-0 font-semibold leading-tight tracking-tight`}>{value}</p>
         {hasFooter ? <div data-erp-region="metric-footer" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          {detail !== undefined ? <span data-erp-region="metric-detail" className="min-w-0 break-words text-[var(--erp-color-text-muted)]">{detail}</span> : null}
+          {displayedDetail !== undefined ? <span data-erp-region="metric-detail" className="min-w-0 break-words text-[var(--erp-color-text-secondary)]">{displayedDetail}</span> : null}
           {hasComparison ? (compare == null ? <span data-erp-region="metric-comparison" className="text-[var(--erp-color-text-muted)]">暂无对比</span> : <span data-erp-region="metric-comparison" className={`inline-flex items-center gap-0.5 font-medium ${valueToneClasses[metricComparisonTone(compare, compareMeaning)]}`}><span className="sr-only">{compare === 0 ? "持平" : compare > 0 ? "上升" : "下降"}</span>{compare >= 0 ? <ArrowUpRight className="h-3 w-3" aria-hidden="true" /> : <ArrowDownRight className="h-3 w-3" aria-hidden="true" />}{Math.abs(compare).toFixed(1)}%<span className={compareLabelClassName || "font-normal text-[var(--erp-color-text-muted)]"}>{compareLabel}</span></span>) : null}
         </div> : null}
         {supplementalContent ? <div data-erp-region="metric-supplement" className="mt-2">{supplementalContent}</div> : null}

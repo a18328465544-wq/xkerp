@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
-import {ErpMetricCard, getErpMetricGroupValueSize, getErpMetricValueSize, isZeroMetricValue, metricComparisonTone} from "./ErpMetricCard";
+import {ErpMetricCard, getErpMetricGroupValueSize, getErpMetricValueSize, hasErpMetricValue, isZeroMetricValue, metricComparisonTone} from "./ErpMetricCard";
 
 test("ErpMetricCard exposes the shared card anatomy and semantic value tone", () => {
   const markup = renderToStaticMarkup(<ErpMetricCard label="今日收入" value="¥68,800" detail="昨日 ¥61,200" tone="success" valueTone="success" compare={12.4} />);
@@ -63,4 +63,16 @@ test("a metric group renders every value at its smallest member tier", () => {
   assert.equal(getErpMetricGroupValueSize(["large", "medium"]), "medium");
   assert.equal(getErpMetricGroupValueSize(["large"]), "large");
   assert.equal(getErpMetricGroupValueSize([]), undefined);
+});
+
+test("missing metrics are absent while real zero and negative values remain", () => {
+  for (const value of [undefined, null, NaN, "", "—", "--", "无权限"]) assert.equal(hasErpMetricValue(value), false);
+  for (const value of [0, "¥0", "0 件", -100, "-¥100", "待处理"]) assert.equal(hasErpMetricValue(value), true);
+  assert.equal(renderToStaticMarkup(<ErpMetricCard label="无权限成本" value="—" />), "");
+  assert.match(renderToStaticMarkup(<ErpMetricCard label="成本" value="¥0" />), /¥0/);
+});
+
+test("metric helper copy removes redundant scope but preserves meaningful context", () => {
+  assert.doesNotMatch(renderToStaticMarkup(<ErpMetricCard label="收入" value="¥100" detail="当前筛选汇总" />), /metric-footer/);
+  assert.match(renderToStaticMarkup(<ErpMetricCard label="余额" value="¥100" detail="包含负余额" />), /包含负余额/);
 });

@@ -4,7 +4,8 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useNavigate} from "@tanstack/react-router";
 import type {ColumnDef, SortingState, VisibilityState} from "@tanstack/react-table";
 import {Banknote, CircleDollarSign, Filter, Plus, ShoppingCart, Truck} from "lucide-react";
-import {ErpEntityThumbnail, ErpRecordDetail} from "@/src/components/common";
+import {ErpDocumentRecordRow, ErpEntityThumbnail, ErpRecordDetail, ErpStatusBadge} from "@/src/components/common";
+import type {DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card} from "@/src/components/ui";
@@ -151,7 +152,10 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
     data: selection.data,
     getRowId: (row: SalesListItem) => row.id,
     onRowClick: openDetail,
-    mobileRow: "columns" as const,
+    mobileRow: (item: SalesListItem) => <ErpDocumentRecordRow documentNo={item.invoiceNo}
+      status={<><ErpStatusBadge label={item.paymentStatus} tone={item.paymentStatus === "已收款" ? "success" : item.paymentStatus === "已退款" ? "neutral" : "warning"} /><ErpStatusBadge label={item.outboundStatus} tone={item.outboundStatus === "已出库" ? "neutral" : "warning"} /></>}
+      quantity={`${item.totalCount} 件`} amount={formatCurrency(item.totalAmount)} party={`客户 · ${item.customerName || "未记录"}`} handler={item.handleBy}
+      summary={item.productSummary} date={item.date} onOpen={() => openDetail(item)} />,
     mobileFieldOrder: ["customerName", "totalAmount", "paymentStatus", "outboundStatus", "handleBy", "date", "totalCount"],
     mobileFields: 6,
     ariaLabel: "销售单据明细",
@@ -175,6 +179,8 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
     mobileShowDetailAction: false,
   };
   return <ErpListPage
+    phonePresentation="documents"
+    onApplyPhoneFilters={(values) => {const date = values.dateRange as DateRangeValue; commitFilters({...filters, channel: values.channel as SalesListFilters["channel"], paymentStatus: values.paymentStatus as SalesListFilters["paymentStatus"], outboundStatus: values.outboundStatus as SalesListFilters["outboundStatus"], dateStart: date.startDate, dateEnd: date.endDate, page: 1});}}
     title="销售单据"
     phoneTitle="销售单据"
     subtitle="查看销售客户、成交金额、收款状态和出库进度。"

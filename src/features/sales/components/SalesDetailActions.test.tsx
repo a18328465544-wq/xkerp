@@ -12,7 +12,8 @@ const item: SalesListItem = {
 };
 type NodeProps = {children: ReactNode; onClick?: () => void; to?: string; params?: {salesId: string}; className?: string; type?: string};
 function controls(overrides: Partial<Parameters<typeof SalesDetailActions>[0]> = {}) {
-  const element = SalesDetailActions({item, canReceive: true, canEditHistory: true, canDelete: true, onReceive: () => undefined, onDelete: () => undefined, ...overrides});
+  const presentation = SalesDetailActions({item, canReceive: true, canEditHistory: true, canDelete: true, onReceive: () => undefined, onDelete: () => undefined, ...overrides});
+  const element = presentation.props.desktopContent;
   const nodes = Children.toArray(element.props.children).filter((node) => isValidElement<NodeProps>(node));
   return {element, nodes, buttons: nodes.filter((node) => node.type === Button), links: nodes.filter((node) => node.props.to)};
 }

@@ -56,10 +56,11 @@ test("phone feedback leaves the back header and persistent action controls reach
   assert.match(source, /var\(--erp-mobile-nav-height\) \+ var\(--erp-mobile-action-height\)/);
 });
 
-test("task mode and mobile workflow hide bottom navigation and position action bar at bottom", () => {
+test("only visible task workflows hide navigation; folded list forms do not", () => {
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
-  assert.match(css, /body:has\(\[data-workspace-tab-panel\]\[data-active="true"\] :is\(\[data-erp-component="mobile-workflow"\], \[data-phone-task="true"\]\)\) \.erp-mobile-bottom-nav/);
-  assert.match(css, /body:has\(\[data-workspace-tab-panel\]\[data-active="true"\] :is\(\[data-erp-component="mobile-workflow"\], \[data-phone-task="true"\]\)\) \[data-erp-shell\]/);
+  const selector = 'body:has([data-workspace-tab-panel][data-active="true"] :is([data-erp-component="mobile-workflow"]:not(.erp-document-workflow:not([open]) *), [data-phone-task="true"]))';
+  assert.ok(css.includes(`${selector} .erp-mobile-bottom-nav`));
+  assert.ok(css.includes(`${selector} [data-erp-shell]`));
 });
 
 test("customer and inventory pickers do not force autofocus on phone viewports", () => {
@@ -69,7 +70,11 @@ test("customer and inventory pickers do not force autofocus on phone viewports",
   assert.match(invPicker, /autoFocus=\{!phone\}/);
 });
 
-test("sales outbound registers usePhoneBackLayer for invoice review", () => {
+test("sales outbound delegates invoice review back handling to the shared template", () => {
   const outboundSource = readFileSync(new URL("../../features/sales/pages/SalesOutboundPage.tsx", import.meta.url), "utf8");
-  assert.match(outboundSource, /usePhoneBackLayer\(active && phone && phoneReview/);
+  const templateSource = readFileSync(new URL("../../components/common/page-templates/ErpListPage.tsx", import.meta.url), "utf8");
+  assert.match(outboundSource, /phoneTask=\{\{open: phoneReview, active,/);
+  assert.match(outboundSource, /onBack: \(\) => \{setPhoneReview\(false\); setCameraScope\(null\); commitOutboundState\(\{\.\.\.outboundState, invoiceId: null\}\)/);
+  assert.match(templateSource, /usePhoneBackLayer\(Boolean\(phone && phoneTask\?\.active && phoneTask.open\)/);
+  assert.match(templateSource, /phoneTask\?\.onBack \?\? phoneTask\?\.onClose/);
 });

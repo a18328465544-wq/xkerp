@@ -22,6 +22,8 @@ import {purchasePaymentStatusValues} from "@/src/types/purchase";
 import type {PurchaseListFilters, PurchaseListItem, PurchaseListSortKey} from "@/src/types/purchase";
 import {sourceTypeValues} from "@/src/types/core";
 import {createPurchaseListColumns} from "../purchase.columns";
+import {ErpDocumentRecordRow, ErpStatusBadge} from "@/src/components/common";
+import type {DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {countActivePurchaseListFilters, defaultPurchaseListFilters, parsePurchaseListFilters, purchaseListFiltersToSearch, selectPurchaseList} from "../purchase.filters";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -137,7 +139,11 @@ function PurchaseListContent({filters, commitFilters, session, query, filterPend
     data: selection.data,
     getRowId: (row: PurchaseListItem) => row.id,
     onRowClick: onDetail,
-    mobileRow: "columns" as const,
+    mobileRow: (item: PurchaseListItem) => <ErpDocumentRecordRow documentNo={item.invoiceNo}
+      status={<ErpStatusBadge label={item.paymentStatus} tone={item.paymentStatus === "已付款" ? "success" : item.paymentStatus === "已退款" ? "neutral" : "warning"} />}
+      quantity={`${item.totalCount} 件`} amount={session.permissions.showCost && item.totalCost !== undefined ? formatCurrency(item.totalCost) : undefined}
+      party={`供应商 / 来源 · ${item.supplierName || "未关联"}`} handler={item.handleBy} summary={item.productSummary}
+      date={<>{item.date} · 关联库存 {item.inventoryCount} 件</>} onOpen={() => onDetail(item)} />,
     mobileFieldOrder: ["supplierName", "paymentStatus", "totalCost", "handleBy", "date", "totalCount"],
     mobileFields: 6,
     ariaLabel: "采购单据明细",
@@ -161,6 +167,8 @@ function PurchaseListContent({filters, commitFilters, session, query, filterPend
     mobileShowDetailAction: false,
   };
   return <ErpListPage
+    phonePresentation="documents"
+    onApplyPhoneFilters={(values) => {const date = values.dateRange as DateRangeValue; commitFilters({...filters, sourceType: values.sourceType as PurchaseListFilters["sourceType"], paymentStatus: values.paymentStatus as PurchaseListFilters["paymentStatus"], dateStart: date.startDate, dateEnd: date.endDate, page: 1});}}
     title="采购单据"
     phoneTitle="采购单据"
     subtitle="查看采购来源、商品数量、付款状态与已生成库存；具备历史编辑权限时，可在详情页按业务阶段修改。"

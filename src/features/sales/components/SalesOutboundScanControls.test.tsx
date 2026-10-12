@@ -48,9 +48,12 @@ test("page guards focus by tab activity and separates camera detections from key
   assert.match(source, /shouldAutofocusOutboundScan\(active,/);
   assert.match(source, /\[active, selectedInvoice\?\.id\]/);
   assert.match(source, /onDetected=\{appendCode\}/);
-  assert.match(source, /mobileShowDetailAction=\{false\}/);
+  assert.match(source, /mobileShowDetailAction: false/);
   assert.match(source, /scrollIntoView\(\{block: "start"\}\)/);
   assert.match(source, /shrink-0 whitespace-nowrap"><ErpStatusBadge label=\{row\.verified/);
+  assert.match(source, /phoneTask=\{\{open: phoneReview, active,/);
+  assert.match(source, /actions: <GpuSnDateLookupButton/);
+  assert.match(source, /sheetExtra=\{<GpuSnDateLookupButton/);
 });
 
 test("outbound results and URL reconciliation belong to a mounted active editor", () => {

@@ -28,7 +28,8 @@ import {
   ErpDateRangePicker,
   ErpFilterBar,
   ErpLoadingState,
-  ErpMobileRecordRow,
+  ErpDocumentRecordRow,
+  ErpStatusBadge,
   ErpPageError,
   MetricsRegion,
   type QuickStatusItemData,} from "@/src/components/common";
@@ -44,6 +45,7 @@ import {invalidateErpDomains, refreshErpAfterDocument} from "@/src/services/api"
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useUrlSearchState} from "@/src/hooks/useUrlSearchState";
 import {formatCurrency} from "@/src/lib/format";
+import type {DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {
   financeIncomeCategories,
   type FinanceIncomeFilters,
@@ -272,6 +274,20 @@ function FinanceIncomeContent({
   };
   return (
     <FinanceEntryPageLayout
+      phoneDocumentList={{
+        title: "收入登记", countLabel: (total) => `${total} 笔记录`, loading: incomeQuery.isPending, loadError: Boolean(incomeQuery.error && !loadedCollection),
+        tableTitle: "收入明细", overlayOpen: Boolean(detail || dialogOpen || deleting),
+        search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索收入登记", placeholder: "搜索编号、对象或备注"},
+        primaryAction: {label: "新增收入", onClick: openCreate, disabled: !canReadAccounts},
+        actions: [{label: "导出本页", onClick: exportRows}], onRefresh: () => void incomeQuery.refetch(), refreshing: incomeQuery.isFetching,
+        filters: [
+          {kind: "select", key: "businessType", label: "业务类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...financeIncomeCategories.map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
+          ...(canReadAccounts ? [{kind: "select" as const, key: "accountId", label: "结算账户", value: filters.accountId, defaultValue: "all", options: [{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))], onChange: (accountId: string) => update({accountId})}] : []),
+          {kind: "text", key: "handler", label: "经办人", value: filters.handler, onChange: (handler) => update({handler})},
+          {kind: "dateRange", key: "dateRange", label: "日期范围", value: {startDate: filters.startDate, endDate: filters.endDate}, onChange: ({startDate, endDate}) => update({startDate, endDate})},
+        ],
+        onApplyPhoneFilters: (draft) => {const dates = draft.dateRange as DateRangeValue; onFiltersChange({...filters, businessType: String(draft.businessType), accountId: canReadAccounts ? String(draft.accountId) : filters.accountId, handler: String(draft.handler).trim(), startDate: dates.startDate, endDate: dates.endDate, page: 1});},
+      }}
       header={{
         title: "其他收支",
         subtitle: "仅登记非销售、非采购退货流程产生的非经营收入；采购退款请在退货或账户流水中查看。",
@@ -438,10 +454,13 @@ function FinanceIncomeContent({
           onPageChange: (page) => update({ page }),
           onPageSizeChange: (pageSize) => update({ page: 1, pageSize }),
           mobileRow: (item) => (
-            <ErpMobileRecordRow
-              title={item.businessType}
-              subtitle={item.source}
-              meta={`${item.time?.slice(0, 10)} · ${item.accountName}${item.handler ? ` · 经办: ${item.handler}` : ""}`}
+            <ErpDocumentRecordRow
+              documentNo={item.id}
+              status={<><ErpStatusBadge label={item.businessType} tone="neutral" />{item.accountingStatus && <ErpStatusBadge label={item.accountingStatus} tone="neutral" />}</>}
+              party={item.source}
+              handler={item.handler}
+              date={item.time?.slice(0, 10)}
+              summary={item.accountName}
               amount={`+${formatCurrency(item.amount)}`}
               amountLabel="收入金额"
               onOpen={() => setDetail(item)}

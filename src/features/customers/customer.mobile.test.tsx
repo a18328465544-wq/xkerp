@@ -32,7 +32,7 @@ test("long customer names can wrap without splitting the transaction date", () =
 
 test("search and creation uses original draft/mutation callbacks and hides for customer overlays", () => {
   assert.match(source, /overlayOpen=\{Boolean\(detail \|\| dialogOpen \|\| deleting \|\| categoryManagerOpen\)\}/);
-  assert.match(template, /<ErpMobileActionDock hidden=\{overlayOpen \|\| sheetOpen\}/);
+  assert.match(template, /<ErpMobileActionDock hidden=\{overlayOpen \|\| sheetOpen \|\| workOpen \|\| Boolean\(workflowOpen && phoneWorkflow\?\.actionLabel\)\}/);
   assert.match(source, /onClick: openCreate/);
   assert.match(source, /onChange: \(keyword\) => onFiltersChange\(\{\.\.\.filters, keyword, page: 1\}\)/);
   assert.match(source, /<CustomerRecordDialog open=\{dialogOpen\}/);
@@ -56,6 +56,6 @@ test("custom mobile toolbar shares the existing table sorting controller even in
   assert.match(table, /mobileToolbar\(\{openSorting: \(\) => setSortOpen\(true\)/);
   assert.match(table, /wrapSurface\(<>\{phoneToolbar\}\{content\}<\/>\)/);
   assert.match(table, /manualSorting,/);
-  assert.match(template, /surface="plain" mobilePagination="compact" mobileToolbar=\{mobileToolbar\}/);
+  assert.match(template, /surface="plain" mobilePagination="compact" mobilePaginationShowTotal=\{!documentPresentation\} mobileToolbar=\{mobileToolbar\}/);
   assert.match(template, /surface="card"/);
 });

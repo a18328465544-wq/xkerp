@@ -1,23 +1,28 @@
-import {useState, type HTMLAttributes, type ReactNode} from "react";
+import {useContext, useState, type HTMLAttributes, type ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {ErpPageFrame} from "./ErpPageFrame";
 import {useBalancedMetricGrid} from "@/src/hooks/useBalancedMetricGrid";
-import {flattenChildren} from "@/src/lib/flattenChildren";
-import {ErpMetricGroup} from "./ErpMetricCard";
+import {ErpMetricGroup, availableMetricItems} from "./ErpMetricCard";
+import {ErpPhoneMetricLimit} from "./ErpMetricPresentation";
+import {useErpPhone} from "@/src/hooks/useErpViewport";
 
 export function ErpDashboardPageFrame({className, children, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode}) {
   return <ErpPageFrame {...props} density="comfortable" className={className}>{children}</ErpPageFrame>;
 }
 
-export function MetricsRegion({className, style, children, mobileCollapseAfter, mobilePrimaryFullWidth = false, mobileScroll, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode; mobileCollapseAfter?: number; mobilePrimaryFullWidth?: boolean; mobileScroll?: "grid" | "snap"}) {
+export function MetricsRegion({className, style, children, mobileCollapseAfter, mobilePrimaryFullWidth = false, mobileScroll, phone: phoneProp, ...props}: HTMLAttributes<HTMLDivElement> & {children: ReactNode; mobileCollapseAfter?: number; mobilePrimaryFullWidth?: boolean; mobileScroll?: "grid" | "snap"; phone?: boolean}) {
   const [expanded, setExpanded] = useState(false);
-  const items = flattenChildren(children);
-  const shouldCollapse = Boolean(mobileCollapseAfter && items.length > mobileCollapseAfter);
-  const visibleItems = shouldCollapse && !expanded ? items.slice(0, mobileCollapseAfter) : items;
+  const phoneFromHook = useErpPhone();
+  const phone = phoneProp ?? phoneFromHook;
+  const limit = useContext(ErpPhoneMetricLimit) ?? mobileCollapseAfter;
+  const items = availableMetricItems(children);
+  const shouldCollapse = Boolean(phone && limit && items.length > limit);
+  const visibleItems = shouldCollapse && !expanded ? items.slice(0, limit) : items;
   const grid = useBalancedMetricGrid(visibleItems.length);
+  if (!items.length) return null;
   return <ErpMetricGroup>
     <section {...props} ref={grid.ref} style={{...grid.style, ...style}} data-erp-component="metrics-region" data-metric-count={visibleItems.length} data-metric-parity={visibleItems.length % 2 === 1 ? "odd" : "even"} data-mobile-collapsed={shouldCollapse && !expanded ? "true" : undefined} data-mobile-primary-full-width={mobilePrimaryFullWidth ? "true" : undefined} data-mobile-scroll={mobileScroll} className={cn("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,var(--erp-metric-min-width)),1fr))] gap-3", className)}>{visibleItems}</section>
-    {shouldCollapse && <button type="button" data-erp-region="metrics-toggle" className="erp-focus-ring mx-auto inline-flex min-h-[var(--erp-control-height-filter)] items-center rounded-[var(--erp-radius-pill)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-medium text-[var(--erp-color-primary)] shadow-sm lg:hidden" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{expanded ? "收起指标" : `展开更多指标（${items.length - (mobileCollapseAfter || 0)}）`}</button>}
+    {shouldCollapse && <button type="button" data-erp-region="metrics-toggle" className="erp-focus-ring mx-auto inline-flex min-h-[var(--erp-mobile-touch-size)] items-center rounded-[var(--erp-radius-pill)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-xs font-medium text-[var(--erp-color-primary)] lg:hidden" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{expanded ? "收起指标" : `更多指标（${items.length - (limit || 0)}）`}</button>}
   </ErpMetricGroup>;
 }
 

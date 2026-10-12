@@ -1,7 +1,7 @@
 import type {ColumnDef} from "@tanstack/react-table";
 import {Button, Input} from "@/src/components/ui";
 import {Lock, Unlock} from "lucide-react";
-import {DashboardSection, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpStatusBadge} from "@/src/components/common";
+import {DashboardSection, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpStatusBadge, ErpRecordDetail} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
 import type {FinanceAccountingPeriod, FinanceDailyClosing} from "@/src/types/finance-closing";
 import {financeClosingStatus, financeClosingStatusLabel} from "../finance-closing";
@@ -84,7 +84,7 @@ export function FinanceClosingDetailDrawer({item, onClose}: {item: FinanceDailyC
       title="日结快照详情"
       description={item ? `${item.id} · ${item.date}` : undefined}
     >
-      <div className="space-y-5">
+      {item && <ErpRecordDetail desktopContent={<div className="space-y-5">
         {item && <>
           <ErpDetailFactGrid>
             <ClosingFact label="收入" value={formatCurrency(item.snapshot.income)} tone="success" />
@@ -113,7 +113,14 @@ export function FinanceClosingDetailDrawer({item, onClose}: {item: FinanceDailyC
           {item.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">备注：{item.remarks}</p>}
           <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] p-3 text-xs leading-relaxed text-[var(--erp-color-text-secondary)]">这是日结时点的不可变快照，当前页面不会据此修改原始订单或流水。</p>
         </>}
-      </div>
+      </div>}
+        hero={{title: item.id, status: <ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />, amount: {label: "净现金变动", value: formatCurrency(item.snapshot.netCash)}, facts: [{label: "日结日期", value: item.date}, {label: "关闭人", value: item.closedBy}, {label: "关闭时间", value: item.closedAt}]}}
+        sections={[
+          {title: "经营快照", facts: [{label: "收入", value: formatCurrency(item.snapshot.income)}, {label: "支出", value: formatCurrency(item.snapshot.expense)}, {label: "销售单数", value: `${item.snapshot.salesCount} 单`}, {label: "采购单数", value: `${item.snapshot.purchaseCount} 单`}]},
+          {title: "待处理快照", facts: [{label: "客户应收", value: formatCurrency(item.snapshot.receivable)}, {label: "供应商应付", value: formatCurrency(item.snapshot.payable)}, {label: "待复核", value: `${item.snapshot.unreviewed} 项`}, {label: "对账差异", value: `${item.snapshot.accountReconciliationDifferences} 项`}]},
+          {title: "补充信息", collapsed: true, facts: item.remarks ? [{label: "备注", value: item.remarks}] : [], extra: <p className="text-xs text-[var(--erp-color-text-muted)]">这是日结时点的不可变快照，不修改原始订单或流水。</p>},
+        ]}
+      />}
     </ErpDetailDrawer>
   );
 }

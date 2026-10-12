@@ -3,7 +3,7 @@ import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 import {useQuery} from "@tanstack/react-query";
 import type {ColumnDef, VisibilityState, SortingState} from "@tanstack/react-table";
 import {BarChart3, CircleDollarSign, Download, FileText, Layers3, LockKeyhole, RefreshCw, RotateCcw, TrendingUp, WalletCards} from "lucide-react";
-import {ErpSearchInput} from "@/src/components/common";
+import {ErpSearchInput, type ErpListTableProps} from "@/src/components/common";
 import {useEffect, useMemo} from "react";
 import {Button, Card, Select} from "@/src/components/ui";
 import {AreaTrendChart} from "@/src/components/ui/chart-primitives";
@@ -80,7 +80,28 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
     const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
     const link = document.createElement("a"); link.href = url; link.download = `销售毛利-${filters.dimension}-${filters.dateStart || "全部"}-${filters.dateEnd || ""}.csv`; link.click(); URL.revokeObjectURL(url);
   };
+  const phoneTable: ErpListTableProps<FinanceProfitGroupRow> = {
+    columns, data: report.pageRows, getRowId: (row) => row.id, loading: !ready && !query.isError,
+    fetching: query.isFetching || !ready, error: query.error as Error | null, onRetry: () => void query.refetch(),
+    emptyTitle: "暂无毛利数据", emptyDescription: activeFilters ? "请调整筛选条件。" : "当前没有销售单据。",
+    page: report.meta.page, pageSize: report.meta.pageSize, total: report.meta.total,
+    onPageChange: (page) => update({page}), onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
+    manualSorting: true, sorting, onSortingChange: (updater) => {const next = typeof updater === "function" ? updater(sorting) : updater; update({sortKey: next[0]?.id as FinanceProfitFilters["sortKey"], sortDirection: next[0] ? next[0].desc ? "desc" : "asc" : undefined});},
+    mobileRow: (item) => <ErpMobileRecordRow title={item.label} subtitle={item.secondary} meta={`${item.orderCount} 单 · ${item.quantity} 件`} amount={session.permissions.showProfit && item.profit !== undefined ? formatCurrency(item.profit) : formatCurrency(item.revenue)} amountLabel={session.permissions.showProfit && item.profit !== undefined ? "毛利" : "销售额"} />,
+  };
   return <FinanceDetailPageLayout
+    phoneDocumentList={{
+      title: "销售毛利", countLabel: (count) => `${count} 组`, tableTitle: "毛利明细", table: phoneTable,
+      loading: !ready && !query.isError, loadError: Boolean(query.error && !query.data),
+      search: {value: filters.keyword, label: "搜索销售利润", placeholder: "商品、客户、单号或经办人", onChange: (keyword) => update({keyword})},
+      filters: [
+        {kind: "select", key: "dimension", label: "分析维度", value: filters.dimension, defaultValue: defaultFinanceProfitFilters.dimension, options: dimensionOptions, onChange: (dimension) => update({dimension: dimension as FinanceProfitDimension})},
+        {kind: "dateRange", key: "date", label: "利润日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, defaultValue: {startDate: defaultFinanceProfitFilters.dateStart, endDate: defaultFinanceProfitFilters.dateEnd}, onChange: ({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})},
+      ],
+      onApplyPhoneFilters: (draft) => {const dates = draft.date as {startDate: string; endDate: string}; update({dimension: draft.dimension as FinanceProfitDimension, dateStart: dates.startDate, dateEnd: dates.endDate});},
+      onRefresh: () => void query.refetch(), refreshing: query.isFetching,
+      actions: [{label: "导出结果", onClick: () => void exportReport(), disabled: query.isFetching || query.isPending || !report.rows.length}],
+    }}
     header={<ErpPageHeader title="销售毛利" subtitle="按商品、客户、渠道或经办人查看销售额、成本与销售毛利表现。" actions={<><Button type="button" size="sm" variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="secondary" disabled={query.isFetching || query.isPending || !report.rows.length} onClick={() => void exportReport()}><Download className="h-4 w-4" />导出结果</Button></>} />}
     filters={<AnalyticsToolbar actions={<Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceProfitFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}>
       <ErpSearchInput className="min-w-56 flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索商品、客户、销售单号或经办人" aria-label="搜索销售利润" />

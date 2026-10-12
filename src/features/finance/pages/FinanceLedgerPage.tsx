@@ -3,6 +3,8 @@ import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, VisibilityState} from "@tanstack/react-table";
 import {CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
 import {ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
+import {ErpDocumentRecordRow, ErpStatusBadge, MetricsRegion} from "@/src/components/common";
+import type {DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, Input, Select} from "@/src/components/ui";
 import {HorizontalBarChart, TrendLineChart} from "@/src/components/ui/chart-primitives";
@@ -96,6 +98,23 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
 
   const analysisAvailable = hasTrendData || expenses.length > 0;
   return <FinanceDetailPageLayout
+    phoneDocumentList={{
+      title: "账户流水", tableTitle: "流水明细", countLabel: (total) => `${total} 笔流水`, loading: ledgerQuery.isPending, loadError: Boolean(ledgerQuery.error && !ledgerQuery.data), overlayOpen: Boolean(detail),
+      search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索账户流水", placeholder: "搜索单号、备注或交易对象"},
+      onRefresh: () => void ledgerQuery.refetch(), refreshing: ledgerQuery.isFetching, actions: [{label: "导出本页", onClick: exportCurrentPage, disabled: rows.length === 0}],
+      filters: [
+        ...(accountOptionsAvailable ? [{kind: "select" as const, key: "accountId", label: "结算账户", value: filters.accountId, defaultValue: "all", options: [{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))], onChange: (accountId: string) => update({accountId})}] : []),
+        {kind: "select", key: "businessType", label: "交易类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...financeLedgerBusinessTypes.map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
+        {kind: "select", key: "direction", label: "交易方向", value: filters.direction, defaultValue: "all", options: [{value: "all", label: "全部方向"}, ...financeLedgerDirections.map((value) => ({value, label: value}))], onChange: (direction) => update({direction: direction as FinanceLedgerFilters["direction"]})},
+        {kind: "dateRange", key: "dateRange", label: "日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})},
+        ...(["handler", "relatedDocNo", "customerName", "supplierName"] as const).map((key) => ({kind: "text" as const, key, label: {handler: "经办人", relatedDocNo: "关联单号", customerName: "客户", supplierName: "供应商"}[key], value: filters[key], onChange: (value: string) => update({[key]: value})})),
+      ],
+      onApplyPhoneFilters: (draft) => {const dates = draft.dateRange as DateRangeValue; onFiltersChange({...filters, accountId: accountOptionsAvailable ? String(draft.accountId) : filters.accountId, businessType: String(draft.businessType), direction: draft.direction as FinanceLedgerFilters["direction"], handler: String(draft.handler), relatedDocNo: String(draft.relatedDocNo), customerName: String(draft.customerName), supplierName: String(draft.supplierName), dateStart: dates.startDate, dateEnd: dates.endDate, page: 1});},
+      table: {columns, data: rows, getRowId: (row) => row.id, loading: ledgerQuery.isPending, fetching: ledgerQuery.isFetching, error: ledgerQuery.error, onRetry: () => void ledgerQuery.refetch(), onRowClick: setDetail,
+        manualSorting: true, mobileSorting: false, page: ledgerQuery.data?.page ?? filters.page, pageSize: ledgerQuery.data?.pageSize ?? filters.pageSize, total: ledgerQuery.data?.total ?? 0, onPageChange: (page) => update({page}), onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
+        mobileRow: (item) => <ErpDocumentRecordRow documentNo={item.id} status={<><ErpStatusBadge label={item.businessType} tone="neutral" /><ErpStatusBadge label={item.direction} tone={item.changeAmount > 0 ? "success" : item.changeAmount < 0 ? "warning" : "neutral"} /></>} party={item.party || item.customerName || item.supplierName} handler={item.handler} date={formatLedgerDateTime(item.time)} summary={`${item.accountName} · 余额 ${formatMoney(item.afterBalance)}`} relatedDocument={item.relatedDocNo} amount={formatLedgerChangeAmount(item.changeAmount).formatted} amountLabel="变动金额" onOpen={() => setDetail(item)} />,
+      },
+    }}
     header={<FinanceLedgerHeader reconciliation={reconciliation} loading={ledgerQuery.isFetching} onRefresh={() => void ledgerQuery.refetch()} onExport={exportCurrentPage} hasRows={rows.length > 0} />}
     filters={desktopFilters}
     metrics={<SummaryCards openingBalance={openingBalance} income={summary.income} expense={summary.expense} closingBalance={closingBalance} />}
@@ -124,12 +143,12 @@ function FinanceLedgerHeader({reconciliation, loading, onRefresh, onExport, hasR
 
 function SummaryCards({openingBalance, income, expense, closingBalance}: {openingBalance?: number; income: number; expense: number; closingBalance?: number}) {
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <MetricsRegion>
       <SummaryCard label="期初余额" value={openingBalance} icon={<WalletCards className="h-4 w-4" />} tone="info" />
       <SummaryCard label="收入金额" value={income}  icon={<ArrowIcon direction="in" />} tone="success" />
       <SummaryCard label="支出金额" value={expense}  icon={<ArrowIcon direction="out" />} tone="danger" />
       <SummaryCard label="期末余额" value={closingBalance} icon={<CircleDollarSign className="h-4 w-4" />} tone="info" />
-    </div>
+    </MetricsRegion>
   );
 }
 
@@ -258,7 +277,11 @@ function TableControls({columns, visibility, onVisibilityChange, density, onDens
 }
 
 function LedgerDetailDrawer({item, onClose}: {item: FinanceLedgerItem | null; onClose: () => void}) {
-  return <ErpDetailDrawer modal={false} resizable drawerKey="finance-ledger-detail" defaultWidth={680} minWidth={520} maxWidth={820} open={Boolean(item)} onOpenChange={(open) => {if (!open) onClose();}} title={item?.businessType || "流水详情"} description={item ? `${item.id} · ${formatLedgerDateTime(item.time)}` : undefined}><div className="space-y-5">{item && <><div className="grid grid-cols-2 gap-3"><Fact label="收入" value={formatMoney(item.incomeAmount)} tone="success" /><Fact label="支出" value={formatMoney(item.expenseAmount)} tone="danger" /><Fact label="变动前余额" value={formatMoney(item.beforeBalance)} /><Fact label="变动后余额" value={formatMoney(item.afterBalance)} tone={item.afterBalance < 0 ? "danger" : "neutral"} /></div><DashboardSection title="流水归属"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="账户" value={`${item.accountName} · ${item.accountType}`} /><DetailRow label="方向" value={item.direction} /><DetailRow label="往来方" value={item.party || item.customerName || item.supplierName || "未记录"} /><DetailRow label="经办人" value={item.handler} /><DetailRow label="创建人" value={item.createdBy} /><DetailRow label="发生时间" value={formatLedgerDateTime(item.time)} /></div></DashboardSection><DashboardSection title="关联单据"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="单据类型" value={item.relatedDocType || "未记录"} /><DetailRow label="单据编号" value={item.relatedDocNo || "未关联"} /></div></DashboardSection>{item.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{item.remarks}</p>}</>}</div></ErpDetailDrawer>;
+  return <ErpDetailDrawer modal={false} resizable drawerKey="finance-ledger-detail" defaultWidth={680} minWidth={520} maxWidth={820} open={Boolean(item)} onOpenChange={(open) => {if (!open) onClose();}} title={item?.businessType || "流水详情"} description={item ? `${item.id} · ${formatLedgerDateTime(item.time)}` : undefined}>{item && <ErpRecordDetail desktopContent={<div className="space-y-5">{item && <><div className="grid grid-cols-2 gap-3"><Fact label="收入" value={formatMoney(item.incomeAmount)} tone="success" /><Fact label="支出" value={formatMoney(item.expenseAmount)} tone="danger" /><Fact label="变动前余额" value={formatMoney(item.beforeBalance)} /><Fact label="变动后余额" value={formatMoney(item.afterBalance)} tone={item.afterBalance < 0 ? "danger" : "neutral"} /></div><DashboardSection title="流水归属"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="账户" value={`${item.accountName} · ${item.accountType}`} /><DetailRow label="方向" value={item.direction} /><DetailRow label="往来方" value={item.party || item.customerName || item.supplierName || "未记录"} /><DetailRow label="经办人" value={item.handler} /><DetailRow label="创建人" value={item.createdBy} /><DetailRow label="发生时间" value={formatLedgerDateTime(item.time)} /></div></DashboardSection><DashboardSection title="关联单据"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><DetailRow label="单据类型" value={item.relatedDocType || "未记录"} /><DetailRow label="单据编号" value={item.relatedDocNo || "未关联"} /></div></DashboardSection>{item.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{item.remarks}</p>}</>}</div>} hero={{title: item.id, status: <><ErpStatusBadge label={item.businessType} tone="neutral" /><ErpStatusBadge label={item.direction} tone="neutral" /></>, amount: {label: "变动金额", value: formatLedgerChangeAmount(item.changeAmount).formatted}, facts: [{label: "账户", value: `${item.accountName} · ${item.accountType}`}, {label: "往来方", value: item.party || item.customerName || item.supplierName || "未记录"}, {label: "经办人", value: item.handler}, {label: "发生时间", value: formatLedgerDateTime(item.time)}]}} sections={[
+ {title: "金额与余额", facts: [{label: "收入", value: formatMoney(item.incomeAmount)}, {label: "支出", value: formatMoney(item.expenseAmount)}, {label: "变动前余额", value: formatMoney(item.beforeBalance)}, {label: "变动后余额", value: formatMoney(item.afterBalance), tone: item.afterBalance < 0 ? "danger" : "default"}]},
+ {title: "关联单据", facts: [{label: "单据类型", value: item.relatedDocType || "未记录"}, {label: "单据编号", value: item.relatedDocNo || "未关联"}]},
+ {title: "备注与记录", collapsed: true, facts: [{label: "创建人", value: item.createdBy}, {label: "备注", value: item.remarks || "未填写"}]},
+]} />}</ErpDetailDrawer>;
 }
 
 function Fact({label, value, tone = "neutral"}: {label: string; value: string; tone?: "neutral" | "success" | "danger"}) {return <ErpDetailFact label={label} value={value} tone={tone === "neutral" ? "default" : tone} />;}
@@ -306,3 +329,4 @@ function formatMoney(value?: number) {return value === undefined ? "—" : new I
 function compactMoney(value: number) {return Math.abs(value) >= 10000 ? `${(value / 10000).toFixed(1)}万` : Math.round(value).toLocaleString("zh-CN");}
 function formatPercent(value: number, total: number) {return total ? `${((value / total) * 100).toFixed(1)}%` : "0.0%";}
 function csvCell(value: string | number) {const text = String(value ?? ""); return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;}
+import {ErpRecordDetail} from "@/src/components/common";

@@ -2,13 +2,11 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
 import {AlertTriangle, CheckCircle2, Database, PackageCheck, RefreshCw, ScanLine, ShieldAlert, Truck} from "lucide-react";
-import {ErpMobileSummary, ErpSearchInput} from "@/src/components/common";
-import {useErpPhone, ERP_PHONE_QUERY} from "@/src/hooks/useErpViewport";
-import {usePhoneBackLayer} from "@/src/hooks/usePhoneBack";
+import {ErpMobileSummary, ErpSearchInput, ErpListPage, ErpDocumentRecordRow, type ErpListTableProps} from "@/src/components/common";
+import {ERP_PHONE_QUERY} from "@/src/hooks/useErpViewport";
 import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Textarea} from "@/src/components/ui";
-import {ErpMobileRecordRow} from "@/src/components/common/ErpMobileRecordRow";
 import {DashboardSection, ErpDataTable, ErpEmptyState, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, ErpWarehousePageFrame, MainRegion, MetricsRegion, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, refreshErpAfterDocument, salesApi} from "@/src/services/api";
 import {createSubmissionIdentity} from "@/src/services/api/submissionIdentity";
@@ -52,13 +50,7 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const {keyword, invoiceId, page} = outboundState;
-  const phone = useErpPhone();
   const [phoneReview, setPhoneReview] = useState(Boolean(invoiceId));
-  usePhoneBackLayer(active && phone && phoneReview, () => {
-    setPhoneReview(false);
-    setCameraScope(null);
-    commitOutboundState({...outboundState, invoiceId: null});
-  }, 50);
   const setKeyword = (value: string) => commitOutboundState({...outboundState, keyword: value, page: 1, invoiceId: null});
   const setInvoiceId = (value: string | null) => commitOutboundState({...outboundState, invoiceId: value});
   const scanInputRef = useRef<HTMLInputElement>(null);
@@ -170,24 +162,19 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
     return () => cancelAnimationFrame(frame);
   }, [active, selectedInvoice?.id]);
 
-  return <ErpWarehousePageFrame data-phone-task={phone && phoneReview ? "true" : undefined}>
-    <ErpPageHeader title="销售出库" subtitle="仓库核验库存 ID / SN 后完成实物出库。" quickStatus={quickStatus} actions={<><GpuSnDateLookupButton sn={scanInput || scanCodes[0]} model={selectedInvoice?.lines[0]?.productName} label="查询 SN 日期" />{!phone && <Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>}<Button type="button" size="sm" variant="secondary" onClick={() => void navigate({to: "/sales"})}>销售单据</Button></>} />
-    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
-    <ErpMobileSummary label="出库统计" summary={`${query.data?.meta?.total ?? invoices.length} 单待出库`}><MetricsRegion>
-      <MetricCard label="待出库销售单" value={`${query.data?.meta?.total ?? invoices.length} 单`} detail={keyword ? "当前搜索结果" : "全部待处理"} icon={<Truck className="h-4 w-4" />} tone={(query.data?.meta?.total ?? invoices.length) ? "warning" : "neutral"} />
-      <MetricCard label="待绑定实物" value={`${query.data?.meta?.summary.pendingItemCount ?? invoices.reduce((sum, item) => sum + item.lines.length, 0)} 件`} detail="实际 SN 在本页绑定" icon={<PackageCheck className="h-4 w-4" />} />
-      <MetricCard label="待出库金额" value={formatCurrency(query.data?.meta?.summary.pendingAmount ?? invoices.reduce((sum, item) => sum + item.totalAmount, 0))} icon={<Database className="h-4 w-4" />} />
-      <MetricCard label="当前核验进度" value={selectedInvoice ? `${verification.verifiedCount}/${verification.expectedCount}` : "—"} detail={selectedInvoice?.invoiceNo || "请选择销售单"} icon={<ScanLine className="h-4 w-4" />} tone={selectedInvoice && !verification.ready ? "warning" : "neutral"} />
-    </MetricsRegion></ErpMobileSummary>
-    <MainRegion variant="60-40">
-      <MainRegion.Primary hidden={phone && phoneReview || undefined}>
-        <DashboardSection title="待出库销售单" actions={<ErpSearchInput className="w-72 max-w-full" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="单号、客户、商品或 SN" aria-label="搜索待出库销售单" />}>
-          <ErpDataTable surface="responsive" mobileRow={(item) => <ErpMobileRecordRow title={item.invoiceNo || item.id} subtitle={item.customerName} meta={`${item.totalCount} 件 · ${item.date}`} amount={formatCurrency(item.totalAmount)} status="待出库" onOpen={() => selectInvoice(item)} />} mobileFieldOrder={["customerName", "products", "totalCount", "totalAmount"]} ariaLabel="待出库销售单" columns={columns} data={invoices} getRowId={(row) => row.id} loading={query.isPending} fetching={query.isFetching} error={query.error as Error | null} errorTitle="待出库数据加载失败" emptyTitle="暂无待出库销售单" emptyDescription={keyword ? "当前搜索没有匹配的待出库销售单。" : "销售出库池已清空。"} onRetry={() => void query.refetch()} onRowClick={selectInvoice} mobileShowDetailAction={false} page={query.data?.meta?.page || page} pageSize={query.data?.meta?.pageSize || outboundPageSize} total={query.data?.meta?.total ?? invoices.length} onPageChange={(nextPage) => commitOutboundState({...outboundState, page: nextPage, invoiceId: null})} density="compact" stickyHeader />
-        </DashboardSection>
-      </MainRegion.Primary>
-      <MainRegion.Secondary hidden={phone && !phoneReview || undefined}>
-        <div ref={verificationRegionRef} className="min-w-0 scroll-mt-[var(--erp-workspace-bar-height)]" data-erp-region="outbound-verification">
-        {phone && <Button type="button" variant="secondary" className="mb-3" onClick={() => {setPhoneReview(false); setCameraScope(null);}}>返回待出库单据</Button>}
+  const table: ErpListTableProps<SalesOutboundInvoice> = {
+    columns, data: invoices, getRowId: (row) => row.id,
+    loading: query.isPending, fetching: query.isFetching, error: query.error as Error | null,
+    errorTitle: "待出库数据加载失败", emptyTitle: "暂无待出库销售单",
+    emptyDescription: keyword ? "当前搜索没有匹配的待出库销售单。" : "销售出库池已清空。",
+    onRetry: () => void query.refetch(), onRowClick: selectInvoice, mobileShowDetailAction: false,
+    mobileSorting: false, ariaLabel: "待出库销售单",
+    page: query.data?.meta?.page || page, pageSize: query.data?.meta?.pageSize || outboundPageSize,
+    total: query.data?.meta?.total ?? invoices.length,
+    onPageChange: (nextPage) => commitOutboundState({...outboundState, page: nextPage, invoiceId: null}),
+    mobileRow: (item) => <ErpDocumentRecordRow documentNo={item.invoiceNo || item.id} party={item.customerName} date={item.date} summary={item.lines.map((line) => line.productName).join("、")} quantity={`${item.totalCount} 件`} amount={formatCurrency(item.totalAmount)} amountLabel="销售金额" status={<ErpStatusBadge label="待出库" tone="warning" />} onOpen={() => selectInvoice(item)} />,
+  };
+  const verificationContent = <div ref={verificationRegionRef} className="min-w-0 scroll-mt-[var(--erp-workspace-bar-height)]" data-erp-region="outbound-verification">
         <DashboardSection title="出库核验" density="default" description="扫码模式必须完成全部实物核验；手动模式必须有权限且填写原因。">
           {query.isPlaceholderData ? <ErpLoadingState title="正在更新待出库单据" /> : !selectedInvoice ? <ErpEmptyState title="选择待出库销售单" description="选择左侧销售单后开始核验库存 ID 或 SN。" /> : <div className="space-y-4">
             <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3"><div className="flex items-center justify-between gap-2"><span className="erp-data-number text-xs font-semibold text-[var(--erp-color-primary)]">{selectedInvoice.invoiceNo}</span><ErpStatusBadge label={`${verification.verifiedCount}/${verification.expectedCount} 已核验`} tone={scanReady ? "success" : "warning"} /></div><p className="mt-2 font-semibold">{selectedInvoice.customerName}</p><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">{selectedInvoice.lines.length} 件 · {formatCurrency(selectedInvoice.totalAmount)}</p></div>
@@ -206,12 +193,39 @@ function SalesOutboundContent({session, query, outboundState, commitOutboundStat
               : !remarks.trim() && <p className="text-center text-xs text-[var(--erp-color-text-muted)]">填写出库备注 / 手动原因后即可直接手动确认。</p>}
           </div>}
         </DashboardSection>
-        </div>
+        </div>;
+  const desktopContent = <ErpWarehousePageFrame>
+    <ErpPageHeader title="销售出库" subtitle="仓库核验库存 ID / SN 后完成实物出库。" quickStatus={quickStatus} actions={<><GpuSnDateLookupButton sn={scanInput || scanCodes[0]} model={selectedInvoice?.lines[0]?.productName} label="查询 SN 日期" />{<Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>}<Button type="button" size="sm" variant="secondary" onClick={() => void navigate({to: "/sales"})}>销售单据</Button></>} />
+    <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+    <ErpMobileSummary label="出库统计" summary={`${query.data?.meta?.total ?? invoices.length} 单待出库`}><MetricsRegion>
+      <MetricCard label="待出库销售单" value={`${query.data?.meta?.total ?? invoices.length} 单`} detail={keyword ? "当前搜索结果" : "全部待处理"} icon={<Truck className="h-4 w-4" />} tone={(query.data?.meta?.total ?? invoices.length) ? "warning" : "neutral"} />
+      <MetricCard label="待绑定实物" value={`${query.data?.meta?.summary.pendingItemCount ?? invoices.reduce((sum, item) => sum + item.lines.length, 0)} 件`} detail="实际 SN 在本页绑定" icon={<PackageCheck className="h-4 w-4" />} />
+      <MetricCard label="待出库金额" value={formatCurrency(query.data?.meta?.summary.pendingAmount ?? invoices.reduce((sum, item) => sum + item.totalAmount, 0))} icon={<Database className="h-4 w-4" />} />
+      <MetricCard label="当前核验进度" value={selectedInvoice ? `${verification.verifiedCount}/${verification.expectedCount}` : "—"} detail={selectedInvoice?.invoiceNo || "请选择销售单"} icon={<ScanLine className="h-4 w-4" />} tone={selectedInvoice && !verification.ready ? "warning" : "neutral"} />
+    </MetricsRegion></ErpMobileSummary>
+    <MainRegion variant="60-40">
+      <MainRegion.Primary>
+        <DashboardSection title="待出库销售单" actions={<ErpSearchInput className="w-72 max-w-full" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="单号、客户、商品或 SN" aria-label="搜索待出库销售单" />}>
+          <ErpDataTable {...table} mobileRow={table.mobileRow} surface="responsive" mobileFieldOrder={["customerName", "products", "totalCount", "totalAmount"]} density="compact" stickyHeader />
+        </DashboardSection>
+      </MainRegion.Primary>
+      <MainRegion.Secondary>
+        {verificationContent}
       </MainRegion.Secondary>
     </MainRegion>
-    <SalesOutboundCameraDialog open={cameraOpen} onOpenChange={(open) => setCameraScope(open ? scope : null)} onDetected={appendCode} />
     </ErpPageContent>
   </ErpWarehousePageFrame>;
+  return <ErpListPage title="销售出库" phonePresentation="documents" pageFrame="warehouse"
+    countLabel={(count) => `${count} 单`} loading={query.isPending} loadError={Boolean(query.error && !query.data)}
+    desktopPageContent={desktopContent} tableTitle="待出库销售单" table={table} tableDensity="compact"
+    search={{value: keyword, onChange: setKeyword, label: "搜索待出库销售单", placeholder: "单号、客户、商品或 SN"}}
+    onRefresh={() => void query.refetch()} refreshing={query.isFetching}
+    pageActions={[{label: "销售单据", onClick: () => void navigate({to: "/sales"})}]}
+    sheetExtra={<GpuSnDateLookupButton sn={scanInput || scanCodes[0]} model={selectedInvoice?.lines[0]?.productName} label="查询 SN 日期" />}
+    phoneTask={{open: phoneReview, active, title: "出库核验", content: verificationContent, actions: <GpuSnDateLookupButton sn={scanInput || scanCodes[0]} model={selectedInvoice?.lines[0]?.productName} label="SN 日期" />, onClose: () => {setPhoneReview(false); setCameraScope(null);}, onBack: () => {setPhoneReview(false); setCameraScope(null); commitOutboundState({...outboundState, invoiceId: null});}}}
+    overlayOpen={cameraOpen}
+    overlays={<SalesOutboundCameraDialog open={cameraOpen} onOpenChange={(open) => setCameraScope(open ? scope : null)} onDetected={appendCode} />}
+  />;
 }
 
 function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) {

@@ -4,6 +4,8 @@ import {
   ErpDisclosureCard,
   ErpFinancePageFrame,
   ErpPageContent,
+  ErpListPage,
+  type ErpListPageProps,
 } from "@/src/components/common";
 import {Button} from "@/src/components/ui";
 import {cn} from "@/src/lib/cn";
@@ -11,7 +13,8 @@ import {useFinanceAnalysisPreference} from "@/src/hooks/useFinanceAnalysisPrefer
 import {useErpPhone} from "@/src/hooks/useErpViewport";
 import {FinanceSectionTabs, type FinanceSectionTab} from "./FinanceSectionTabs";
 
-export interface FinanceDetailPageLayoutProps {
+export interface FinanceDetailPageLayoutProps<TData = unknown> {
+  phoneDocumentList?: ErpListPageProps<TData>;
   header: ReactNode;
   tabs?: {
     label: string;
@@ -36,8 +39,9 @@ export interface FinanceDetailPageLayoutProps {
  * filters → metrics → table; phones keep the Finance frame's search-first
  * ordering and can fold pre-table analysis after the records.
  */
-export function FinanceDetailPageLayout({header, tabs, filters, metrics, beforeTable, phoneFoldBeforeTable, table, analysis, children}: FinanceDetailPageLayoutProps) {
+export function FinanceDetailPageLayout<TData = unknown>({header, tabs, filters, metrics, beforeTable, phoneFoldBeforeTable, table, analysis, children, phoneDocumentList}: FinanceDetailPageLayoutProps<TData>) {
   const phone = useErpPhone();
+  if (phone && phoneDocumentList) return <ErpListPage {...phoneDocumentList} phonePresentation="documents" phoneActionPlacement="dock" phoneMetrics={metrics} pageFrame="finance" tabs={tabs && <FinanceSectionTabs label={tabs.label} items={tabs.items} />} sheetExtra={phoneDocumentList.sheetExtra} phoneAfterTable={<>{beforeTable && <ErpDisclosureCard title={phoneFoldBeforeTable || "分析"}>{beforeTable}</ErpDisclosureCard>}{analysis && <FinanceAnalysisDisclosure title={analysis.title} preferenceKey={analysis.preferenceKey}>{analysis.children}</FinanceAnalysisDisclosure>}</>} overlays={children} />;
   const foldBeforeTable = Boolean(phone && phoneFoldBeforeTable && beforeTable);
   return (
     <ErpFinancePageFrame>

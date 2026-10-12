@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
-import {ErpSearchInput} from "@/src/components/common";
+import {ErpSearchInput, ErpDocumentRecordRow, type ErpFilterField, type ErpListTableProps} from "@/src/components/common";
 import {
   useEffect,
   useMemo,
@@ -29,7 +29,6 @@ import {
   ErpEmptyState,
   ErpFilterBar,
   ErpLoadingState,
-  ErpMobileRecordRow,
   ErpPageError,
   ErpPageHeader,
   ErpPageToolbar,
@@ -267,7 +266,43 @@ function FinanceClosingContent({
       action: () => document.getElementById("finance-closing-health")?.scrollIntoView({behavior: "smooth", block: "start"}),
     },
   ];
+  const periodManagement = <>      <FinanceAccountingPeriodPanel periods={accountingPeriods} selectedPeriod={selectedPeriod} onSelectedPeriodChange={setSelectedPeriod} onClosePeriod={(period) => accountingPeriodMutation.mutate({period, action: "close"})} onReopenPeriod={(period) => accountingPeriodMutation.mutate({period, action: "reopen"})} busy={accountingPeriodMutation.isPending || accountingPeriodsQuery.isFetching} />
+      {latest && hasLatestExceptions && <DashboardSection title="最新异常" description={`来自 ${latest.date} 日结快照`} actions={<ErpStatusBadge label={financeClosingStatusLabel(latest)} tone={financeClosingStatus(latest)} />}><FinanceLatestExceptions item={latest} /></DashboardSection>}</>;
+  const phoneTable: ErpListTableProps<FinanceDailyClosing> & {mobileRow: (item: FinanceDailyClosing) => React.ReactNode} = {
+          columns,
+          data: report.pageRows,
+          getRowId: (row) => row.id,
+          loading: query.isPending,
+          fetching: query.isFetching,
+          error: query.error as Error | null,
+          errorTitle: "日结快照加载失败",
+          emptyTitle: "暂无日结快照",
+          emptyDescription: activeFilters ? "当前筛选条件没有匹配的日结记录。" : "当前还没有已保存的日结快照。",
+          onRetry: () => void query.refetch(),
+          onRowClick: setDetail,
+          page: report.meta.page,
+          pageSize: report.meta.pageSize,
+          total: report.meta.total,
+          onPageChange: (page) => update({page}),
+          onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
+          mobileRow: (item) => <ErpDocumentRecordRow documentNo={item.id} party={`日结 · ${item.date}`} handler={item.closedBy} date={item.closedAt} summary={`收入 ${formatCurrency(item.snapshot.income)} · 支出 ${formatCurrency(item.snapshot.expense)}`} amount={formatCurrency(item.snapshot.netCash)} amountLabel="净现金" status={<ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />} onOpen={() => setDetail(item)} />,
+          mobileShowDetailAction: false,
+          mobileSorting: false,
+          enableColumnResizing: true,
+          stickyHeader: true,
+          virtualized: report.pageRows.length >= 50,
+  };
+  const phoneFilters: ErpFilterField[] = [{kind: "dateRange", key: "date", label: "日结日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})}];
   return <FinanceDetailPageLayout
+    phoneDocumentList={{
+      title: "日结记录", countLabel: (count) => `${count} 条`, loading: query.isPending, loadError: Boolean(query.error && !query.data),
+      tableTitle: "已保存日结", table: phoneTable, tableDensity: "compact", filters: phoneFilters,
+      search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索日结记录", placeholder: "日结编号、关闭人或备注"},
+      onApplyPhoneFilters: (draft) => {const date = draft.date as {startDate: string; endDate: string}; update({dateStart: date.startDate, dateEnd: date.endDate});},
+      onRefresh: () => void query.refetch(), refreshing: query.isFetching, overlayOpen: Boolean(detail),
+      phoneWorkflow: {title: "月结锁定与最新异常", content: periodManagement},
+      actions: [{label: "导出结果", disabled: !report.rows.length, onClick: exportRows}, {label: "检查账务", disabled: reconciliationQuery.isFetching, onClick: () => void reconciliationQuery.refetch()}],
+    }}
     header={<ErpPageHeader
       title="财务核对"
       subtitle="集中复核每日经营快照、账户差异与退货对账。"
@@ -299,37 +334,12 @@ function FinanceClosingContent({
       <FinanceMetricCard label="待处理异常" value={`${report.summary.unreviewed + report.summary.reconciliationDifferences} 项`} detail={`待复核 ${report.summary.unreviewed} · 对账差异 ${report.summary.reconciliationDifferences}`} icon={<ShieldAlert className="h-4 w-4" />} tone={report.summary.unreviewed + report.summary.reconciliationDifferences ? "warning" : "success"} />
     </MetricsRegion>}
     table={<div className="space-y-[var(--erp-page-gap)]">
-      <FinanceAccountingPeriodPanel periods={accountingPeriods} selectedPeriod={selectedPeriod} onSelectedPeriodChange={setSelectedPeriod} onClosePeriod={(period) => accountingPeriodMutation.mutate({period, action: "close"})} onReopenPeriod={(period) => accountingPeriodMutation.mutate({period, action: "reopen"})} busy={accountingPeriodMutation.isPending || accountingPeriodsQuery.isFetching} />
-      {latest && hasLatestExceptions && <DashboardSection title="最新异常" description={`来自 ${latest.date} 日结快照`} actions={<ErpStatusBadge label={financeClosingStatusLabel(latest)} tone={financeClosingStatus(latest)} />}><FinanceLatestExceptions item={latest} /></DashboardSection>}
+      {periodManagement}
       <FinanceTableRegion
         title="已保存日结"
         description="点击记录查看应收、应付、销售与采购摘要。"
         count={`共 ${report.meta.total} 条`} actions={<FinanceTableControls columns={columns} visibility={columnVisibility} onVisibilityChange={setColumnVisibility} density={density} onDensityChange={setDensity} />}
-        table={{
-          columns,
-          data: report.pageRows,
-          getRowId: (row) => row.id,
-          loading: query.isPending,
-          fetching: query.isFetching,
-          error: query.error as Error | null,
-          errorTitle: "日结快照加载失败",
-          emptyTitle: "暂无日结快照",
-          emptyDescription: activeFilters ? "当前筛选条件没有匹配的日结记录。" : "当前还没有已保存的日结快照。",
-          onRetry: () => void query.refetch(),
-          onRowClick: setDetail,
-          page: report.meta.page,
-          pageSize: report.meta.pageSize,
-          total: report.meta.total,
-          onPageChange: (page) => update({page}),
-          onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
-          mobileRow: (item) => <ErpMobileRecordRow title={item.date} subtitle={`关闭人: ${item.closedBy}`} meta={`收 ${formatCurrency(item.snapshot.income)} · 支 ${formatCurrency(item.snapshot.expense)}`} amount={formatCurrency(item.snapshot.netCash)} amountLabel="净现金" status={<ErpStatusBadge label={financeClosingStatusLabel(item)} tone={financeClosingStatus(item)} />} statusPlacement="title" onOpen={() => setDetail(item)} />,
-          columnVisibility,
-          onColumnVisibilityChange: setColumnVisibility,
-          enableColumnResizing: true,
-          density,
-          stickyHeader: true,
-          virtualized: report.pageRows.length >= 50,
-        }}
+        table={{...phoneTable, columnVisibility, onColumnVisibilityChange: setColumnVisibility, density}}
       />
     </div>}
   >

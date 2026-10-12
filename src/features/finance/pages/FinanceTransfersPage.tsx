@@ -3,6 +3,8 @@ import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, SortingState} from "@tanstack/react-table";
 import {ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarRange, Download, Pencil, Plus, RefreshCw, RotateCcw, Trash2} from "lucide-react";
 import {ErpSearchInput} from "@/src/components/common";
+import {ErpDocumentRecordRow, ErpStatusBadge, ErpDocumentActions} from "@/src/components/common";
+import type {DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Select} from "@/src/components/ui";
@@ -71,6 +73,23 @@ function FinanceTransfersContent({session, onAuthExpired, filters, onFiltersChan
     const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"})); const link = document.createElement("a"); link.href = url; link.download = `资金调拨-第${filters.page}页.csv`; link.click(); URL.revokeObjectURL(url);
   };
   return <FinanceDetailPageLayout
+    phoneDocumentList={{
+      title: "资金调拨", tableTitle: "调拨明细", countLabel: (total) => `${total} 笔调拨`,
+      loading: transferQuery.isPending, loadError: Boolean(transferQuery.error && !transferQuery.data), overlayOpen: Boolean(detail || dialogOpen || deleting),
+      search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索资金调拨", placeholder: "搜索编号、账户或备注"},
+      primaryAction: {label: "新增调拨", onClick: openCreate, disabled: !accountOptionsAvailable},
+      actions: [{label: "导出本页", onClick: exportCurrentPage}], onRefresh: () => void transferQuery.refetch(), refreshing: transferQuery.isFetching,
+      filters: [
+        ...(accountOptionsAvailable ? [{kind: "select" as const, key: "accountId", label: "结算账户", value: filters.accountId, defaultValue: "all", options: [{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))], onChange: (accountId: string) => update({accountId})}] : []),
+        {kind: "text", key: "handler", label: "经办人", value: filters.handler, onChange: (handler) => update({handler})},
+        {kind: "dateRange", key: "dateRange", label: "日期范围", value: {startDate: filters.startDate, endDate: filters.endDate}, onChange: ({startDate, endDate}) => update({startDate, endDate})},
+      ],
+      onApplyPhoneFilters: (draft) => {const dates = draft.dateRange as DateRangeValue; onFiltersChange({...filters, accountId: accountOptionsAvailable ? String(draft.accountId) : filters.accountId, handler: String(draft.handler).trim(), startDate: dates.startDate, endDate: dates.endDate, page: 1});},
+      table: {columns, data: collection.items, getRowId: (row) => row.id, loading: transferQuery.isPending, fetching: transferQuery.isFetching, error: transferQuery.error, onRetry: () => void transferQuery.refetch(), onRowClick: setDetail,
+        manualSorting: true, sorting, onSortingChange: handleSortingChange, page: collection.page, pageSize: collection.pageSize, total: collection.total, onPageChange: (page) => update({page}), onPageSizeChange: (pageSize) => update({page: 1, pageSize}),
+        mobileRow: (item) => <ErpDocumentRecordRow documentNo={item.id} status={<ErpStatusBadge label="资金调拨" tone="neutral" />} party={`${item.fromAccountName} → ${item.toAccountName}`} handler={item.handler} date={item.time?.slice(0, 10)} summary={`实际到账 ${formatCurrency(item.receivedAmount)} · 手续费 ${formatCurrency(item.fee)}`} amount={formatCurrency(item.amount)} amountLabel="调拨金额" onOpen={() => setDetail(item)} />,
+      },
+    }}
     header={<ErpPageHeader title="资金调拨" subtitle="在结算账户之间转移资金，并同步记录手续费与账户流水。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" disabled={transferQuery.isFetching} onClick={() => void transferQuery.refetch()}><RefreshCw className={`h-4 w-4 ${transferQuery.isFetching ? "animate-spin" : ""}`} />刷新</Button><Button type="button" size="sm" variant="secondary" onClick={exportCurrentPage}><Download className="h-4 w-4" />导出</Button><Button type="button" size="sm" variant="primary" disabled={!accountOptionsAvailable} title={accountOptionsAvailable ? undefined : "登记调拨需要资金账户权限"} onClick={openCreate}><Plus className="h-4 w-4" />新增调拨</Button></>} />}
     metrics={<MetricsRegion><Metric label="筛选调拨金额" value={formatCurrency(collection.totalAmount)} detail={`${collection.total} 笔匹配记录`} icon={<ArrowLeftRight className="h-4 w-4" />} tone="info" /><Metric label="筛选实际到账" value={formatCurrency(collection.totalReceived)} detail="转入账户实际增加金额" icon={<ArrowDownLeft className="h-4 w-4" />} tone="success" /><Metric label="筛选手续费" value={formatCurrency(collection.totalFee)} detail="已计入财务流水" icon={<ArrowUpRight className="h-4 w-4" />} tone="danger" /><Metric label="筛选调拨笔数" value={`${collection.total} 笔`} detail={filters.startDate || filters.endDate ? `${filters.startDate || "不限"} 至 ${filters.endDate || "不限"}` : "不限日期"} icon={<CalendarRange className="h-4 w-4" />} tone="neutral" /></MetricsRegion>}
     filters={<ErpPageToolbar><ErpFilterBar compact actions={<Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultFinanceTransferFilters)}><RotateCcw className="h-4 w-4" />重置</Button>}><ErpSearchInput className="min-w-56 flex-1" value={filters.keyword} onChange={(event) => update({keyword: event.target.value})} placeholder="搜索调拨编号、账户或备注" aria-label="搜索资金调拨" />{accountOptionsAvailable ? <Select className="w-44" value={filters.accountId} onValueChange={(accountId) => update({accountId})} options={[{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))]} aria-label="筛选调拨账户" /> : <Select className="w-44" value="unavailable" onValueChange={() => undefined} options={[{value: "unavailable", label: "账户筛选需权限"}]} disabled aria-label="调拨账户筛选不可用" />}<Input className="w-32" value={filters.handler} onChange={(event) => update({handler: event.target.value.trim()})} placeholder="经办人" aria-label="筛选经办人" /><ErpDateRangePicker value={{startDate: filters.startDate, endDate: filters.endDate}} onChange={({startDate, endDate}) => update({startDate, endDate})} density="compact" triggerClassName="sm:w-36" startAriaLabel="开始日期" endAriaLabel="结束日期" ariaLabel="调拨日期范围" /></ErpFilterBar></ErpPageToolbar>}
@@ -94,16 +113,19 @@ function TransferDetail({item, canEdit, canDelete, onClose, onEdit, onDelete}: {
     onOpenChange={(open) => {if (!open) onClose();}}
     title="资金调拨详情"
     description={item ? `${item.id} · ${item.time}` : undefined}
-    footer={item && <div className="flex justify-end gap-2">{canDelete && <Button size="sm" variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4" />冲销</Button>}{canEdit && <Button size="sm" variant="primary" onClick={onEdit}><Pencil className="h-4 w-4" />编辑</Button>}</div>}
+    footer={item && <ErpDocumentActions title="调拨单操作" actions={[...(canEdit ? [{key: "edit", label: "编辑", onClick: onEdit, phone: "primary" as const}] : []), ...(canDelete ? [{key: "reverse", label: "冲销", onClick: onDelete, variant: "danger" as const, phone: "more" as const}] : [])]} desktopContent={<div className="flex justify-end gap-2">{canDelete && <Button size="sm" variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4" />冲销</Button>}{canEdit && <Button size="sm" variant="primary" onClick={onEdit}><Pencil className="h-4 w-4" />编辑</Button>}</div>} />}
   >
-    <div className="space-y-5">
+{item && <ErpRecordDetail desktopContent={<div className="space-y-5">
       {item && <>
         <ErpDetailFactGrid><Fact label="调拨金额" value={formatCurrency(item.amount)} /><Fact label="实际到账" value={formatCurrency(item.receivedAmount)} tone="success" /><Fact label="手续费" value={formatCurrency(item.fee)} tone="danger" /><Fact label="经办人" value={item.handler} /></ErpDetailFactGrid>
         <DashboardSection title="账户流向"><div className="grid grid-cols-2 gap-x-4 gap-y-3"><Row label="转出账户" value={item.fromAccountName} /><Row label="转入账户" value={item.toAccountName} /><Row label="经办人" value={item.handler} /><Row label="发生时间" value={item.time || "未记录"} /></div></DashboardSection>
         {item.remarks && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm text-[var(--erp-color-text-secondary)]">{item.remarks}</p>}
         <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] p-3 text-xs text-[var(--erp-color-text-secondary)]">转出账户扣除 {formatCurrency(item.amount)}；转入账户增加 {formatCurrency(item.receivedAmount)}；手续费 {formatCurrency(item.fee)} 记入财务流水。</p>
       </>}
-    </div>
+    </div>} hero={{title: item.id, status: <ErpStatusBadge label="资金调拨" tone="neutral" />, amount: {label: "调拨金额", value: formatCurrency(item.amount)}, facts: [{label: "转出账户", value: item.fromAccountName}, {label: "转入账户", value: item.toAccountName}, {label: "经办人", value: item.handler}, {label: "发生时间", value: item.time || "未记录"}]}} sections={[
+ {title: "到账与费用", facts: [{label: "实际到账", value: formatCurrency(item.receivedAmount)}, {label: "手续费", value: formatCurrency(item.fee)}], extra: <p>转出账户扣除 {formatCurrency(item.amount)}；转入账户增加 {formatCurrency(item.receivedAmount)}；手续费 {formatCurrency(item.fee)} 记入财务流水。</p>},
+ {title: "备注", collapsed: true, facts: item.remarks ? [{label: "备注", value: item.remarks}] : []},
+]} />}
   </ErpDetailDrawer>;
 }
 
@@ -127,3 +149,4 @@ function csvCell(value: string | number) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
+import {ErpRecordDetail} from "@/src/components/common";

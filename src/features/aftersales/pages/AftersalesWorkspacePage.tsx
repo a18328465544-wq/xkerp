@@ -3,7 +3,7 @@ import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
 import type {SortingState} from "@tanstack/react-table";
 import {AlertTriangle, CheckCircle2, Download, History, Plus, ShieldAlert, Wrench} from "lucide-react";
-import {ErpMobileRecordRow, ErpListPage, type ErpFilterField} from "@/src/components/common";
+import {ErpDocumentRecordRow, ErpListPage, type ErpFilterField} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card} from "@/src/components/ui";
@@ -52,6 +52,8 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
   ];
 
   return <ErpListPage
+    phonePresentation="documents"
+    onApplyPhoneFilters={(draft) => onFiltersChange({...filters, status: draft.status as AftersalesFilters["status"], type: draft.type as AftersalesFilters["type"], page: 1})}
     title="售后维护"
     subtitle="按已售 SN 登记并追踪维修、检测争议、换货与补差价；退货退款统一走销售退货。"
     countLabel={(count) => `${count} 件工单`}
@@ -84,14 +86,16 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
     tableDescription="点击行查看完整反馈、处理结论和费用；历史退货工单只读并引导到销售退货。"
     columnSettings={{columns, visibility: columnVisibility, onVisibilityChange: setColumnVisibility, density, onDensityChange: setDensity}}
     table={{ariaLabel: "售后工单流水", columns, data: pageRows, getRowId: (row) => row.id, mobileShowDetailAction: false, mobileRow: (item) => (
-        <ErpMobileRecordRow
-          title={item.model || item.productName || item.serialNumber || item.id}
-          subtitle={item.customerName}
-          meta={`${item.serialNumber ? `SN: ${item.serialNumber} · ` : ""}${item.type} · ${item.createdAt?.slice(0, 10)}`}
-          statusPlacement="title"
-          status={<ErpStatusBadge label={item.status} tone={statusTone(item.status)} />}
-          amountLabel={item.repairCost ? "维修支出" : undefined}
-          amount={item.repairCost ? formatCurrency(item.repairCost) : undefined}
+        <ErpDocumentRecordRow
+          documentNo={item.id}
+          party={item.customerName}
+          handler={item.handler}
+          summary={`${item.model || item.productName || "未记录商品"}${item.serialNumber ? ` · SN ${item.serialNumber}` : ""}`}
+          relatedDocument={item.salesInvoiceNo}
+          date={formatDateTime(item.createdAt)}
+          status={<><ErpStatusBadge label={item.status} tone={statusTone(item.status)} /><ErpStatusBadge label={item.type} tone="neutral" /></>}
+          amountLabel="维修支出"
+          amount={formatCurrency(item.repairCost)}
           onOpen={() => setDetail(item)}
         />
       ), loading: pending, fetching, error, errorTitle: "售后工单加载失败", emptyTitle: "暂无匹配售后工单", emptyDescription: activeFilters ? "请调整搜索或筛选条件。" : "点击登记售后创建第一张工单。", onRetry, onRowClick: setDetail, manualSorting: true, sorting, onSortingChange: setSorting, page: filters.page, pageSize: filters.pageSize, total: filtered.length, onPageChange: (page) => onFiltersChange({...filters, page}), onPageSizeChange: (pageSize) => onFiltersChange({...filters, page: 1, pageSize}), enableColumnResizing: true, stickyHeader: true}}
@@ -104,10 +108,15 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
   />;
 }
 
-function AftersalesDetailDrawer({record, onClose, onResolve, onReturn}: {record: AftersalesListItem | null; onClose: () => void; onResolve: () => void; onReturn: () => void}) {const active = record && ["待处理", "检测中"].includes(record.status); return <ErpDetailDrawer modal={false} resizable drawerKey="aftersales-detail" defaultWidth={720} minWidth={560} maxWidth={920} open={Boolean(record)} onOpenChange={(open) => {if (!open) onClose();}} title={record?.id || "售后工单"} description={record ? `${record.salesInvoiceNo} · ${formatDateTime(record.createdAt)}` : undefined} footer={record ? record.historicalReturn ? <Button className="w-full" variant="primary" onClick={onReturn}>前往销售退货</Button> : active ? <Button className="w-full" variant="primary" onClick={onResolve}>处理并结案</Button> : undefined : undefined}><div className="space-y-5">{record && <><div className="flex flex-wrap gap-2"><ErpStatusBadge label={record.status} tone={statusTone(record.status)} /><ErpStatusBadge label={record.type} tone={record.historicalReturn ? "warning" : "neutral"} /></div><ErpDetailFactGrid><Fact label="客户" value={record.customerName} /><Fact label="联系方式" value={record.contact || "未记录"} /><Fact label="商品" value={record.model || record.productName} /><Fact label="SN" value={record.serialNumber || "未记录"} /><Fact label="库存编号" value={record.inventoryNo || "未记录"} /><Fact label="经办人" value={record.handler || "未记录"} /><Fact label="维修支出" value={formatCurrency(record.repairCost)} /><Fact label="退款记录" value={formatCurrency(record.refundAmount)} /></ErpDetailFactGrid><DashboardSection title="客户反馈"><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--erp-color-text-secondary)]">{record.description || "未记录"}</p></DashboardSection>{record.finalResult && <DashboardSection title="处理结论"><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--erp-color-text-secondary)]">{record.finalResult}</p></DashboardSection>}{record.historicalReturn && <div className="rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-warning-soft)] p-4 text-sm leading-relaxed text-[var(--erp-color-warning)]">这是历史售后退货记录。新退货必须在销售退货中关联原销售单处理，此处不直接结案或退款。</div>}</>}</div></ErpDetailDrawer>;}
+function AftersalesDetailDrawer({record, onClose, onResolve, onReturn}: {record: AftersalesListItem | null; onClose: () => void; onResolve: () => void; onReturn: () => void}) {const active = record && ["待处理", "检测中"].includes(record.status); return <ErpDetailDrawer modal={false} resizable drawerKey="aftersales-detail" defaultWidth={720} minWidth={560} maxWidth={920} open={Boolean(record)} onOpenChange={(open) => {if (!open) onClose();}} title={record?.id || "售后工单"} description={record ? `${record.salesInvoiceNo} · ${formatDateTime(record.createdAt)}` : undefined} footer={record ? record.historicalReturn ? <Button className="w-full" variant="primary" onClick={onReturn}>前往销售退货</Button> : active ? <Button className="w-full" variant="primary" onClick={onResolve}>处理并结案</Button> : undefined : undefined}>{record && <ErpRecordDetail desktopContent={<div className="space-y-5">{record && <><div className="flex flex-wrap gap-2"><ErpStatusBadge label={record.status} tone={statusTone(record.status)} /><ErpStatusBadge label={record.type} tone={record.historicalReturn ? "warning" : "neutral"} /></div><ErpDetailFactGrid><Fact label="客户" value={record.customerName} /><Fact label="联系方式" value={record.contact || "未记录"} /><Fact label="商品" value={record.model || record.productName} /><Fact label="SN" value={record.serialNumber || "未记录"} /><Fact label="库存编号" value={record.inventoryNo || "未记录"} /><Fact label="经办人" value={record.handler || "未记录"} /><Fact label="维修支出" value={formatCurrency(record.repairCost)} /><Fact label="退款记录" value={formatCurrency(record.refundAmount)} /></ErpDetailFactGrid><DashboardSection title="客户反馈"><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--erp-color-text-secondary)]">{record.description || "未记录"}</p></DashboardSection>{record.finalResult && <DashboardSection title="处理结论"><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--erp-color-text-secondary)]">{record.finalResult}</p></DashboardSection>}{record.historicalReturn && <div className="rounded-[var(--erp-radius-lg)] bg-[var(--erp-color-warning-soft)] p-4 text-sm leading-relaxed text-[var(--erp-color-warning)]">这是历史售后退货记录。新退货必须在销售退货中关联原销售单处理，此处不直接结案或退款。</div>}</>}</div>} hero={{title: record.id, status: <><ErpStatusBadge label={record.status} tone={statusTone(record.status)} /><ErpStatusBadge label={record.type} tone={record.historicalReturn ? "warning" : "neutral"} /></>, amount: {label: "维修支出", value: formatCurrency(record.repairCost)}, facts: [{label: "客户", value: record.customerName}, {label: "经办人", value: record.handler || "未记录"}, {label: "登记时间", value: formatDateTime(record.createdAt)}]}} sections={[
+ {title: "商品与原单", facts: [{label: "商品", value: record.model || record.productName}, {label: "SN", value: record.serialNumber || "未记录"}, {label: "库存编号", value: record.inventoryNo || "未记录"}, {label: "原销售单", value: record.salesInvoiceNo || "未记录"}, {label: "联系方式", value: record.contact || "未记录"}, {label: "退款记录", value: formatCurrency(record.refundAmount)}]},
+ {title: "客户反馈", facts: [{label: "问题描述", value: record.description || "未记录"}]},
+ {title: "处理结论", facts: record.finalResult ? [{label: "结论", value: record.finalResult}] : [], extra: record.historicalReturn && <p>这是历史售后退货记录。新退货必须在销售退货中关联原销售单处理，此处不直接结案或退款。</p>},
+]} />}</ErpDetailDrawer>;}
 
 function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "info" | "success" | "warning"}) {return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone} />;}
 // Detail facts use the shared component directly so drawer spacing and tones
 // cannot drift from the rest of the ERP.
 const Fact = ErpDetailFact;
 function csvCell(value: string | number) {const text = String(value); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;}
+import {ErpRecordDetail} from "@/src/components/common";

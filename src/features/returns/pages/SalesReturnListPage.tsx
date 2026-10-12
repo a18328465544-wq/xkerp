@@ -22,6 +22,7 @@ import {csvCell, DeleteReturnDialog, ReturnEditDialog, VoidReturnDialog, type Re
 import {ReturnItemsSummary} from "../components/ReturnItemsSummary";
 import {ReturnDetailActions} from "../components/ReturnDetailActions";
 import {returnDisplayLabel} from "../return-display";
+import {ErpDocumentRecordRow, ErpStatusBadge} from "@/src/components/common";
 
 const statusOptions = [{value: "", label: "全部处理状态"}, ...returnOrderStatusValues.map((value) => ({value, label: value}))];
 
@@ -187,7 +188,10 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
     data: items,
     getRowId: (item: SalesReturnListItem) => item.id,
     onRowClick: openDetail,
-    mobileRow: "columns" as const,
+    mobileRow: (item: SalesReturnListItem) => <ErpDocumentRecordRow documentNo={item.returnNo}
+      status={<ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : item.status === "待处理" ? "warning" : "neutral"} />}
+      amount={formatCurrency(item.amount)} amountLabel="退货金额" party={`客户 · ${item.partyName || "未记录"}`} handler={item.handler}
+      summary={returnDisplayLabel(item)} relatedDocument={item.relatedDocNo} date={item.date} onOpen={() => openDetail(item)} />,
     mobileFieldOrder: ["partyName", "status", "amount", "relatedDocNo", "productName"],
     mobileFields: 4,
     ariaLabel: "销售退货明细",
@@ -211,6 +215,8 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
     mobileShowDetailAction: false,
   };
   return <ErpListPage
+    phonePresentation="documents"
+    onApplyPhoneFilters={(values) => commitFilters({...filters, status: values.status as SalesReturnListFilters["status"], page: 1})}
     title="销售退货"
     phoneTitle="销售退货"
     subtitle="查看退货单，完成原路退款与库存处理。"
@@ -258,11 +264,19 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
 }
 
 function SalesReturnDetail({item}: {item: SalesReturnListItem}) {
-  return <div className="space-y-5">
+  return <ErpRecordDetail
+    desktopContent={<div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2"><DetailFact label="处理状态" value={item.status} /><DetailFact label="退货日期" value={item.date || "—"} /><DetailFact label="关联销售单" value={item.relatedDocNo || "—"} /><DetailFact label="退货范围" value={returnDisplayLabel(item)} /><DetailFact label="原库存卡片" value={item.sourceInventoryId || "—"} /><DetailFact label="客户" value={item.partyName || "—"} /><DetailFact label="联系方式" value={item.contact || "—"} /><DetailFact label="商品" value={item.productName} /><DetailFact label="SN" value={item.sn || "—"} /><DetailFact label="退款金额" value={formatCurrency(item.amount)} /><DetailFact label="退款方式" value={item.settlementMode || "—"} /><DetailFact label="库存处理" value={item.inventoryAction || "—"} /><DetailFact label="责任归属" value={item.responsibility || "—"} /><DetailFact label="经办人" value={item.handler || "—"} /><DetailFact label="完成时间" value={item.completedAt || "尚未完成"} /></div>
     <ReturnItemsSummary item={item} />
     <Card><CardContent className="grid gap-4 p-4"><DetailFact label="退货原因" value={item.reason || "—"} /><DetailFact label="备注" value={item.remarks || "—"} /></CardContent></Card>
-  </div>;
+  </div>}
+    hero={{title: item.returnNo, status: <ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : item.status === "已作废" ? "neutral" : "warning"} />, amount: {label: "退款金额", value: formatCurrency(item.amount)}, facts: [{label: "客户", value: item.partyName || "—"}, {label: "经办人", value: item.handler || "—"}, {label: "退货日期", value: item.date || "—"}, {label: "完成时间", value: item.completedAt || "尚未完成"}]}}
+    sections={[
+      {title: "退货明细", facts: [{label: "原销售单", value: item.relatedDocNo || "—"}, {label: "退货范围", value: returnDisplayLabel(item)}, {label: "商品", value: item.productName}, {label: "SN", value: item.sn || "—"}], extra: <ReturnItemsSummary item={item} />},
+      {title: "结算与库存", facts: [{label: "结算方式", value: item.settlementMode || "—"}, {label: "库存处理", value: item.inventoryAction || "—"}, {label: "联系方式", value: item.contact || "—"}, {label: "责任归属", value: item.responsibility || "—"}, {label: "原库存卡片", value: item.sourceInventoryId || "—"}]},
+      {title: "原因与备注", collapsed: true, facts: [{label: "退货原因", value: item.reason || "—"}, {label: "备注", value: item.remarks || "—"}]},
+    ]}
+  />;
 }
 
 function CompleteReturnDialog({target, pending, error, onClose, onConfirm}: {target: SalesReturnListItem | null; pending: boolean; error: string; onClose: () => void; onConfirm: () => void}) {
@@ -272,3 +286,4 @@ function CompleteReturnDialog({target, pending, error, onClose, onConfirm}: {tar
 const DetailFact = ErpDetailFact;
 
 function MetricCard({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />; }
+import {ErpRecordDetail} from "@/src/components/common";

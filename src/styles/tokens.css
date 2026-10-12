@@ -9,7 +9,7 @@
   --erp-color-border-strong: #cbd5e1;
   --erp-color-text: #172033;
   --erp-color-text-secondary: #506078;
-  --erp-color-text-muted: #64748b;
+  --erp-color-text-muted: #596980;
   --erp-color-primary: #0a84ff;
   --erp-color-primary-hover: #006edc;
   --erp-color-info-soft: #eaf3ff;
@@ -108,6 +108,8 @@
   --erp-font-section-title: var(--erp-text-lg);
   --erp-font-body: var(--erp-text-base);
   --erp-font-caption: var(--erp-text-xs);
+  --erp-font-table-body: var(--erp-text-base);
+  --erp-font-table-meta: var(--erp-text-sm);
   --erp-line-body: var(--erp-line-base);
   /* Optional helper/annotation copy always owns one stable line. */
   --erp-annotation-height: 16px;
@@ -118,7 +120,7 @@
   --erp-control-height-compact: 36px;
   --erp-control-height-filter: 36px;
   --erp-chart-grid: #edf0f7;
-  --erp-chart-axis: #8995aa;
+  --erp-chart-axis: var(--erp-color-text-secondary);
   /* Chart language is deliberately separate from action-button blue: a
      calm indigo keeps data visible without making every chart look like a
      primary CTA. Semantic accents stay reserved for financial direction. */

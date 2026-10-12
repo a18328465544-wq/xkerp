@@ -1,4 +1,5 @@
 import type {ReactNode} from "react";
+import {ErpRecordDetail, ErpStatusBadge, ErpDocumentActions, type ErpRecordPageAction} from "@/src/components/common";
 import {Button} from "@/src/components/ui";
 import {DashboardSection, ErpDetailDrawer, ErpDetailFact, ErpDetailFactGrid, ErpMetricCard, type ErpMetricTone} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
@@ -34,6 +35,10 @@ export function FinanceEntryDetailDrawer({item, kind, subject, canEdit, canDelet
 }) {
   const isIncome = kind === "income";
   const noun = isIncome ? "收入" : "支出";
+  const actions: ErpRecordPageAction[] = [
+    ...(item && canEdit && item.editable ? [{key: "edit", label: "编辑", onClick: onEdit, phone: "primary" as const}] : []),
+    ...(item && canDelete && item.deletable ? [{key: "reverse", label: "冲销", onClick: onDelete, variant: "danger" as const, phone: "more" as const}] : []),
+  ];
   return (
     <ErpDetailDrawer
       open={Boolean(item)}
@@ -50,14 +55,14 @@ export function FinanceEntryDetailDrawer({item, kind, subject, canEdit, canDelet
       description={item ? `${item.id} · ${item.time}` : undefined}
       footer={
         item && (
-          <div className="flex justify-end gap-2">
+          <ErpDocumentActions actions={actions} title={`${noun}单操作`} desktopContent={<div className="flex justify-end gap-2">
             {canDelete && item.deletable && <Button size="sm" variant="danger" onClick={onDelete}>冲销</Button>}
             {canEdit && item.editable && <Button size="sm" variant="primary" onClick={onEdit}>编辑</Button>}
-          </div>
+          </div>} />
         )
       }
     >
-      <div className="space-y-5">
+      {item && <ErpRecordDetail desktopContent={<div className="space-y-5">
         {item && (
           <>
             <ErpDetailFactGrid>
@@ -87,7 +92,13 @@ export function FinanceEntryDetailDrawer({item, kind, subject, canEdit, canDelet
             {item.restrictionReason && <p className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">{item.restrictionReason}</p>}
           </>
         )}
-      </div>
+      </div>}
+        hero={{title: item.id, status: <ErpStatusBadge label={item.businessType} tone="neutral" />, amount: {label: `${noun}金额`, value: formatCurrency(item.amount)}, facts: [{label: "结算账户", value: item.accountName}, {label: isIncome ? "收入来源" : "支出对象", value: subject}, {label: "经办人", value: item.handler}, {label: "发生时间", value: item.time}]}}
+        sections={[
+          {title: "登记信息", facts: [{label: isIncome ? "入账方式" : "支付方式", value: item.paymentMethod}, {label: "外部参考号", value: item.referenceNo || "未填写"}]},
+          {title: "备注与凭证", collapsed: true, facts: [{label: "备注", value: item.remarks || "未填写"}], extra: <>{item.images.length > 0 && <div className="grid grid-cols-2 gap-3">{item.images.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`${noun}凭证 ${index + 1}`} className="h-36 w-full rounded-[var(--erp-radius-md)] object-cover" /></a>)}</div>}{item.restrictionReason && <p>{item.restrictionReason}</p>}</>},
+        ]}
+      />}
     </ErpDetailDrawer>
   );
 }

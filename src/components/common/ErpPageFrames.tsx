@@ -1,6 +1,7 @@
 import type {HTMLAttributes, ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {ErpPageFrame, type ErpPageFrameDensity} from "./ErpPageFrame";
+import {ErpPhoneMetricLimit} from "./ErpMetricPresentation";
 
 /**
  * Shared page-frame primitives. They only describe the work pattern of a page;
@@ -37,7 +38,7 @@ export function ErpWarehousePageFrame({className, children, mobileSearchFirst = 
 }
 
 export function ErpFinancePageFrame({className, children, ...props}: FrameProps) {
-  return <FrameBase {...props} mobileSearchFirst density="standard" data-page-frame="finance" className={className}>{children}</FrameBase>;
+  return <ErpPhoneMetricLimit.Provider value={2}><FrameBase {...props} mobileSearchFirst density="standard" data-page-frame="finance" className={className}>{children}</FrameBase></ErpPhoneMetricLimit.Provider>;
 }
 
 export function ErpCrmPageFrame({className, children, ...props}: FrameProps) {

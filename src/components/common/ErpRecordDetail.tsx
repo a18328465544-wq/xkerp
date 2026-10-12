@@ -19,6 +19,8 @@ export interface ErpRecordSection {
 }
 
 export interface ErpRecordDetailProps {
+  /** Keep an existing desktop drawer unchanged during a phone-only migration. */
+  desktopContent?: ReactNode;
   /** `titleLabel` turns the phone identity title into the first desktop fact, for drawers whose own title is a document number. */
   hero: {title: string; titleLabel?: string; status?: ReactNode; thumbnail?: ReactNode; amount?: {label: string; value: ReactNode}; facts?: ReadonlyArray<ErpRecordFact | false | null | undefined | "" | 0>};
   sections: readonly ErpRecordSection[];
@@ -31,9 +33,10 @@ export interface ErpRecordDetailProps {
  * extras. Phones get a single-column document; desktop drawers keep the
  * two-column fact grid. Place it inside ErpDetailDrawer.
  */
-export function ErpRecordDetail({hero, sections, phone: phoneProp}: ErpRecordDetailProps) {
+export function ErpRecordDetail({hero, sections, desktopContent, phone: phoneProp}: ErpRecordDetailProps) {
   const phoneFromHook = useErpPhone();
   const phone = phoneProp ?? phoneFromHook;
+  if (!phone && desktopContent) return <>{desktopContent}</>;
   const visible = sections
     .map((section) => ({...section, facts: section.facts.filter((fact): fact is ErpRecordFact => Boolean(fact))}))
     .filter((section) => section.facts.length > 0 || section.extra);

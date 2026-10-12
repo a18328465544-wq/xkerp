@@ -2,7 +2,7 @@ import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ColumnDef} from "@tanstack/react-table";
 import {Filter, RefreshCw, Undo2} from "lucide-react";
-import {ErpSearchInput} from "@/src/components/common";
+import {ErpSearchInput, ErpDocumentRecordRow, ErpRecordDetail, type ErpFilterField, type ErpListTableProps} from "@/src/components/common";
 import {useEffect, useMemo, useState} from "react";
 import {useNavigate} from "@tanstack/react-router";
 import {Button, Card, Select} from "@/src/components/ui";
@@ -12,7 +12,6 @@ import {
   ErpDetailDrawer,
   ErpFilterBar,
   ErpMetricCard,
-  ErpMobileRecordRow,
   ErpPageError,
   ErpPageHeader,
   ErpPageToolbar,
@@ -387,11 +386,11 @@ function FinanceReturnReconcileContent({
       </ErpFilterBar>
     </ErpPageToolbar>
   );
-  const table = (
-      <FinanceTableRegion
-        title="对账记录"
-        description="集中查看销售退货与进货退货的结算状态。"
-        table={{
+  const phoneFilters: ErpFilterField[] = [
+    {kind: "select", key: "type", label: "退货类型", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, {value: "销售退货", label: "销售退货"}, {value: "进货退货", label: "进货退货"}], onChange: (type) => update({type: type as typeof filters.type})},
+    {kind: "select", key: "status", label: "退货状态", value: filters.status || "", defaultValue: "", options: statuses, onChange: (status) => update({status: status as typeof filters.status})},
+  ];
+  const phoneTable: ErpListTableProps<FinanceReturnReconcileItem> & {mobileRow: (item: FinanceReturnReconcileItem) => React.ReactNode} = {
           columns,
           data: pageRows,
           getRowId: (row) => `${row.reconcileType}:${row.id}`,
@@ -409,22 +408,17 @@ function FinanceReturnReconcileContent({
           onPageChange: (page) => setFilters({ ...filters, page }),
           onPageSizeChange: (pageSize) =>
             setFilters({ ...filters, page: 1, pageSize }),
-          mobileRow: (item) => (
-            <ErpMobileRecordRow
-              title={item.returnNo}
-              subtitle={`${item.reconcileType} · ${item.partyName || "—"}`}
-              meta={`${item.date?.slice(0, 10) || "—"}${item.relatedDocNo ? ` · 原单: ${item.relatedDocNo}` : ""}`}
-              amount={formatCurrency(item.amount)}
-              amountLabel="退款金额"
-              status={<ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : "warning"} />}
-              statusPlacement="title"
-              onOpen={() => setDetail(item)}
-            />
-          ),
+          mobileShowDetailAction: false,
+          mobileSorting: false,
+          mobileRow: (item) => <ErpDocumentRecordRow documentNo={item.returnNo} party={item.partyName || "—"} date={item.date?.slice(0, 10)} summary={`${item.reconcileType} · ${item.productName || ""}`} relatedDocument={item.relatedDocNo} amount={formatCurrency(item.amount)} amountLabel="退款金额" status={<ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : item.status === "已作废" ? "neutral" : "warning"} />} onOpen={() => setDetail(item)} />,
           stickyHeader: true,
-          density: "compact",
           virtualized: pageRows.length >= 50,
-        }}
+  };
+  const table = (
+      <FinanceTableRegion
+        title="对账记录"
+        description="集中查看销售退货与进货退货的结算状态。"
+        table={{...phoneTable, density: "compact"}}
       />
   );
   const detailDrawer = (
@@ -444,8 +438,7 @@ function FinanceReturnReconcileContent({
           detail ? `${detail.reconcileType} · ${detail.status}` : undefined
         }
       >
-        {detail && (
-          <div className="space-y-4">
+        {detail && <ErpRecordDetail desktopContent={<div className="space-y-4">
             <ErpDetailFactGrid>
               <Fact label="金额" value={formatCurrency(detail.amount)} />
               <Fact label="结算方式" value={detail.settlementMode || "—"} />
@@ -473,12 +466,25 @@ function FinanceReturnReconcileContent({
             >
               打开退货工作台
             </Button>
-          </div>
-        )}
+          </div>}
+          hero={{title: detail.returnNo, status: <ErpStatusBadge label={detail.status} tone={detail.status === "已完成" ? "success" : detail.status === "已作废" ? "neutral" : "warning"} />, amount: {label: "退款金额", value: formatCurrency(detail.amount)}, facts: [{label: "往来方", value: detail.partyName || "—"}, {label: "类型", value: detail.reconcileType}, {label: "日期", value: detail.date}]}}
+          sections={[
+            {title: "商品明细", facts: [{label: "商品", value: detail.productName || "—"}, {label: "SN", value: detail.sn || "—"}, {label: "关联单据", value: detail.relatedDocNo || "—"}]},
+            {title: "结算与库存", facts: [{label: "结算方式", value: detail.settlementMode || "—"}, {label: "库存动作", value: detail.inventoryAction || "—"}, {label: "完成时间", value: detail.completedAt || "尚未完成"}]},
+            {title: "处理退货", facts: [], extra: <Button type="button" variant="secondary" onClick={() => void navigate({to: detail.reconcileType === "销售退货" ? "/sales/returns" : "/purchase/returns"})}>打开退货工作台</Button>},
+          ]} />}
       </ErpDetailDrawer>
   );
 
-  return <FinanceDetailPageLayout header={header} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} metrics={metrics} table={table}>{detailDrawer}</FinanceDetailPageLayout>;
+  return <FinanceDetailPageLayout phoneDocumentList={{
+    title: "退货对账", countLabel: (count) => `${count} 单`, loading, loadError: Boolean(error && !pageRows.length),
+    tableTitle: "对账记录", table: phoneTable, tableDensity: "compact", filters: phoneFilters,
+    search: {value: filters.keyword || "", onChange: (keyword) => update({keyword}), label: "搜索退货对账", placeholder: "退货单、往来方、商品或 SN"},
+    onApplyPhoneFilters: (draft) => setFilters({...filters, type: draft.type as typeof filters.type, status: draft.status as typeof filters.status, page: 1}),
+    quickFilters: statuses.map((option) => ({label: option.label, active: (filters.status || "") === option.value, onSelect: () => update({status: option.value as typeof filters.status})})),
+    onRefresh: onRetry, refreshing: fetching, overlayOpen: Boolean(detail),
+    sheetExtra: <p className="text-xs text-[var(--erp-color-text-muted)]">已加载的退货记录，每类最多 100 条。</p>,
+  }} header={header} tabs={{label: "财务核对分类", items: [{label: "日结与异常", path: "/finance/closing", visible: menuAllowed(session, "finance")}, {label: "退货对账", path: "/finance/return-reconcile", visible: allowed(session)}]}} filters={filterBar} metrics={metrics} table={table}>{detailDrawer}</FinanceDetailPageLayout>;
 }
 function Metric({
   label,

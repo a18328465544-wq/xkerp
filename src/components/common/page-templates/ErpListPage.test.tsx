@@ -125,3 +125,59 @@ test("quick filters are capped at four", () => {
   assert.match(markup, /筛选3/);
   assert.doesNotMatch(markup, /筛选4/);
 });
+
+test("document lists opt into compact rows without changing the desktop layout", () => {
+  const documentProps: ErpListPageProps<Row> = {...props, phonePresentation: "documents", onApplyPhoneFilters: noop};
+  assert.equal(renderToStaticMarkup(<ErpListPage {...props} phone={false} />), renderToStaticMarkup(<ErpListPage {...documentProps} phone={false} />));
+  const markup = renderToStaticMarkup(<ErpListPage {...documentProps} phone />);
+  assert.match(markup, /erp-document-list/);
+  assert.match(markup, /aria-label="客户筛选"/);
+  assert.match(markup, /aria-label="新建客户"/);
+  assert.match(markup, /aria-label="客户更多操作"/);
+  assert.equal(markup.match(/37 位客户/g)?.length, 1);
+  assert.doesNotMatch(markup, /共 37 条|客户筛选与操作/);
+});
+
+test("documents cannot pretend a server-ordered page has global sorting", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone phonePresentation="documents" table={{...props.table!, mobileSorting: false}} />);
+  assert.doesNotMatch(markup, /aria-label="客户排序"/);
+});
+
+test("legacy desktop workspaces and overlays are retained verbatim", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone={false} desktopPageContent={<main>原桌面工作台</main>} overlays={<aside>原确认窗口</aside>} />);
+  assert.equal(markup, "<main>原桌面工作台</main><aside>原确认窗口</aside>");
+});
+
+test("phone workbench uses one task instead of duplicating list and scan controls", () => {
+  const task = {open: true, active: true, title: "出库核验", onClose: noop, actions: <button>SN 日期</button>, content: <textarea aria-label="扫码草稿" defaultValue="SN-4090" />};
+  const phone = renderToStaticMarkup(<ErpListPage {...props} phone phoneTask={task} overlays={<aside>原扫码窗口</aside>} />);
+  assert.match(phone, /data-phone-task="true"/);
+  assert.match(phone, /返回单据列表/);
+  assert.equal(phone.match(/>SN 日期</g)?.length, 1);
+  assert.equal(phone.match(/aria-label="扫码草稿"/g)?.length, 1);
+  assert.doesNotMatch(phone, /个人客户明细|erp-list-phone-title|搜索客户档案/);
+  assert.match(phone, /原扫码窗口/);
+  const desktop = renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneTask={task} desktopPageContent={<main>原双栏工作台</main>} />);
+  assert.equal(desktop, "<main>原双栏工作台</main>");
+});
+
+test("returning from a phone task restores the original list projection", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone phoneTask={{open: false, active: true, title: "出库核验", onClose: noop, content: <div>核验表单</div>}} />);
+  assert.match(markup, /erp-list-phone-title/);
+  assert.doesNotMatch(markup, /data-phone-task|核验表单/);
+});
+
+test("list section counts use the shared gray inline tally without a status dot", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone={false} desktopTableSection />);
+  assert.match(markup, /data-erp-region="section-count"[^>]*>共 37 条/);
+  assert.doesNotMatch(markup, /label="共 37 条"/);
+});
+
+test("empty lists offer the already-authorized creation action on both projections", () => {
+  for (const phone of [false, true]) {
+    const markup = renderToStaticMarkup(<ErpListPage {...props} phone={phone} table={{...props.table!, data: [], total: 0}} />);
+    assert.match(markup, /data-erp-component="empty-state"[\s\S]*新建客户/);
+    const restricted = renderToStaticMarkup(<ErpListPage {...props} phone={phone} primaryAction={undefined} table={{...props.table!, data: [], total: 0}} />);
+    assert.doesNotMatch(restricted, /新建客户/);
+  }
+});

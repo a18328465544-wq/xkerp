@@ -22,6 +22,7 @@ import {csvCell, DeleteReturnDialog, ReturnEditDialog, VoidReturnDialog, type Re
 import {ReturnItemsSummary} from "../components/ReturnItemsSummary";
 import {ReturnDetailActions} from "../components/ReturnDetailActions";
 import {returnDisplayLabel} from "../return-display";
+import {ErpDocumentRecordRow, ErpStatusBadge} from "@/src/components/common";
 
 const statusOptions = [{value: "", label: "全部处理状态"}, ...returnOrderStatusValues.map((value) => ({value, label: value}))];
 function useUrlState() {
@@ -105,7 +106,10 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
     data: items,
     getRowId: (item: PurchaseReturnListItem) => item.id,
     onRowClick: openDetail,
-    mobileRow: "columns" as const,
+    mobileRow: (item: PurchaseReturnListItem) => <ErpDocumentRecordRow documentNo={item.returnNo}
+      status={<ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : item.status === "待处理" ? "warning" : "neutral"} />}
+      amount={formatCurrency(item.amount)} amountLabel="退货金额" party={`供应商 / 来源 · ${item.partyName || "未记录"}`} handler={item.handler}
+      summary={returnDisplayLabel(item)} relatedDocument={item.relatedDocNo} date={item.date} onOpen={() => openDetail(item)} />,
     mobileFieldOrder: ["partyName", "status", "amount", "relatedDocNo", "productName"],
     mobileFields: 4,
     ariaLabel: "采购退货明细",
@@ -129,6 +133,8 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
     mobileShowDetailAction: false,
   };
   return <ErpListPage
+    phonePresentation="documents"
+    onApplyPhoneFilters={(values) => commitFilters({...filters, status: values.status as PurchaseReturnListFilters["status"], page: 1})}
     title="采购退货"
     phoneTitle="采购退货"
     subtitle="管理原路退款、供应商抵扣与误录付款冲销。"
@@ -175,9 +181,20 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
   />;
 }
 
-function PurchaseReturnDetail({item}: {item: PurchaseReturnListItem}) { return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><Fact label="状态" value={item.status} /><Fact label="原采购单" value={item.relatedDocNo || "—"} /><Fact label="供应商 / 来源" value={item.partyName || "—"} /><Fact label="退货范围" value={returnDisplayLabel(item)} /><Fact label="商品" value={`${item.productName}${item.sn ? ` · ${item.sn}` : ""}`} /><Fact label="退货金额" value={formatCurrency(item.amount)} /><Fact label="结算方式" value={item.settlementMode || "—"} /><Fact label="冲减应付款" value={formatCurrency(item.creditAmount)} /><Fact label="供应商抵扣变化" value={formatCurrency(item.vendorCreditAmount)} /><Fact label="释放现金付款" value={formatCurrency(item.cashReleasedAmount)} /><Fact label="库存处理" value={item.inventoryAction || "—"} /><Fact label="经办人" value={item.handler || "—"} /><Fact label="完成时间" value={item.completedAt || "尚未完成"} /></div><ReturnItemsSummary item={item} /><Card><CardContent className="grid gap-3 p-4"><Fact label="退货原因" value={item.reason || "—"} /><Fact label="备注" value={item.remarks || "—"} /></CardContent></Card></div>; }
+function PurchaseReturnDetail({item}: {item: PurchaseReturnListItem}) {
+  return <ErpRecordDetail
+    desktopContent={<div className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><Fact label="状态" value={item.status} /><Fact label="原采购单" value={item.relatedDocNo || "—"} /><Fact label="供应商 / 来源" value={item.partyName || "—"} /><Fact label="退货范围" value={returnDisplayLabel(item)} /><Fact label="商品" value={`${item.productName}${item.sn ? ` · ${item.sn}` : ""}`} /><Fact label="退货金额" value={formatCurrency(item.amount)} /><Fact label="结算方式" value={item.settlementMode || "—"} /><Fact label="冲减应付款" value={formatCurrency(item.creditAmount)} /><Fact label="供应商抵扣变化" value={formatCurrency(item.vendorCreditAmount)} /><Fact label="释放现金付款" value={formatCurrency(item.cashReleasedAmount)} /><Fact label="库存处理" value={item.inventoryAction || "—"} /><Fact label="经办人" value={item.handler || "—"} /><Fact label="完成时间" value={item.completedAt || "尚未完成"} /></div><ReturnItemsSummary item={item} /><Card><CardContent className="grid gap-3 p-4"><Fact label="退货原因" value={item.reason || "—"} /><Fact label="备注" value={item.remarks || "—"} /></CardContent></Card></div>}
+    hero={{title: item.returnNo, status: <ErpStatusBadge label={item.status} tone={item.status === "已完成" ? "success" : item.status === "已作废" ? "neutral" : "warning"} />, amount: {label: "退货金额", value: formatCurrency(item.amount)}, facts: [{label: "供应商 / 来源", value: item.partyName || "—"}, {label: "经办人", value: item.handler || "—"}, {label: "退货日期", value: item.date || "—"}, {label: "完成时间", value: item.completedAt || "尚未完成"}]}}
+    sections={[
+      {title: "退货明细", facts: [{label: "原采购单", value: item.relatedDocNo || "—"}, {label: "退货范围", value: returnDisplayLabel(item)}, {label: "商品", value: item.productName}, {label: "SN", value: item.sn || "—"}], extra: <ReturnItemsSummary item={item} />},
+      {title: "结算与库存", facts: [{label: "结算方式", value: item.settlementMode || "—"}, {label: "库存处理", value: item.inventoryAction || "—"}, {label: "冲减应付款", value: formatCurrency(item.creditAmount)}, {label: "供应商抵扣变化", value: formatCurrency(item.vendorCreditAmount)}, {label: "释放现金付款", value: formatCurrency(item.cashReleasedAmount)}]},
+      {title: "原因与备注", collapsed: true, facts: [{label: "退货原因", value: item.reason || "—"}, {label: "备注", value: item.remarks || "—"}]},
+    ]}
+  />;
+}
 function CompleteDialog({target, pending, error, onClose, onConfirm}: {target: PurchaseReturnListItem | null; pending: boolean; error: string; onClose: () => void; onConfirm: () => void}) {
   return <ErpConfirmDialog open={Boolean(target)} onOpenChange={(open) => {if (!open) onClose();}} title="确认完成采购退货" description="将冲减采购单、处理现金或供应商抵扣，并把库存标记为退回或报废。" documentName={target ? `${target.returnNo} · ${target.productName} · ${formatCurrency(target.amount)} · ${target.settlementMode} · ${target.inventoryAction}` : undefined} confirmLabel="确认完成" pendingLabel="处理中…" pending={pending} error={error} onConfirm={onConfirm} />;
 }
 const Fact = ErpDetailFact;
 function Metric({label, value, detail, icon, tone = "neutral"}: {label: string; value: string; detail?: string; icon: ReactNode; tone?: "neutral" | "warning"}) { return <ErpMetricCard label={label} value={value} detail={detail} icon={icon} tone={tone === "warning" ? "warning" : "info"} />; }
+import {ErpRecordDetail} from "@/src/components/common";

@@ -3,6 +3,8 @@ import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {DashboardSection, MetricsRegion} from "./DashboardShell";
 import {ErpDisclosureCard} from "./ErpDisclosureCard";
+import {ErpMetricCard} from "./ErpMetricCard";
+import {ErpPhoneMetricLimit} from "./ErpMetricPresentation";
 
 test("metrics region exposes its visible count for responsive balancing", () => {
   const markup = renderToStaticMarkup(
@@ -48,4 +50,20 @@ test("disclosure cards fold content behind a section-weight summary", () => {
   assert.match(markup, /<details data-erp-component="disclosure-card"[^>]*erp-card-surface/);
   assert.match(markup, /<summary[^>]*list-none[^>]*>.*更多指标.*展开.*收起.*<\/summary>/);
   assert.match(markup, /metrics/);
+});
+
+test("financial phones show two available metrics and never collapse desktop metrics", () => {
+  const cards = <><ErpMetricCard label="未知" value="—" /><ErpMetricCard label="收入" value="¥0" /><ErpMetricCard label="支出" value="¥10" /><ErpMetricCard label="净额" value="-¥10" /></>;
+  const phone = renderToStaticMarkup(<ErpPhoneMetricLimit.Provider value={2}><MetricsRegion phone>{cards}</MetricsRegion></ErpPhoneMetricLimit.Provider>);
+  assert.match(phone, /data-metric-count="2"/);
+  assert.match(phone, /更多指标（1）/);
+  assert.doesNotMatch(phone, /未知|净额/);
+  const desktop = renderToStaticMarkup(<ErpPhoneMetricLimit.Provider value={2}><MetricsRegion phone={false}>{cards}</MetricsRegion></ErpPhoneMetricLimit.Provider>);
+  assert.match(desktop, /data-metric-count="3"/);
+  assert.match(desktop, /净额/);
+  assert.doesNotMatch(desktop, /metrics-toggle/);
+});
+
+test("all unavailable metrics leave no empty region", () => {
+  assert.equal(renderToStaticMarkup(<MetricsRegion><ErpMetricCard label="未提供" value="—" /></MetricsRegion>), "");
 });

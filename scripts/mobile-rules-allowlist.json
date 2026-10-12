@@ -24,10 +24,6 @@
     {
       "file": "src/features/inventory/pages/InventoryListPage.tsx",
       "reason": "库存单卡/SN 与型号汇总的领域表格，手机分支待收拢（T8 例外）；2026-10-10 另一项改动正在修改此文件，暂不迁移"
-    },
-    {
-      "file": "src/features/sales/pages/SalesOutboundPage.tsx",
-      "reason": "手机端分两步任务（选择待出库单 → 扫码核验），接管返回键；电脑端左右并排。保留分支是有意的交互差异"
     }
   ]
 }

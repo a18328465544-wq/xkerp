@@ -10,6 +10,13 @@ const columns: ColumnDef<Row, unknown>[] = [
   {accessorKey: "amount", header: "金额"},
 ];
 
+test("empty actions are offered only for empty data, not loading or failed reads", () => {
+  const props = {columns, data: [] as Row[], emptyAction: <button type="button">新建销售单</button>};
+  assert.match(renderToStaticMarkup(<ErpDataTable {...props} />), /新建销售单/);
+  assert.doesNotMatch(renderToStaticMarkup(<ErpDataTable {...props} loading />), /新建销售单/);
+  assert.doesNotMatch(renderToStaticMarkup(<ErpDataTable {...props} error={new Error("无法读取")} />), /新建销售单/);
+});
+
 test("client-side sorting reorders data rows", () => {
   const sorting: SortingState = [{id: "amount", desc: true}];
   const markup = renderToStaticMarkup(
