@@ -239,7 +239,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
     className="erp-barcode-scanner-dialog"
   >
     <div data-erp-component="barcode-scanner-camera" data-preview-ready={cameraEnabled && cameraReady && !error} className="erp-barcode-camera" aria-busy={!cameraReady || decoderPreparing}>
-      <video ref={videoRef} muted playsInline className="erp-barcode-video" style={{transform: `scale(${softwareZoom})`}} aria-label="扫码相机预览" />
+      <video ref={videoRef} muted playsInline className="erp-barcode-video" style={{transform: softwareZoom > 1 ? `scale(${softwareZoom})` : undefined}} aria-label="扫码相机预览" />
       {/* Aiming aid only. Default and periodic zoom fallback read full frames;
           explicit digital magnification also reads a matching central ROI. */}
       {!error && <div data-erp-region="barcode-guide" className="erp-barcode-guide" aria-hidden="true">
@@ -255,6 +255,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
     <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={photoPending || zoomPending} onClick={() => imageInputRef.current?.click()}><ImageUp className="h-4 w-4" />{photoPending ? "正在识别图片…" : "从图片识别"}</Button>{error ? <Button type="button" variant="secondary" disabled={starting || photoPending} onClick={() => setAttempt((current) => current + 1)}><RefreshCw className="h-4 w-4" />重试扫码</Button> : <Button type="button" variant="secondary" data-erp-region="barcode-camera-switch" className={cameras.length > 1 ? undefined : "invisible"} aria-hidden={cameras.length < 2 ? true : undefined} tabIndex={cameras.length > 1 ? undefined : -1} disabled={!cameraReady || starting || photoPending || zoomPending || cameras.length < 2} onClick={() => {
       const next = cameras[(cameras.findIndex((camera) => camera.deviceId === currentCamera) + 1) % cameras.length];
       if (!next) return;
+      setCameraReady(false);
       rememberBarcodeRearCamera(next.deviceId);
       setCameraDeviceId(next.deviceId);
       setAttempt((value) => value + 1);

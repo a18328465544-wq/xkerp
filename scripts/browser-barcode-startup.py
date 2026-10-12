@@ -67,11 +67,21 @@ def unchanged(page, initial):
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
 
 
+def stable_frames(page):
+    page.wait_for_function("document.querySelector('.erp-barcode-video').readyState >= 2")
+    page.evaluate("""async () => {
+      for (let n=0; n<4; n++) {
+        window.__firePreviewFrame();
+        if (n<3) await new Promise(resolve => setTimeout(resolve, 110));
+      }
+    }""")
+
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     try:
         for width in [320, 390, 1440]:
-            for mode in ['native', 'slow-decoder', 'legacy', 'close-permission', 'close-frame']:
+            for mode in ['native', 'slow-decoder', 'legacy', 'late-geometry', 'close-permission', 'close-frame']:
                 context = browser.new_context(viewport={"width": width, "height": 844})
                 page = context.new_page()
                 errors = []
@@ -84,6 +94,7 @@ with sync_playwright() as p:
                     one = page.get_by_role('button', name='1×', exact=True)
                     expect(one).to_be_visible()
                     expect(one).to_be_disabled()
+                    assert page.locator('.erp-barcode-video').evaluate("el => getComputedStyle(el).opacity") == '0'
                     expect(page.get_by_role('status', name='', exact=True)).to_contain_text('正在准备扫码')
                     # Wait only for the shared dialog entrance to finish; readiness
                     # below is explicitly gated, never driven by this delay.
@@ -120,7 +131,20 @@ with sync_playwright() as p:
                                 page.evaluate('window.__firePreviewFrame(0,0)')
                                 expect(one).to_be_disabled()
                                 page.evaluate('window.__firePreviewFrame()')
+                                # Many browser paints after one video frame must
+                                # not reveal it. This reproduces the old bug.
+                                page.wait_for_timeout(350)
+                                expect(one).to_be_disabled()
+                                assert page.locator('.erp-barcode-video').evaluate("el => getComputedStyle(el).opacity") == '0'
+                                if mode == 'late-geometry':
+                                    page.evaluate('window.__firePreviewFrame(720,1280)')
+                                    page.wait_for_timeout(110)
+                                    page.evaluate('window.__firePreviewFrame(720,1280)')
+                                    expect(one).to_be_disabled()
+                                stable_frames(page)
                             expect(one).to_be_enabled()
+                            assert page.locator('.erp-barcode-video').evaluate("el => getComputedStyle(el).opacity") == '1'
+                            assert page.locator('.erp-barcode-video').evaluate("el => getComputedStyle(el).transform") == 'none'
                             unchanged(page, initial)
                             page.wait_for_function('window.__startup.enumeration.length === 1')
                             page.evaluate('window.__startup.enumeration.shift()()')
@@ -141,7 +165,7 @@ with sync_playwright() as p:
                             page.wait_for_function('window.__cameraQA.media.length === 2')
                             if mode != 'legacy':
                                 page.wait_for_function('window.__startup.frames.size === 1')
-                                page.evaluate('window.__firePreviewFrame()')
+                                stable_frames(page)
                             expect(one).to_be_enabled()
                             unchanged(page, initial)
                             page.get_by_role('button', name='关闭', exact=True).click()

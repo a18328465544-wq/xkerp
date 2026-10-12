@@ -24,11 +24,12 @@ if (preview === "frame" || preview === "portrait" || preview === "denied") {
     context.fillStyle = "#cee4ea";
     context.fillRect(0, 0, canvas.width, canvas.height);
     const stream = canvas.captureStream(8);
+    const repaint = setInterval(() => context.drawImage(canvas, 0, 0), 125);
     const previewState = window as Window & {__previewCameraStops: number};
     previewState.__previewCameraStops = 0;
     stream.getTracks().forEach((track) => {
       const stop = track.stop.bind(track);
-      track.stop = () => {previewState.__previewCameraStops++; stop();};
+      track.stop = () => {clearInterval(repaint); previewState.__previewCameraStops++; stop();};
     });
     return stream;
   };

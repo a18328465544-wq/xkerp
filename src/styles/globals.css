@@ -1428,6 +1428,9 @@ input[inputmode="numeric"] {
 /* Camera streams may be portrait even when landscape dimensions are requested.
    Fill the aiming surface; decoding still reads the uncropped source video. */
 .erp-barcode-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+/* Keep decoding/compositing active while hiding unstable startup frames. Do not
+   use display:none/visibility:hidden, which can suspend video frame delivery. */
+.erp-barcode-camera[data-preview-ready="false"] > .erp-barcode-video { opacity: 0; }
 .erp-barcode-guide {
   position: absolute;
   top: 50%;

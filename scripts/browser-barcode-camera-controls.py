@@ -43,10 +43,13 @@ SETUP = """mode => {
     ctx.fillStyle = '#dae7e9'; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = '#243c44'; ctx.font = '60px sans-serif'; ctx.fillText('Local camera fixture', 600, 540);
     const stream = canvas.captureStream(8);
+    // A real camera keeps producing frames. Repeated browser paints of a single
+    // static canvas frame are no longer enough to pass startup readiness.
+    const repaint = setInterval(() => ctx.drawImage(canvas,0,0), 125);
     for (const track of stream.getTracks()) {
       let zoom = 1;
       const stop = track.stop.bind(track);
-      track.stop = () => {stats.stops++; stop();};
+      track.stop = () => {clearInterval(repaint); stats.stops++; stop();};
       track.getCapabilities = () => mode === 'unsupported' ? {} : {zoom:{min:1,max:4,step:.1},focusMode:['continuous']};
       track.getSettings = () => ({deviceId:id,zoom});
       track.applyConstraints = async constraints => {
@@ -88,7 +91,7 @@ with sync_playwright() as p:
                     expect(two).to_have_attribute('aria-pressed', 'true')
                     expect(two).to_be_enabled()
                     scale = '1' if mode == 'hardware' else '2'
-                    page.wait_for_function("scale => document.querySelector('.erp-barcode-video').style.transform === `scale(${scale})`", arg=scale)
+                    page.wait_for_function("scale => document.querySelector('.erp-barcode-video').style.transform === (scale === '1' ? '' : `scale(${scale})`)", arg=scale)
                     page.evaluate('window.__cameraQA.fullFrames = 0')
                     page.wait_for_function('window.__cameraQA.fullFrames > 0')
                     if mode != 'hardware':

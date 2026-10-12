@@ -62,7 +62,8 @@ SETUP = """async ({mode, png, text}) => {
     const w = image.width * scale, h = image.height * scale;
     ctx.drawImage(image,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
     const stream = canvas.captureStream(10); stats.media++;
-    stream.getTracks().forEach(track => {const stop=track.stop.bind(track); track.stop=()=>{stats.stops++; stop();};});
+    const repaint = setInterval(() => ctx.drawImage(canvas,0,0),100);
+    stream.getTracks().forEach(track => {const stop=track.stop.bind(track); track.stop=()=>{clearInterval(repaint); stats.stops++; stop();};});
     return stream;
   };
 }"""
@@ -85,6 +86,7 @@ with sync_playwright() as p:
                         video = page.get_by_label('扫码相机预览')
                         expect(video).to_be_visible()
                         page.wait_for_function('document.querySelector(".erp-barcode-video")?.videoWidth > 0')
+                        page.wait_for_function('document.querySelector(".erp-barcode-camera")?.dataset.previewReady === "true"')
                         geometry = video.evaluate('''video => {
                           const camera = video.parentElement.getBoundingClientRect();
                           const guide = video.parentElement.querySelector('[data-erp-region="barcode-guide"]').getBoundingClientRect();
@@ -128,7 +130,7 @@ with sync_playwright() as p:
                 try:
                     page.goto(BASE + ("/inventory" if PRODUCTION else "/__barcode-scanner"))
                     page.wait_for_load_state("networkidle")
-                    open_button = page.get_by_role("button", name="扫码搜索库存" if PRODUCTION else "打开扫码", exact=True)
+                    open_button = page.get_by_role("region", name="库存搜索", exact=True).get_by_role("button", name="扫码", exact=True) if PRODUCTION else page.get_by_role("button", name="打开扫码", exact=True)
                     expect(open_button).to_be_visible()
                     result = page.get_by_role("searchbox", name="搜索库存", exact=True) if PRODUCTION else page.get_by_label("识别结果")
                     def assert_result(value):

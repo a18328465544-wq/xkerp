@@ -66,6 +66,12 @@ test("startup controls occupy their final geometry before the first frame", () =
   assert.ok(scanner.indexOf("if (track) void enableBarcodeAutofocus(track)") < scanner.indexOf("waitForBarcodeCameraPreview(video, previewController.signal)"));
 });
 
+test("unstable video is itself hidden without suspending playback or adding a default transform", () => {
+  assert.match(css, /\.erp-barcode-camera\[data-preview-ready="false"\] > \.erp-barcode-video \{ opacity: 0; \}/);
+  assert.match(scanner, /transform: softwareZoom > 1 \? `scale\(\$\{softwareZoom\}\)` : undefined/);
+  assert.doesNotMatch(css, /\.erp-barcode-camera\[data-preview-ready="false"\][^{]*\{[^}]*(?:display: none|visibility: hidden)/);
+});
+
 test("unavailable camera cannot display a misleading active aiming guide", () => {
   assert.match(scanner, /\{!error && <div data-erp-region="barcode-guide"/);
   assert.match(scanner, /\{error && !starting && <div aria-hidden="true" className="erp-barcode-camera-status"/);
