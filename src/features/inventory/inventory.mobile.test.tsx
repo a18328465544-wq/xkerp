@@ -72,6 +72,18 @@ test("single-card facts have separate SN and location rows outside the detail bu
   }
 });
 
+test("inventory phone facts and model actions stay flat instead of nesting another card", () => {
+  const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
+  for (const selector of ["erp-inventory-phone-facts", "erp-inventory-model-phone-actions"]) {
+    const rules = css.match(new RegExp(`\\.${selector} \\{([^}]+)\\}`, "g"));
+    assert.ok(rules?.length, selector);
+    for (const rule of rules) {
+      assert.doesNotMatch(rule, /background(?:-color)?:|border-radius:|box-shadow:/, selector);
+      assert.match(rule, /border-top: 1px solid var\(--erp-color-border-soft\)/, selector);
+    }
+  }
+});
+
 test("wide prices get their own line without changing amounts, warehouse or serial facts", () => {
   const html = render({estimatedSellPrice: 1234567890, warehouse: "成都仓库 A区超长货架名称 第01层", serialNumber: "000000-LONG-SERIAL-20261012"});
   assert.match(html, /data-price-layout="wide"/);

@@ -58,6 +58,7 @@ with sync_playwright() as playwright:
                 record = records.nth(index)
                 header = record.locator('[data-erp-component="mobile-record"]')
                 facts = record.locator('.erp-inventory-phone-facts')
+                assert facts.evaluate("e => { const s = getComputedStyle(e); return s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.borderRadius === '0px' && s.boxShadow === 'none' && s.borderTopWidth === '1px'; }")
                 sn = record.locator('.erp-inventory-phone-sn')
                 location = record.locator('.erp-inventory-phone-location')
                 expect(record.locator('.erp-phone-record-title')).to_have_text(row["productName"])
