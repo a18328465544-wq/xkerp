@@ -41,6 +41,20 @@ test("inventory dock uses original filter controller, scanner and permission-che
   assert.doesNotMatch(source, /rows\.filter\(/);
 });
 
+test("inventory phone header leaves categories above the view-and-sort row and statistics in More", () => {
+  assert.match(source, /tabs=\{<nav className="erp-phone-category-strip md:hidden"/);
+  assert.match(source, /phoneHeaderActionsMode="inline"/);
+  assert.match(source, /aria-label="更多页面操作"[^\n]+setActionsOpen\(true\)/);
+  assert.match(source, /setActionsOpen\(false\); setStatsOpen\(true\);[^\n]+库存统计/);
+  const toolbar = source.slice(source.indexOf("function InventoryPhoneToolbar"), source.indexOf("function InventoryViewSwitcher"));
+  assert.match(toolbar, /InventoryViewSwitcher view=\{view\} onChange=\{onChangeView\}/);
+  assert.match(toolbar, /aria-label="库存排序" onClick=\{openSorting\}/);
+  assert.doesNotMatch(toolbar, /库存统计|onStats/);
+  const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.erp-inventory-phone-views \{[^}]*flex: 0 0 55%/);
+  assert.match(css, /\.erp-inventory-phone-views > \[role="group"\] \{[^}]*height: calc\(var\(--erp-mobile-touch-size\) - var\(--erp-space-2\)\)/);
+});
+
 test("mobile-only selection and compact presentation do not rewrite saved desktop visibility", () => {
   assert.match(source, /surface="card" density=\{density\} columnVisibility=\{columnVisibility\}/);
   assert.match(source, /surface="plain" density=\{density\} columnVisibility=\{\{\.\.\.columnVisibility, select: selectionMode\}\}/);

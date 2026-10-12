@@ -11,7 +11,10 @@
   "quickStatus": [],
   "metrics": [],
   "dock": [],
-  "browser": [],
+  "browser": [
+    {"route": "/inventory", "rule": "M4", "match": "单卡 / SN（", "reason": "2026-10-12 用户明确要求库存工具栏分段控制器整体 32–36px；使用既有 36px 令牌，限顶部视图切换；专用浏览器回归约束尺寸和行为"},
+    {"route": "/inventory", "rule": "M4", "match": "型号汇总（", "reason": "同一库存工具栏分段控制器的另一选项；不放宽其他按钮、弹层或页面的 44px 规则"}
+  ],
   "pageViewport": [
     {
       "file": "src/features/dashboard/pages/DashboardPage.tsx",

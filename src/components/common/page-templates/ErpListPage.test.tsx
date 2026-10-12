@@ -3,6 +3,7 @@ import test from "node:test";
 import {readFileSync} from "node:fs";
 import {renderToStaticMarkup} from "react-dom/server";
 import type {ColumnDef} from "@tanstack/react-table";
+import {Button} from "@/src/components/ui";
 import {createErpPageSizeOptions, ErpListPage, type ErpListPageProps} from "./ErpListPage";
 
 type Row = {id: string; name: string; balance: number};
@@ -28,6 +29,17 @@ const props: ErpListPageProps<Row> = {
   tableTitle: "个人客户明细",
   table: {columns, data: [{id: "c1", name: "张三", balance: 12}], getRowId: (row) => row.id, mobileRow: "columns", total: 37, page: 1, pageSize: 20, onPageChange: noop, onPageSizeChange: noop},
 };
+
+test("a domain-owned phone More trigger can stay inline without another action sheet", () => {
+  const headerActions = <Button aria-label="库存更多" onClick={noop}>库存更多</Button>;
+  const inline = renderToStaticMarkup(<ErpListPage {...props} phone phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);
+  assert.match(inline, /aria-label="库存更多"/);
+  assert.doesNotMatch(inline, /aria-label="更多页面操作"/);
+  const unchanged = renderToStaticMarkup(<ErpListPage {...props} phone phoneHeaderActions={headerActions} />);
+  assert.match(unchanged, /aria-label="更多页面操作"/);
+  const desktop = renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);
+  assert.doesNotMatch(desktop, /库存更多/);
+});
 
 test("desktop keeps header, metrics, filter bar, then the table card", () => {
   const markup = renderToStaticMarkup(<ErpListPage {...props} phone={false} />);
