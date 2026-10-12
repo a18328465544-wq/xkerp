@@ -100,6 +100,8 @@ export interface ErpListPageProps<TData> {
   desktopHeaderActions?: ReactNode;
   /** Optional phone-only header control placed beside the filter button. */
   phoneHeaderActions?: ReactNode;
+  /** A domain-owned More sheet can keep its trigger inline without a second action sheet. */
+  phoneHeaderActionsMode?: "collapse" | "inline";
   /** Phone dock action when it differs from the desktop primary action. */
   phonePrimaryAction?: ErpListPageAction;
   /** Secondary actions: desktop filter bar, phone filter sheet. */
@@ -177,6 +179,7 @@ export function ErpListPage<TData>({
   primaryAction,
   desktopHeaderActions,
   phoneHeaderActions,
+  phoneHeaderActionsMode,
   phonePrimaryAction,
   actions = [],
   pageActions = [],
@@ -268,7 +271,7 @@ export function ErpListPage<TData>({
     <ErpPageContent>{phoneTask.content}{overlays}</ErpPageContent>
   </PageFrame>;
   return <PageFrame className={cn("erp-list-page", documentPresentation && "erp-document-list", className)} data-phone-layout="thumb">
-    <ErpPageHeader phone={phone} phoneActionsMode={documentPresentation ? "inline" : "collapse"} title={phoneTitleNode} subtitle={subtitle} quickStatus={quickStatus} actions={phoneHeaderActions || filterButton || documentPresentation ? <>{filterButton}{phoneHeaderActions}{documentPresentation && phoneActionPlacement !== "dock" && primaryAction && <Button type="button" variant="ghost" size="iconTouch" aria-label={primaryAction.label} title={primaryAction.label} disabled={primaryAction.disabled} onClick={primaryAction.onClick}><Plus className="h-5 w-5" /></Button>}{documentPresentation && (actions.length > 0 || pageActions.length > 0 || onRefresh || onPageSizeChange) && <Button type="button" variant="ghost" size="iconTouch" aria-label={`${phoneTitle}更多操作`} title="更多操作" onClick={() => setWorkOpen(true)}><MoreHorizontal className="h-5 w-5" /></Button>}</> : undefined} />
+    <ErpPageHeader phone={phone} phoneActionsMode={phoneHeaderActionsMode ?? (documentPresentation ? "inline" : "collapse")} title={phoneTitleNode} subtitle={subtitle} quickStatus={quickStatus} actions={phoneHeaderActions || filterButton || documentPresentation ? <>{filterButton}{phoneHeaderActions}{documentPresentation && phoneActionPlacement !== "dock" && primaryAction && <Button type="button" variant="ghost" size="iconTouch" aria-label={primaryAction.label} title={primaryAction.label} disabled={primaryAction.disabled} onClick={primaryAction.onClick}><Plus className="h-5 w-5" /></Button>}{documentPresentation && (actions.length > 0 || pageActions.length > 0 || onRefresh || onPageSizeChange) && <Button type="button" variant="ghost" size="iconTouch" aria-label={`${phoneTitle}更多操作`} title="更多操作" onClick={() => setWorkOpen(true)}><MoreHorizontal className="h-5 w-5" /></Button>}</> : undefined} />
     {/* The thumb layout bleeds rows to the screen edge; everything above the rows keeps the 16px gutter. */}
     {tabs && <div className="px-[var(--erp-mobile-content-inset)]">{tabs}</div>}
     {/* Phones keep list rows near the top; summary metrics stay on desktop (M13/M18). */}

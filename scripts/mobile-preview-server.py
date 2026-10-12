@@ -84,6 +84,9 @@ model_layout_samples = [
     ("零库存型号", "CPU", 0, 0, 0, 0, 0, []),
 ]
 model_layout_rows = [{"key": f"MODEL-LAYOUT-{index}", "productName": name, "category": category, "brand": "本地测试", "model": name, "version": "", "vram": "", "totalCount": total, "availableCount": available, "pendingCount": pending, "lockedCount": locked, "soldCount": sold, "repairCount": 0, "warehouseLocation": locations[0] if locations else "", "warehouseLocations": locations, "lastEntryTime": "2026-10-11"} for index, (name, category, total, available, pending, locked, sold, locations) in enumerate(model_layout_samples)]
+if inventory_scenario == "models":
+    model_layout_rows[0].update(brand="三星", model="990PRO", vram="2T")
+    model_layout_rows[1].update(brand="华硕", model="RTX5090", vram="32G")
 ledger_scenario = os.environ.get("ERP_LEDGER_QA_SCENARIO", "baseline")
 if ledger_scenario not in {"baseline", "design", "stress", "empty", "error", "restricted"}:
     raise ValueError("Invalid ledger QA scenario")
