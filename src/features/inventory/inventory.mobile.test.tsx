@@ -59,33 +59,37 @@ test("inventory grid resets the shared flex amount cap to prevent overlap with m
 
 const model: InventoryModelSummary = {key: "MODEL-QA", productName: "华硕 RTX5090 夜神OC 32G", category: "显卡", brand: "华硕", model: "RTX5090", version: "夜神OC", vram: "32G", warehouseLocation: "A区货架-01", warehouseLocations: ["A区货架-01", "待检测区"], totalCount: 10, availableCount: 9, pendingCount: 1, lockedCount: 0, soldCount: 0, repairCount: 0};
 const renderModel = (patch: Partial<InventoryModelSummary> = {}) => renderToStaticMarkup(<InventoryModelMobileRecord row={{...model, ...patch}} onOpenLedger={() => undefined} onOpenCards={() => undefined} />);
+const modelText = (html: string) => html.replace(/<[^>]*>/g, "");
 
 test("inventory model mobile row keeps ledger and single-card actions separate and compact", () => {
   const html = renderModel();
-  for (const text of [model.productName, "显卡", "查看单卡", "出入明细", "共", "10", "件", "在库 9", "待检 1", "A区货架-01、待检测区"]) assert.ok(html.includes(text));
+  for (const text of [model.productName, "显卡", "华硕", "RTX5090", "32G", "查看单卡", "出入明细", "总 10", "在库 9", "待检 1", "锁定 0", "A区货架-01、待检测区"]) assert.ok(modelText(html).includes(text), text);
   assert.match(html, /aria-label="查看 华硕 RTX5090 夜神OC 32G 单卡库存"/);
   assert.match(html, /aria-label="库存数量 10 件"/);
-  assert.doesNotMatch(html, /锁定 0|待检 0|erp-inventory-model-phone-end|erp-inventory-model-phone-quantity-label/);
+  assert.doesNotMatch(html, /待出|erp-inventory-model-phone-end|erp-inventory-model-phone-quantity-label/);
   assert.doesNotMatch(html, /<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<button\b/);
 
   const source = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
   assert.match(source, /\.erp-inventory-model-phone-row \{[^}]*grid-template-columns: var\(--erp-mobile-touch-size\) minmax\(0, 1fr\);/);
-  assert.match(source, /\.erp-inventory-model-phone-quantity-value \{[^}]*font-size: var\(--erp-text-lg\)[^}]*font-weight: var\(--erp-font-semibold\)[^}]*font-variant-numeric: tabular-nums/);
+  assert.match(source, /\.erp-inventory-model-phone-quantity-value \{[^}]*font-size: var\(--erp-text-sm\)[^}]*font-weight: var\(--erp-font-medium\)[^}]*font-variant-numeric: tabular-nums/);
   assert.doesNotMatch(source, /\.erp-inventory-phone-model > button:last-child/);
 });
 
-test("model category and total precede readonly stock metadata, with both actions in the footer", () => {
+test("model identity chips precede one quantity strip, location and full-width footer actions", () => {
   const html = renderModel();
   const quantity = html.indexOf("erp-inventory-model-phone-quantity");
   const categoryEnd = html.indexOf("</button>", html.indexOf('class="erp-inventory-model-phone-subtitle"'));
   const action = html.indexOf("erp-inventory-model-phone-cards-action");
   const stock = html.indexOf("erp-inventory-model-phone-meta");
   const ledger = html.indexOf("erp-inventory-model-phone-ledger-action");
-  assert.ok(quantity < categoryEnd && categoryEnd < stock && stock < action && action < ledger);
+  const counts = html.indexOf("erp-inventory-model-phone-counts");
+  const location = html.indexOf("erp-inventory-model-phone-location");
+  assert.ok(categoryEnd < stock && stock < counts && counts < quantity && quantity < location && location < action && action < ledger);
+  assert.equal((modelText(html).match(/总 10/g) || []).length, 1);
   assert.match(html, /<div class="erp-inventory-model-phone-meta"/);
   assert.match(html, /erp-inventory-model-phone-actions[^]*查看单卡[^]*出入明细/);
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
-  assert.match(css, /\.erp-inventory-model-phone-actions \{[^}]*justify-content: space-between/);
+  assert.match(css, /\.erp-inventory-model-phone-actions \{[^}]*grid-column: 1 \/ -1[^}]*justify-content: space-between/);
   assert.match(css, /\.erp-inventory-model-phone-cards-action, \.erp-inventory-model-phone-ledger-action \{[^}]*min-height: var\(--erp-mobile-touch-size\)/);
 });
 
@@ -94,13 +98,22 @@ test("model row preserves full long names, zero total, large totals and included
   const html = renderModel({productName, category: "硬盘", totalCount: 126, availableCount: 2, pendingCount: 0, lockedCount: 0, soldCount: 124});
   assert.ok(html.includes(productName));
   assert.match(html, /aria-label="库存数量 126 件"/);
-  assert.match(html, /在库 2/);
-  assert.doesNotMatch(html, /待检 0|锁定 0|可售/);
+  assert.match(modelText(html), /总 126在库 2待检 0锁定 0已售 124/);
+  assert.doesNotMatch(html, /可售|待出/);
   assert.match(renderModel({totalCount: 0, availableCount: 0, pendingCount: 0}), /aria-label="库存数量 0 件"/);
   assert.match(renderModel({totalCount: 10000}), /aria-label="库存数量 10000 件"/);
 });
 
 test("nonzero pending and locked counts stay visible, including when available stock is zero", () => {
   const html = renderModel({availableCount: 0, pendingCount: 2, lockedCount: 3, warehouseLocations: []});
-  for (const text of ["在库 0", "待检 2", "锁定 3", "未设置库位"]) assert.ok(html.includes(text));
+  for (const text of ["在库 0", "待检 2", "锁定 3", "未设置库位"]) assert.ok(modelText(html).includes(text));
+});
+
+test("model identity renders supplied facts only, without duplicate or invented specifications", () => {
+  const html = renderModel({brand: "未标注品牌", model: model.productName, vram: "", repairCount: 2});
+  assert.doesNotMatch(html, /erp-inventory-model-phone-spec|ASUS|AM5|待出/);
+  assert.match(modelText(html), /售后 \/ 维修 2/);
+  assert.match(html, /暂无商品图片 · 显卡/);
+  const duplicate = renderModel({brand: "AMD", model: "AMD", vram: ""});
+  assert.equal((duplicate.match(/class="erp-inventory-model-phone-spec"/g) || []).length, 1);
 });
