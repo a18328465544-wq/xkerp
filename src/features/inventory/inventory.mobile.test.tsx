@@ -28,7 +28,7 @@ test("inventory phone preserves full identity, SN, warehouse and existing adapte
   for (const text of [item.productName, item.serialNumber, item.warehouse, "库龄 7 天"]) assert.ok(html.includes(text));
   assert.match(html, /暂无商品图片/);
   assert.match(html, /data-status-placement="title"/);
-  assert.match(render({serialNumber: ""}), /SN 待录入/);
+  assert.match(render({serialNumber: ""}), /erp-inventory-phone-fact-label">SN<[^]*erp-inventory-phone-sn-value">待录入/);
 });
 
 test("inventory dock uses original filter controller, scanner and permission-checked task routes", () => {
@@ -52,9 +52,33 @@ test("mobile-only selection and compact presentation do not rewrite saved deskto
 test("inventory grid resets the shared flex amount cap to prevent overlap with metadata", () => {
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
   assert.match(css, /\.erp-inventory-directory \.erp-phone-record-end \{[^}]+grid-template-columns: max-content[^}]+width: max-content; max-width: none;/);
-  assert.match(css, /\.erp-inventory-phone-sn \{ overflow-wrap: anywhere;/);
+  assert.match(css, /\.erp-inventory-phone-sn-value \{[^}]*overflow-wrap: anywhere/);
+  assert.match(css, /\.erp-inventory-phone-sn, \.erp-inventory-phone-location \{[^}]*grid-template-columns: var\(--erp-space-10\) minmax\(0, 1fr\) auto/);
   assert.match(css, /\.erp-inventory-phone-filters label > \.sr-only \{[^}]+clip-path: none;/);
   assert.match(css, /inventory"\] \[data-erp-component="detail-fact"\] \{ display: grid; grid-template-columns: minmax\(0, 2fr\) minmax\(0, 3fr\)/);
+});
+
+test("single-card facts have separate SN and location rows outside the detail button", () => {
+  const html = render({serialNumber: "00002005013EPH0086", inventoryDays: 0});
+  const facts = html.indexOf('class="erp-inventory-phone-facts"');
+  assert.ok(html.indexOf("</button>") < facts);
+  assert.match(html, /aria-label="复制 SN 00002005013EPH0086"/);
+  assert.match(html, /erp-inventory-phone-fact-label">位置<[^]*erp-inventory-phone-age">库龄 0 天/);
+  assert.doesNotMatch(html, /<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<button\b/);
+  for (const serialNumber of ["", " ", "未录入 SN", "待录入"]) {
+    const missing = render({serialNumber});
+    assert.match(missing, /erp-inventory-phone-sn-value">待录入/);
+    assert.doesNotMatch(missing, /aria-label="复制 SN/);
+  }
+});
+
+test("wide prices get their own line without changing amounts, warehouse or serial facts", () => {
+  const html = render({estimatedSellPrice: 1234567890, warehouse: "成都仓库 A区超长货架名称 第01层", serialNumber: "000000-LONG-SERIAL-20261012"});
+  assert.match(html, /data-price-layout="wide"/);
+  assert.match(html, /1,234,567,890/);
+  assert.match(html, /000000-LONG-SERIAL-20261012/);
+  assert.match(html, /成都仓库 A区超长货架名称 第01层/);
+  assert.match(render({estimatedSellPrice: 0}), /data-price-layout="inline"[^]*¥0/);
 });
 
 const model: InventoryModelSummary = {key: "MODEL-QA", productName: "华硕 RTX5090 夜神OC 32G", category: "显卡", brand: "华硕", model: "RTX5090", version: "夜神OC", vram: "32G", warehouseLocation: "A区货架-01", warehouseLocations: ["A区货架-01", "待检测区"], totalCount: 10, availableCount: 9, pendingCount: 1, lockedCount: 0, soldCount: 0, repairCount: 0};
