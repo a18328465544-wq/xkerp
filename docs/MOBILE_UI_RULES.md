@@ -46,14 +46,14 @@
 
 - **M13 列表页**（单据、库存、客户、商品、财务明细……）
   1. 页头：标题，下面一行小字显示结果数量（只在这里出现一次）；右侧放「筛选」按钮（`secondary` 样式，有生效筛选时显示数字角标）。
-  2. `mobileToolbar`：左侧最多 4 个快捷筛选，右侧放排序按钮。
+  2. `mobileToolbar`：左侧快捷筛选是一行可横向滑动的选择胶囊（`ErpChoiceChips layout="scroll"`，不截断），右侧放排序按钮。
   3. 列表：`ErpDataTable` 传 `surface="plain"`、`mobilePagination="compact"`、`mobileRow`；每一行用 `ErpMobileRecordRow` 渲染，平铺成一整块白色列表面，行与行之间用细分隔线。
   4. 底部：`ErpMobileActionDock`，放搜索框，加上最多 1 个主操作。
-  5. 高级筛选条件用 `ErpDialogShell mobilePresentation="sheet"`。默认模板包含每页条数和刷新；专用筛选面板通过 `ErpListPage.phoneFilterSheet` 接入，只放筛选条件，每页条数、刷新、批量选择放既有作业面板。库存筛选采用单行选择项，打开时创建草稿，点「应用筛选」才提交，关闭不修改查询；重置只清空筛选条件，保留搜索、排序与每页条数。
+  5. 高级筛选条件用 `ErpDialogShell mobilePresentation="sheet"`。固定的短枚举（字段写 `phoneControl: "chips"`）显示为选择胶囊，全部选项一眼看全；其余选择字段显示为选择行「标签 … 值 ›」，点开底部列表，超过 12 项带搜索。默认模板包含每页条数和刷新；专用筛选面板通过 `ErpListPage.phoneFilterSheet` 接入，只放筛选条件，每页条数、刷新、批量选择放既有作业面板。库存筛选采用单行选择项，打开时创建草稿，点「应用筛选」才提交，关闭不修改查询；重置只清空筛选条件，保留搜索、排序与每页条数。
   - 功能页面使用 `ErpDataTable` 时必须传 `mobileRow`（函数或 `"columns"`），或者显式传 `mobileMode="table"` 并写明原因。[lint，由 `check-ui-contracts` 检查]
   - 手机上不得出现：刷新按钮、列设置 / 列显示、舒适 / 紧凑密度切换、「查看其余 N 项」、通用卡片（`data-erp-region="mobile-card-header"`）。[浏览器]
 - **M14 开单页**（采购、销售、退货、编辑）：分成「客户 / 来源与商品 → 结算」两步，未显示的步骤保持挂载；每件商品用 `ErpMobileOrderLine` 编辑；底部用 `ErpSubmitBar` 显示合计和**唯一**的主操作；物流、质保、备注、附件折叠在结算步骤里。[人工]
-- **M15 选择器**：少量固定选项用 `Select` 的底部菜单；需要搜索的内容（客户、商品、库存、单据）用全屏选择器，搜索区固定，只有结果区滚动；打开选择器时不自动弹出键盘。[人工]
+- **M15 选择器**：筛选面板里的固定短枚举用选择胶囊（见 M29）；其余少量选项用 `Select` 的底部菜单；需要搜索的内容（客户、商品、库存、单据）用全屏选择器，搜索区固定，只有结果区滚动；打开选择器时不自动弹出键盘。[人工]
 - **M16 详情页**：顺序为「身份 / 状态 → 明细 → 结算 / 属性 → 补充信息」，字段用 `ErpDetailFact` 单列排列，少用卡片套卡片；只读记录不要做成看起来可以点击的样子。[人工]
 
 ## 5. 内容与文案
@@ -79,6 +79,7 @@
 ## 6.1 页面结构
 
 - **M28** 业务页面（`src/features/*/pages/*.tsx`）不调用 `useErpPhone()`，不写「手机一份、电脑一份」的分支。手机和电脑两种布局由模板决定：列表页用 `ErpListPage`，详情抽屉用 `ErpRecordDetail`，开单页用 `ErpMobileWorkflow`。还没迁移的页面登记在 `scripts/mobile-rules-allowlist.json` 的 `pageViewport` 里，每项写明原因和对应任务；页面迁移完成后必须从清单里移除，否则检查失败。[lint]
+- **M29** 选项控件只有四种，按 [DESIGN.md](../DESIGN.md) 的顺序选：按钮（执行动作）、分段控件（2–5 个互斥模式）、选择胶囊 `ErpChoiceChips`（固定短选项单选）、选择器 / 选择行（选项多或来自数据）。选择胶囊看上去 32px，间距 8px，选中时显示对勾，可点范围补足到 44px；选中状态不得使用实心主色。功能页面不得手写 `aria-pressed` 按钮组。[lint + 浏览器]
 
 ## 7. 验收
 

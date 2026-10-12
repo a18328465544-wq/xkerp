@@ -181,7 +181,7 @@ function SalesReturnListContent({session, filters, commitFilters, detailId, comm
 
 
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "status", label: "处理状态", width: "w-40", value: filters.status, defaultValue: "", options: statusOptions, onChange: (status) => updateFilters({status: status as SalesReturnListFilters["status"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "status", label: "处理状态", width: "w-40", value: filters.status, defaultValue: "", options: statusOptions, onChange: (status) => updateFilters({status: status as SalesReturnListFilters["status"]})},
   ];
   const table = {
     columns,

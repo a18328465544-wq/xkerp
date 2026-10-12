@@ -1,7 +1,8 @@
 """Browser guard for docs/MOBILE_UI_RULES.md rules marked [浏览器].
 
 M4 touch targets, M5 16px inputs, M6 >=12px text, M7 no page overflow,
-M13 no desktop table chrome / generic cards on phones, plus console errors.
+M13 no desktop table chrome / generic cards on phones, M29 choice chips
+(>= 32px visual, >= 8px apart, no solid primary selection), plus console errors.
 
 Run against the isolated preview (synthetic data, writes blocked):
   ERP_MOBILE_QA_PORT=3020 python3 scripts/mobile-preview-server.py
@@ -39,8 +40,8 @@ AUDIT = r"""() => {
   const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && r.right > 0 && r.left < W && s.visibility !== "hidden" && Number(s.opacity) > 0.05; };
   const label = (el) => ((el.innerText || el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.value || "").trim().replace(/\s+/g, " ").slice(0, 24));
   // aria-hidden form proxies (Base UI select inputs) and content of closed <details> are not touch targets.
-  const exempt = (el) => el.closest('[role="grid"], [data-erp-component*="calendar"], thead, .erp-skip-link, [data-erp-touch-exempt], .erp-table-desktop-view, [role="separator"], .erp-phone-chip, [aria-hidden="true"]') || (el.closest("details:not([open])") && !el.closest("summary"));
-  const out = {overflow: document.documentElement.scrollWidth > W + 1, targets: [], inputs: [], tiny: [], chrome: [], generic: 0};
+  const exempt = (el) => el.closest('[role="grid"], [data-erp-component*="calendar"], thead, .erp-skip-link, [data-erp-touch-exempt], .erp-table-desktop-view, [role="separator"], [aria-hidden="true"]') || (el.closest("details:not([open])") && !el.closest("summary"));
+  const out = {overflow: document.documentElement.scrollWidth > W + 1, targets: [], inputs: [], tiny: [], chrome: [], chips: [], generic: 0};
   for (const el of document.querySelectorAll('button, a[href], [role="button"], [role="combobox"], [role="tab"], input:not([type="hidden"]), select, textarea')) {
     if (!visible(el) || exempt(el)) continue;
     let box = el;
@@ -61,6 +62,16 @@ AUDIT = r"""() => {
     if ([...el.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 12) out.tiny.push(`${el.textContent.trim().slice(0, 16)}（${getComputedStyle(el).fontSize}）`);
   }
   out.generic = [...document.querySelectorAll('[data-erp-region="mobile-card-header"]')].filter(visible).length;
+  for (const group of document.querySelectorAll('[data-erp-component="choice-chips"]')) {
+    const chips = [...group.querySelectorAll(".erp-choice-chip")].filter(visible);
+    chips.forEach((chip, index) => {
+      const r = chip.getBoundingClientRect();
+      if (r.height < 31.5) out.chips.push(`${label(chip)} 高 ${Math.round(r.height)}px`);
+      if (chip.getAttribute("data-erp-button-variant") === "primary") out.chips.push(`${label(chip)} 选中用了实心主色`);
+      const next = chips[index + 1]?.getBoundingClientRect();
+      if (next && Math.abs(next.top - r.top) < 2 && next.left - r.right < 7.5) out.chips.push(`${label(chip)} 与下一个间距 ${Math.round(next.left - r.right)}px`);
+    });
+  }
   return out;
 }"""
 
@@ -94,6 +105,7 @@ def main():
                 findings += [("M5", f"输入框字号不足 16px：{item}") for item in result["inputs"]]
                 findings += [("M6", f"文字小于 12px：{item}") for item in result["tiny"][:5]]
                 findings += [("M13", f"手机上出现桌面控件：{item}") for item in result["chrome"]]
+                findings += [("M29", f"选择胶囊不合规：{item}") for item in result["chips"]]
                 if result["generic"]:
                     findings.append(("M13", f"出现 {result['generic']} 张通用卡片，需提供 mobileRow"))
                 findings += [("console", f"控制台报错：{item}") for item in sorted(set(errors))[:3]]

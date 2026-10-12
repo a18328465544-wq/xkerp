@@ -75,9 +75,9 @@ function VendorDirectoryContent({session, query, filters, sorting, onSortingChan
   };
 
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "type", label: "同行类型", width: "w-40", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...vendorTypes.map((value) => ({value, label: value}))], onChange: (type) => onFiltersChange({...filters, type, page: 1})},
-    {kind: "select", key: "level", label: "同行等级", width: "w-32", value: filters.level, defaultValue: "all", options: [{value: "all", label: "全部等级"}, ...vendorLevels.map((value) => ({value, label: value}))], onChange: (level) => onFiltersChange({...filters, level, page: 1})},
-    {kind: "select", key: "balance", label: "往来余额", width: "w-40", value: filters.balance, defaultValue: "all", options: [{value: "all", label: "全部往来余额"}, {value: "payable", label: "有应付余额"}, {value: "receivable", label: "有应收余额"}, {value: "credit", label: "有退货抵扣"}], onChange: (balance) => onFiltersChange({...filters, balance: balance as VendorDirectoryFilters["balance"], page: 1})},
+    {kind: "select", phoneControl: "chips" as const, key: "type", label: "同行类型", width: "w-40", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...vendorTypes.map((value) => ({value, label: value}))], onChange: (type) => onFiltersChange({...filters, type, page: 1})},
+    {kind: "select", phoneControl: "chips" as const, key: "level", label: "同行等级", width: "w-32", value: filters.level, defaultValue: "all", options: [{value: "all", label: "全部等级"}, ...vendorLevels.map((value) => ({value, label: value}))], onChange: (level) => onFiltersChange({...filters, level, page: 1})},
+    {kind: "select", phoneControl: "chips" as const, key: "balance", label: "往来余额", width: "w-40", value: filters.balance, defaultValue: "all", options: [{value: "all", label: "全部往来余额"}, {value: "payable", label: "有应付余额"}, {value: "receivable", label: "有应收余额"}, {value: "credit", label: "有退货抵扣"}], onChange: (balance) => onFiltersChange({...filters, balance: balance as VendorDirectoryFilters["balance"], page: 1})},
   ];
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.type !== "all") + Number(filters.level !== "all") + Number(filters.balance !== "all");
 

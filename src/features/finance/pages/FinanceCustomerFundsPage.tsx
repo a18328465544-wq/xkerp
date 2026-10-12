@@ -87,7 +87,7 @@ function FinanceCustomerFundsContent({applyPhoneFilters, dateFilters, setDateFil
     loading: query.isPending, loadError: Boolean(query.error && !query.data),
     search: {value: keyword, label: "搜索往来账款", placeholder: "客户、供应商或电话", onChange: setKeyword},
     filters: [
-      {kind: "select", key: "balance", label: "余额类型", value: balance, defaultValue: "all", options: [{value: "all", label: "全部余额"}, {value: "receivable", label: "有应收"}, {value: "payable", label: "有应付"}, {value: "balanced", label: "已结清"}], onChange: setBalance},
+      {kind: "select", phoneControl: "chips" as const, key: "balance", label: "余额类型", value: balance, defaultValue: "all", options: [{value: "all", label: "全部余额"}, {value: "receivable", label: "有应收"}, {value: "payable", label: "有应付"}, {value: "balanced", label: "已结清"}], onChange: setBalance},
       {kind: "dateRange", key: "date", label: "资金日期范围", value: {startDate: dateFilters.startDate, endDate: dateFilters.endDate}, defaultValue: {startDate: initialFilters().startDate, endDate: initialFilters().endDate}, onChange: ({startDate, endDate}) => setDateFilters({...dateFilters, startDate, endDate})},
     ],
     onApplyPhoneFilters: (draft) => {const dates = draft.date as {startDate: string; endDate: string}; applyPhoneFilters(String(draft.balance), {...dateFilters, ...dates});},

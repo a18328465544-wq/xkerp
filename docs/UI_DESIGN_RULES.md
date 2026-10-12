@@ -36,13 +36,14 @@
 ### 几何和层级
 
 - 控件默认高度 `--erp-control-height`（40px）；筛选和密集表格使用 `--erp-control-height-filter`（36px）。
-- 控件高度只有四档：表格行内 xs 按钮 28px、筛选/工具栏 36px、表单默认 40px、手机 44px，不新增其他高度。
+- 控件高度只有四档：表格行内 xs 按钮 28px、筛选/工具栏 36px、表单默认 40px、手机 44px，不新增其他高度。手机按钮另按位置分两档（内容里看上去 36px、底部固定栏 44px，可点范围都是 44px），见 MOBILE_UI_RULES M4。
+- 胶囊只有两种高度：选择胶囊 `--erp-chip-height` 28px（手机 `--erp-mobile-chip-height` 32px，可点范围补足 44px），已选条件 `--erp-filter-tag-height` 24px；状态标签 22px。
 - 按钮层级：主按钮（primary/danger/warning）字重 600，其余 500；secondary 是带 `--erp-shadow-control` 的“凸起”按钮，输入框保持扁平无阴影，二者不得长得一样。
-- 分段控件（`ErpSegmentedControl`、首页时段、质检队列、库存视图）统一为灰色槽 `--erp-color-segmented-track` + 白色凸起滑块，选中文字 600；选中项不得使用 primary 实心蓝，避免与页面主操作争抢。
+- 分段控件（`ErpSegmentedControl`、首页时段、质检队列、库存视图、退货范围）统一为灰色槽 `--erp-color-segmented-track` + 白色凸起滑块，选中文字 600；选中项不得使用 primary 实心蓝，避免与页面主操作争抢。
 - 只读字段（非 combobox 的 `readonly` 输入）无边框、底色 `--erp-color-readonly`；选择器触发框（role=combobox）保持可编辑外观。
 - 数量步进器在桌面与手机都是一个带边框的组合控件；勾选卡片选中时与单选卡片一样显示主色描边和浅底。
 - `button, input, select, textarea { font: inherit }` 必须留在 `@layer base`；放到 layer 外会覆盖所有 Tailwind 字号/字重工具类。
-- 卡片使用 `--erp-radius-card`，控件使用 `--erp-radius-control`，标签使用 `--erp-radius-pill`。
+- 卡片使用 `--erp-radius-card`，控件和按钮使用 `--erp-radius-control`，选择胶囊、已选条件和状态标签使用 `--erp-radius-pill`。按钮不做成胶囊：胶囊专门表示「可以选」或「已选」。
 - 阴影统一使用 `--erp-shadow-card`、`--erp-shadow-popover` 和对应语义 Token；焦点使用 `--erp-color-focus-ring`。
 - 层级固定为 Tab `--erp-layer-tab-navigation` > Popover `--erp-layer-popover` > Modal `--erp-layer-modal` > Drawer `--erp-layer-drawer`/遮罩。业务 CSS 只使用 `erp-popover-layer`、`erp-modal-layer`、`erp-drawer-layer` 等语义类。
 
@@ -59,6 +60,10 @@
 | 字段标签/提示/错误 | `ErpField` |
 | 金额 | `ErpAmountInput` 或 `money()` 展示 |
 | 勾选/单选 | `ErpCheckboxField`、`ErpRadioField`、`ErpRadioGroup`；行选择保留原生语义 |
+| 2–5 个互斥模式 | `ErpSegmentedControl` |
+| 固定短选项单选（快捷筛选、筛选条件、固定分类） | `ErpChoiceChips` |
+| 已生效的筛选条件（电脑端） | `ErpFilterTags`；字段条件用 `getActiveErpFilterTags(fields)` 生成 |
+| 只读状态 | `ErpStatusBadge` |
 | 分页列表 | `ErpDataTable` |
 | 短表单/确认/删除 | `ErpDialogShell`、`ErpConfirmDialog`、`ErpDocumentDeleteDialog` |
 | 详情/进出明细 | `ErpDetailDrawer`、`ErpProductLedgerDrawer` |
@@ -68,6 +73,21 @@
 复杂表单、可编辑明细和扫码/日期网格可以组合底层 `Dialog`、原生 checkbox/radio/button，但必须保留统一的遮罩、焦点、类型、错误和移动端行为，并在代码中说明例外原因。图片预览统一使用 `ErpImagePreviewDialog`；底层 `Dialog` 仅允许出现在 `ErpDialogShell`、全局命令搜索和持续工作抽屉等已登记的复杂交互中。Sonner 只可在 `NotificationToaster` 和 `notification.ts` 适配层出现。
 
 - 图表统一复用 `src/components/ui/chart-primitives.tsx`；`src/components/ui/recharts.tsx` 是唯一允许运行时导入 `recharts` 的边界，图表库拆分为独立可缓存的 vendor chunk。底层 Recharts 组件必须同步导出，不得用 `React.lazy` 包裹 forwardRef 图表组件；按需加载发生在页面模块边界。`ChartContainer` 统一提供图表外壳，页面负责可读的加载、错误和空态。
+
+### 选项控件（2026-10-12）
+
+组件定义和外观以根目录 [DESIGN.md](../DESIGN.md) 为准。选控件按下面的顺序判断，命中就停：
+
+1. 点了会执行动作或进入下一步 → `Button`。
+2. 2–5 个互斥的模式或视图 → `ErpSegmentedControl`。超过 5 个改用选择胶囊。
+3. 写死在代码里的短选项单选 → `ErpChoiceChips`：有边框的胶囊，选中时浅蓝底、主色边框和文字，并显示对勾；可带数量（「待收款 12」）。不得用实心主色表示选中。
+4. 选项更多，或从数据里读出来（账户、员工、客户、分类） → `Select`。
+5. 去同级页面 → 页签。页签不能拿来做筛选。
+6. 只显示状态 → `ErpStatusBadge`：无边框、没有悬停效果。
+
+- 筛选字段 `ErpFilterField` 的 `kind: "select"` 写 `phoneControl: "chips"` 表示「固定短枚举」：手机筛选面板显示为胶囊（除「全部」外不超过 6 个，超过自动改为选择行），「全部××」在胶囊里显示为「全部」。不写时手机显示为选择行「标签 … 值 ›」，超过 12 项带搜索。电脑筛选栏不受影响，仍是下拉框。
+- 电脑端列表结果栏不再显示「N 项筛选」，改为 `ErpFilterTags`：每个生效条件一个「字段：值 ×」，超过 5 个显示「+n」，多于 1 个时末尾有「清空」。
+- 功能页面不得手写 `aria-pressed` 按钮组来做多选一，改用 `ErpChoiceChips` 或 `ErpSegmentedControl`。例外登记在 `scripts/check-ui-contracts.mjs` 的白名单里并写明原因。[lint]
 
 ## 4. 页面、工具栏和表格
 

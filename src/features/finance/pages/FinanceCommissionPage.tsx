@@ -125,7 +125,7 @@ function FinanceCommissionContent({mode, session, filters, onFiltersChange, item
     onPageSizeChange: (pageSize) => onFiltersChange({page: 1, pageSize}),
   };
   const phoneFilters: ErpFilterField[] = [
-    {kind: "select", key: "status", label: "提成状态", value: filters.status, defaultValue: "", options: statuses, onChange: (status) => onFiltersChange({status, page: 1})},
+    {kind: "select", phoneControl: "chips" as const, key: "status", label: "提成状态", value: filters.status, defaultValue: "", options: statuses, onChange: (status) => onFiltersChange({status, page: 1})},
     {kind: "text", key: "handler", label: "经办人", value: filters.handler, defaultValue: "", onChange: (handler) => onFiltersChange({handler, page: 1})},
     {kind: "dateRange", key: "date", label: "提成日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => onFiltersChange({dateStart: startDate, dateEnd: endDate, page: 1})},
   ];

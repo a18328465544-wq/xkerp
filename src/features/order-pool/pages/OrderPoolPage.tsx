@@ -2,7 +2,7 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {ColumnDef} from "@tanstack/react-table";
 import {AlertTriangle, CalendarClock, CircleDot, ClipboardList, Link2, MessageSquarePlus, Plus, UserRound, Users} from "lucide-react";
-import {ErpDateTimePicker, ErpDetailFact, ErpField, ErpListPage, ErpDocumentRecordRow, ErpRecordDetail, type ErpFilterField, type ErpListTableProps} from "@/src/components/common";
+import {ErpChoiceChips, ErpDateTimePicker, ErpDetailFact, ErpField, ErpListPage, ErpDocumentRecordRow, ErpRecordDetail, type ErpFilterField, type ErpListTableProps} from "@/src/components/common";
 import {useEffect, useMemo, useState, type FormEvent, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Select, Textarea} from "@/src/components/ui";
@@ -151,8 +151,8 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
   ], [claimOrder, completeOrder, session.user.id, updateMutation.isPending]);
 
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "orderType", label: "订单类型", width: "w-32", value: filters.orderType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...orderPoolOrderTypeOptions], onChange: (value) => updateFilters({orderType: value as OrderPoolFilters["orderType"]})},
-    {kind: "select", key: "mainStage", label: "订单阶段", width: "w-36", value: filters.mainStage, defaultValue: "all", options: [{value: "all", label: "全部阶段"}, ...orderPoolStageOptions], onChange: (value) => updateFilters({mainStage: value as OrderPoolFilters["mainStage"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "orderType", label: "订单类型", width: "w-32", value: filters.orderType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...orderPoolOrderTypeOptions], onChange: (value) => updateFilters({orderType: value as OrderPoolFilters["orderType"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "mainStage", label: "订单阶段", width: "w-36", value: filters.mainStage, defaultValue: "all", options: [{value: "all", label: "全部阶段"}, ...orderPoolStageOptions], onChange: (value) => updateFilters({mainStage: value as OrderPoolFilters["mainStage"]})},
     {kind: "select", key: "owner", label: "负责人或协作者", width: "w-40", value: filters.owner, defaultValue: "", options: [{value: "", label: "全部协作者"}, ...owners], onChange: (owner) => updateFilters({owner})},
   ];
   const table: ErpListTableProps<CustomerOrder> = {
@@ -222,7 +222,7 @@ function OrderPoolContent({session, filters, commitFilters, query, onAuthExpired
     table={table}
     tableDensity="compact"
     phonePageSizeOptions={[20, 50, 100]}
-    sheetExtra={<section className="space-y-2" aria-label="全部工作队列"><p className="text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">工作队列</p><div className="flex flex-wrap gap-1.5">{orderPoolQueueOptions.map((option) => <Button key={option.value} type="button" size="sm" variant={filters.queue === option.value ? "primary" : "ghost"} aria-pressed={filters.queue === option.value} onClick={() => updateFilters({queue: option.value})}>{option.label} ({queueCounts[option.value]})</Button>)}</div><p className="text-xs text-[var(--erp-color-text-muted)]">队列只改变当前视图，不会改变订单阶段；所有成员看到同一条协作主线。</p></section>}
+    sheetExtra={<section className="space-y-2" aria-label="全部工作队列"><p className="text-erp-sm font-medium text-[var(--erp-color-text-secondary)]">工作队列</p><ErpChoiceChips label="工作队列" value={filters.queue} options={orderPoolQueueOptions.map((option) => ({value: option.value, label: option.label, count: queueCounts[option.value]}))} onValueChange={(queue) => updateFilters({queue})} /><p className="text-xs text-[var(--erp-color-text-muted)]">队列只改变当前视图，不会改变订单阶段；所有成员看到同一条协作主线。</p></section>}
     desktopTableSection={false}
     desktopTableContent={desktopTable}
     tableNotice={<div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--erp-color-text-muted)]"><span>{activeFilterCount ? `${activeFilterCount} 项筛选 · ` : ""}筛选结果 {collection.total} 条订单</span><ErpStatusBadge label="协同主线" tone="info" /></div>}

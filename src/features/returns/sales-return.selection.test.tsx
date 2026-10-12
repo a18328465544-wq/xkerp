@@ -74,7 +74,7 @@ test("mobile projection preserves desktop selection, mounted draft and authorita
   assert.match(source, /key=\{selectedInvoice\?\.invoiceNo \|\| "no-invoice"\}/);
   assert.match(source, /className="min-w-0 md:hidden"><SalesReturnItemSelection/);
   assert.match(source, /className="hidden text-sm font-semibold md:block">商品明细/);
-  assert.match(source, /data-erp-region="sales-return-scope" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"/);
+  assert.match(source, /data-erp-region="sales-return-scope"><ErpSegmentedControl label="退货范围"/);
   assert.match(source, /退货商品：/);
   assert.match(source, /useWorkspaceTabDraft/);
   assert.match(source, /mutationFn: \(input: SalesReturnFormValues\) => returnsApi\.createSales\(input, undefined, submission\.current\)/);

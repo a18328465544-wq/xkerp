@@ -282,7 +282,7 @@ function FinanceExpenseContent({
         primaryAction: {label: "登记支出", onClick: openCreate, disabled: !canReadAccounts},
         actions: [{label: "导出本页", onClick: exportRows}], onRefresh: () => void expenseQuery.refetch(), refreshing: expenseQuery.isFetching,
         filters: [
-          {kind: "select", key: "businessType", label: "业务类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...[...financeExpenseCategories, ...legacyFinanceExpenseCategories].map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
+          {kind: "select", phoneControl: "chips" as const, key: "businessType", label: "业务类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...[...financeExpenseCategories, ...legacyFinanceExpenseCategories].map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
           ...(canReadAccounts ? [{kind: "select" as const, key: "accountId", label: "结算账户", value: filters.accountId, defaultValue: "all", options: [{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))], onChange: (accountId: string) => update({accountId})}] : []),
           {kind: "text", key: "handler", label: "经办人", value: filters.handler, onChange: (handler) => update({handler})},
           {kind: "dateRange", key: "dateRange", label: "日期范围", value: {startDate: filters.startDate, endDate: filters.endDate}, onChange: ({startDate, endDate}) => update({startDate, endDate})},

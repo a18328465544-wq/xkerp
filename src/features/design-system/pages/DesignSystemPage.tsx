@@ -3,7 +3,7 @@ import {useEffect, useState} from "react";
 import {Avatar, Badge, Button, Card, CardContent, CardHeader, Input, Select, Separator, Skeleton, Textarea} from "@/src/components/ui";
 import {DashboardSection, ErpDashboardPageFrame, ErpAmountInput, ErpDataTable, ErpDatePicker, ErpDateRangePicker, ErpSubmitBar, ErpEmptyState, ErpFilterBar, ErpFormSection, ErpLoadingState, ErpMetricCard, ErpPageContent, ErpPageError, ErpPageHeader, ErpPageToolbar, ErpSearchInput, ErpStatusBadge, MetricsRegion, QuickStatusGroup, type QuickStatusItemData} from "@/src/components/common";
 import {formatCurrency} from "@/src/lib/format";
-import {ErpCheckboxField, ErpRadioGroup, ErpSegmentedControl, ErpQuantityStepper} from "@/src/components/common";
+import {ErpCheckboxField, ErpChoiceChips, ErpFilterTags, ErpRadioGroup, ErpSegmentedControl, ErpQuantityStepper} from "@/src/components/common";
 import {ErpField} from "@/src/components/common/ErpField";
 import {CustomerPicker} from "@/src/components/domain/CustomerPicker";
 import {InventoryItemPicker} from "@/src/components/domain/InventoryItemPicker";
@@ -33,6 +33,7 @@ export function DesignSystemPage() {
   const [keyword, setKeyword] = useState("");
   const [demoQuantity, setDemoQuantity] = useState(1);
   const [demoMode, setDemoMode] = useState("full");
+  const [demoChip, setDemoChip] = useState("all");
   const [demoChecked, setDemoChecked] = useState(false);
   const [demoChoice, setDemoChoice] = useState("inventory");
   const [stressFilter, setStressFilter] = useState("");
@@ -62,6 +63,8 @@ export function DesignSystemPage() {
         <ErpSearchInput aria-label="控件尺寸样例搜索" placeholder="搜索商品名称或型号" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
         <label className="text-sm md:hidden">样例数量<ErpQuantityStepper label="样例数量" value={demoQuantity} max={5} onChange={setDemoQuantity} /></label>
         <ErpSegmentedControl label="样例结算方式" value={demoMode} onValueChange={setDemoMode} options={[{value: "full", label: "全额付款"}, {value: "none", label: "暂不付款"}, {value: "partial", label: "部分付款"}]} />
+        <ErpChoiceChips label="样例收款状态" value={demoChip} onValueChange={setDemoChip} options={[{value: "all", label: "全部", count: 128}, {value: "unpaid", label: "待收款", count: 12}, {value: "outbound", label: "待出库", count: 5}]} />
+        <ErpFilterTags tags={demoChip === "all" ? [] : [{key: "status", label: `收款状态：${demoChip === "unpaid" ? "待收款" : "待出库"}`, onRemove: () => setDemoChip("all")}]} />
         <ErpCheckboxField variant="inline" label="包含历史已售出的库存记录" checked={demoChecked} onChange={(event) => setDemoChecked(event.target.checked)} />
         <ErpRadioGroup name="样例展示方式" value={demoChoice} onChange={setDemoChoice} options={[{value: "inventory", label: "库存列表"}, {value: "model", label: "型号汇总"}]} />
         <Select aria-label="长选项尺寸样例" value={selectValue} onValueChange={setSelectValue} options={[{value: "inventory", label: "本地长名称账户 · 二手显卡及服务器配件采购结算"}, {value: "sales", label: "本地销售账户"}, {value: "finance", label: "停用样例", disabled: true}]} />

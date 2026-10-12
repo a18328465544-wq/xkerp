@@ -142,9 +142,9 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   ];
 
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "channel", label: "销售渠道", width: "w-36", value: filters.channel, defaultValue: "", options: channelOptions, onChange: (channel) => updateFilters({channel: channel as SalesListFilters["channel"]})},
-    {kind: "select", key: "paymentStatus", label: "收款状态", width: "w-36", value: filters.paymentStatus, defaultValue: "", options: paymentOptions, onChange: (paymentStatus) => updateFilters({paymentStatus: paymentStatus as SalesListFilters["paymentStatus"]})},
-    {kind: "select", key: "outboundStatus", label: "出库状态", width: "w-36", value: filters.outboundStatus, defaultValue: "", options: outboundOptions, onChange: (outboundStatus) => updateFilters({outboundStatus: outboundStatus as SalesListFilters["outboundStatus"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "channel", label: "销售渠道", width: "w-36", value: filters.channel, defaultValue: "", options: channelOptions, onChange: (channel) => updateFilters({channel: channel as SalesListFilters["channel"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "paymentStatus", label: "收款状态", width: "w-36", value: filters.paymentStatus, defaultValue: "", options: paymentOptions, onChange: (paymentStatus) => updateFilters({paymentStatus: paymentStatus as SalesListFilters["paymentStatus"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "outboundStatus", label: "出库状态", width: "w-36", value: filters.outboundStatus, defaultValue: "", options: outboundOptions, onChange: (outboundStatus) => updateFilters({outboundStatus: outboundStatus as SalesListFilters["outboundStatus"]})},
     {kind: "dateRange", key: "dateRange", label: "销售日期", width: "sm:w-40", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})},
   ];
   const table = {

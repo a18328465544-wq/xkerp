@@ -27,7 +27,7 @@ export function ErpDocumentFilterSheet({title, fields, onClose, onApply}: {
 }) {
   const [draft, setDraft] = useState(() => filterDraftValues(fields));
   return <ErpDialogShell open onOpenChange={(open) => {if (!open) onClose();}} title={title} mobilePresentation="sheet"
-    footer={<><Button type="button" variant="secondary" onClick={() => setDraft(filterDraftValues(fields, true))}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" onClick={() => {onApply(draft); onClose();}}>应用筛选</Button></>}>
+    footer={<><Button type="button" variant="secondary" onClick={() => setDraft(filterDraftValues(fields, true))}><RotateCcw className="h-4 w-4" />重置</Button><Button type="button" variant="primary" onClick={() => {onApply(draft); onClose();}}>应用筛选</Button></>}>
     <ErpFilterFields layout="sheet" fields={filterFieldsWithDraft(fields, draft, (key, value) => setDraft((current) => ({...current, [key]: value})))} />
   </ErpDialogShell>;
 }

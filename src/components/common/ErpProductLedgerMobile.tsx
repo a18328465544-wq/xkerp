@@ -48,7 +48,7 @@ export function ErpProductLedgerMobile({open, subject, subjects = [], columns, f
   const subjectLabel = subject ? productDisplayName({name: subject.productName, ...subject}) : "未选择商品型号";
   const rows = page?.rows ?? [];
   const fieldsFor = (criteria: LedgerCriteria, update: (patch: Partial<LedgerCriteria>) => void): ErpFilterField[] => [
-    {key: "documentType", label: "单据类型", kind: "select", value: criteria.documentType, defaultValue: "", options: [{value: "", label: "全部类型"}, ...productLedgerDocumentTypes.map((value) => ({value, label: value}))], onChange: (value) => update({documentType: value as LedgerCriteria["documentType"]})},
+    {key: "documentType", label: "单据类型", kind: "select", phoneControl: "chips" as const, value: criteria.documentType, defaultValue: "", options: [{value: "", label: "全部类型"}, ...productLedgerDocumentTypes.map((value) => ({value, label: value}))], onChange: (value) => update({documentType: value as LedgerCriteria["documentType"]})},
     {key: "createdBy", label: "制单人", kind: "text", value: criteria.createdBy, placeholder: "搜索制单人", onChange: (value) => update({createdBy: value})},
     {key: "date", label: "出入日期", kind: "dateRange", value: {startDate: criteria.startDate, endDate: criteria.endDate}, onChange: (value) => update(value)},
   ];

@@ -130,8 +130,8 @@ function PurchaseListContent({filters, commitFilters, session, query, filterPend
   ];
 
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "sourceType", label: "采购来源", width: "w-36", value: filters.sourceType, defaultValue: "", options: sourceOptions, onChange: (sourceType) => updateFilters({sourceType: sourceType as PurchaseListFilters["sourceType"]})},
-    {kind: "select", key: "paymentStatus", label: "付款状态", width: "w-36", value: filters.paymentStatus, defaultValue: "", options: paymentOptions, onChange: (paymentStatus) => updateFilters({paymentStatus: paymentStatus as PurchaseListFilters["paymentStatus"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "sourceType", label: "采购来源", width: "w-36", value: filters.sourceType, defaultValue: "", options: sourceOptions, onChange: (sourceType) => updateFilters({sourceType: sourceType as PurchaseListFilters["sourceType"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "paymentStatus", label: "付款状态", width: "w-36", value: filters.paymentStatus, defaultValue: "", options: paymentOptions, onChange: (paymentStatus) => updateFilters({paymentStatus: paymentStatus as PurchaseListFilters["paymentStatus"]})},
     {kind: "dateRange", key: "dateRange", label: "采购日期", width: "sm:w-40", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => updateFilters({dateStart: startDate, dateEnd: endDate})},
   ];
   const table = {

@@ -85,7 +85,7 @@ function CustomerDirectoryContent({session, query, filters, sorting, onSortingCh
     {kind: "select", key: "type", label: "客户类型", width: "w-40", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...(query.data?.types || []).map((value) => ({value, label: value}))], onChange: (type) => onFiltersChange({...filters, type, page: 1})},
     {kind: "select", key: "channel", label: "客户来源", width: "w-36", value: filters.channel, defaultValue: "all", options: [{value: "all", label: "全部来源"}, ...(query.data?.channels || []).map((value) => ({value, label: value}))], onChange: (channel) => onFiltersChange({...filters, channel, page: 1})},
     {kind: "select", key: "categoryId", label: "客户分类", width: "w-36", value: filters.categoryId, defaultValue: "all", options: [{value: "all", label: "全部分类"}, ...categories.map((category) => ({value: category.id, label: category.isActive ? category.name : `${category.name}（已停用）`}))], onChange: (categoryId) => onFiltersChange({...filters, categoryId, page: 1})},
-    {kind: "select", key: "level", label: "客户等级", width: "w-32", value: filters.level, defaultValue: "all", options: [{value: "all", label: "全部等级"}, ...customerLevels.map((value) => ({value, label: value}))], onChange: (level) => onFiltersChange({...filters, level, page: 1})},
+    {kind: "select", phoneControl: "chips" as const, key: "level", label: "客户等级", width: "w-32", value: filters.level, defaultValue: "all", options: [{value: "all", label: "全部等级"}, ...customerLevels.map((value) => ({value, label: value}))], onChange: (level) => onFiltersChange({...filters, level, page: 1})},
   ];
 
   return <ErpListPage

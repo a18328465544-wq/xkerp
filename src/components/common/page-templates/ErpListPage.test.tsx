@@ -102,7 +102,8 @@ test("phone shows the count once, a filter button with its badge and column-buil
   assert.doesNotMatch(markup, /条记录/, "the table's own count bar is replaced by the header count");
   assert.match(markup, /aria-label="客户筛选与操作"[^>]*>[\s\S]*?筛选<span class="tabular-nums">1<\/span>/);
   assert.match(markup, /aria-label="客户快捷筛选"/);
-  assert.match(markup, /aria-pressed="true"[^>]*>核心 \/ S级/);
+  assert.match(markup, /role="radiogroup" aria-label="客户快捷筛选"/);
+  assert.match(markup, /aria-checked="true"[^>]*>[\s\S]*?<span>核心 \/ S级<\/span>/);
   assert.match(markup, /最近交易/);
   assert.match(markup, /erp-phone-record-title[^>]*>张三/);
   assert.doesNotMatch(markup, /data-erp-component="mobile-summary"|卡片A/, "summary metrics stay off phone lists");
@@ -119,11 +120,20 @@ test("page-specific queue criteria are included in the phone filter badge", () =
   assert.match(markup, /筛选<span class="tabular-nums">3<\/span>/);
 });
 
-test("quick filters are capped at four", () => {
-  const many = Array.from({length: 6}, (_, index) => ({label: `筛选${index}`, active: false, onSelect: noop}));
+test("quick filters are one scrollable chip row instead of a truncated list", () => {
+  const many = Array.from({length: 6}, (_, index) => ({label: `筛选${index}`, active: index === 0, onSelect: noop}));
   const markup = renderToStaticMarkup(<ErpListPage {...props} quickFilters={many} phone />);
-  assert.match(markup, /筛选3/);
-  assert.doesNotMatch(markup, /筛选4/);
+  assert.match(markup, /data-erp-component="choice-chips" data-layout="scroll"/);
+  assert.match(markup, /筛选5/);
+  assert.doesNotMatch(markup, /data-erp-button-variant="primary"[^>]*aria-checked/);
+});
+
+test("desktop results bar lists applied filters as removable tags", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} search={{...props.search!, value: "4090"}} onResetFilters={noop} phone={false} />);
+  assert.match(markup, /data-erp-component="filter-tags"/);
+  assert.match(markup, /搜索：4090/);
+  assert.match(markup, />清空</);
+  assert.doesNotMatch(markup, /项筛选/);
 });
 
 test("document lists opt into compact rows without changing the desktop layout", () => {

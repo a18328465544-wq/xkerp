@@ -2,7 +2,7 @@ import {keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryRe
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
 import {AlertTriangle, ArrowDownToLine, ArrowLeftRight, Banknote, Building2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, MoreHorizontal, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
-import {ErpSearchInput} from "@/src/components/common";
+import {ErpChoiceChips, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Input, Select} from "@/src/components/ui";
@@ -208,11 +208,7 @@ function AccountStatusFilters({counts, value, onChange}: {counts: ReturnType<typ
     {key: "frozen", label: "冻结", count: counts.frozen},
     {key: "disabled", label: "停用", count: counts.disabled},
   ];
-  return <div role="group" aria-label="按资金账户状态筛选" className="flex flex-wrap items-center gap-1 max-md:gap-y-2 rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1">
-    {items.map((item) => <Button key={item.key} type="button" size="sm" variant={value === item.key ? "secondary" : "ghost"} aria-pressed={value === item.key} onClick={() => onChange(item.key)} className="gap-1.5">
-      {item.label}<span className="erp-data-number text-xs text-[var(--erp-color-text-muted)]">{item.count}</span>
-    </Button>)}
-  </div>;
+  return <ErpChoiceChips label="按资金账户状态筛选" value={value} options={items.map((item) => ({value: item.key, label: item.label, count: item.count}))} onValueChange={onChange} />;
 }
 
 function AccountAnomalyNotice({rows, onOpen}: {rows: ExceptionRow[]; onOpen: () => void}) {

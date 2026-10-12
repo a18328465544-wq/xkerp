@@ -25,6 +25,7 @@ export {ErpDocumentDeleteDialog, type ErpDocumentDeleteDialogProps} from "./ErpD
 export {ErpConfirmDialog, type ErpConfirmDialogProps} from "./ErpConfirmDialog";
 export {ErpSearchInput, type ErpSearchInputProps} from "./ErpSearchInput";
 export {ErpSegmentedControl, type ErpSegmentedOption} from "./ErpSegmentedControl";
+export {ErpChoiceChips, type ErpChoiceChipOption} from "./ErpChoiceChips";
 export {ErpPullToRefreshIndicator, usePullToRefresh, type PullToRefreshState, type UsePullToRefreshOptions} from "./ErpPullToRefresh";
 export {NotificationToaster} from "./NotificationToaster";
 export {ErpDatePicker} from "./ErpDatePicker";
@@ -54,7 +55,8 @@ export {ErpAnalyticsPageFrame, ErpCrmPageFrame, ErpDetailPageFrame, ErpFinancePa
 export {AnalyticsDetailRegion, AnalyticsFrame, AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, type AnalyticsMainVariant, type AnalyticsVisualizationSize} from "./page-frames/AnalyticsFrame";
 export {AnalyticsInsightItem, type AnalyticsInsightItemProps, type AnalyticsInsightTone} from "./page-frames/AnalyticsInsightItem";
 export {GpuSnDateLookupButton} from "./GpuSnDateLookupButton";
-export {countActiveErpFilterFields, ErpFilterFields, isErpFilterFieldActive, type ErpFilterField, type ErpFilterOption} from "./filters/ErpFilterFields";
+export {countActiveErpFilterFields, ErpFilterFields, getActiveErpFilterTags, isErpFilterFieldActive, type ErpFilterField, type ErpFilterOption} from "./filters/ErpFilterFields";
+export {ErpFilterTags, type ErpActiveFilterTag} from "./filters/ErpFilterTags";
 export {ErpListPage, type ErpListColumnSettings, type ErpListPageAction, type ErpListPageFrameKind, type ErpListPagePagination, type ErpListPageProps, type ErpListQuickFilter, type ErpListTableProps} from "./page-templates/ErpListPage";
 export {ErpRecordDetail, type ErpRecordDetailProps, type ErpRecordFact, type ErpRecordSection} from "./ErpRecordDetail";
 export {ErpRecordPage, type ErpRecordPageAction, type ErpRecordPageProps} from "./page-templates/ErpRecordPage";

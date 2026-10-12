@@ -4,6 +4,7 @@ import {Controller, useForm} from "react-hook-form";
 import {Sparkles} from "lucide-react";
 import {Button, Input, Textarea} from "@/src/components/ui";
 import {ErpAmountInput} from "./ErpAmountInput";
+import {ErpChoiceChips} from "./ErpChoiceChips";
 import {ErpDialogShell} from "./ErpDialogShell";
 import {ErpField} from "./ErpField";
 import {ErpImagePreviewDialog} from "./ErpImagePreviewDialog";
@@ -89,7 +90,7 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
       <form id={formId} onSubmit={submission.onSubmit} className="space-y-4">
         <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]/45 p-3 sm:p-4" aria-labelledby="product-category-title">
           <div className="mb-2 flex items-center justify-between gap-3"><h2 id="product-category-title" className="text-sm font-semibold text-[var(--erp-color-text)]">商品分类</h2><span className="text-xs text-[var(--erp-color-text-muted)]">当前：{values.category}</span></div>
-          <Controller control={control} name="category" render={({field}) => <div className="flex flex-wrap gap-2">{productCategoryValues.map((category) => <Button key={category} type="button" size="sm" variant={field.value === category ? "primary" : "secondary"} className={field.value === category ? "shadow-sm" : "bg-[var(--erp-color-surface)]"} onClick={() => handleCategoryChange(category, field.onChange)} disabled={pending} aria-pressed={field.value === category}>{category}</Button>)}</div>} />
+          <Controller control={control} name="category" render={({field}) => <ErpChoiceChips label="商品品类" value={field.value} options={productCategoryValues.map((category) => ({value: category, label: category}))} disabled={pending} onValueChange={(category) => handleCategoryChange(category, field.onChange)} />} />
         </section>
 
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">

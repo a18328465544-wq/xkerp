@@ -75,10 +75,10 @@ test("both return entry pages render a retryable error before the no-data loadin
     assert.match(source, /<fieldset disabled=\{pending\} className="flex min-w-0 flex-col gap-5">/);
   }
 });
-test("purchase batch spans respect the two-column tablet parent and compact scope controls", () => {
+test("purchase batch spans respect the two-column tablet parent and use the shared scope segmented control", () => {
   const source = readFileSync(new URL("./pages/NewPurchaseReturnPage.tsx", import.meta.url), "utf8");
   assert.equal((source.match(/md:col-span-full xl:col-span-3/g) || []).length, 2);
   assert.doesNotMatch(source, /(?<!xl:)md:col-span-3/);
-  assert.match(source, /data-erp-region="return-scope" className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap"/);
+  assert.match(source, /data-erp-region="return-scope"><ErpSegmentedControl label="退货范围"/);
   assert.match(source, /退货商品：/);
 });

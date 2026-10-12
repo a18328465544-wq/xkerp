@@ -99,7 +99,7 @@ function PurchaseReturnContent({session, filters, commitFilters, detailId, commi
   const exportCurrentPage = () => {const rows = [["退货单号", "状态", "关联采购单", "供应商 / 来源", "商品", "SN / 库存卡片", "退货金额", "结算方式", "冲减应付", "供应商抵扣", "释放现金", "库存处理", "经办人", "退货日期", "原因", "备注"], ...items.map((item) => [item.returnNo, item.status, item.relatedDocNo, item.partyName, returnDisplayLabel(item), item.returnItems?.map((line) => `${line.sourceInventoryId}${line.sn ? ` · ${line.sn}` : ""}`).join("；") || item.sn, item.amount, item.settlementMode, item.creditAmount, item.vendorCreditAmount, item.cashReleasedAmount, item.inventoryAction, item.handler, item.date, item.reason, item.remarks])]; const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\n")}`; const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"})); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `采购退货-第${filters.page}页.csv`; anchor.click(); URL.revokeObjectURL(url);};
 
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "status", label: "处理状态", width: "w-40", value: filters.status, defaultValue: "", options: statusOptions, onChange: (status) => update({status: status as PurchaseReturnListFilters["status"]})},
+    {kind: "select", phoneControl: "chips" as const, key: "status", label: "处理状态", width: "w-40", value: filters.status, defaultValue: "", options: statusOptions, onChange: (status) => update({status: status as PurchaseReturnListFilters["status"]})},
   ];
   const table = {
     columns,

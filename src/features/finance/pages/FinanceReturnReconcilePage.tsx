@@ -387,8 +387,8 @@ function FinanceReturnReconcileContent({
     </ErpPageToolbar>
   );
   const phoneFilters: ErpFilterField[] = [
-    {kind: "select", key: "type", label: "退货类型", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, {value: "销售退货", label: "销售退货"}, {value: "进货退货", label: "进货退货"}], onChange: (type) => update({type: type as typeof filters.type})},
-    {kind: "select", key: "status", label: "退货状态", value: filters.status || "", defaultValue: "", options: statuses, onChange: (status) => update({status: status as typeof filters.status})},
+    {kind: "select", phoneControl: "chips" as const, key: "type", label: "退货类型", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, {value: "销售退货", label: "销售退货"}, {value: "进货退货", label: "进货退货"}], onChange: (type) => update({type: type as typeof filters.type})},
+    {kind: "select", phoneControl: "chips" as const, key: "status", label: "退货状态", value: filters.status || "", defaultValue: "", options: statuses, onChange: (status) => update({status: status as typeof filters.status})},
   ];
   const phoneTable: ErpListTableProps<FinanceReturnReconcileItem> & {mobileRow: (item: FinanceReturnReconcileItem) => React.ReactNode} = {
           columns,

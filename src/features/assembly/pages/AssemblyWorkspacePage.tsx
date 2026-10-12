@@ -70,7 +70,7 @@ function AssemblyContent({session, filters, onFiltersChange, listQuery, referenc
     countLabel={(total) => `${total} 单记录`} loading={listQuery.isPending} loadError={Boolean(listQuery.error && !listQuery.data)}
     search={{value: filters.keyword, label: "搜索组装拆卸记录", placeholder: "搜索单号、SN、商品或配件", onChange: (keyword) => onFiltersChange({...filters, keyword, page: 1})}}
     filters={[
-      {kind: "select", key: "type", label: "操作类型", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, {value: "组装", label: "组装"}, {value: "拆卸", label: "拆卸"}], onChange: (type) => onFiltersChange({...filters, type: type as AssemblyOperationFilters["type"], page: 1})},
+      {kind: "select", phoneControl: "chips" as const, key: "type", label: "操作类型", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, {value: "组装", label: "组装"}, {value: "拆卸", label: "拆卸"}], onChange: (type) => onFiltersChange({...filters, type: type as AssemblyOperationFilters["type"], page: 1})},
       {kind: "text", key: "handler", label: "经办人", value: filters.handler, onChange: (handler) => onFiltersChange({...filters, handler, page: 1})},
     ]}
     onApplyPhoneFilters={(draft) => onFiltersChange({...filters, type: draft.type as AssemblyOperationFilters["type"], handler: String(draft.handler), page: 1})}

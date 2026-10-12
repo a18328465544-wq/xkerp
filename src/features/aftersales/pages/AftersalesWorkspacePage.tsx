@@ -47,8 +47,8 @@ function AftersalesContent({session, snapshot, pending, fetching, error, filters
 
   const setStatus = (status: AftersalesFilters["status"]) => onFiltersChange({...filters, status, page: 1});
   const filterFields: ErpFilterField[] = [
-    {kind: "select", key: "status", label: "售后状态", width: "w-36", value: filters.status, defaultValue: "all", options: [{value: "all", label: "全部状态"}, ...aftersalesStatuses.map((value) => ({value, label: value}))], onChange: (status) => setStatus(status as AftersalesFilters["status"])},
-    {kind: "select", key: "type", label: "售后类型", width: "w-36", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...aftersalesTypes.map((value) => ({value, label: value}))], onChange: (type) => onFiltersChange({...filters, type: type as AftersalesFilters["type"], page: 1})},
+    {kind: "select", phoneControl: "chips" as const, key: "status", label: "售后状态", width: "w-36", value: filters.status, defaultValue: "all", options: [{value: "all", label: "全部状态"}, ...aftersalesStatuses.map((value) => ({value, label: value}))], onChange: (status) => setStatus(status as AftersalesFilters["status"])},
+    {kind: "select", phoneControl: "chips" as const, key: "type", label: "售后类型", width: "w-36", value: filters.type, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...aftersalesTypes.map((value) => ({value, label: value}))], onChange: (type) => onFiltersChange({...filters, type: type as AftersalesFilters["type"], page: 1})},
   ];
 
   return <ErpListPage

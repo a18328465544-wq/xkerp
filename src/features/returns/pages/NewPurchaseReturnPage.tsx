@@ -6,7 +6,7 @@ import { RefreshCw} from "lucide-react";
 import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, CardContent, Input, Select, Textarea} from "@/src/components/ui";
-import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpMobileWorkflowTotal, ErpDatePicker, ErpFormSection, ErpMetricCard, ErpPageContent, ErpPageError, ErpTransactionHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
+import {ErpMobileWorkflow, ErpMobileWorkflowSection, ErpMobileWorkflowTotal, ErpDatePicker, ErpSegmentedControl, ErpFormSection, ErpMetricCard, ErpPageContent, ErpPageError, ErpTransactionHeader, ErpStatusBadge, ErpSubmitBar, ErpTransactionPageFrame, ErpUnsavedChangesDialog, MetricsRegion, useErpDirtyGuard} from "@/src/components/common";
 import {ApiError, queryKeys, refreshErpAfterDocument, returnsApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
 import type {AuthSession} from "@/src/services/api";
@@ -197,7 +197,7 @@ function PurchaseReturnForm({session, state, referenceUpdatedAt, refreshError, o
     <form noValidate onSubmit={submit.onSubmit} aria-busy={pending}>
       <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5">
       <ErpMobileWorkflowSection step={0}>
-      <ErpFormSection title="退货范围" description="单件适合逐项处理，多件可在同一采购单内勾选部分库存，整单则要求全部明细都能匹配可退库存。"><div data-erp-region="return-scope" className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap"><Button type="button" className="max-sm:px-2" aria-pressed={values.returnScope === "single"} variant={values.returnScope === "single" ? "primary" : "secondary"} onClick={() => setReturnScope("single")}>单件退货</Button><Button type="button" className="max-sm:px-2" aria-pressed={values.returnScope === "multiple"} variant={values.returnScope === "multiple" ? "primary" : "secondary"} onClick={() => setReturnScope("multiple")} disabled={!selectedInvoice}>多件退货</Button><Button type="button" className="max-sm:px-2" aria-pressed={values.returnScope === "document"} variant={values.returnScope === "document" ? "primary" : "secondary"} onClick={() => setReturnScope("document")} disabled={!selectedInvoice}>整单退货</Button></div></ErpFormSection>
+      <ErpFormSection title="退货范围" description="单件适合逐项处理，多件可在同一采购单内勾选部分库存，整单则要求全部明细都能匹配可退库存。"><div data-erp-region="return-scope"><ErpSegmentedControl label="退货范围" value={values.returnScope ?? "single"} options={[{value: "single", label: "单件退货"}, {value: "multiple", label: "多件退货", disabled: !selectedInvoice}, {value: "document", label: "整单退货", disabled: !selectedInvoice}]} onValueChange={setReturnScope} /></div></ErpFormSection>
       <ErpFormSection title="原采购单与库存" description={isDocumentReturn ? "整单模式要求每一条采购明细都能精确匹配仍可退回的库存卡片。" : isMultipleReturn ? "多件模式只能选择同一采购单下仍可退回的库存卡片，系统会按所选商品合计结算。" : "只允许选择仍可退回、且与采购单存在精确结构化关联的库存卡片。"}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-sm font-semibold">退货日期<ErpDatePicker disabled={pending} className="mt-2" value={values.date} onChange={(date) => setValues((current) => ({...current, date}))} aria-label="采购退货日期" /></label>

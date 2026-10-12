@@ -119,6 +119,9 @@
      and meets the touch/keyboard baseline without page-level height patches. */
   --erp-control-height-compact: 36px;
   --erp-control-height-filter: 36px;
+  /* Choice chips (bordered pills) and applied-filter tags (borderless pills). */
+  --erp-chip-height: 28px;
+  --erp-filter-tag-height: var(--erp-space-6);
   --erp-chart-grid: #edf0f7;
   --erp-chart-axis: var(--erp-color-text-secondary);
   /* Chart language is deliberately separate from action-button blue: a
@@ -172,6 +175,7 @@
      transparent overlay; buttons in fixed bottom action bars stay 44px. */
   --erp-mobile-button-height: calc(var(--erp-space-8) + var(--erp-space-1));
   --erp-mobile-dock-button-height: var(--erp-mobile-touch-size);
+  --erp-mobile-chip-height: var(--erp-space-8);
   --erp-mobile-option-height: var(--erp-mobile-primary-height);
   --erp-mobile-input-text: var(--erp-text-lg);
   --erp-mobile-choice-size: var(--erp-space-5);

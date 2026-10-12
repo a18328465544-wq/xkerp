@@ -191,6 +191,52 @@ for (const file of collectFeatureFiles(path.join(projectRoot, "src", "features")
 }
 
 
+// M29 / DESIGN.md: one-of-many choices use ErpChoiceChips or ErpSegmentedControl,
+// never a hand-written group of aria-pressed buttons (mapped, or 2+ siblings).
+const pressedGroupAllowlist = new Map([
+  ["src/components/common/ErpSegmentedControl.tsx", "分段控件本身"],
+  ["src/features/assembly/components/AssemblyOperationForm.tsx", "带说明的选择卡片（组装 / 拆卸）"],
+  ["src/features/settings/components/UserPermissionDialog.tsx", "菜单权限是多选开关，不是多选一"],
+  ["src/components/common/ErpProductLedgerMobile.tsx", "排序面板里的整行选项"],
+  ["src/features/inventory/pages/InventoryListPage.tsx", "分类横条：Codex 库存分支合并后迁移到 ErpChoiceChips"],
+  ["src/features/inspections/pages/InspectionWorkspacePage.tsx", "检测队列：Codex 质检分支合并后迁移到 ErpSegmentedControl"],
+]);
+
+function isPressedButton(node, sourceFile) {
+  const opening = ts.isJsxElement(node) ? node.openingElement : ts.isJsxSelfClosingElement(node) ? node : undefined;
+  return Boolean(opening && opening.tagName.getText(sourceFile) === "Button" && findAttribute(opening, "aria-pressed"));
+}
+
+function inspectPressedGroups(file) {
+  const sourceText = fs.readFileSync(file, "utf8");
+  if (!sourceText.includes("aria-pressed")) return;
+  const rel = path.relative(projectRoot, file).split(path.sep).join("/");
+  if (pressedGroupAllowlist.has(rel)) return;
+  const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const message = "手写的 aria-pressed 按钮组：多选一请用 ErpChoiceChips（固定短选项）或 ErpSegmentedControl（2–5 个模式），见 DESIGN.md。";
+  function visit(node) {
+    if (ts.isJsxElement(node)) {
+      const pressedSiblings = node.children.filter((child) => isPressedButton(child, sourceFile));
+      if (pressedSiblings.length >= 2) fail(file, sourceFile, pressedSiblings[0], message);
+    }
+    if (isPressedButton(node, sourceFile)) {
+      for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
+        if (ts.isCallExpression(parent) && ts.isPropertyAccessExpression(parent.expression) && parent.expression.name.text === "map") {
+          fail(file, sourceFile, node, message);
+          break;
+        }
+        if (ts.isJsxElement(parent) && parent.openingElement.tagName.getText(sourceFile) !== "Button") break;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
+for (const directory of [path.join(projectRoot, "src", "features"), path.join(projectRoot, "src", "components", "common")]) {
+  for (const file of collectFeatureFiles(directory).sort()) inspectPressedGroups(file);
+}
+
 function inspectFormalTree(directory) {
   if (!fs.existsSync(directory)) return;
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {

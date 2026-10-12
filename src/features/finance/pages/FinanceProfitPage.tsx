@@ -95,7 +95,7 @@ function FinanceProfitContent({session, filters, onFiltersChange, query}: {sessi
       loading: !ready && !query.isError, loadError: Boolean(query.error && !query.data),
       search: {value: filters.keyword, label: "搜索销售利润", placeholder: "商品、客户、单号或经办人", onChange: (keyword) => update({keyword})},
       filters: [
-        {kind: "select", key: "dimension", label: "分析维度", value: filters.dimension, defaultValue: defaultFinanceProfitFilters.dimension, options: dimensionOptions, onChange: (dimension) => update({dimension: dimension as FinanceProfitDimension})},
+        {kind: "select", phoneControl: "chips" as const, key: "dimension", label: "分析维度", value: filters.dimension, defaultValue: defaultFinanceProfitFilters.dimension, options: dimensionOptions, onChange: (dimension) => update({dimension: dimension as FinanceProfitDimension})},
         {kind: "dateRange", key: "date", label: "利润日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, defaultValue: {startDate: defaultFinanceProfitFilters.dateStart, endDate: defaultFinanceProfitFilters.dateEnd}, onChange: ({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})},
       ],
       onApplyPhoneFilters: (draft) => {const dates = draft.date as {startDate: string; endDate: string}; update({dimension: draft.dimension as FinanceProfitDimension, dateStart: dates.startDate, dateEnd: dates.endDate});},

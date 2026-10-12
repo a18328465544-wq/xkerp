@@ -2,7 +2,7 @@ import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {OnChangeFn, VisibilityState} from "@tanstack/react-table";
 import {CircleDollarSign, Download, FileCheck2, RefreshCw, RotateCcw, SlidersHorizontal, WalletCards} from "lucide-react";
-import {ErpMobileRecordRow, ErpSearchInput} from "@/src/components/common";
+import {ErpFilterTags, ErpMobileRecordRow, ErpSearchInput, getActiveErpFilterTags, type ErpFilterField} from "@/src/components/common";
 import {ErpDocumentRecordRow, ErpStatusBadge, MetricsRegion} from "@/src/components/common";
 import type {DateRangeValue} from "@/src/lib/dateRangePickerUtils";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
@@ -80,6 +80,14 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
   };
 
 
+  const ledgerFilterFields: ErpFilterField[] = [
+    ...(accountOptionsAvailable ? [{kind: "select" as const, key: "accountId", label: "结算账户", value: filters.accountId, defaultValue: "all", options: [{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))], onChange: (accountId: string) => update({accountId})}] : []),
+    {kind: "select", phoneControl: "chips" as const, key: "businessType", label: "交易类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...financeLedgerBusinessTypes.map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
+    {kind: "select", phoneControl: "chips" as const, key: "direction", label: "交易方向", value: filters.direction, defaultValue: "all", options: [{value: "all", label: "全部方向"}, ...financeLedgerDirections.map((value) => ({value, label: value}))], onChange: (direction) => update({direction: direction as FinanceLedgerFilters["direction"]})},
+    {kind: "dateRange", key: "dateRange", label: "日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})},
+    ...(["handler", "relatedDocNo", "customerName", "supplierName"] as const).map((key) => ({kind: "text" as const, key, label: {handler: "经办人", relatedDocNo: "关联单号", customerName: "客户", supplierName: "供应商"}[key], value: filters[key], onChange: (value: string) => update({[key]: value})})),
+  ];
+
   const desktopFilters = (
     <ErpPageToolbar>
     <div className="space-y-2">
@@ -91,7 +99,7 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
         <ErpDateRangePicker value={{startDate: filters.dateStart, endDate: filters.dateEnd}} onChange={({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})} triggerClassName="sm:w-32" startPlaceholder="开始日期" endPlaceholder="结束日期" startAriaLabel="流水开始日期" endAriaLabel="流水结束日期" ariaLabel="流水日期范围" />
         {advancedOpen && <><Input className="w-32" value={filters.handler} onChange={(event) => update({handler: event.target.value})} placeholder="经办人" aria-label="筛选经办人" /><Input className="w-36" value={filters.relatedDocNo} onChange={(event) => update({relatedDocNo: event.target.value})} placeholder="关联单号" aria-label="筛选关联单号" /><Select className="w-32" value={filters.customerName} onValueChange={(customerName) => update({customerName})} options={customerOptions} aria-label="筛选客户" /></>}
       </ErpFilterBar>
-      {activeFilters > 0 && <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[var(--erp-color-text-secondary)]"><span>已应用 {activeFilters} 项筛选</span><Button type="button" size="xs" variant="ghost" className="h-auto px-0 font-semibold text-[var(--erp-color-primary)] hover:underline" onClick={() => onFiltersChange(defaultFinanceLedgerFilters)}>清空全部</Button></div>}
+      <ErpFilterTags tags={[...(filters.keyword ? [{key: "keyword", label: `搜索：${filters.keyword}`, onRemove: () => update({keyword: ""})}] : []), ...getActiveErpFilterTags(ledgerFilterFields)]} onClearAll={() => onFiltersChange(defaultFinanceLedgerFilters)} />
     </div>
     </ErpPageToolbar>
   );
@@ -102,13 +110,7 @@ function FinanceLedgerContent({session, filters, onFiltersChange, ledgerQuery, a
       title: "账户流水", tableTitle: "流水明细", countLabel: (total) => `${total} 笔流水`, loading: ledgerQuery.isPending, loadError: Boolean(ledgerQuery.error && !ledgerQuery.data), overlayOpen: Boolean(detail),
       search: {value: filters.keyword, onChange: (keyword) => update({keyword}), label: "搜索账户流水", placeholder: "搜索单号、备注或交易对象"},
       onRefresh: () => void ledgerQuery.refetch(), refreshing: ledgerQuery.isFetching, actions: [{label: "导出本页", onClick: exportCurrentPage, disabled: rows.length === 0}],
-      filters: [
-        ...(accountOptionsAvailable ? [{kind: "select" as const, key: "accountId", label: "结算账户", value: filters.accountId, defaultValue: "all", options: [{value: "all", label: "全部账户"}, ...accounts.map((account) => ({value: account.id, label: account.name}))], onChange: (accountId: string) => update({accountId})}] : []),
-        {kind: "select", key: "businessType", label: "交易类型", value: filters.businessType, defaultValue: "all", options: [{value: "all", label: "全部类型"}, ...financeLedgerBusinessTypes.map((value) => ({value, label: value}))], onChange: (businessType) => update({businessType})},
-        {kind: "select", key: "direction", label: "交易方向", value: filters.direction, defaultValue: "all", options: [{value: "all", label: "全部方向"}, ...financeLedgerDirections.map((value) => ({value, label: value}))], onChange: (direction) => update({direction: direction as FinanceLedgerFilters["direction"]})},
-        {kind: "dateRange", key: "dateRange", label: "日期范围", value: {startDate: filters.dateStart, endDate: filters.dateEnd}, onChange: ({startDate, endDate}) => update({dateStart: startDate, dateEnd: endDate})},
-        ...(["handler", "relatedDocNo", "customerName", "supplierName"] as const).map((key) => ({kind: "text" as const, key, label: {handler: "经办人", relatedDocNo: "关联单号", customerName: "客户", supplierName: "供应商"}[key], value: filters[key], onChange: (value: string) => update({[key]: value})})),
-      ],
+      filters: ledgerFilterFields,
       onApplyPhoneFilters: (draft) => {const dates = draft.dateRange as DateRangeValue; onFiltersChange({...filters, accountId: accountOptionsAvailable ? String(draft.accountId) : filters.accountId, businessType: String(draft.businessType), direction: draft.direction as FinanceLedgerFilters["direction"], handler: String(draft.handler), relatedDocNo: String(draft.relatedDocNo), customerName: String(draft.customerName), supplierName: String(draft.supplierName), dateStart: dates.startDate, dateEnd: dates.endDate, page: 1});},
       table: {columns, data: rows, getRowId: (row) => row.id, loading: ledgerQuery.isPending, fetching: ledgerQuery.isFetching, error: ledgerQuery.error, onRetry: () => void ledgerQuery.refetch(), onRowClick: setDetail,
         manualSorting: true, mobileSorting: false, page: ledgerQuery.data?.page ?? filters.page, pageSize: ledgerQuery.data?.pageSize ?? filters.pageSize, total: ledgerQuery.data?.total ?? 0, onPageChange: (page) => update({page}), onPageSizeChange: (pageSize) => update({page: 1, pageSize}),

@@ -1788,17 +1788,6 @@ input[inputmode="numeric"] {
     min-width: 140px;
     scroll-snap-align: start;
   }
-  .erp-phone-chip {
-    scroll-snap-align: start;
-    border-radius: var(--erp-radius-pill) !important;
-    min-height: var(--erp-control-height-compact);
-    padding-inline: var(--erp-space-3);
-    font-size: var(--erp-text-xs);
-    white-space: nowrap;
-    border: 1px solid var(--erp-color-border);
-    background: var(--erp-color-surface);
-    color: var(--erp-color-text-secondary);
-  }
   .erp-phone-pull-refresh {
     display: flex;
     align-items: center;
@@ -2018,9 +2007,7 @@ input[inputmode="numeric"] {
   .erp-list-page[data-phone-layout="thumb"] [data-erp-component="data-table"] { border: 0; border-radius: 0; box-shadow: none; }
   :is(.erp-customer-list-toolbar, .erp-list-toolbar) { display: flex; align-items: center; gap: var(--erp-space-2); padding: 0 var(--erp-space-4) var(--erp-space-3); background: var(--erp-color-canvas); }
   .erp-customer-list-toolbar.erp-inventory-phone-toolbar { padding-top: var(--erp-space-1); }
-  /* Room for the 44px hit area of 36px buttons inside a scrolling row. */
-  .erp-list-quick-filters { display: flex; min-width: 0; gap: var(--erp-space-1); padding-block: var(--erp-space-1); }
-  .erp-list-quick-filters > button { padding-inline: var(--erp-space-3); white-space: nowrap; }
+  .erp-list-quick-filters { flex: 1; }
   :is(.erp-customer-sort, .erp-list-sort) { margin-left: auto; min-width: 0; max-width: 42%; padding-inline: var(--erp-space-2); color: var(--erp-color-text-secondary); }
   :is(.erp-customer-sort, .erp-list-sort) > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
   :is(.erp-customer-sort, .erp-list-sort) > svg { flex-shrink: 0; }
@@ -2305,8 +2292,6 @@ input[inputmode="numeric"] {
   .erp-phone-record[data-record-layout="document"] .erp-phone-record-end > .erp-data-number { font-size: var(--erp-text-base); white-space: nowrap; }
   .erp-phone-record[data-record-layout="document"] .erp-phone-record-amount-label { display: none; }
   .erp-phone-record[data-record-layout="document"] .erp-phone-record-end > svg { flex-shrink: 0; }
-  .erp-document-list .erp-list-quick-filters { min-width: 0; overflow-x: auto; flex-wrap: nowrap; }
-  .erp-document-list .erp-list-quick-filters > button { flex-shrink: 0; }
   .erp-document-list .erp-phone-pagination > button { border: 0; box-shadow: none; background: var(--erp-color-surface-muted); }
   .erp-document-workflow { margin-inline: var(--erp-mobile-content-inset); border-bottom: 1px solid var(--erp-color-border-soft); }
   .erp-document-workflow > summary { min-height: var(--erp-mobile-touch-size); padding-block: var(--erp-space-3); font-size: var(--erp-text-base); font-weight: var(--erp-font-medium); color: var(--erp-color-primary); cursor: pointer; }
@@ -2315,6 +2300,48 @@ input[inputmode="numeric"] {
   .erp-document-actions > button { min-height: var(--erp-mobile-dock-button-height); }
   /* 更多 and the primary (a button or a detail link) split the bar evenly. */
   .erp-document-actions > :is(button, a) { flex: 1; min-width: 0; padding-inline: var(--erp-space-3); }
+}
+
+/* Choice chips, filter tags and picker rows (DESIGN.md). Pills mark choices,
+   rectangles mark actions: a chip is bordered and adds a check mark when
+   selected; an applied-filter tag is borderless with ×; status badges stay
+   read-only. */
+.erp-choice-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--erp-space-2); min-width: 0; }
+/* The 4px block padding leaves room for the 44px phone hit area inside the scroller. */
+.erp-choice-chips[data-layout="scroll"] { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-block: var(--erp-space-1); }
+/* A soft trailing edge tells people the row scrolls instead of ending mid-chip. */
+.erp-choice-chips[data-layout="scroll"] { padding-inline-end: var(--erp-space-6); mask-image: linear-gradient(to right, var(--erp-color-text) calc(100% - var(--erp-space-6)), transparent); }
+.erp-choice-chips[data-layout="scroll"]::-webkit-scrollbar { display: none; }
+.erp-choice-chip[data-erp-control="button"] { flex-shrink: 0; height: var(--erp-chip-height); min-height: var(--erp-chip-height); gap: var(--erp-space-1); padding-inline: var(--erp-space-3); border: 1px solid var(--erp-color-border); border-radius: var(--erp-radius-pill); background: var(--erp-color-surface); box-shadow: none; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); font-weight: var(--erp-font-regular); white-space: nowrap; }
+.erp-choice-chip[data-erp-control="button"]:hover { border-color: var(--erp-color-border-strong); background: var(--erp-color-surface); color: var(--erp-color-text); }
+.erp-choice-chip[data-erp-control="button"][aria-checked="true"] { border-color: var(--erp-color-primary); background: var(--erp-color-info-soft); color: var(--erp-color-primary); font-weight: var(--erp-font-medium); }
+.erp-choice-chip-check { width: 1em; height: 1em; flex-shrink: 0; }
+.erp-choice-chip-count { font-variant-numeric: tabular-nums; color: var(--erp-color-text-muted); }
+.erp-choice-chip[aria-checked="true"] .erp-choice-chip-count { color: inherit; }
+.erp-filter-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--erp-space-2); min-width: 0; }
+.erp-filter-tag { display: inline-flex; align-items: center; gap: 2px; height: var(--erp-filter-tag-height); padding-inline: var(--erp-space-2); border-radius: var(--erp-radius-pill); background: var(--erp-color-info-soft); color: var(--erp-color-primary); font-size: var(--erp-text-xs); line-height: 1; white-space: nowrap; }
+.erp-filter-tag[data-removable="true"] { padding-right: 2px; }
+.erp-filter-tag-remove[data-erp-control="button"] { width: calc(var(--erp-filter-tag-height) - 4px); height: calc(var(--erp-filter-tag-height) - 4px); min-height: 0; padding: 0; border-radius: var(--erp-radius-pill); color: inherit; }
+.erp-filter-tag-remove[data-erp-control="button"]:hover { background: var(--erp-color-surface); color: var(--erp-color-primary); }
+.erp-filter-tag-remove > svg { width: var(--erp-space-3); height: var(--erp-space-3); }
+.erp-filter-tag-more[data-erp-control="button"], .erp-filter-tags-clear[data-erp-control="button"] { height: var(--erp-filter-tag-height); min-height: 0; padding-inline: var(--erp-space-2); border-radius: var(--erp-radius-pill); color: var(--erp-color-primary); font-size: var(--erp-text-xs); font-weight: var(--erp-font-regular); }
+.erp-filter-tag-more[data-erp-control="button"] { background: var(--erp-color-info-soft); }
+.erp-filter-tags-clear[data-erp-control="button"] { padding-inline: var(--erp-space-1); }
+
+@media (max-width: 767px) {
+  .erp-choice-chips[data-layout="scroll"] { padding-block: calc((var(--erp-mobile-touch-size) - var(--erp-mobile-chip-height)) / 2); }
+  .erp-choice-chip[data-erp-control="button"] { height: var(--erp-mobile-chip-height); min-height: var(--erp-mobile-chip-height); font-size: var(--erp-text-base); line-height: var(--erp-line-base); white-space: nowrap; overflow-wrap: normal; }
+  /* Picker row 「标签 … 值 ›」: the select trigger fills the row, the label sits over its left edge. */
+  .erp-filter-picker-row { position: relative; min-width: 0; }
+  .erp-filter-picker-row + .erp-filter-picker-row { margin-top: calc(var(--erp-space-4) * -1); }
+  .erp-filter-picker-label { position: absolute; left: 0; top: 50%; z-index: 1; max-width: 38%; transform: translateY(-50%); pointer-events: none; color: var(--erp-color-text-secondary); font-size: var(--erp-text-base); line-height: var(--erp-line-base); }
+  .erp-filter-picker-row[data-active] .erp-filter-picker-label { color: var(--erp-color-text); font-weight: var(--erp-font-medium); }
+  .erp-filter-picker-row > [data-erp-component="select"].erp-filter-picker-select { width: 100%; min-height: var(--erp-space-12); padding: var(--erp-space-3) 0 var(--erp-space-3) 40%; justify-content: flex-end; gap: var(--erp-space-2); border: 0; border-bottom: 1px solid var(--erp-color-border-soft); border-radius: 0; background: transparent; box-shadow: none; color: var(--erp-color-text-secondary); font-size: var(--erp-text-base); text-align: right; }
+  .erp-filter-picker-row[data-active] > [data-erp-component="select"].erp-filter-picker-select { color: var(--erp-color-text); }
+  .erp-filter-picker-row > [data-erp-component="select"].erp-filter-picker-select svg { transform: rotate(-90deg); }
+  .erp-filter-picker-row > [data-variant="search"].erp-filter-picker-select { padding: 0; }
+  .erp-filter-picker-row > [data-variant="search"].erp-filter-picker-select > button:first-child { flex: 1; min-height: var(--erp-space-12); padding-left: 40%; justify-content: flex-end; color: inherit; font-weight: var(--erp-font-regular); }
+  .erp-filter-picker-row > [data-variant="search"].erp-filter-picker-select > button:first-child > svg:first-child { display: none; }
 }
 
 /* Phone hit area: a button may look smaller than 44px; this transparent
