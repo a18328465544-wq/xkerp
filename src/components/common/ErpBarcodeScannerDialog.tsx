@@ -11,6 +11,7 @@ import {createBarcodeDecoder, type BarcodeDecoder, type NativeBarcodeDetector} f
 import {createBarcodeFrameReader, readBarcodeImage} from "./barcodeScannerFrames";
 import {barcodeRearCameras, cameraSettings, createBarcodeCameraZoom, enableBarcodeAutofocus, openBarcodeCamera, rememberBarcodeRearCamera} from "./barcodeCamera";
 import {ErpSegmentedControl} from "./ErpSegmentedControl";
+import {waitForBarcodeCameraPreview} from "./barcodeCameraPreview";
 
 export const DEFAULT_BARCODE_FORMATS = ["qr_code", "code_128", "code_39", "code_93", "ean_13", "ean_8", "data_matrix"] as const;
 
@@ -40,6 +41,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
   const deliverCodeRef = useRef<((code: string) => void) | undefined>(undefined);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
+  const [decoderPreparing, setDecoderPreparing] = useState(false);
   const [photoPending, setPhotoPending] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -61,7 +63,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
   scannerConfigRef.current = {formats, unsupportedMessage};
 
   useEffect(() => {
-    if (!cameraEnabled) return;
+    if (!cameraEnabled) {setCameraReady(false); return;}
     let active = true;
     const controller = new AbortController();
     let stream: MediaStream | undefined;
@@ -93,6 +95,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
     };
     deliverCodeRef.current = deliverCode;
     setStarting(true);
+    setDecoderPreparing(false);
     setError("");
     setPhotoError("");
     setPhotoPending(false);
@@ -126,7 +129,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
       native: Detector,
       signal: controller.signal,
       unsupportedMessage: scannerConfigRef.current.unsupportedMessage,
-      onPreparing: (preparing) => {if (isActive()) setStarting(preparing);},
+      onPreparing: (preparing) => {if (isActive()) setDecoderPreparing(preparing);},
     });
     const scanPhoto = async (file: File) => {
       if (!isActive() || photoInFlight) return;
@@ -160,17 +163,23 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
         stream = acquiredStream;
         const video = videoRef.current;
         sessionVideo = video;
-        video.srcObject = stream;
-        await video.play();
-        if (!isActive() || videoRef.current !== video) return;
         const track = stream.getVideoTracks()[0];
+        // Start optional autofocus while the preparation cover is still up,
+        // not after exposing the initial camera frame. It must not block play.
+        if (track) void enableBarcodeAutofocus(track);
+        video.srcObject = stream;
+        // Install before play so a fast first frame cannot race the readiness
+        // listener. The preparation cover stays opaque until geometry settles.
+        const previewController = new AbortController();
+        const cancelPreview = () => previewController.abort();
+        controller.signal.addEventListener("abort", cancelPreview, {once: true});
+        try {await Promise.all([waitForBarcodeCameraPreview(video, previewController.signal), video.play()]);}
+        finally {controller.signal.removeEventListener("abort", cancelPreview); previewController.abort();}
+        if (!isActive() || videoRef.current !== video) return;
         if (track) {
           const actualId = cameraSettings(track).deviceId;
           setCurrentCamera(actualId);
           zoomController = createBarcodeCameraZoom(track, isActive);
-          // Best effort and asynchronous: an optional camera control must not
-          // block playback/decoding on a browser with incomplete support.
-          void enableBarcodeAutofocus(track);
           if (navigator.mediaDevices.enumerateDevices) void navigator.mediaDevices.enumerateDevices().then((devices) => {
             if (isActive()) setCameras(barcodeRearCameras(devices, actualId));
           }).catch(() => {});
@@ -201,7 +210,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
         animationFrame = requestAnimationFrame((time) => {void scan(time);});
       } catch (caught) {
         releaseCamera();
-        if (isActive()) setError(barcodeScannerErrorMessage(caught));
+        if (isActive()) {setError(barcodeScannerErrorMessage(caught)); setCameraReady(false);}
       } finally {
         if (isActive()) setStarting(false);
       }
@@ -213,6 +222,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
       cancelAnimationFrame(animationFrame);
       decoder?.dispose();
       releaseCamera();
+      setCameraReady(false);
       if (photoScanRef.current === scanPhoto) photoScanRef.current = undefined;
       if (deliverCodeRef.current === deliverCode) deliverCodeRef.current = undefined;
       if (zoomActionRef.current === zoomAction) zoomActionRef.current = undefined;
@@ -228,26 +238,27 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
     mobilePresentation="dialog"
     className="erp-barcode-scanner-dialog"
   >
-    <div data-erp-component="barcode-scanner-camera" className="erp-barcode-camera">
+    <div data-erp-component="barcode-scanner-camera" data-preview-ready={cameraEnabled && cameraReady && !error} className="erp-barcode-camera" aria-busy={!cameraReady || decoderPreparing}>
       <video ref={videoRef} muted playsInline className="erp-barcode-video" style={{transform: `scale(${softwareZoom})`}} aria-label="扫码相机预览" />
       {/* Aiming aid only. Default and periodic zoom fallback read full frames;
           explicit digital magnification also reads a matching central ROI. */}
       {!error && <div data-erp-region="barcode-guide" className="erp-barcode-guide" aria-hidden="true">
         <span /><span /><span /><span />
       </div>}
-      {starting && <div role="status" className="erp-barcode-camera-status"><RefreshCw className="h-4 w-4 animate-spin" />正在准备扫码</div>}
+      {(starting || !cameraReady) && !error && <div role="status" className="erp-barcode-camera-status"><RefreshCw className="h-4 w-4 animate-spin" />正在准备扫码</div>}
+      {cameraReady && decoderPreparing && <span role="status" className="sr-only">正在准备条码识别</span>}
       {error && !starting && <div aria-hidden="true" className="erp-barcode-camera-status"><Camera className="h-5 w-5" /><span>摄像头暂不可用</span></div>}
     </div>
     <p className="mt-2 text-center text-xs text-[var(--erp-color-text-secondary)]">模糊时请稍微拿远，再放大。将条形码横向放入框内，保留两侧白边</p>
-    {cameraReady && !error && <div className="mt-3" data-erp-region="barcode-camera-controls"><ErpSegmentedControl label="扫码放大倍数" value={String(magnification)} options={[{value: "1", label: "1×"}, {value: "1.5", label: "1.5×"}, {value: "2", label: "2×"}]} disabled={starting || photoPending || zoomPending} onValueChange={(value) => {void zoomActionRef.current?.(Number(value));}} /></div>}
+    <div className="mt-3" data-erp-region="barcode-camera-controls"><ErpSegmentedControl label="扫码放大倍数" value={String(magnification)} options={[{value: "1", label: "1×"}, {value: "1.5", label: "1.5×"}, {value: "2", label: "2×"}]} disabled={!cameraReady || Boolean(error) || starting || decoderPreparing || photoPending || zoomPending} onValueChange={(value) => {void zoomActionRef.current?.(Number(value));}} /></div>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/bmp" className="hidden" aria-label="选择条码图片" onChange={(event) => {const file = event.target.files?.[0]; event.target.value = ""; if (file) void photoScanRef.current?.(file);}} />
-    <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={photoPending || zoomPending} onClick={() => imageInputRef.current?.click()}><ImageUp className="h-4 w-4" />{photoPending ? "正在识别图片…" : "从图片识别"}</Button>{!error && cameras.length > 1 && <Button type="button" variant="secondary" disabled={starting || photoPending || zoomPending} onClick={() => {
+    <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={photoPending || zoomPending} onClick={() => imageInputRef.current?.click()}><ImageUp className="h-4 w-4" />{photoPending ? "正在识别图片…" : "从图片识别"}</Button>{error ? <Button type="button" variant="secondary" disabled={starting || photoPending} onClick={() => setAttempt((current) => current + 1)}><RefreshCw className="h-4 w-4" />重试扫码</Button> : <Button type="button" variant="secondary" data-erp-region="barcode-camera-switch" className={cameras.length > 1 ? undefined : "invisible"} aria-hidden={cameras.length < 2 ? true : undefined} tabIndex={cameras.length > 1 ? undefined : -1} disabled={!cameraReady || starting || photoPending || zoomPending || cameras.length < 2} onClick={() => {
       const next = cameras[(cameras.findIndex((camera) => camera.deviceId === currentCamera) + 1) % cameras.length];
       if (!next) return;
       rememberBarcodeRearCamera(next.deviceId);
       setCameraDeviceId(next.deviceId);
       setAttempt((value) => value + 1);
-    }}><SwitchCamera className="h-4 w-4" />切换镜头</Button>}{error && <Button type="button" variant="secondary" disabled={starting || photoPending} onClick={() => setAttempt((current) => current + 1)}><RefreshCw className="h-4 w-4" />重试扫码</Button>}</div>
+    }}><SwitchCamera className="h-4 w-4" />切换镜头</Button>}</div>
     {phone && <div className="mt-4 space-y-2"><label className="block text-xs font-medium" htmlFor={manualId}>手动输入 SN / 编号</label><div className="flex gap-2"><ErpSearchInput id={manualId} value={manualCode} onChange={(event) => setManualCode(event.target.value)} aria-label="扫码备用输入" placeholder="输入或粘贴序列号" className="min-w-0 flex-1" /><Button type="button" variant="primary" disabled={!manualCode.trim()} onClick={() => deliverCodeRef.current?.(manualCode.trim())}>使用</Button></div></div>}
     {photoError && <p role="alert" className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">{photoError}</p>}
     {error && <p role="alert" className="mt-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-3 text-xs text-[var(--erp-color-warning)]">{error}</p>}
