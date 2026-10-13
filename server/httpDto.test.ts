@@ -11,6 +11,9 @@ import {
   customerCategoryUpdateDto,
   marketQuoteCategoryCreateDto,
   marketQuoteCategoryUpdateDto,
+  marketQuoteCreateDto,
+  marketQuoteUpdateDto,
+  marketQuoteImportDto,
   customerCreateDto,
   crmCustomerUpdateDto,
   globalSearchQueryDto,
@@ -22,6 +25,42 @@ import {
   returnCreateDto,
   salesOutboundDto,
 } from "./httpDto.ts";
+
+test("quote DTOs accept explicit nullable bindings and reject incomplete/unknown metadata", () => {
+  const legacy = {model: "RTX 5090", brand: "NVIDIA", refBuyPrice: 0, refSellPrice: 100, trend: "stable", updateTime: "2026-10-13"};
+  const modern = {...legacy, quoteScope: "core", coreModel: "RTX 5090", refBuyPrice: null,
+    profile: {condition: "used", grade: "95新", warranty: "any", packaging: "any", vram: "32G", currency: "CNY"}, source: "门店报价", validUntil: "2026-10-20"};
+  assert.equal(parseHttpDto(marketQuoteCreateDto, modern).refBuyPrice, null);
+  const baseProfile = {condition: "any", grade: "any", warranty: "any", packaging: "any", vram: "", currency: "CNY"};
+  assert.deepEqual(parseHttpDto(marketQuoteCreateDto, {...modern, profile: undefined}).profile, baseProfile);
+  assert.deepEqual(parseHttpDto(marketQuoteCreateDto, {...modern, profile: {condition: "new", grade: "95新", warranty: "bad", vram: "24G", currency: "USD"}}).profile, baseProfile);
+  const product = {...modern, quoteScope: "product", productId: "REAL"};
+  assert.throws(() => parseHttpDto(marketQuoteCreateDto, product), ValidationError);
+  assert.equal(parseHttpDto(marketQuoteCreateDto, legacy).quoteScope, "core");
+  for (const source of [undefined, "", " "]) assert.equal(parseHttpDto(marketQuoteCreateDto, {...modern, source}).quoteScope, "core");
+  assert.equal(parseHttpDto(marketQuoteCreateDto, {...legacy, source: "门店"}).quoteScope, "core");
+  assert.equal(parseHttpDto(marketQuoteImportDto, {quotes: [modern, {...legacy, source: "门店"}]}).quotes.length, 2);
+  assert.throws(() => parseHttpDto(marketQuoteImportDto, {quotes: [modern, product]}), ValidationError);
+  assert.throws(() => parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: 1, todaySellPrice: 2, quoteScope: "product"}), ValidationError);
+  assert.equal(parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: null, todaySellPrice: 100}).todayBuyPrice, null);
+  assert.equal(parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: 1, todaySellPrice: 2, quoteScope: "core", coreModel: "RTX 5090", profile: modern.profile, source: "确认转换"}).quoteScope, "core");
+  for (const invalid of [
+    {...modern, refSellPrice: null}, {...modern, quoteScope: "legacy"}, {...modern, coreModel: ""}, {...modern, productId: "FAKE"},
+    {...modern, source: "x".repeat(301)}, {...modern, quoteScope: "product"},
+    {...modern, validUntil: "2026-02-30"}, {...product, profile: {...modern.profile, currency: "USD"}},
+    {...product, profile: {...modern.profile, warranty: "unknown"}}, {...modern, unknown: "field"},
+    {...product, profile: {...modern.profile, grade: "未知成色"}}, {...product, profile: {...modern.profile, condition: "new"}},
+    {...product, profile: {...modern.profile, grade: "全新"}}, {...product, profile: undefined}, {...product, profile: baseProfile},
+    {...legacy, refBuyPrice: null, refSellPrice: null}, {...modern, refBuyPrice: -1}, {...modern, refSellPrice: "100"},
+  ]) assert.throws(() => parseHttpDto(marketQuoteCreateDto, invalid), ValidationError);
+  assert.throws(() => parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: null, todaySellPrice: null}), ValidationError);
+  assert.throws(() => parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: 1, todaySellPrice: 2, history: []}), ValidationError);
+  const clearing = parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: 1, todaySellPrice: 2, validUntil: ""});
+  assert.equal(Object.hasOwn(clearing, "validUntil"), true);
+  assert.equal(clearing.validUntil, undefined);
+  const omitted = parseHttpDto(marketQuoteUpdateDto, {todayBuyPrice: 1, todaySellPrice: 2});
+  assert.equal(Object.hasOwn(omitted, "validUntil"), false);
+});
 
 test("outbound DTO separates scanner requirements from authorized manual confirmation", () => {
   const base = {handler: "仓库员", manual: false, codes: [" SN-1 "], remarks: ""};

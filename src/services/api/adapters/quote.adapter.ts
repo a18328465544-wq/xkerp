@@ -1,7 +1,9 @@
 import type {PermissionModel} from "../endpoints/auth";
 import type {MarketQuoteCategoryDto, MarketQuoteCreateRequestDto, MarketQuoteSnapshotResponseDto, MarketQuoteUpdateRequestDto} from "../dto/quote.dto";
-import type {MarketQuoteCategory, MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend} from "@/src/types/quote";
+import type {MarketQuoteCategory, MarketQuoteFormValues, MarketQuoteImportResult, MarketQuoteItem, MarketQuoteSnapshot, QuoteHistoryPoint, QuoteTrend, QuoteProductOption, QuoteProfile} from "@/src/types/quote";
 import {inventoryQuoteStatusValues} from "@/src/types/inventory";
+import {coreQuoteProfile, gpuCoreIdentity, isCoreBaseQuote, normalizeQuoteVram, productCoreIdentity, quoteIsExpired} from "@/src/utils/quoteReference";
+import {storeDate} from "@/src/utils/storeTime";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -30,32 +32,37 @@ function history(value: unknown, permissions: Pick<PermissionModel, "showCost" |
       date: text(point.date),
       buyPrice: permissions.showCost ? optionalNumber(point.buyPrice) : undefined,
       sellPrice: permissions.showProfit ? optionalNumber(point.sellPrice) : undefined,
+      quoteKey: text(point.quoteKey) || undefined,
     };
   }).filter((point) => Boolean(point.date));
 }
 
 type InventoryAggregate = {count: number; totalCost: number; maximumCost: number};
 
-function inventoryIndex(value: unknown, showCost: boolean) {
-  const byProduct = new Map<string, InventoryAggregate>();
-  const active = new Set<string>(inventoryQuoteStatusValues);
-  if (!Array.isArray(value)) return byProduct;
-  value.forEach((raw) => {
-    const item = record(raw);
-    const productId = text(item.productId).trim();
-    if (!productId || !active.has(text(item.status))) return;
-    const current = byProduct.get(productId) || {count: 0, totalCost: 0, maximumCost: 0};
-    const cost = showCost ? optionalNumber(item.costPrice) || 0 : 0;
-    byProduct.set(productId, {count: current.count + 1, totalCost: current.totalCost + cost, maximumCost: Math.max(current.maximumCost, cost)});
-  });
-  return byProduct;
+function profile(value: unknown): QuoteProfile | undefined {
+  const dto = record(value);
+  if (dto.condition === "any" && dto.grade === "any" && dto.warranty === "any" && dto.packaging === "any" && dto.vram === "" && dto.currency === "CNY") return coreQuoteProfile();
+  if ((dto.condition !== "new" && dto.condition !== "used") || !text(dto.grade).trim()
+    || !["any", "in", "out"].includes(text(dto.warranty)) || !["any", "boxed", "unboxed"].includes(text(dto.packaging))
+    || !text(dto.vram).trim() || dto.currency !== "CNY") return undefined;
+  return {condition: dto.condition, grade: text(dto.grade).trim(), warranty: dto.warranty as QuoteProfile["warranty"], packaging: dto.packaging as QuoteProfile["packaging"], vram: normalizeQuoteVram(text(dto.vram)), currency: "CNY"};
+}
+
+function stockMatches(quote: MarketQuoteItem, item: Record<string, unknown>, products: QuoteProductOption[]) {
+  const productId = text(item.productId);
+  if (!isCoreBaseQuote(quote) || !quote.coreId) return false;
+  const product = products.find((candidate) => candidate.id === productId);
+  const coreId = text(item.coreId) || (product && productCoreIdentity(product)?.coreId);
+  return coreId === quote.coreId;
 }
 
 export function adaptMarketQuote(value: unknown, permissions: Pick<PermissionModel, "showCost" | "showProfit">, stock?: InventoryAggregate): MarketQuoteItem {
   const dto = record(value);
   const changeAmount = optionalNumber(dto.changeAmount);
-  const buyPrice = optionalNumber(dto.refBuyPrice) ?? optionalNumber(dto.todayBuyPrice) ?? optionalNumber(dto.yestBuyPrice);
-  const sellPrice = optionalNumber(dto.refSellPrice) ?? optionalNumber(dto.todaySellPrice) ?? optionalNumber(dto.maxPrice);
+  const quoteScope = dto.quoteScope === "core" || dto.quoteScope === "product" ? dto.quoteScope : undefined;
+  // Modern null prices are missing, never the numeric legacy compatibility fields.
+  const buyPrice = quoteScope ? optionalNumber(dto.refBuyPrice) : optionalNumber(dto.refBuyPrice) ?? optionalNumber(dto.todayBuyPrice) ?? optionalNumber(dto.yestBuyPrice);
+  const sellPrice = quoteScope ? optionalNumber(dto.refSellPrice) : optionalNumber(dto.refSellPrice) ?? optionalNumber(dto.todaySellPrice) ?? optionalNumber(dto.maxPrice);
   return {
     id: text(dto.id),
     productId: text(dto.productId) || undefined,
@@ -64,11 +71,19 @@ export function adaptMarketQuote(value: unknown, permissions: Pick<PermissionMod
     brand: text(dto.brand, "未标注"),
     categoryId: text(dto.categoryId) || undefined,
     version: text(dto.version) || undefined,
+    quoteScope,
+    coreId: text(dto.coreId) || undefined,
+    coreModel: text(dto.coreModel) || undefined,
+    profile: profile(dto.profile),
+    source: text(dto.source) || undefined,
+    validUntil: text(dto.validUntil) || undefined,
+    expired: quoteIsExpired({validUntil: text(dto.validUntil) || undefined}, storeDate()),
+    maintainedBy: text(dto.maintainedBy) || undefined,
     buyPrice: permissions.showCost ? buyPrice : undefined,
     sellPrice: permissions.showProfit ? sellPrice : undefined,
-    previousBuyPrice: permissions.showCost ? optionalNumber(dto.yestBuyPrice) : undefined,
-    changeAmount: permissions.showCost ? changeAmount : undefined,
-    changeRatio: permissions.showCost ? optionalNumber(dto.changeRatio) : undefined,
+    previousBuyPrice: permissions.showCost && !quoteScope ? optionalNumber(dto.yestBuyPrice) : undefined,
+    changeAmount: permissions.showCost && (!quoteScope || buyPrice !== undefined) ? changeAmount : undefined,
+    changeRatio: permissions.showCost && (!quoteScope || buyPrice !== undefined) ? optionalNumber(dto.changeRatio) : undefined,
     trend: trend(dto.trend, changeAmount),
     note: text(dto.fluctuation, text(dto.remarks)) || undefined,
     updateTime: text(dto.updateTime, text(dto.date)) || undefined,
@@ -81,13 +96,36 @@ export function adaptMarketQuote(value: unknown, permissions: Pick<PermissionMod
 
 export function adaptMarketQuoteSnapshot(response: MarketQuoteSnapshotResponseDto, permissions: Pick<PermissionModel, "showCost" | "showProfit">): MarketQuoteSnapshot {
   const payload = record(response.data);
-  const stocks = inventoryIndex(payload.inventory, permissions.showCost);
+  const products: QuoteProductOption[] = (Array.isArray(payload.products) ? payload.products : []).flatMap((raw) => {
+    const product = record(raw);
+    if (!text(product.id) || !text(product.name)) return [];
+    return [{id: text(product.id), name: text(product.name), category: text(product.category), brand: text(product.brand), model: text(product.model), version: text(product.version) || undefined, vram: text(product.vram) || undefined, coreId: text(product.coreId) || undefined, coreModel: text(product.coreModel) || undefined}];
+  });
+  const active = new Set<string>(inventoryQuoteStatusValues);
+  const seenInventory = new Set<string>();
+  const inventory = (Array.isArray(payload.inventory) ? payload.inventory : []).map(record).filter((item) => {
+    if (!active.has(text(item.status))) return false;
+    const id = text(item.id);
+    if (id && seenInventory.has(id)) return false;
+    if (id) seenInventory.add(id);
+    return true;
+  });
+  const linkedInventory = new Set<Record<string, unknown>>();
   const rawQuotes = Array.isArray(payload.marketQuotes) ? payload.marketQuotes : [];
   const quotes = rawQuotes.map((value) => {
-    const dto = record(value);
-    return adaptMarketQuote(value, permissions, stocks.get(text(dto.productId)));
+    const quote = adaptMarketQuote(value, permissions);
+    const stock: InventoryAggregate = {count: 0, totalCost: 0, maximumCost: 0};
+    inventory.filter((item) => stockMatches(quote, item, products)).forEach((item) => {
+      if (!quote.expired) linkedInventory.add(item);
+      stock.count += 1;
+      const cost = permissions.showCost ? optionalNumber(item.costPrice) || 0 : 0;
+      stock.totalCost += cost;
+      stock.maximumCost = Math.max(stock.maximumCost, cost);
+    });
+    return adaptMarketQuote(value, permissions, stock);
   }).filter((item) => Boolean(item.id));
-  return {quotes, brands: Array.from(new Set(quotes.map((item) => item.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))};
+  const stockCount = optionalNumber(payload.stockCount) ?? linkedInventory.size;
+  return {quotes, products, stockCount, brands: Array.from(new Set(quotes.map((item) => item.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))};
 }
 
 export function adaptMarketQuoteCategories(value: unknown): MarketQuoteCategory[] {
@@ -101,11 +139,20 @@ export function adaptMarketQuoteCategories(value: unknown): MarketQuoteCategory[
 }
 
 export function toMarketQuoteCreateRequest(values: MarketQuoteFormValues, date: string): MarketQuoteCreateRequestDto {
-  return {model: values.model.trim(), brand: values.brand.trim(), ...(values.categoryId.trim() ? {categoryId: values.categoryId.trim()} : {}), refBuyPrice: values.buyPrice, refSellPrice: values.sellPrice, trend: values.trend, ...(values.note.trim() ? {fluctuation: values.note.trim()} : {}), updateTime: date};
+  const binding = bindingRequest(values);
+  return {model: binding.coreModel, brand: gpuCoreIdentity(binding.coreModel)!.vendor, ...binding, ...(values.categoryId.trim() ? {categoryId: values.categoryId.trim()} : {}), refBuyPrice: values.buyPrice, refSellPrice: values.sellPrice, trend: values.trend, ...(values.note.trim() ? {fluctuation: values.note.trim()} : {}), updateTime: date};
 }
 
 export function toMarketQuoteUpdateRequest(values: MarketQuoteFormValues): MarketQuoteUpdateRequestDto {
-  return {todayBuyPrice: values.buyPrice, todaySellPrice: values.sellPrice, categoryId: values.categoryId.trim() || null, ...(values.note.trim() ? {remarks: values.note.trim()} : {})};
+  return {todayBuyPrice: values.buyPrice, todaySellPrice: values.sellPrice, ...bindingRequest(values), validUntil: values.validUntil || "", categoryId: values.categoryId.trim() || null, remarks: values.note.trim()};
+}
+
+function bindingRequest(values: MarketQuoteFormValues) {
+  if (values.quoteScope !== "core") throw new Error("仅支持核心基础价；旧报价请明确转换");
+  const core = gpuCoreIdentity(values.coreModel || values.model);
+  if (!core || values.coreId && values.coreId !== core.coreId) throw new Error("请输入带 RTX 等前缀的完整核心型号");
+  return {quoteScope: "core" as const, coreId: core.coreId, coreModel: core.coreModel, productId: "" as const,
+    profile: coreQuoteProfile(), ...(values.source?.trim() ? {source: values.source.trim()} : {}), ...(values.validUntil ? {validUntil: values.validUntil} : {})};
 }
 
 export function adaptMarketQuoteMutation(response: MarketQuoteSnapshotResponseDto, permissions: Pick<PermissionModel, "showCost" | "showProfit">) {

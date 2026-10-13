@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {collectJsxElements} from "./architecture-utils.mjs";
+import {hasExplicitAny} from "./explicit-any.mjs";
 
 const root = process.cwd();
 const sourceRoots = [
@@ -138,7 +139,7 @@ for (const file of productionFiles) {
   const layer = layerOf(file);
   const specs = importSpecifiers(source);
 
-  if (/\bany\b/.test(source)) fail(file, "新增业务代码不得使用 any，请定义明确的 DTO 或 Domain 类型");
+  if (hasExplicitAny(source, file)) fail(file, "新增业务代码不得使用 any，请定义明确的 DTO 或 Domain 类型");
   if (/\bfetch\s*\(/.test(source) && layer.name === "feature") fail(file, "Feature 页面不得直接调用 fetch，请使用 services/api Endpoint");
   if (/["'`]\/api\//.test(source) && layer.name === "feature") fail(file, "Feature 页面不得拼接 API 地址，请使用 services/api Endpoint");
   if (layer.name === "feature") {

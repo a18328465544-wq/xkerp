@@ -4,6 +4,7 @@ import { getAiInsightsCache, saveAiInsightsCache } from "./db.ts";
 import { getCurrentTenantContext } from "./requestTenantContext.ts";
 import { storeDate, storeDateAfterDays, storeDateDiffDays } from "../src/utils/storeTime.ts";
 import {inventoryInactiveStatuses} from "../src/utils/inventoryFilters.ts";
+import {quoteReferenceSummary} from "../src/utils/quoteReference.ts";
 
 export type AiInsightSeverity = "high" | "medium" | "low";
 export type AiInsightActionTab = "inventory" | "finance_reports" | "purchase_add" | "quotes" | "sales_list";
@@ -127,11 +128,11 @@ export function buildAiBusinessSnapshot(state: AppState, businessDate = storeDat
       payable: state.purchaseInvoices.reduce((sum, invoice) => sum + Math.max(0, money(invoice.unpaidAmount)), 0),
     },
     market: [...state.marketQuotes]
-      .map(quote => ({
-        productName: truncate(quote.model || quote.productName, 72) || "未命名型号",
-        todaySellPrice: money(quote.todaySellPrice),
-        changeRatio: money(quote.changeRatio),
-      }))
+      .flatMap(quote => {
+        const summary = quoteReferenceSummary(quote, businessDate);
+        return summary && summary.sellPrice !== null && summary.changeRatio !== null
+          ? [{productName: truncate(summary.title, 160), todaySellPrice: summary.sellPrice, changeRatio: summary.changeRatio}] : [];
+      })
       .sort((left, right) => Math.abs(right.changeRatio) - Math.abs(left.changeRatio))
       .slice(0, 8),
   };
@@ -178,11 +179,11 @@ export function buildRuleAiInsights(snapshot: AiBusinessSnapshot): AiInsight[] {
       id: `market-${risingQuote.productName}`,
       label: "采购建议",
       title: `${risingQuote.productName} 行情近期上涨`,
-      detail: `当前参考售价 ${formatMoney(risingQuote.todaySellPrice)}，涨幅 ${risingQuote.changeRatio.toFixed(1)}%；可谨慎增加收货。`,
+      detail: `当前销售参考价 ${formatMoney(risingQuote.todaySellPrice)}，回收参考价较上次上涨 ${risingQuote.changeRatio.toFixed(1)}%；需先核对货况与报价来源。`,
       severity: "low",
       actionLabel: "看行情",
       actionTab: "quotes",
-      evidence: [`行情涨幅 ${risingQuote.changeRatio.toFixed(1)}%`, `参考售价 ${formatMoney(risingQuote.todaySellPrice)}`],
+      evidence: [`回收参考价较上次上涨 ${risingQuote.changeRatio.toFixed(1)}%`, `销售参考价 ${formatMoney(risingQuote.todaySellPrice)}`],
       confidence: 82,
     });
   }

@@ -24,3 +24,12 @@ test("quote filters search adapted domain fields", () => {
   assert.equal(filterQuotes([quote], {...parseQuoteFilters(""), keyword: "4090 货源"}).length, 1);
   assert.equal(filterQuotes([quote], {...parseQuoteFilters(""), trend: "down"}).length, 0);
 });
+
+test("retired scope and physical-condition filters are ignored and not exported", () => {
+  const filters = parseQuoteFilters("?quoteScope=product&condition=used");
+  assert.equal(filters.quoteScope, undefined);
+  assert.equal(quoteFiltersToSearch(filters).has("condition"), false);
+  assert.equal(quoteFiltersToSearch(filters).has("quoteScope"), false);
+  const bound: MarketQuoteItem = {...quote, quoteScope: "product", profile: {condition: "used", grade: "95新", warranty: "any", packaging: "any", vram: "24G", currency: "CNY"}};
+  assert.deepEqual(filterQuotes([quote, bound], filters), [quote, bound]);
+});

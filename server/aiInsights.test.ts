@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildAiBusinessSnapshot, buildRuleAiInsights, parseModelInsightsContent } from "./aiInsights.ts";
+import type {AppState} from "./store.ts";
+import type {MarketQuote} from "../src/types/quote.ts";
+import {coreQuoteProfile, quoteIdentityKey} from "../src/utils/quoteReference.ts";
+
+test("AI market evidence includes confirmed conditions and excludes expired, legacy or missing quotes", () => {
+  const profile = coreQuoteProfile();
+  const quote = {id: "Q-CORE", quoteScope: "core", coreId: "GPU-NVIDIA-RTX5090", coreModel: "RTX5090", model: "RTX5090", productName: "RTX5090", profile, source: "人工询价", refBuyPrice: 110, refSellPrice: 200, changeRatio: 10} as MarketQuote;
+  const key = quoteIdentityKey(quote)!;
+  quote.history = [{date: "2026-10-12", buyPrice: 100, sellPrice: 200, quoteKey: key}, {date: "2026-10-13", buyPrice: 110, sellPrice: 200, quoteKey: key}];
+  const state = {inventory: [], salesInvoices: [], purchaseInvoices: [], marketQuotes: [quote, {...quote, quoteScope: undefined}, {...quote, quoteScope: "product", productId: "P-RETIRED"}, {...quote, validUntil: "2026-10-12"}, {...quote, refSellPrice: null}, {...quote, history: []}]} as unknown as AppState;
+  const snapshot = buildAiBusinessSnapshot(state, "2026-10-13");
+  assert.equal(snapshot.market.length, 1);
+  assert.match(snapshot.market[0]!.productName, /RTX5090 · 核心基础价 · 不分新旧/);
+  const insight = buildRuleAiInsights(snapshot).find(item => item.actionTab === "quotes")!;
+  assert.match(insight.detail, /回收参考价较上次上涨/);
+  assert.match(insight.detail, /报价来源/);
+});
 
 test("AI snapshot excludes customer privacy and turns aged inventory into actionable advice", () => {
   const state = {

@@ -36,6 +36,15 @@ test("GET state reloads from database", () => {
   assert.equal(shouldReloadStateFromDatabase("GET", "/api/state"), true);
 });
 
+test("quote commands reload real product/stock references without persisting them and serialize globally", () => {
+  for (const [method, path] of [["POST", "/api/market-quotes"], ["POST", "/api/market-quotes/import"], ["PATCH", "/api/market-quotes/MQ-1"], ["DELETE", "/api/market-quotes/MQ-1"]]) {
+    assert.equal(requiresStateSerialization(method, path), true);
+    assert.deepEqual(getReloadKeysForRequest(method, path), ["marketQuotes", "inventory", "products"]);
+    assert.deepEqual(getPersistenceKeysForRequest(method, path), ["marketQuotes", "logs"]);
+    assert.deepEqual(getStatePatchKeysForRequest(method, path), ["marketQuotes", "logs"]);
+  }
+});
+
 test("POST previews load their explicit read dependencies, not the command-only authentication snapshot", () => {
   const path = "/api/sales-invoices/XS-internal-id/outbound/preflight";
   assert.deepEqual(getAuthenticationReloadKeys("POST", path), ["systemUsers", "salesInvoices", "inventory", "products"]);
@@ -147,7 +156,7 @@ test("reads participate in revision checks while HEAD and OPTIONS remain lightwe
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/customers/page"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/vendors"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/products"), []);
-  assert.deepEqual(getReloadKeysForRequest("GET", "/api/market-quotes"), ["marketQuotes", "inventory"]);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/market-quotes"), ["marketQuotes", "inventory", "products"]);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/sales-invoices/outbound"), []);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/logs"), []);
 });

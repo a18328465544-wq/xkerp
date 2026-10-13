@@ -147,7 +147,7 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   if (startsWithAny(path, ["/api/returns"])) return RETURN_KEYS;
   if (startsWithAny(path, ["/api/aftersales"])) return AFTERSALES_KEYS;
   if (startsWithAny(path, ["/api/order-pool"])) return ["customerOrders", "logs"];
-  if (startsWithAny(path, ["/api/market-quotes"])) return ["marketQuotes", "inventory", "logs"];
+  if (startsWithAny(path, ["/api/market-quotes"])) return ["marketQuotes", "logs"];
   if (startsWithAny(path, ["/api/inventory"])) return ["inventory", "products", "purchaseInvoices", "salesInvoices", "purchaseCommissions", "logs"];
   if (path === "/api/gpu-sn/estimate/save") return ["inventory", "logs"];
   if (path === "/api/gpu-sn/parse") return null;
@@ -196,7 +196,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   // so permissions are evaluated against the same tenant, not the fallback
   // single-store state.
   if (method.toUpperCase() === "GET" && ["/api/ai/daily-sales-summary", "/api/ai/insights", "/api/ai/insight-actions"].includes(path)) return [];
-  if (method.toUpperCase() === "GET" && path === "/api/market-quotes") return ["marketQuotes", "inventory"];
+  if (startsWithAny(path, ["/api/market-quotes"])) return ["marketQuotes", "inventory", "products"];
   if (method.toUpperCase() === "GET" && path === "/api/vendors") return [];
   if (method.toUpperCase() === "GET" && path === "/api/customers/page") return [];
   if (method.toUpperCase() === "GET" && path === "/api/market-quote-categories") return [];

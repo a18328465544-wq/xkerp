@@ -6,7 +6,7 @@ import {ErpSearchInput, ErpListPage, ErpDisclosureCard, type ErpListTableProps} 
 import {useEffect, useMemo, useState} from "react";
 import {notify} from "@/src/utils/notification";
 import {Button, Card, Select} from "@/src/components/ui";
-import {AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpConfirmDialog, ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpLoadingState, ErpMetricCard, ErpMobileRecordRow, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
+import {AnalyticsKpiRegion, AnalyticsMainRegion, AnalyticsToolbar, DashboardSection, ErpAnalyticsPageFrame, ErpConfirmDialog, ErpDataTable, ErpLoadingState, ErpMetricCard, ErpMobileRecordRow, ErpPageContent, ErpPageError, ErpPageHeader, ErpStatusBadge, type QuickStatusItemData} from "@/src/components/common";
 import {ApiError, queryKeys, quotesApi, type AuthSession} from "@/src/services/api";
 import {invalidateErpDomains} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -19,6 +19,10 @@ import {quoteCsv, type QuotePasteResult} from "../quote.import";
 import {MarketQuoteDialog} from "../components/MarketQuoteDialog";
 import {MarketQuoteCategoryManagerDialog} from "../components/MarketQuoteCategoryManagerDialog";
 import {MarketQuotePasteDialog} from "../components/MarketQuotePasteDialog";
+import {MarketQuoteDetail} from "../components/MarketQuoteDetail";
+import {quoteExportRows} from "../quote.export";
+import {quoteNeedsConfirmation, quoteScopeLabel, quoteTitle} from "../quote.reference";
+
 
 function useQuoteUrlState() {
   return useUrlSearchState({defaultValue: defaultQuoteFilters, parse: parseQuoteFilters, serialize: quoteFiltersToSearch});
@@ -56,7 +60,7 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
   const pageRows = filtered.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
   const upCount = quotes.filter((quote) => quote.trend === "up").length;
   const downCount = quotes.filter((quote) => quote.trend === "down").length;
-  const linkedStock = quotes.reduce((total, quote) => total + quote.stockCount, 0);
+  const linkedStock = query.data?.stockCount || 0;
   const activeFilters = Number(Boolean(filters.keyword)) + Number(filters.brand !== "all") + Number(filters.categoryId !== "all") + Number(filters.trend !== "all");
 
   const invalidate = () => invalidateErpDomains(queryClient, ["quotes", "products", "inventory", "state"]);
@@ -69,11 +73,9 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
 
   const openCreate = () => {if (!fullPriceAccess) return; setEditing(null); saveMutation.reset(); setDialogOpen(true);};
   const openEdit = (quote: MarketQuoteItem) => {if (!fullPriceAccess) return; setEditing(quote); saveMutation.reset(); setDialogOpen(true);};
-  const columns = useMemo(() => createQuoteColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canEdit: fullPriceAccess, canDelete: session.permissions.canDelete, onEdit: openEdit, onDelete: setDeleting}), [fullPriceAccess, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
+  const columns = useMemo(() => createQuoteColumns({showCost: session.permissions.showCost, showProfit: session.permissions.showProfit, canEdit: fullPriceAccess, canDelete: fullPriceAccess && session.permissions.canDelete, onEdit: openEdit, onDelete: setDeleting}), [fullPriceAccess, session.permissions.canDelete, session.permissions.showCost, session.permissions.showProfit]);
   const downloadCsv = () => {
-    const rows = [["行情ID", "型号", "品牌", ...(session.permissions.showCost ? ["回收参考价"] : []), ...(session.permissions.showProfit ? ["销售参考价"] : []), "走势", "波动说明", "更新时间"], ...filtered.map((quote) => [quote.id, quote.model, quote.brand, ...(session.permissions.showCost ? [quote.buyPrice || 0] : []), ...(session.permissions.showProfit ? [quote.sellPrice || 0] : []), quote.trend, quote.note || "", quote.updateTime || ""])];
-    const categorizedRows = rows.map((row, index) => index === 0 ? [...row.slice(0, 3), "分类", ...row.slice(3)] : [...row.slice(0, 3), filtered[index - 1]?.categoryName || "未分类", ...row.slice(3)]);
-    const url = URL.createObjectURL(new Blob([quoteCsv(categorizedRows)], {type: "text/csv;charset=utf-8"})); const link = document.createElement("a"); link.href = url; link.download = "行情参考.csv"; link.click(); URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(new Blob([quoteCsv(quoteExportRows(filtered, session.permissions))], {type: "text/csv;charset=utf-8"})); const link = document.createElement("a"); link.href = url; link.download = "行情参考.csv"; link.click(); URL.revokeObjectURL(url);
   };
   const quickStatus: QuickStatusItemData[] = [
     {icon: <ArrowUpRight className="h-4 w-4" />, label: "价格上调", value: `${upCount} 款`, description: "当前价格记录", tone: upCount ? "success" : "neutral"},
@@ -89,13 +91,17 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
     sorting, onSortingChange: setSorting, page: filters.page, pageSize: filters.pageSize,
     total: filtered.length, onPageChange: (page) => onFiltersChange({...filters, page}),
     onPageSizeChange: (pageSize) => onFiltersChange({...filters, page: 1, pageSize}),
-    mobileShowDetailAction: false, mobileRow: (item) => { const price = session.permissions.showProfit && item.sellPrice !== undefined ? formatCurrency(item.sellPrice) : session.permissions.showCost && item.buyPrice !== undefined ? formatCurrency(item.buyPrice) : undefined; const priceLabel = session.permissions.showProfit && item.sellPrice !== undefined ? "销售参考" : session.permissions.showCost && item.buyPrice !== undefined ? "回收参考" : undefined; const trendTone = item.trend === "up" ? "success" : item.trend === "down" ? "warning" : "neutral"; const trendLabel = item.trend === "up" ? "价格上调" : item.trend === "down" ? "价格下调" : "价格平稳"; return <ErpMobileRecordRow title={item.model} subtitle={item.brand} meta={`${item.categoryName ? `${item.categoryName} · ` : ""}${item.stockCount ? `在库 ${item.stockCount} 件` : "暂无在库"}${item.updateTime ? ` · ${item.updateTime.slice(0, 10)}` : ""}`} statusPlacement="title" status={<ErpStatusBadge label={trendLabel} tone={trendTone} />} amount={price} amountLabel={priceLabel} onOpen={() => setDetail(item)} />; },
+    mobileShowDetailAction: false, mobileRow: (item) => {
+      const allowed = session.permissions.showProfit || session.permissions.showCost;
+      const value = session.permissions.showProfit ? item.sellPrice : item.buyPrice;
+      return <ErpMobileRecordRow title={quoteTitle(item)} subtitle={item.brand} meta={`${item.stockCount ? `在库 ${item.stockCount} 件` : "暂无在库"}${item.source ? ` · ${item.source}` : ""}${item.validUntil ? ` · 至 ${item.validUntil}` : ""}`} statusPlacement="title" status={<ErpStatusBadge label={`${quoteScopeLabel(item)}${item.expired ? " · 已过期" : ""}`} tone={quoteNeedsConfirmation(item) || item.expired ? "warning" : "info"} />} amount={allowed ? value === undefined ? "暂无报价" : formatCurrency(value) : "无权限"} amountLabel={session.permissions.showProfit ? "销售参考" : session.permissions.showCost ? "回收参考" : undefined} onOpen={() => setDetail(item)} />;
+    },
     enableColumnResizing: true, stickyHeader: true,
   };
-  const overlays = <>    <MarketQuoteDialog open={dialogOpen} quote={editing} categories={categories} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, quote: editing});}} />
+  const overlays = <>    <MarketQuoteDialog open={dialogOpen} quote={editing} categories={categories} products={query.data?.products || []} quotes={quotes} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, quote: editing});}} />
     <MarketQuoteCategoryManagerDialog open={categoryManagerOpen} categories={categories} pending={createCategoryMutation.isPending || updateCategoryMutation.isPending} error={(createCategoryMutation.error || updateCategoryMutation.error) instanceof Error ? (createCategoryMutation.error || updateCategoryMutation.error as Error).message : undefined} onOpenChange={setCategoryManagerOpen} onCreate={(name) => createCategoryMutation.mutateAsync(name)} onUpdate={(id, updates) => updateCategoryMutation.mutateAsync({id, updates})} />
     <MarketQuotePasteDialog open={pasteOpen} value={pasteText} pending={importMutation.isPending} onValueChange={setPasteText} onOpenChange={setPasteOpen} onImport={(result) => importMutation.mutate(result)} />
-    <QuoteDetail quote={detail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} onClose={() => setDetail(null)} />
+    <MarketQuoteDetail quote={detail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} onClose={() => setDetail(null)} />
     <DeleteDialog quote={deleting} pending={deleteMutation.isPending} onClose={() => setDeleting(null)} onConfirm={() => {if (deleting) deleteMutation.mutate(deleting.id);}} /></>;
   const desktopContent = <ErpAnalyticsPageFrame>
     <ErpPageHeader title="行情参考" subtitle="维护回收与销售参考价，查看价格变化与更新时间。" quickStatus={quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />刷新</Button>{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setCategoryManagerOpen(true)}><Tags className="h-4 w-4" />分类管理</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="secondary" onClick={() => setPasteOpen(true)}><Upload className="h-4 w-4" />批量粘贴</Button>}{fullPriceAccess && <Button type="button" size="sm" variant="primary" onClick={openCreate}><Plus className="h-4 w-4" />新增参考价</Button>}</>} />
@@ -104,7 +110,7 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
       <ErpMetricCard label="行情型号" value={`${quotes.length} 款`} detail={`${query.data?.brands.length || 0} 个品牌`} icon={<LineChart className="h-4 w-4" />} tone="info" />
       <ErpMetricCard label="上调型号" value={`${upCount} 款`} detail="参考价格上涨" icon={<ArrowUpRight className="h-4 w-4" />} tone="success" />
       <ErpMetricCard label="下调型号" value={`${downCount} 款`} detail="建议关注库存风险" icon={<ArrowDownRight className="h-4 w-4" />} tone="warning" />
-      <ErpMetricCard label="关联在库" value={`${linkedStock} 件`} detail="按现有 active 库存汇总" icon={<TrendingUp className="h-4 w-4" />} tone="info" />
+      <ErpMetricCard label="关联在库" value={`${linkedStock} 件`} detail="同核心的去重库存" icon={<TrendingUp className="h-4 w-4" />} tone="info" />
     </>} />
     <AnalyticsToolbar actions={<><Button type="button" size="sm" variant="ghost" onClick={() => onFiltersChange(defaultQuoteFilters)}>重置</Button><Button type="button" size="sm" variant="secondary" onClick={downloadCsv}><Download className="h-4 w-4" />导出</Button></>}>
       <ErpSearchInput className="min-w-64 flex-1" value={filters.keyword} onChange={(event) => onFiltersChange({...filters, keyword: event.target.value, page: 1})} placeholder="搜索型号、品牌、说明或行情 ID" aria-label="搜索行情" />
@@ -118,7 +124,6 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
         <DashboardSection title="行情参考明细" description="按当前条件查看行情记录与价格变化。" count={activeFilters ? `已筛选 ${activeFilters} 项` : undefined}><ErpDataTable {...table} mobileRow={table.mobileRow} surface="plain" mobilePagination="compact" density="compact" /></DashboardSection>
       </AnalyticsMainRegion.Visualization>
     </AnalyticsMainRegion>
-    {overlays}
     </ErpPageContent>
   </ErpAnalyticsPageFrame>;
   return <ErpListPage title="行情参考" phonePresentation="documents" pageFrame="analytics" desktopPageContent={desktopContent}
@@ -141,8 +146,6 @@ function MarketQuotesContent({active, session, query, filters, onFiltersChange, 
   />;
 }
 
-function QuoteDetail({quote, showCost, showProfit, onClose}: {quote: MarketQuoteItem | null; showCost: boolean; showProfit: boolean; onClose: () => void}) {return <ErpDetailDrawer modal={false} resizable drawerKey="market-quote-detail" defaultWidth={680} minWidth={520} maxWidth={880} open={Boolean(quote)} onOpenChange={(open) => {if (!open) onClose();}} title={quote?.model || "行情详情"} description="暂无历史价格时不显示趋势。"><div className="space-y-4">{quote && <><div className="grid grid-cols-2 gap-3"><Fact label="品牌" value={quote.brand} /><Fact label="分类" value={quote.categoryName || "未分类"} /><Fact label="走势" value={quote.trend === "up" ? "价格上调" : quote.trend === "down" ? "价格下调" : "价格平稳"} /><Fact label="回收参考价" value={showCost && quote.buyPrice !== undefined ? formatCurrency(quote.buyPrice) : "无权限"} /><Fact label="销售参考价" value={showProfit && quote.sellPrice !== undefined ? formatCurrency(quote.sellPrice) : "无权限"} /><Fact label="关联在库" value={`${quote.stockCount} 件`} /><Fact label="更新时间" value={quote.updateTime || "—"} /></div><DashboardSection title="波动说明"><p className="text-sm text-[var(--erp-color-text-secondary)]">{quote.note || "暂无补充说明"}</p></DashboardSection><DashboardSection title="真实历史"><div className="space-y-2">{quote.history.length ? quote.history.map((point, index) => <div key={`${point.date}-${index}`} className="grid grid-cols-3 gap-3 rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] p-3 text-sm"><span>{point.date}</span><span>{showCost && point.buyPrice !== undefined ? `收 ${formatCurrency(point.buyPrice)}` : "收 —"}</span><span>{showProfit && point.sellPrice !== undefined ? `售 ${formatCurrency(point.sellPrice)}` : "售 —"}</span></div>) : <p className="text-sm text-[var(--erp-color-text-muted)]">暂无历史价格。</p>}</div></DashboardSection></>}</div></ErpDetailDrawer>;}
-const Fact = ErpDetailFact;
 
 function DeleteDialog({quote, pending, onClose, onConfirm}: {quote: MarketQuoteItem | null; pending: boolean; onClose: () => void; onConfirm: () => void}) {
   return <ErpConfirmDialog

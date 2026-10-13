@@ -1,5 +1,5 @@
 import type { Express, RequestHandler } from "express";
-import { publicCollectionForUser, publicMarketQuoteInventoryForUser } from "../publicState.ts";
+import { publicCollectionForUser, publicMarketQuoteInventoryForUser, publicMarketQuoteProductsForUser, publicMarketQuoteStockCountForUser } from "../publicState.ts";
 import type { AuthenticatedRequest } from "../httpAuth.ts";
 import type { AppState } from "../store.ts";
 import type { SystemUserAccount } from "../../src/types.ts";
@@ -23,6 +23,8 @@ export function registerMarketQuoteRoutes(app: Express, dependencies: MarketQuot
         data: {
           marketQuotes,
           inventory,
+          products: publicMarketQuoteProductsForUser(state, req.authUser),
+          stockCount: publicMarketQuoteStockCountForUser(state, req.authUser),
         },
         meta: {
           source: "market-quotes-snapshot",

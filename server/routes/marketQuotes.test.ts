@@ -31,7 +31,7 @@ test("行情专用读取路由返回数据库快照中的行情集合，而不�
     route.handler(req, res, (handlerError?: unknown) => { throw handlerError; });
   });
 
-  const response = payload as {data: {marketQuotes: Array<{id: string}>; inventory: unknown[]}; meta: {total: number; source: string}};
+  const response = payload as {data: {marketQuotes: Array<{id: string}>; inventory: unknown[]; products: Array<Record<string, unknown>>; stockCount: number}; meta: {total: number; source: string}};
   assert.equal(response.meta.source, "market-quotes-snapshot");
   assert.equal(response.meta.total, state.marketQuotes.length);
   assert.equal(response.data.marketQuotes.length, state.marketQuotes.length);
@@ -39,4 +39,7 @@ test("行情专用读取路由返回数据库快照中的行情集合，而不�
   assert.ok(Array.isArray(response.data.inventory));
   assert.equal("sn" in ((response.data.inventory[0] || {}) as Record<string, unknown>), false);
   assert.equal("warehouseLocation" in ((response.data.inventory[0] || {}) as Record<string, unknown>), false);
+  assert.equal(response.data.products.length, state.products.length);
+  assert.equal(typeof response.data.stockCount, "number");
+  for (const product of response.data.products) for (const hidden of ["refBuyPrice", "refSellPrice", "lastBuyPrice", "lastSellPrice", "currentStock", "remarks"]) assert.equal(hidden in product, false);
 });

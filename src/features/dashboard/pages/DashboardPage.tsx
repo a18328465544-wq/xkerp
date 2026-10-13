@@ -11,12 +11,12 @@ import {createCapabilities, useAuth} from "@/src/app/auth";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import type {AuthSession} from "@/src/services/api";
 import type {CardInventory} from "@/src/types/core";
-import type {MarketQuote} from "@/src/types/quote";
 import type {ReturnOrder} from "@/src/types/returns";
 import type {SalesInvoice} from "@/src/types/sales";
 import {formatCurrency} from "@/src/lib/format";
 import {storeDate, storeDateAfterDays, storeDateDiffDays, storeHour} from "@/src/utils/storeTime";
 import {inventoryInactiveStatuses} from "@/src/utils/inventoryFilters";
+import {quoteReferenceSummary} from "@/src/utils/quoteReference";
 import {isPersonalPurchaseSource} from "@/src/utils/purchaseSources";
 import type {AiInsightItem} from "@/src/services/api/endpoints/ai";
 
@@ -93,7 +93,10 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
     return () => window.clearTimeout(timer);
   }, [active, phone]);
   const risks = useMemo(() => inventory.filter((item) => !inventoryInactiveStatuses.has(item.status) && (item.gpuRisk || storeDateDiffDays(item.entryTime, today) >= 30 || item.marketPrice > 0 && item.marketPrice < item.costPrice)).sort((left, right) => riskScore(right, today) - riskScore(left, today)).slice(0, 5), [inventory, today]);
-  const marketRows = useMemo(() => [...marketQuotes].sort((left, right) => Math.abs(right.changeRatio) - Math.abs(left.changeRatio)).slice(0, 5), [marketQuotes]);
+  const marketRows = useMemo(() => marketQuotes.flatMap(quote => {
+    const summary = quoteReferenceSummary(quote, today);
+    return summary ? [{id: quote.id, ...summary}] : [];
+  }).sort((left, right) => Math.abs(right.changeRatio ?? 0) - Math.abs(left.changeRatio ?? 0)).slice(0, 5), [marketQuotes, today]);
   const profitChange = percent(stats.todayProfit, stats.yesterdayProfit);
   const currentHour = storeHour();
   const greeting = currentHour < 11 ? "早上好" : currentHour < 14 ? "中午好" : currentHour < 19 ? "下午好" : "晚上好";
@@ -140,7 +143,7 @@ function DashboardContent({session, state, ai, aiLoading, aiError, onAiRetry, on
           {aiLoading ? <div className="space-y-3"><div className="h-16 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /><div className="h-16 animate-pulse rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)]" /></div> : aiError ? <div className="space-y-3"><p className="text-xs text-[var(--erp-color-text-secondary)]">AI 建议暂时不可用，数据仍可正常查看。</p><Button size="sm" variant="secondary" onClick={onAiRetry}>重试</Button></div> : <div className="divide-y divide-[var(--erp-color-border)]">{ai.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-info-soft)] text-[var(--erp-color-primary)]"><Sparkles className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><ErpStatusBadge label={item.label} tone={toneForSeverity[item.severity]} /><span className="text-xs text-[var(--erp-color-text-muted)]">置信度 {item.confidence}%</span></div><p className="mt-1 text-sm font-semibold leading-5 text-[var(--erp-color-text)]">{item.title}</p><p className="mt-1 text-xs leading-5 text-[var(--erp-color-text-secondary)]">{item.detail}</p></div></div>)}{!ai.length && <p className="text-sm text-[var(--erp-color-text-secondary)]">暂无经营建议。</p>}</div>}
         </DashboardSection>}
         {marketRows.length > 0 && <DashboardSection title="今日行情" actions={<Link to="/quotes" className="text-xs font-semibold text-[var(--erp-color-primary)]">更多行情 <ArrowRight className="inline h-3.5 w-3.5" /></Link>}>
-          <div className="space-y-3">{marketRows.map((quote) => { const sellPrice = canSeeProfit ? safeQuoteSellPrice(quote) : null; return <Link to="/quotes" key={quote.id} className="grid grid-cols-[minmax(0,1fr)_84px_56px] items-center gap-2"><span className="truncate text-sm font-semibold text-[var(--erp-color-text-secondary)]">{quote.model || quote.productName}</span><span className="text-right text-sm font-semibold text-[var(--erp-color-text)]">{sellPrice === null ? "无权查看" : formatCurrency(sellPrice)}</span><span className={`text-right text-xs font-semibold ${quote.changeRatio >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{quote.changeRatio >= 0 ? "↗" : "↘"} {Math.abs(quote.changeRatio).toFixed(1)}%</span></Link>; })}{!marketRows.length && <p className="py-4 text-center text-sm text-[var(--erp-color-text-muted)]">暂无行情数据</p>}</div>
+          <div className="space-y-3">{marketRows.map((quote) => <Link to="/quotes" key={quote.id} className="grid grid-cols-[minmax(0,1fr)_84px_56px] items-center gap-2"><span title={quote.title} className="truncate text-sm font-semibold text-[var(--erp-color-text-secondary)]">{quote.title}</span><span className="text-right text-sm font-semibold text-[var(--erp-color-text)]">{!canSeeProfit ? "无权查看" : quote.sellPrice === null ? "暂无报价" : formatCurrency(quote.sellPrice)}</span><span title="回收参考价较上次变化" className={`text-right text-xs font-semibold ${quote.changeRatio === null ? "text-[var(--erp-color-text-muted)]" : quote.changeRatio >= 0 ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-danger)]"}`}>{quote.changeRatio === null ? "—" : `${quote.changeRatio >= 0 ? "↗" : "↘"} ${Math.abs(quote.changeRatio).toFixed(1)}%`}</span></Link>)}</div>
         </DashboardSection>}
       </MainRegion.Secondary>
     </MainRegion>
@@ -213,17 +216,6 @@ function buildTrendRows(invoices: SalesInvoice[], today: string) {
 }
 
 function riskScore(item: CardInventory, today: string) { return storeDateDiffDays(item.entryTime, today) * 1000 + Math.max(0, Number(item.costPrice || 0) - Number(item.marketPrice || 0)); }
-
-/**
- * The initial state endpoint serves both legacy and permission-projected quote
- * shapes. A restricted account can legitimately receive no sell-price field,
- * so the dashboard must never pass undefined/NaN into Intl.NumberFormat.
- */
-function safeQuoteSellPrice(quote: MarketQuote) {
-  const candidate = quote.todaySellPrice ?? quote.refSellPrice ?? quote.maxPrice ?? quote.minPrice;
-  const parsed = Number(candidate);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 function SummaryCell({label, value, tone}: {label: string; value: string; tone?: "success"}) { return <div><p className="text-xs text-[var(--erp-color-text-muted)]">{label}</p><p className={`mt-1 text-sm font-semibold ${tone === "success" ? "text-[var(--erp-color-success)]" : "text-[var(--erp-color-text)]"}`}>{value}</p></div>; }
 

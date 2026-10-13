@@ -308,32 +308,8 @@ export interface SalesInvoice {
   totalProfit: number;
 }
 
-export interface MarketQuote {
-  id: string;
-  date: string;
-  productId: string;
-  productName: string;
-  model: string;
-  brand: string;
-  categoryId?: string;
-  version: string;
-  yestBuyPrice: number;
-  todayBuyPrice: number;
-  todaySellPrice: number;
-  maxPrice: number;
-  minPrice: number;
-  changeAmount: number; // positive = rise, negative = drop
-  changeRatio: number; // percentage value e.g. -1.2
-  remarks?: string;
-
-  // Additional fields for MarketQuotes.tsx UI
-  trend?: "up" | "down" | "stable";
-  fluctuation?: string;
-  updateTime?: string;
-  refBuyPrice?: number;
-  refSellPrice?: number;
-  history?: Array<{ date: string; buyPrice: number; sellPrice: number }>;
-}
+/** Keep legacy state consumers on the canonical quote contract. */
+export type {MarketQuote} from "./quote";
 
 export type AftersalesStatus = "待处理" | "检测中" | "已完成" | "已拒绝" | "已维修" | "已退款" | "待审核" | "处理中" | "已解决";
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createInitialState} from "./store.ts";
 import {marketQuotePriceChange, marketQuotePriceChanges, snapshotMarketQuote} from "./marketQuoteNotifications.ts";
+import {coreQuoteProfile} from "../src/utils/quoteReference.ts";
 
 test("market quote change detection ignores timestamp-only updates", () => {
   const state = createInitialState();
@@ -35,4 +36,18 @@ test("batch change detection excludes newly created and unchanged quotes", () =>
   const changed = {...beforeQuote, refSellPrice: existing.todaySellPrice + 200};
   const created = {...beforeQuote, id: "MQ-NEW"};
   assert.deepEqual(marketQuotePriceChanges(before, [changed, existing, created]).map((item) => item.quoteId), [existing.id]);
+});
+
+test("notifications never coerce modern null prices to zero or compare converted/expired conditions", () => {
+  const state = createInitialState();
+  const quote = {...state.marketQuotes[0], quoteScope: "core" as const, coreId: "GPU-NVIDIA-RTX5090", coreModel: "RTX5090",
+    profile: coreQuoteProfile(), source: "门店", refBuyPrice: null, refSellPrice: 200};
+  assert.equal(marketQuotePriceChange(quote, {...quote, refBuyPrice: 100}), null);
+  const priced = {...quote, refBuyPrice: 0};
+  assert.equal(marketQuotePriceChange(priced, {...priced, refBuyPrice: 100})?.previousBuyPrice, 0);
+  assert.equal(marketQuotePriceChange(priced, {...priced, refBuyPrice: 100, validUntil: "2000-01-01"}), null);
+  assert.equal(marketQuotePriceChange(priced, {...priced, refBuyPrice: 100, profile: {...priced.profile, condition: "new"}}), null);
+  const conditioned = {...priced, profile: {...priced.profile, condition: "used" as const, grade: "95新", vram: "32G"}};
+  assert.equal(marketQuotePriceChange(conditioned, {...priced, refBuyPrice: 100}), null);
+  assert.equal(marketQuotePriceChange({...priced, quoteScope: undefined, coreId: undefined, profile: undefined}, {...priced, refBuyPrice: 100}), null);
 });

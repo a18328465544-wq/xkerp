@@ -1263,6 +1263,9 @@ registerMarketQuoteMutationRoutes(app, {
   notifyPriceChanged: notifyFeishuMarketQuotePriceChanged,
   notifyPriceChanges: notifyFeishuMarketQuotePriceChanged,
   sendValidationError: (req, res, message) => sendApiError(req, res, 400, "VALIDATION_ERROR", message),
+  claimMutationIdempotency: (req) => claimMutationIdempotency(req as AuthRequest),
+  releaseMutationIdempotency,
+  transactionHookWithIdempotency,
 });
 
 registerInventoryMutationRoutes(app, {

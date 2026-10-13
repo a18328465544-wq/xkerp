@@ -110,6 +110,47 @@ if ledger_scenario == "restricted":
 if inventory_scenario == "models":
     sample_inventory = [{**fixture["STOCK"], "id": "KC-MODEL-LAYOUT", "productId": "P-MODEL-LAYOUT", "productName": model_layout_rows[0]["productName"], "name": model_layout_rows[0]["productName"], "category": "硬盘", "model": "990PRO", "warehouseLocation": "配件待检测区"}]
 
+# Quote validation is a separate, opt-in visual fixture. This never enables
+# persistence: real write/permission acceptance uses the isolated HTTP tests.
+quote_scenario = os.environ.get("ERP_QUOTE_QA_SCENARIO", "baseline")
+if quote_scenario not in {"baseline", "core"}:
+    raise ValueError("Invalid quote QA scenario")
+quote_inventory = state["inventory"]
+quote_products = state["products"]
+if quote_scenario == "core":
+    quote_products = [
+        {"id": "P-QUOTE-ASUS", "name": "华硕 RTX5090 夜神OC 32G", "category": "显卡", "brand": "华硕", "model": "RTX5090", "version": "夜神OC", "vram": "32G", "coreId": "GPU-NVIDIA-RTX5090", "coreModel": "RTX5090"},
+        {"id": "P-QUOTE-MSI", "name": "微星 RTX5090 SUPRIM 32G", "category": "显卡", "brand": "微星", "model": "RTX5090", "vram": "32G", "coreId": "GPU-NVIDIA-RTX5090", "coreModel": "RTX5090"},
+        {"id": "P-QUOTE-D", "name": "华硕 RTX5090D TUF 32G", "category": "显卡", "brand": "华硕", "model": "RTX5090D", "vram": "32G", "coreId": "GPU-NVIDIA-RTX5090D", "coreModel": "RTX5090D"},
+        {"id": "P-QUOTE-CASE", "name": "微星 rtx4070ti 12G", "category": "显卡", "brand": "微星", "model": "rtx4070ti", "vram": "12G", "coreId": "GPU-NVIDIA-RTX4070TI", "coreModel": "RTX4070TI"},
+    ]
+    profile = {"condition": "used", "grade": "95新", "warranty": "any", "packaging": "any", "vram": "32G", "currency": "CNY"}
+    core_profile = {"condition": "any", "grade": "any", "warranty": "any", "packaging": "any", "vram": "", "currency": "CNY"}
+    today = time.strftime("%Y-%m-%d")
+
+    def sample_quote(identity, scope, core, product_id, buy, sell, conditions=None, **extra):
+        conditions = conditions or (core_profile if scope == "core" else profile)
+        target = product_id if scope == "product" else f"GPU-NVIDIA-{core}"
+        key = f"core|{target}|CNY" if scope == "core" and conditions["condition"] == "any" else f"{scope}|{target}|{conditions['condition']}|{conditions['grade']}|{conditions['warranty']}|{conditions['packaging']}|{conditions['vram']}|CNY"
+        return {"id": identity, "date": today, "productId": product_id, "productName": quote_products[0]["name"] if product_id else core,
+                "brand": "华硕" if product_id else "NVIDIA", "model": core, "version": "", "quoteScope": scope,
+                "coreId": f"GPU-NVIDIA-{core}", "coreModel": core, "profile": conditions, "source": "本地验收示例（非市场报价）",
+                "maintainedBy": "手机测试员", "refBuyPrice": buy, "refSellPrice": sell, "todayBuyPrice": buy or 0, "todaySellPrice": sell or 0,
+                "yestBuyPrice": 0, "maxPrice": buy or 0, "minPrice": buy or 0, "changeAmount": 0, "changeRatio": 0,
+                "trend": "stable", "updateTime": today + " 14:30", "history": [{"date": today + " 14:30", "buyPrice": buy, "sellPrice": sell, "quoteKey": key}], **extra}
+
+    state["marketQuotes"] = [
+        sample_quote("Q-CORE", "core", "RTX5090", "", 38000, 43000),
+        sample_quote("Q-PRODUCT", "product", "RTX5090", "P-QUOTE-ASUS", None, 45000),
+        sample_quote("Q-OLD-CONDITIONS", "core", "RTX5080", "", 42000, 47000, {**profile, "condition": "new", "grade": "全新"}),
+        sample_quote("Q-EXPIRED", "core", "RTX5090D", "", 33000, 39000, validUntil="2026-01-01"),
+        sample_quote("Q-CASE", "core", "RTX4070TI", "", 2000, 3000),
+        {"id": "Q-LEGACY", "date": today, "productId": "OLD-REFERENCE", "productName": "RTX4090 旧参考价", "brand": "NVIDIA", "model": "RTX4090", "version": "", "todayBuyPrice": 17000, "todaySellPrice": 19000, "yestBuyPrice": 17000, "maxPrice": 17000, "minPrice": 17000, "changeAmount": 0, "changeRatio": 0, "trend": "stable", "history": [{"date": "10-07 14:30", "buyPrice": 17000, "sellPrice": 19000}]},
+    ]
+    quote_inventory = [{"id": f"KC-QUOTE-{index}", "productId": product["id"], "status": "已入库", "productName": product["name"],
+                        "brand": product["brand"], "model": product["model"], "category": "显卡", "vram": "32G", "condition": "95新",
+                        "coreId": product["coreId"], "coreModel": product["coreModel"], "profile": profile.copy(), "costPrice": 31000} for index, product in enumerate(quote_products)]
+
 def inventory_rows(params):
     keyword = params.get("keyword", [""])[0].casefold()
     status = params.get("status", [""])[0]
@@ -278,6 +319,10 @@ class Handler(BaseHTTPRequestHandler):
                 data = {"data": state}
             elif path == "/api/logs":
                 data = {"data": {"auditLogs": [{"id": "LOG-MOBILE", "time": "2026-10-07 14:30", "user": "手机测试员", "module": "销售", "type": "创建", "target": "XS-MOBILE-001", "beforeVal": "", "afterVal": "仅本地合成记录"}]}, "meta": meta}
+            elif path == "/api/market-quotes" and quote_scenario == "core":
+                effective_cores = {quote["coreId"] for quote in state["marketQuotes"] if quote.get("quoteScope") == "core" and quote.get("profile", {}).get("condition") == "any" and (not quote.get("validUntil") or quote["validUntil"] >= today)}
+                matched_stock_ids = {item["id"] for item in quote_inventory if item.get("status") == "已入库" and item.get("coreId") in effective_cores}
+                data = {"data": {"marketQuotes": state["marketQuotes"], "products": quote_products, "inventory": quote_inventory, "stockCount": len(matched_stock_ids)}, "meta": {"total": len(state["marketQuotes"]), "source": "local-synthetic-quote-qa"}}
             elif path.startswith(("/api/finance/dashboard", "/api/aftersales/workspace", "/api/assembly-operations", "/api/market-quotes")):
                 data = {"data": state, "meta": meta}
             elif path.startswith(("/api/gpu_erp/finance/payment-ins", "/api/gpu_erp/finance/payment-outs", "/api/gpu_erp/finance/account-transfers")):

@@ -11,12 +11,210 @@ import type {SystemUserAccount} from "../src/types/auth.ts";
 import type {ReturnOrder} from "../src/types/returns.ts";
 import type {AftersalesRecord, CardInventory, PurchaseInvoice, InspectionRecord, SettlementAccount, SettlementLedger} from "../src/types.ts";
 import {hashPassword} from "./security.ts";
+import {coreQuoteProfile} from "../src/utils/quoteReference.ts";
+import type {MarketQuote} from "../src/types/quote.ts";
 
 const integrationEnabled = Boolean(
   process.env.NODE_ENV === "test"
   && process.env.TEST_DATABASE_URL
   && process.env.RUN_BACKEND_HTTP_TESTS === "1",
 );
+
+test("core quote HTTP persistence preserves inventory pricing and enforces identity, permissions and scope", {skip: !integrationEnabled}, async () => {
+  const {createApp} = await import("./app.ts");
+  const {createInitialState} = await import("./store.ts");
+  const {storeDate} = await import("../src/utils/storeTime.ts");
+  const server = createServer(createApp());
+  const base = await listenEphemeral(server);
+  const prefix = `HTTP-CORE-${Date.now()}`;
+  try {
+    const signIn = async (username: string, password: string) => {
+      const response = await fetch(`${base}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username, password})});
+      assert.equal(response.status, 200);
+      const payload = await response.json() as {data: {csrfToken: string; user: {tenantId: string; storeId: string}}};
+      return {cookie: response.headers.get("set-cookie")!.split(";", 1)[0]!, ...payload.data};
+    };
+    const owner = await signIn(process.env.BACKEND_TEST_USERNAME!, process.env.BACKEND_TEST_PASSWORD!);
+    const {tenantId, storeId} = owner.user;
+    const local = createInitialState();
+    const product = {...local.products[0]!, id: `${prefix}-P`, name: "华硕 RTX5090 夜神 32G", model: "RTX5090", category: "显卡", vram: "32G", brand: "华硕"};
+    const cards = ["已入库", "已售出"].map((status, index) => ({...local.inventory[0]!, id: `${prefix}-KC-${index}`, productId: product.id, productName: product.name, model: product.model, category: product.category, vram: "32G", condition: "95新", status, sn: `${prefix}-SN-${index}`, costPrice: 31000, estSellPrice: 48000, marketPrice: 41000}));
+    const viewer: SystemUserAccount = {id: `${prefix}-USER`, tenantId, storeId, username: `${prefix}-viewer`, displayName: "行情只读测试员", password: hashPassword("local-core-quote-password"), enabled: true, role: "店员", permissionOverrides: {allowedMenus: ["quotes", "inventory"], showCost: false, showProfit: false, canDelete: false}};
+    await withDatabaseTransaction(async client => {
+      for (const [table, rows] of Object.entries({gpu_products: [product], gpu_inventory: cards, gpu_system_users: [viewer]})) for (const row of rows) await client.query(`INSERT INTO ${table} (id, tenant_id, store_id, data) VALUES ($1, $2, $3, $4::jsonb)`, [row.id, tenantId, storeId, JSON.stringify(row)]);
+      await client.query("INSERT INTO gpu_tenant_memberships (tenant_id, user_id, store_id, role, status, permissions) VALUES ($1, $2, $3, $4, 'active', $5::jsonb)", [tenantId, viewer.id, storeId, viewer.role, JSON.stringify(viewer.permissionOverrides)]);
+      const foreign = {...product, id: `${prefix}-FOREIGN-P`};
+      await client.query("INSERT INTO gpu_products (id, tenant_id, store_id, data) VALUES ($1, $2, $3, $4::jsonb)", [foreign.id, tenantId, `${storeId}-other`, JSON.stringify(foreign)]);
+    });
+    const headers = {cookie: owner.cookie, "content-type": "application/json", "x-csrf-token": owner.csrfToken};
+    const facts = () => withDatabaseTransaction(async client => {
+      const result: Record<string, unknown> = {};
+      for (const table of ["gpu_products", "gpu_inventory"]) result[table] = (await client.query(`SELECT id, data FROM ${table} WHERE id LIKE $1 ORDER BY id`, [`${prefix}%`])).rows;
+      return result;
+    });
+    const initial = await facts();
+    const profile = {condition: "used", grade: "95新", warranty: "any", packaging: "any", vram: "32G", currency: "CNY"};
+    const command = {model: "RTX5090", brand: "NVIDIA", quoteScope: "core", coreModel: "RTX5090", source: "本地 HTTP 测试", refBuyPrice: null, refSellPrice: 45000, trend: "stable", updateTime: storeDate()};
+    const createdResponse = await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify(command)});
+    assert.equal(createdResponse.status, 201, await createdResponse.clone().text());
+    const created = await createdResponse.json() as {data: {id: string; coreId: string; productId?: string; refBuyPrice: number | null; profile: unknown}; stateMerge: Record<string, unknown>};
+    assert.equal(created.data.coreId, "GPU-NVIDIA-RTX5090");
+    assert.equal(created.data.refBuyPrice, null);
+    assert.deepEqual(created.data.profile, {condition: "any", grade: "any", warranty: "any", packaging: "any", vram: "", currency: "CNY"});
+    assert.ok(!created.data.productId);
+    assert.equal("inventory" in created.stateMerge, false);
+    assert.equal("products" in created.stateMerge, false);
+    assert.deepEqual(await facts(), initial);
+    const changed = await fetch(`${base}/api/market-quotes/${created.data.id}`, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 38000, todaySellPrice: null, remarks: "只更新基准"})});
+    assert.equal(changed.status, 200, await changed.clone().text());
+    assert.deepEqual(await facts(), initial);
+    const snapshot = await fetch(`${base}/api/market-quotes`, {headers: {cookie: owner.cookie}});
+    const read = await snapshot.json() as {data: {marketQuotes: Array<{id: string; refBuyPrice: number; refSellPrice: null; history: unknown[]}>; products: Array<{id: string}>}};
+    const reloaded = read.data.marketQuotes.find(quote => quote.id === created.data.id)!;
+    assert.equal(reloaded.refBuyPrice, 38000);
+    assert.equal(reloaded.refSellPrice, null);
+    assert.ok(reloaded.history.length >= 2);
+    assert.equal(read.data.products.some(item => item.id === `${prefix}-FOREIGN-P`), false);
+    const metadataUpdate = await fetch(`${base}/api/market-quotes/${created.data.id}`, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 38000, todaySellPrice: null, source: "更新后的人工报价来源", validUntil: "2099-01-01"})});
+    assert.equal(metadataUpdate.status, 200, await metadataUpdate.clone().text());
+    const metadataSaved = await metadataUpdate.json() as {data: {source: string; validUntil: string}};
+    assert.equal(metadataSaved.data.source, "更新后的人工报价来源");
+    assert.equal(metadataSaved.data.validUntil, "2099-01-01");
+    const cleared = await fetch(`${base}/api/market-quotes/${created.data.id}`, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 38000, todaySellPrice: null, validUntil: ""})});
+    assert.equal(cleared.status, 200, await cleared.clone().text());
+    assert.equal(((await cleared.json()) as {data: {validUntil?: string}}).data.validUntil, undefined);
+    assert.equal((await fetch(`${base}/api/market-quotes/${created.data.id}`, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 38000, todaySellPrice: null, profile: {...profile, grade: "9新"}})})).status, 200);
+    const specific = {...command, profile, quoteScope: "product", productId: product.id, model: product.model, brand: product.brand, refBuyPrice: 39000};
+    const specificResponse = await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify(specific)});
+    assert.equal(specificResponse.status, 400, await specificResponse.clone().text());
+    const newSpecific = {...specific, profile: {...profile, condition: "new", grade: "全新"}};
+    assert.equal((await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify(newSpecific)})).status, 400);
+    assert.equal((await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify({...specific, profile: {...profile, condition: "any"}})})).status, 400);
+    assert.equal((await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify({...specific, productId: `${prefix}-FOREIGN-P`})})).status, 400);
+    assert.equal((await fetch(`${base}/api/market-quotes/import`, {method: "POST", headers, body: JSON.stringify({quotes: [specific]})})).status, 400);
+    assert.equal((await fetch(`${base}/api/market-quotes/${created.data.id}`, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 1, todaySellPrice: 2, quoteScope: "product"})})).status, 400);
+    const concurrent = await Promise.all([0, 1].map(index => fetch(`${base}/api/market-quotes`, {method: "POST", headers: {...headers, "idempotency-key": `${prefix}-duplicate-${index}`}, body: JSON.stringify({...command, model: "RTX5080", coreModel: "RTX5080", profile: {...profile, vram: "16G"}})})));
+    assert.deepEqual(concurrent.map(response => response.status).sort(), [201, 409]);
+    const replayHeaders = {...headers, "idempotency-key": `${prefix}-replay`};
+    const replayCommand = {...command, model: "RTX5070", coreModel: "RTX5070", profile: {...profile, vram: "12G"}};
+    const first = await fetch(`${base}/api/market-quotes`, {method: "POST", headers: replayHeaders, body: JSON.stringify(replayCommand)});
+    const replay = await fetch(`${base}/api/market-quotes`, {method: "POST", headers: replayHeaders, body: JSON.stringify({...replayCommand, profile: {...profile, condition: "new", grade: "全新", warranty: "out", packaging: "unboxed", vram: "8G"}})});
+    assert.equal(first.status, 201);
+    assert.equal(replay.status, 201);
+    assert.equal(((await first.json()) as {data: {id: string}}).data.id, ((await replay.json()) as {data: {id: string}}).data.id);
+    const caseHeaders = {...headers, "idempotency-key": `${prefix}-case-replay`};
+    const {quoteScope: _scope, coreModel: _core, ...defaultCore} = command;
+    const lowerCase = {...defaultCore, model: "rtx4070ti"};
+    const foreignCore: MarketQuote = {...local.marketQuotes[0]!, id: `${prefix}-FOREIGN-Q`, quoteScope: "core", coreId: "GPU-NVIDIA-RTX4070TI", coreModel: "RTX4070TI", model: "RTX4070TI", productName: "RTX4070TI", productId: "", profile: coreQuoteProfile(), source: "异店基础报价"};
+    await saveStateRecords([{key: "marketQuotes", items: [foreignCore]}], undefined, tenantId, `${storeId}-other`);
+    const caseCreate = await fetch(`${base}/api/market-quotes`, {method: "POST", headers: caseHeaders, body: JSON.stringify(lowerCase)});
+    assert.equal(caseCreate.status, 201, await caseCreate.clone().text());
+    const canonical = (await caseCreate.json() as {data: MarketQuote}).data;
+    assert.deepEqual([canonical.model, canonical.coreModel, canonical.productName, canonical.coreId], ["RTX4070TI", "RTX4070TI", "RTX4070TI", "GPU-NVIDIA-RTX4070TI"]);
+    const revisionBeforeReplay = await getStateRevision();
+    for (const model of ["RTX4070TI", "RTX4070ti"]) {
+      const retry = await fetch(`${base}/api/market-quotes`, {method: "POST", headers: caseHeaders, body: JSON.stringify({...lowerCase, quoteScope: "core", model, coreModel: model, coreId: canonical.coreId, profile: coreQuoteProfile()})});
+      assert.equal(retry.status, 201, await retry.clone().text());
+      assert.equal((await retry.json() as {data: MarketQuote}).data.id, canonical.id);
+      assert.equal(await getStateRevision(), revisionBeforeReplay);
+    }
+    for (const changes of [{refSellPrice: 1}, {source: "另一来源"}, {validUntil: "2099-01-01"}]) assert.equal((await fetch(`${base}/api/market-quotes`, {method: "POST", headers: caseHeaders, body: JSON.stringify({...lowerCase, ...changes})})).status, 409);
+    assert.equal((await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify({...lowerCase, model: "4070ti"})})).status, 400);
+    assert.equal((await fetch(`${base}/api/market-quotes`, {method: "POST", headers, body: JSON.stringify({...lowerCase, productId: "FAKE"})})).status, 400);
+    const noSourceHeaders = {...headers, "idempotency-key": `${prefix}-no-source`};
+    const noSourceCommand = {...lowerCase, model: "rtx4060ti", source: undefined};
+    const noSourceResponse = await fetch(`${base}/api/market-quotes`, {method: "POST", headers: noSourceHeaders, body: JSON.stringify(noSourceCommand)});
+    assert.equal(noSourceResponse.status, 201, await noSourceResponse.clone().text());
+    const noSourceCreated = (await noSourceResponse.json() as {data: MarketQuote}).data;
+    assert.equal(noSourceCreated.source, undefined);
+    assert.equal(noSourceCreated.coreId, "GPU-NVIDIA-RTX4060TI");
+    const noSourceRevision = await getStateRevision();
+    for (const source of ["", " "]) {
+      const retry = await fetch(`${base}/api/market-quotes`, {method: "POST", headers: noSourceHeaders, body: JSON.stringify({...noSourceCommand, source})});
+      assert.equal(retry.status, 201, await retry.clone().text());
+      assert.equal((await retry.json() as {data: MarketQuote}).data.id, noSourceCreated.id);
+      assert.equal(await getStateRevision(), noSourceRevision);
+    }
+    assert.equal((await fetch(`${base}/api/market-quotes/${foreignCore.id}`, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 1, todaySellPrice: 2})})).status, 404);
+    const historical: MarketQuote = {...local.marketQuotes[0]!, id: `${prefix}-OLD-PRODUCT`, quoteScope: "product", productId: product.id, model: "rtx5060", coreModel: "rtx5060", coreId: "GPU-NVIDIA-RTX5060", source: "历史商品报价",
+      profile: {condition: "used", grade: "95新", warranty: "any", packaging: "any", vram: "8G", currency: "CNY"}, refBuyPrice: 10, refSellPrice: 20,
+      history: [{date: "old-unqualified", buyPrice: 10, sellPrice: 20}, {date: "old-colliding", buyPrice: 100, sellPrice: 200, quoteKey: "core|GPU-NVIDIA-RTX5060|CNY"}]};
+    await saveStateRecords([{key: "marketQuotes", items: [historical]}], undefined, tenantId, storeId);
+    const historicalPath = `${base}/api/market-quotes/${historical.id}`;
+    const conversion = {todayBuyPrice: 110, todaySellPrice: 210, quoteScope: "core", productId: "", profile: coreQuoteProfile(), coreModel: "RTX5060"};
+    const beforeUnconfirmed = await getStateRevision();
+    for (const body of [{todayBuyPrice: 110, todaySellPrice: 210}, {...conversion, profile: historical.profile}, {...conversion, productId: undefined}]) assert.equal((await fetch(historicalPath, {method: "PATCH", headers, body: JSON.stringify(body)})).status, 400);
+    assert.equal(await getStateRevision(), beforeUnconfirmed);
+    const conversionHeaders = {...headers, "idempotency-key": `${prefix}-convert-product`};
+    const convertedResponse = await fetch(historicalPath, {method: "PATCH", headers: conversionHeaders, body: JSON.stringify(conversion)});
+    assert.equal(convertedResponse.status, 200, await convertedResponse.clone().text());
+    const converted = (await convertedResponse.json() as {data: MarketQuote}).data;
+    assert.equal(converted.quoteScope, "core");
+    assert.equal(converted.productId, "");
+    assert.deepEqual([converted.model, converted.coreModel, converted.productName], ["RTX5060", "RTX5060", "RTX5060"]);
+    assert.equal(converted.changeRatio, undefined);
+    assert.deepEqual(converted.history?.[0], historical.history?.[0]);
+    assert.match(converted.history?.[1].quoteKey || "", /^historical-product\|/);
+    assert.equal(converted.history?.[1].buyPrice, 100);
+    assert.equal((await fetch(historicalPath, {method: "PATCH", headers: conversionHeaders, body: JSON.stringify({...conversion, coreModel: "rtx5060"})})).status, 200);
+    const peer = {...historical, id: `${prefix}-OLD-PRODUCT-PEER`};
+    await saveStateRecords([{key: "marketQuotes", items: [peer]}], undefined, tenantId, storeId);
+    const beforeConflict = await getStateRevision();
+    assert.equal((await fetch(`${base}/api/market-quotes/${peer.id}`, {method: "PATCH", headers, body: JSON.stringify(conversion)})).status, 409);
+    assert.equal(await getStateRevision(), beforeConflict);
+    const unbound: MarketQuote = {...historical, id: `${prefix}-OLD-UNBOUND`, quoteScope: undefined, coreId: undefined, coreModel: undefined, profile: undefined, productId: "",
+      history: [{date: "unbound-old", buyPrice: 1, sellPrice: 2, quoteKey: "core|GPU-NVIDIA-RTX5050|CNY"}]};
+    await saveStateRecords([{key: "marketQuotes", items: [unbound]}], undefined, tenantId, storeId);
+    const unboundPath = `${base}/api/market-quotes/${unbound.id}`;
+    const beforeLegacyDenial = await getStateRevision();
+    assert.equal((await fetch(unboundPath, {method: "PATCH", headers, body: JSON.stringify({todayBuyPrice: 10, todaySellPrice: 20})})).status, 400);
+    assert.equal(await getStateRevision(), beforeLegacyDenial);
+    const confirmedLegacy = await fetch(unboundPath, {method: "PATCH", headers, body: JSON.stringify({...conversion, coreModel: "rtx5050", source: "确认旧报价核心"})});
+    assert.equal(confirmedLegacy.status, 200, await confirmedLegacy.clone().text());
+    const normalizedLegacy = (await confirmedLegacy.json() as {data: MarketQuote}).data;
+    assert.deepEqual([normalizedLegacy.model, normalizedLegacy.coreModel, normalizedLegacy.productName], ["RTX5050", "RTX5050", "RTX5050"]);
+    assert.equal(normalizedLegacy.changeRatio, undefined);
+    assert.match(normalizedLegacy.history?.[0].quoteKey || "", /^historical-unconfirmed\|/);
+    assert.equal(normalizedLegacy.history?.[0].date, "unbound-old");
+    assert.equal(normalizedLegacy.history?.[0].buyPrice, 1);
+    assert.deepEqual(await facts(), initial);
+    const imported = await fetch(`${base}/api/market-quotes/import`, {method: "POST", headers, body: JSON.stringify({quotes: [{...command, refBuyPrice: 38100, source: "导入后的来源"}]})});
+    assert.equal(imported.status, 201, await imported.clone().text());
+    const importedData = await imported.json() as {data: {updated: number; created: number; quotes: Array<{id: string; source: string}>}};
+    assert.equal(importedData.data.updated, 1);
+    assert.equal(importedData.data.created, 0);
+    assert.equal(importedData.data.quotes[0]!.id, created.data.id);
+    assert.equal(importedData.data.quotes[0]!.source, "导入后的来源");
+    const beforeConflictingImport = await getStateRevision();
+    const conflictingImport = await fetch(`${base}/api/market-quotes/import`, {method: "POST", headers, body: JSON.stringify({quotes: [
+      {...command, refBuyPrice: 38100, profile}, {...command, refBuyPrice: 39000, profile: {...profile, condition: "new", grade: "全新"}},
+    ]})});
+    assert.equal(conflictingImport.status, 409);
+    assert.equal(await getStateRevision(), beforeConflictingImport);
+    const beforeFailedImport = await getStateRevision();
+    const invalidImport = await fetch(`${base}/api/market-quotes/import`, {method: "POST", headers, body: JSON.stringify({quotes: [
+      {...command, model: "RTX4060", coreModel: "RTX4060", profile: {...profile, vram: "8G"}},
+      {...command, model: "RTX4070", coreModel: "RTX4070", profile: {...profile, vram: "12G"}, categoryId: `${prefix}-missing-category`},
+    ]})});
+    assert.equal(invalidImport.status, 400, await invalidImport.clone().text());
+    assert.equal(await getStateRevision(), beforeFailedImport);
+    const afterFailedImport = await fetch(`${base}/api/market-quotes`, {headers: {cookie: owner.cookie}});
+    const afterFailedData = await afterFailedImport.json() as {data: {marketQuotes: Array<{coreModel: string}>}};
+    assert.equal(afterFailedData.data.marketQuotes.some(row => ["RTX4060", "RTX4070"].includes(row.coreModel)), false);
+    const limited = await signIn(viewer.username, "local-core-quote-password");
+    const viewerHeaders = {cookie: limited.cookie, "content-type": "application/json", "x-csrf-token": limited.csrfToken};
+    for (const [path, method, body] of [["/api/market-quotes", "POST", command], [`/api/market-quotes/${created.data.id}`, "PATCH", {todayBuyPrice: 1, todaySellPrice: 2}], ["/api/market-quotes/import", "POST", {quotes: [command]}]] as const) assert.equal((await fetch(`${base}${path}`, {method, headers: viewerHeaders, body: JSON.stringify(body)})).status, 403);
+    const restricted = await fetch(`${base}/api/market-quotes`, {headers: {cookie: limited.cookie}});
+    const restrictedData = await restricted.json() as {data: {marketQuotes: Array<Record<string, unknown>>}};
+    const masked = restrictedData.data.marketQuotes.find(row => row.id === created.data.id)!;
+    assert.equal(restrictedData.data.marketQuotes.some(row => row.id === foreignCore.id), false);
+    assert.equal(restrictedData.data.marketQuotes.find(row => row.id === peer.id)?.quoteScope, "product");
+    assert.equal("refBuyPrice" in masked, false);
+    assert.equal("refSellPrice" in masked, false);
+    assert.ok((masked.history as Array<Record<string, unknown>>).every(point => !("buyPrice" in point) && !("sellPrice" in point)));
+    assert.deepEqual(await facts(), initial);
+  } finally {await closeServer(server);}
+});
 
 if (process.env.RUN_BACKEND_HTTP_TESTS === "1") assertTestDatabaseConfigured();
 

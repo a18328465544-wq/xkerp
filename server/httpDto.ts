@@ -13,6 +13,7 @@ import {salesChannelValues, salesOutboundStatusValues, salesPaymentStatusValues}
 import {salesPaymentMethodValues} from "../src/types/sales.ts";
 import {assemblyOperationTypeValues} from "../src/types/assembly.ts";
 import {quoteTrendValues} from "../src/types/quote.ts";
+import {coreQuoteProfile} from "../src/utils/quoteReference.ts";
 import {crmBusinessStatusValues, crmContactMethodValues, crmCustomerStageValues, crmFollowUpResultValues, crmIntentValues, crmLeadStageValues, crmQuoteStatusValues, crmRequirementStageValues, quickCaptureDeliveryMethodValues, quickCaptureIntentValues, quickCaptureSourceTypeValues, quickCaptureTransactionValues, crmLeadPriorityValues} from "../src/types/crm.ts";
 import {creatableAftersalesTypes} from "../src/types/aftersales.ts";
 import {orderPoolBlockers, orderPoolDocumentTypes, orderPoolExceptionStages, orderPoolMainStages, orderPoolOrderTypes, orderPoolPartyTypeValues, orderPoolPriorityValues, orderPoolQueueValues} from "../src/types/order-pool.ts";
@@ -1228,17 +1229,54 @@ export const assemblyCreateDto = z.object({
   if (value.type === "组装" && (!value.afterSn || !value.afterProductName)) context.addIssue({code: "custom", path: ["afterSn"], message: "组装必须填写新设备 SN 和商品名称"});
 });
 
-export const marketQuoteCreateDto = z.object({
+const marketQuoteMetadataFields = {
+  quoteScope: z.literal("core").optional(),
+  coreId: requiredText("核心 ID", 120).optional(),
+  coreModel: requiredText("核心型号", 160).optional(),
+  productId: optionalText(120),
+  profile: z.object({
+    condition: z.enum(["any", "new", "used"]), grade: z.string().trim().max(80),
+    warranty: z.enum(["any", "in", "out"]), packaging: z.enum(["any", "boxed", "unboxed"]),
+    vram: z.string().trim().max(80), currency: z.literal("CNY"),
+  }).strict().optional(),
+  source: optionalText(300),
+  validUntil: z.union([z.iso.date(), z.literal(""), z.null()]).transform(value => value || undefined).optional(),
+};
+
+function validateMarketQuoteMetadata(value: {quoteScope?: string; coreId?: string; coreModel?: string; source?: string; productId?: string}, context: z.RefinementCtx, updating = false) {
+  if (value.productId) context.addIssue({code: "custom", message: "核心报价不能关联商品", path: ["productId"]});
+  if (!value.quoteScope) {
+    return;
+  }
+  if (!updating && !value.coreModel) context.addIssue({code: "custom", message: "核心关联必须填写核心型号"});
+}
+
+function normalizeCoreQuoteBody(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) && "quoteScope" in value && value.quoteScope === "core" ? {...value, profile: coreQuoteProfile()} : value;
+}
+
+export const marketQuoteCreateDto = z.preprocess(value => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const command = {...value, quoteScope: Reflect.get(value, "quoteScope") ?? "core", coreModel: Reflect.get(value, "coreModel") ?? Reflect.get(value, "model")};
+  return normalizeCoreQuoteBody(command);
+}, z.object({
   model: requiredText("型号", 160),
   brand: requiredText("品牌", 120),
   categoryId: optionalText(120),
-  refBuyPrice: nonNegativeMoney,
-  refSellPrice: nonNegativeMoney,
+  refBuyPrice: nonNegativeMoney.nullable(),
+  refSellPrice: nonNegativeMoney.nullable(),
   trend: z.enum(quoteTrendValues),
   fluctuation: optionalText(300),
   updateTime: dateText,
-}).strict();
-export const marketQuoteUpdateDto = z.object({todayBuyPrice: nonNegativeMoney, todaySellPrice: nonNegativeMoney, categoryId: optionalText(120).nullable().optional(), remarks: optionalText(500)}).strict();
+  ...marketQuoteMetadataFields,
+}).strict().superRefine((value, context) => {
+  validateMarketQuoteMetadata(value, context);
+  if (value.refBuyPrice === null && value.refSellPrice === null) context.addIssue({code: "custom", message: "至少填写一个参考价格"});
+}));
+export const marketQuoteUpdateDto = z.preprocess(normalizeCoreQuoteBody, z.object({todayBuyPrice: nonNegativeMoney.nullable(), todaySellPrice: nonNegativeMoney.nullable(), categoryId: optionalText(120).nullable().optional(), remarks: optionalText(500), ...marketQuoteMetadataFields}).strict().superRefine((value, context) => {
+  validateMarketQuoteMetadata(value, context, true);
+  if (value.todayBuyPrice === null && value.todaySellPrice === null) context.addIssue({code: "custom", message: "至少填写一个参考价格"});
+}));
 export const marketQuoteImportDto = z.object({quotes: z.array(marketQuoteCreateDto).min(1, "请至少提供一条行情参考数据").max(2000, "单次最多导入 2000 条行情参考")}).strict();
 
 export const aftersalesCreateDto = z.object({

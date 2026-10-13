@@ -1351,42 +1351,54 @@ test("product template updates active inventory and quotes without rewriting his
   assert.equal(state.logs[0].afterVal, "已同步未售出库存和行情名称");
 });
 
-test("market quote batch import updates matching brand and model and creates new quotes", () => {
+test("market quote batch import canonicalizes complete cores, deduplicates and rejects invalid batches atomically", () => withFixedNow("2026-07-12T04:30:00Z", () => {
   const state = createInitialState();
   const actions = createStoreActions(state);
   const existing = actions.createMarketQuote({
-    model: "批量导入测试 RTX 5090",
+    model: "RTX5090",
     brand: "NVIDIA",
+    source: "门店批量测试",
     refBuyPrice: 20000,
     refSellPrice: 22000,
   });
 
+  const before = structuredClone(state);
+  assert.throws(() => actions.importMarketQuotes([
+    {model: "RTX5080", brand: "NVIDIA", source: "门店批量测试", refBuyPrice: 1, refSellPrice: 2},
+    {model: "", brand: "NVIDIA", source: "门店批量测试", refBuyPrice: 1, refSellPrice: 2},
+  ]), /型号不能为空/);
+  assert.deepEqual(state, before);
+
   const result = actions.importMarketQuotes([
     {
-      model: "批量导入测试 RTX 5090",
+      model: "rtx5090",
       brand: "NVIDIA",
+      source: "门店批量测试",
       refBuyPrice: 21000,
       refSellPrice: 23000,
       fluctuation: "批量更新价格",
       updateTime: "2026-07-12",
     },
     {
-      model: "批量导入测试 RX 9070",
+      model: "RX9070",
       brand: "AMD",
+      source: "门店批量测试",
       refBuyPrice: 4200,
       refSellPrice: 4700,
     },
-    { model: "", brand: "NVIDIA", refBuyPrice: 1, refSellPrice: 2 },
+    {model: "rx9070", brand: "AMD", source: "门店批量测试", refBuyPrice: 4200, refSellPrice: 4700},
   ]);
 
   assert.equal(result.created, 1);
   assert.equal(result.updated, 1);
   assert.equal(result.skipped, 1);
-  assert.equal(state.marketQuotes.filter((quote) => quote.model === "批量导入测试 RTX 5090").length, 1);
+  assert.equal(state.marketQuotes.filter((quote) => quote.coreId === "GPU-NVIDIA-RTX5090").length, 1);
+  assert.equal(state.marketQuotes.find((quote) => quote.id === existing.id)?.model, "RTX5090");
   assert.equal(state.marketQuotes.find((quote) => quote.id === existing.id)?.todayBuyPrice, 21000);
-  assert.equal(state.marketQuotes.find((quote) => quote.id === existing.id)?.updateTime, "2026-07-12");
-  assert.equal(state.marketQuotes.filter((quote) => quote.model === "批量导入测试 RX 9070").length, 1);
-});
+  assert.equal(state.marketQuotes.find((quote) => quote.id === existing.id)?.updateTime, "2026-07-12 12:30");
+  assert.equal(state.marketQuotes.filter((quote) => quote.model === "RX9070").length, 1);
+  assert.deepEqual({products: state.products, inventory: state.inventory}, {products: before.products, inventory: before.inventory});
+}));
 
 test("estimated sell price sync updates product and active inventory without touching sold cards", () => {
   const state = createInitialState();

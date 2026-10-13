@@ -1,5 +1,6 @@
 import type {SortingState} from "@tanstack/react-table";
 import type {MarketQuoteFilters, MarketQuoteItem} from "@/src/types/quote";
+import {quoteScopeLabel, quoteTitle} from "./quote.reference";
 
 export const UNCLASSIFIED_QUOTE_CATEGORY = "__unclassified__";
 export const defaultQuoteFilters: MarketQuoteFilters = {keyword: "", brand: "all", categoryId: "all", trend: "all", page: 1, pageSize: 20};
@@ -40,7 +41,7 @@ export function filterQuotes(quotes: MarketQuoteItem[], filters: MarketQuoteFilt
     if (filters.categoryId !== "all" && filters.categoryId !== UNCLASSIFIED_QUOTE_CATEGORY && quote.categoryId !== filters.categoryId) return false;
     if (filters.trend !== "all" && quote.trend !== filters.trend) return false;
     if (!keyword) return true;
-    const searchable = normalized([quote.id, quote.productName, quote.model, quote.brand, quote.version || "", quote.categoryName || "", quote.note || ""].join(" "));
+    const searchable = normalized([quote.id, quote.productName, quoteTitle(quote), quote.brand, quote.version || "", quote.categoryName || "", quote.note || "", quote.coreId || "", quote.source || "", quote.validUntil || "", quoteScopeLabel(quote)].join(" "));
     return keyword.split(" ").every((part) => searchable.includes(part));
   });
 }
@@ -52,7 +53,11 @@ export function sortQuotes(quotes: MarketQuoteItem[], sorting: SortingState) {
   return [...quotes].sort((left, right) => {
     const leftValue = left[rule.id as keyof MarketQuoteItem];
     const rightValue = right[rule.id as keyof MarketQuoteItem];
-    if (typeof leftValue === "number" || typeof rightValue === "number") return (Number(leftValue || 0) - Number(rightValue || 0)) * direction;
+    if (typeof leftValue === "number" || typeof rightValue === "number") {
+      if (leftValue === undefined) return 1;
+      if (rightValue === undefined) return -1;
+      return (Number(leftValue) - Number(rightValue)) * direction;
+    }
     return String(leftValue || "").localeCompare(String(rightValue || ""), "zh-CN", {numeric: true}) * direction;
   });
 }

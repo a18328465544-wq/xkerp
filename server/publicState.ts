@@ -9,6 +9,10 @@ import { sanitizeCommissionRecord } from "./commissionRecords.ts";
 import {canViewReturnType, projectReturnOrderForPermissions, projectPurchaseInvoiceForPermissions, projectSalesInvoiceForPermissions, projectCustomerForPermissions, projectVendorForPermissions, projectInventoryForPermissions} from "./returnPermissionProjection.ts";
 import {projectAftersalesRecordForPermissions} from "./aftersalesPermissionProjection.ts";
 import type {StateMergePatch} from "./statePatch.ts";
+import {storeDate} from "../src/utils/storeTime.ts";
+import type {QuoteProductOption} from "../src/types/quote.ts";
+import {productCoreIdentity, quoteIsExpired, resolveQuoteReference} from "../src/utils/quoteReference.ts";
+import {inventoryQuoteStatusValues} from "../src/types/inventory.ts";
 
 export type PublicStateMode = "full" | "initial";
 
@@ -17,6 +21,12 @@ function projectProductForUser(product: ProductTemplate, permissions: {showCost?
     ...(!permissions.showCost ? {refBuyPrice: 0, ...(product.lastBuyPrice !== undefined ? {lastBuyPrice: 0} : {})} : {}),
     ...(!permissions.showProfit ? {refSellPrice: 0, ...(product.lastSellPrice !== undefined ? {lastSellPrice: 0} : {})} : {}),
   };
+}
+
+function projectLogForUser(log: AppState["logs"][number], permissions: MarketQuotePricePermissions) {
+  if (permissions.showCost === true && permissions.showProfit === true) return log;
+  const {beforeVal: _before, afterVal: _after, ...safe} = log;
+  return safe;
 }
 
 export function canAccessMenu(permissions: { allowedMenus: string[] }, menuId: string) {
@@ -90,14 +100,18 @@ export function projectMarketQuoteForUser(quote: MarketQuote, permissions: Marke
       if (!point || typeof point !== "object" || typeof point.date !== "string" || !point.date.trim()) return [];
       return [{
         date: point.date,
+        ...(point.quoteKey !== undefined ? {quoteKey: point.quoteKey} : {}),
         ...(showCost ? { buyPrice: point.buyPrice } : {}),
         ...(showProfit ? { sellPrice: point.sellPrice } : {}),
       }];
     })
     : [];
-  const projected = {...quote, history};
+  const projected = {...quote, history, expired: quoteIsExpired(quote, storeDate())};
   const fields = projected as unknown as Record<string, unknown>;
-  if (!showCost) for (const key of MARKET_QUOTE_COST_FIELDS) delete fields[key];
+  if (!showCost) {
+    for (const key of MARKET_QUOTE_COST_FIELDS) delete fields[key];
+    delete fields.trend;
+  }
   if (!showProfit) for (const key of MARKET_QUOTE_PROFIT_FIELDS) delete fields[key];
   return projected as MarketQuote;
 }
@@ -173,7 +187,7 @@ export function publicStateForUser(state: AppState, user?: SystemUserAccount, mo
       frozenAmount: 0,
     }));
   }
-  if (!canAccessMenu(permissions, "logs")) scopedState.logs = [];
+  scopedState.logs = canAccessMenu(permissions, "logs") ? scopedState.logs.map(log => projectLogForUser(log, permissions)) : [];
   if (!canAccessMenu(permissions, "permissions")) {
     scopedState.systemUsers = scopedState.systemUsers.filter((item) => item.id === user.id);
     // The current role's effective settings are required by the frontend to render its own
@@ -234,7 +248,7 @@ export function publicCollectionForUser(
   if (key === "paymentOutRecords" && !canAccessMenu(permissions, "payment_out")) return [];
   if (key === "accountTransfers" && !canAccessMenu(permissions, "account_transfer")) return [];
   if (key === "returnOrders") return state.returnOrders.filter((item) => canViewReturnType(permissions, item.type)).map((item) => projectReturnOrderForPermissions(item, permissions));
-  if (key === "logs" && !canAccessMenu(permissions, "logs")) return [];
+  if (key === "logs") return canAccessMenu(permissions, "logs") ? state.logs.map(log => projectLogForUser(log, permissions)) : [];
   if (key === "settlementAccounts" && !canAccessMenu(permissions, "settlement_accounts")) {
     return state.settlementAccounts.map((account) => ({
       ...account,
@@ -271,10 +285,36 @@ export function publicStateMergeForUser(state: AppState, patch: StateMergePatch,
 export function publicMarketQuoteInventoryForUser(state: AppState, user?: SystemUserAccount) {
   if (!user) return [];
   const permissions = getPermissionsForUser(state, user);
-  if (!canAccessCollection(permissions, "inventory")) return [];
-  return inventoryWithCurrentAge(state.inventory).map((item) => ({
+  if (!canAccessMenu(permissions, "quotes")) return [];
+  const seen = new Set<string>();
+  return state.inventory.filter(item => {
+    if (!item.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  }).map((item) => ({
+    id: item.id,
     productId: item.productId,
     status: item.status,
     ...(permissions.showCost ? { costPrice: item.costPrice } : {}),
   }));
+}
+
+/** Quote selectors never receive template finances, stock pricing, SNs or locations. */
+export function publicMarketQuoteProductsForUser(state: AppState, user?: SystemUserAccount): QuoteProductOption[] {
+  if (!user || !canAccessMenu(getPermissionsForUser(state, user), "quotes")) return [];
+  return state.products.map(product => {
+    const option = {id: product.id, name: product.name, category: product.category || "", brand: product.brand, model: product.model, version: product.version, vram: product.vram};
+    const core = productCoreIdentity(option);
+    return {...option, ...(core ? {coreId: core.coreId, coreModel: core.coreModel} : {})};
+  });
+}
+
+export function publicMarketQuoteStockCountForUser(state: AppState, user?: SystemUserAccount) {
+  const products = new Map(publicMarketQuoteProductsForUser(state, user).map(product => [product.id, product]));
+  const inventory = publicMarketQuoteInventoryForUser(state, user);
+  return inventory.filter(item => {
+    if (!inventoryQuoteStatusValues.includes(item.status as typeof inventoryQuoteStatusValues[number])) return false;
+    const product = products.get(item.productId);
+    return product && resolveQuoteReference(product, state.marketQuotes, storeDate()).status === "matched";
+  }).length;
 }
