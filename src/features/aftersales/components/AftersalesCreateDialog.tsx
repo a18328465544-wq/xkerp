@@ -36,6 +36,8 @@ export function AftersalesCreateDialog({open, candidates, pending, error, onOpen
           <ErpDetailFact label="客户" value={`${selected.customerName} · ${selected.contact || "未记录联系"}`} />
           <ErpDetailFact label="商品" value={selected.model || selected.productName} />
           <ErpDetailFact label="SN" value={selected.serialNumber} />
+          <ErpDetailFact label="售出时长" value={selected.soldDays === undefined ? "销售日期未记录" : `已售 ${selected.soldDays} 天`} />
+          <div className="rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 py-2"><p className="text-xs text-[var(--erp-color-text-muted)]">保修状态</p><div className="mt-1 flex flex-wrap items-center gap-2"><ErpStatusBadge label={selected.warrantyStatus || "未记录保修期"} tone={selected.warrantyStatus === "在保" ? "success" : selected.warrantyStatus === "过保" ? "danger" : "neutral"} />{selected.warrantyRemainingDays !== undefined && selected.warrantyStatus === "在保" && <span className="text-xs text-[var(--erp-color-text-secondary)]">最长剩余 {selected.warrantyRemainingDays} 天</span>}</div><p className="mt-1 text-xs text-[var(--erp-color-text-muted)]">{selected.warrantyPeriods?.length ? selected.warrantyPeriods.map((period) => `${period.source}至 ${period.endDate}${period.active ? `（剩余 ${period.remainingDays} 天）` : "（已过期）"}`).join("；") : "未记录有效的出厂保或店保期限"}</p></div>
           <div className="col-span-2"><GpuSnDateLookupButton sn={selected.serialNumber} model={selected.model} label="查询该卡 SN 出厂日期" /></div>
         </div>}
         <ErpField label="售后类型" error={form.formState.errors.type?.message}>

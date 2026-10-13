@@ -12,7 +12,7 @@ const item: SalesListItem = {
 };
 type NodeProps = {children: ReactNode; onClick?: () => void; to?: string; params?: {salesId: string}; className?: string; type?: string};
 function controls(overrides: Partial<Parameters<typeof SalesDetailActions>[0]> = {}) {
-  const presentation = SalesDetailActions({item, canReceive: true, canEditHistory: true, canDelete: true, onReceive: () => undefined, onDelete: () => undefined, ...overrides});
+  const presentation = SalesDetailActions({item, canReceive: true, canEditHistory: true, canDelete: true, onReceive: () => undefined, onDelete: () => undefined, onReceipt: () => undefined, ...overrides});
   const element = presentation.props.desktopContent;
   const nodes = Children.toArray(element.props.children).filter((node) => isValidElement<NodeProps>(node));
   return {element, nodes, buttons: nodes.filter((node) => node.type === Button), links: nodes.filter((node) => node.props.to)};
@@ -22,29 +22,29 @@ const text = (children: ReactNode) => renderToStaticMarkup(<>{children}</>);
 test("sales drawer actions use shared phone geometry while preserving exact edit/detail destinations", () => {
   const {element, buttons, links} = controls();
   assert.match(element.props.className, /erp-form-actions/);
-  assert.equal(buttons.length, 2);
+  assert.equal(buttons.length, 3);
   assert.equal(links.length, 2);
   assert.deepEqual(links.map((link) => [link.props.to, link.props.params]), [["/sales/$salesId/edit", {salesId: item.id}], ["/sales/$salesId", {salesId: item.id}]]);
   for (const node of links) assert.match(node.props.className || "", /erp-focus-ring.*min-w-0.*justify-center/);
   for (const node of buttons) assert.equal(node.props.type, "button");
 });
 
-test("sales action callbacks open the existing flows with the unchanged selected document", () => {
+test("sales action callbacks open settlement, receipt and delete flows with the unchanged selected document", () => {
   const before = structuredClone(item);
   const calls: string[] = [];
-  const {buttons} = controls({onReceive: (selected) => {assert.equal(selected, item); calls.push("receive");}, onDelete: (selected) => {assert.equal(selected, item); calls.push("delete");}});
+  const {buttons} = controls({onReceive: (selected) => {assert.equal(selected, item); calls.push("receive");}, onDelete: (selected) => {assert.equal(selected, item); calls.push("delete");}, onReceipt: (selected) => {assert.equal(selected, item); calls.push("receipt");}});
   for (const node of buttons) node.props.onClick?.();
-  assert.deepEqual(calls, ["receive", "delete"]);
+  assert.deepEqual(calls, ["receive", "receipt", "delete"]);
   assert.deepEqual(item, before);
 });
 
 test("settled, shipped and restricted sales retain their permission and deletion boundaries", () => {
   const restricted = controls({canReceive: false, canEditHistory: false, canDelete: false});
-  assert.equal(restricted.buttons.length, 0);
+  assert.equal(restricted.buttons.length, 1);
   assert.equal(restricted.links.length, 1);
-  assert.equal(controls({item: {...item, unpaidAmount: 0}}).buttons.length, 1);
+  assert.equal(controls({item: {...item, unpaidAmount: 0}}).buttons.length, 2);
   const shipped = controls({item: {...item, outboundStatus: "已出库"}});
-  assert.equal(shipped.buttons.length, 1);
+  assert.equal(shipped.buttons.length, 2);
   assert.match(text(shipped.nodes.map((node) => node.props.children)), /已出库销售单不能删除/);
   const receiveButton = shipped.buttons[0];
   assert.ok(receiveButton);

@@ -23,6 +23,7 @@ import {salesChannelValues, salesOutboundStatusValues, salesPaymentStatusValues}
 import type {SalesListFilters, SalesListItem, SalesListLine, SalesListSortKey} from "@/src/types/sales";
 import {createSalesListColumns} from "../sales.columns";
 import {SalesDetailActions} from "../components/SalesDetailActions";
+import {SalesReceiptDialog} from "../components/SalesReceiptDialog";
 import {countActiveSalesListFilters, defaultSalesListFilters, parseSalesListFilters, salesListFiltersToSearch, selectSalesList} from "../sales.filters";
 
 const permissionDefaults = {showCost: false, showProfit: false, canDelete: false, canEditHistory: false, allowedMenus: [] as string[]};
@@ -96,6 +97,7 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState<SalesListItem | null>(null);
   const [settling, setSettling] = useState<SalesListItem | null>(null);
+  const [receiptItem, setReceiptItem] = useState<SalesListItem | null>(null);
   const {columnVisibility, setColumnVisibility, density, setDensity} = useTablePreferences<VisibilityState>({feature: "sales-list", userId: session.user.id, defaultVisibility: emptyVisibility});
   const selection = useMemo(() => query.data?.selection || selectSalesList(query.data?.items || [], filters), [filters, query.data]);
   const metricValue = (value: string | number) => displayQueryValue(query, value, filterPending);
@@ -212,12 +214,13 @@ function SalesListContent({filters, commitFilters, detailId, commitDetail, sessi
     tableTitle="销售单据"
     columnSettings={{columns, visibility: columnVisibility, onVisibilityChange: setColumnVisibility, density, onDensityChange: setDensity}}
     table={table}
-    overlayOpen={Boolean(detailId || deleting || settling)}
+    overlayOpen={Boolean(detailId || deleting || settling || receiptItem)}
     overlays={<>
-      <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-detail" defaultWidth={900} minWidth={720} maxWidth={1160} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要" footer={selectedDetail ? <SalesDetailActions item={selectedDetail} canReceive={canReceive} canEditHistory={session.permissions.canEditHistory} canDelete={session.permissions.canDelete} onReceive={(item) => {settlementMutation.reset(); setSettling(item);}} onDelete={setDeleting} /> : undefined}>
+      <ErpDetailDrawer open={Boolean(detailId)} onOpenChange={(open) => {if (!open) commitDetail(null);}} modal={false} resizable drawerKey="sales-detail" defaultWidth={900} minWidth={720} maxWidth={1160} title={selectedDetail?.invoiceNo || detailId || "销售单摘要"} description="销售单摘要" footer={selectedDetail ? <SalesDetailActions item={selectedDetail} canReceive={canReceive} canEditHistory={session.permissions.canEditHistory} canDelete={session.permissions.canDelete} onReceive={(item) => {settlementMutation.reset(); setSettling(item);}} onDelete={setDeleting} onReceipt={setReceiptItem} /> : undefined}>
         {selectedDetail ? <SalesSnapshotDetail item={selectedDetail} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} /> : detailQuery.isPending || query.isPending ? <ErpLoadingState title="正在定位销售单" description="正在跨页查找完整销售单明细。" /> : detailQuery.error ? <ErpEmptyState title="销售单详情加载失败" description={(detailQuery.error as Error).message} action={<Button type="button" size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] p-4 text-sm text-[var(--erp-color-warning)]">当前未找到该销售单，可能已删除或当前账号无权查看。</div>}
       </ErpDetailDrawer>
       <ErpOutstandingSettlementDialog open={Boolean(settling)} context={settlementContext} accounts={accountsQuery.data?.accounts || []} accountsLoading={accountsQuery.isPending || accountsQuery.isFetching} error={settlementMutation.error instanceof Error ? settlementMutation.error.message : accountsQuery.error instanceof Error ? accountsQuery.error.message : undefined} pending={settlementMutation.isPending} onOpenChange={(open) => {if (!open) {setSettling(null); settlementMutation.reset();}}} onSubmit={(values) => settlementMutation.mutateAsync(values).then(() => undefined)} />
+      <SalesReceiptDialog item={receiptItem} open={Boolean(receiptItem)} onOpenChange={(open) => {if (!open) setReceiptItem(null);}} />
       <ErpDocumentDeleteDialog
         open={Boolean(deleting)}
         title="删除销售单"
@@ -269,6 +272,7 @@ export function SalesSnapshotDetail({item, showCost, showProfit}: {item: SalesLi
         {label: "物流", value: shipping},
         {label: "需要发票", value: item.needInvoice ? "是" : "否"},
         {label: "售后条款", value: item.aftersalesTerms || "—"},
+        {label: "店保", value: item.storeWarrantyDays && item.storeWarrantyDays > 0 ? `${item.storeWarrantyDays} 天` : "未单独设置"},
         {label: "备注", value: item.remarks || "—"},
       ]},
     ]}

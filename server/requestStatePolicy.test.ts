@@ -135,6 +135,16 @@ test("inspection and inventory mutations reload and persist purchase revisions w
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/items"), []);
 });
 
+test("inventory stocktake uses an isolated serialized write and scoped read collections", () => {
+  const path = "/api/inventory/stocktakes";
+  assert.equal(requiresStateSerialization("POST", path), true);
+  assert.deepEqual(getPersistenceKeysForRequest("POST", path), ["inventoryStocktakes", "logs"]);
+  assert.deepEqual(getReloadKeysForRequest("GET", path), ["inventoryStocktakes"]);
+  assert.deepEqual(getReloadKeysForRequest("GET", `${path}/reference`), ["inventory"]);
+  assert.deepEqual(getReloadKeysForRequest("POST", path), ["inventory", "inventoryStocktakes"]);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/market-risk"), ["inventory"]);
+});
+
 test("aftersales writes reload related identities and source payments while SQL workspace reads stay lightweight", () => {
   assert.deepEqual(getAuthenticationReloadKeys("GET", "/api/aftersales/workspace"), ["systemUsers"]);
   assert.deepEqual(getReloadKeysForRequest("GET", "/api/aftersales/workspace"), []);

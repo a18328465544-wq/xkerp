@@ -2,6 +2,7 @@ import type {AftersalesCreateRequestDto, AftersalesMutationResponseDto, Aftersal
 import {aftersalesActiveStatusValues, aftersalesStatuses, aftersalesTypes, type AftersalesCandidate, type AftersalesCreateFormValues, type AftersalesListItem, type AftersalesResolutionFormValues, type AftersalesStatus, type AftersalesType, type AftersalesWorkspaceSnapshot} from "@/src/types/aftersales";
 import {inventoryAftersalesCandidateStatusValues} from "@/src/types/inventory";
 import {matchesAftersalesSource} from "@/src/utils/aftersalesSource";
+import {summarizeWarranty} from "@/src/utils/warranty";
 
 function record(value: unknown): Record<string, unknown> {return value && typeof value === "object" ? value as Record<string, unknown> : {};}
 function text(value: unknown, fallback = "") {return typeof value === "string" ? value : value === null || value === undefined ? fallback : String(value);}
@@ -43,10 +44,12 @@ export function adaptAftersalesWorkspace(response: AftersalesStateResponseDto): 
     const invoice = invoices.find((row) => text(row.invoiceNo) === saleId || text(row.id) === saleId);
     if (!invoice) return [];
     const serialNumber = text(card.sn);
+    const saleDate = optionalText(invoice.outboundTime) || optionalText(card.salesTime) || optionalText(invoice.date);
+    const warranty = summarizeWarranty({saleDate, factoryWarrantyDate: optionalText(card.warrantyDate), storeWarrantyDays: amount(invoice.storeWarrantyDays), aftersalesTerms: text(invoice.aftersalesTerms)});
     const active = items.find((item) => matchesAftersalesSource({salesInvoiceNo: item.salesInvoiceNo, inventoryNo: item.inventoryNo, sn: item.serialNumber},
       {id: text(invoice.id), invoiceNo: text(invoice.invoiceNo)}, {id: text(card.id), sn: serialNumber})
       && aftersalesActiveStatusValues.includes(item.status as (typeof aftersalesActiveStatusValues)[number]));
-    return [{inventoryId: text(card.id), productName: text(card.productName, text(card.model, "未记录商品")), serialNumber, saleInvoiceNo: text(invoice.invoiceNo, text(invoice.id)), customerId: optionalText(invoice.customerId), customerName: text(invoice.customerName, "未记录客户"), contact: text(invoice.contact), model: optionalText(card.model), saleDate: optionalText(invoice.date), activeClaimId: active?.id}];
+    return [{inventoryId: text(card.id), productName: text(card.productName, text(card.model, "未记录商品")), serialNumber, saleInvoiceNo: text(invoice.invoiceNo, text(invoice.id)), customerId: optionalText(invoice.customerId), customerName: text(invoice.customerName, "未记录客户"), contact: text(invoice.contact), model: optionalText(card.model), saleDate: warranty.saleDate, soldDays: warranty.soldDays, warrantyStatus: warranty.status, warrantyRemainingDays: warranty.remainingDays, warrantyEndDate: warranty.endDate, warrantySources: warranty.sources, warrantyPeriods: warranty.periods, activeClaimId: active?.id}];
   }).filter((item) => Boolean(item.inventoryId && item.saleInvoiceNo && item.serialNumber));
   return {items, candidates, source: text(record(response.meta).source) === "database-workspace" ? "database-workspace" : "state-snapshot"};
 }

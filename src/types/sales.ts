@@ -44,6 +44,8 @@ export interface SalesInvoice {
   expressCompany?: string;
   expressNo?: string;
   aftersalesTerms: string;
+  /** Shop warranty duration; zero means no separately promised shop warranty. */
+  storeWarrantyDays?: number;
   handleBy: string;
   remarks?: string;
   items: SalesItem[];
@@ -129,6 +131,8 @@ export interface SalesListItem {
   expressCompany: string;
   expressNo: string;
   aftersalesTerms: string;
+  /** Shop warranty duration; zero means no separately promised shop warranty. */
+  storeWarrantyDays?: number;
   handleBy: string;
   remarks: string;
   productSummary: string;
@@ -357,6 +361,8 @@ export interface SalesFormValues {
   expressCompany: string;
   expressNo: string;
   aftersalesTerms: string;
+  /** Shop warranty duration; zero means no separately promised shop warranty. */
+  storeWarrantyDays?: number;
   handleBy: string;
   paymentHandler: string;
   remarks: string;

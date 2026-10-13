@@ -22,11 +22,13 @@ export interface ErpBarcodeScannerDialogProps {
   title?: string;
   description?: string;
   formats?: readonly string[];
+  /** Keep the camera session open after a code is found, for inventory stocktake. */
+  continuous?: boolean;
   /** Fallback guidance for environments without either decoding engine. */
   unsupportedMessage?: string;
 }
 
-export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title = "摄像头扫码", description = "识别条形码或二维码，识别成功后回填当前字段。", formats = DEFAULT_BARCODE_FORMATS, unsupportedMessage = "当前浏览器不支持摄像头条码识别，请使用扫码枪或手动输入 SN。"}: ErpBarcodeScannerDialogProps) {
+export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title = "摄像头扫码", description = "识别条形码或二维码，识别成功后回填当前字段。", formats = DEFAULT_BARCODE_FORMATS, continuous = false, unsupportedMessage = "当前浏览器不支持摄像头条码识别，请使用扫码枪或手动输入 SN。"}: ErpBarcodeScannerDialogProps) {
   const phone = useErpPhone();
   const manualId = useId();
   const [manualCode, setManualCode] = useState("");
@@ -52,6 +54,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
   const [softwareZoom, setSoftwareZoom] = useState(1);
   const [cameraReady, setCameraReady] = useState(false);
   const [zoomPending, setZoomPending] = useState(false);
+  const lastContinuousScanRef = useRef(new Map<string, number>());
   const zoomActionRef = useRef<((zoom: number) => Promise<void>) | undefined>(undefined);
   // Keep the camera session tied to the visible, active Tab, not callback identity. Some
   // feature forms intentionally provide inline handlers and should not cause
@@ -59,8 +62,8 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
   // intent in the parent so returning to a kept-alive Tab starts a fresh stream.
   const callbacksRef = useRef({onDetected, onOpenChange});
   callbacksRef.current = {onDetected, onOpenChange};
-  const scannerConfigRef = useRef({formats, unsupportedMessage});
-  scannerConfigRef.current = {formats, unsupportedMessage};
+  const scannerConfigRef = useRef({formats, continuous, unsupportedMessage});
+  scannerConfigRef.current = {formats, continuous, unsupportedMessage};
 
   useEffect(() => {
     if (!cameraEnabled) {setCameraReady(false); return;}
@@ -76,6 +79,9 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
     let cropZoom = 1;
     let frameIndex = 0;
     let settleUntil = 0;
+    const recentCodes = lastContinuousScanRef.current;
+    // Do not carry the duplicate cooldown into a later scanner session.
+    recentCodes.clear();
     let readZoomFrame: ReturnType<typeof createBarcodeFrameReader> | undefined;
     const isActive = () => active && !controller.signal.aborted && cameraEnabledRef.current;
     const releaseCamera = () => {
@@ -86,6 +92,17 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
     };
     const deliverCode = (value: string) => {
       if (!isActive()) return;
+      if (scannerConfigRef.current.continuous) {
+        const code = value.trim();
+        if (!code) return;
+        const now = Date.now();
+        const previous = recentCodes.get(code.toLocaleUpperCase("en-US")) || 0;
+        if (now - previous < 1400) return;
+        recentCodes.set(code.toLocaleUpperCase("en-US"), now);
+        for (const [key, time] of recentCodes) if (now - time > 15_000) recentCodes.delete(key);
+        callbacksRef.current.onDetected(code);
+        return;
+      }
       active = false;
       cameraEnabledRef.current = false;
       controller.abort();
@@ -200,7 +217,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
             if (useCrop) readZoomFrame ??= createBarcodeFrameReader();
             const source = useCrop ? readZoomFrame!(video, cropZoom) : video;
             const delivered = source && await deliverActiveBarcode(source, (frame) => decoder!.detect(frame), () => isActive() && !photoInFlight && !zoomInFlight && videoRef.current === video, deliverCode);
-            if (delivered) return;
+            if (delivered && !scannerConfigRef.current.continuous) return;
           } catch (caught) {
             if (isActive()) {releaseCamera(); setError(barcodeScannerErrorMessage(caught));}
             return;
@@ -249,7 +266,7 @@ export function ErpBarcodeScannerDialog({open, onOpenChange, onDetected, title =
       {cameraReady && decoderPreparing && <span role="status" className="sr-only">正在准备条码识别</span>}
       {error && !starting && <div aria-hidden="true" className="erp-barcode-camera-status"><Camera className="h-5 w-5" /><span>摄像头暂不可用</span></div>}
     </div>
-    <p className="mt-2 text-center text-xs text-[var(--erp-color-text-secondary)]">模糊时请稍微拿远，再放大。将条形码横向放入框内，保留两侧白边</p>
+    <p className="mt-2 text-center text-xs text-[var(--erp-color-text-secondary)]">{continuous ? "连续扫码中；同一条码短时间内只记录一次。" : "模糊时请稍微拿远，再放大。将条形码横向放入框内，保留两侧白边"}</p>
     <div className="mt-3" data-erp-region="barcode-camera-controls"><ErpSegmentedControl label="扫码放大倍数" value={String(magnification)} options={[{value: "1", label: "1×"}, {value: "1.5", label: "1.5×"}, {value: "2", label: "2×"}]} disabled={!cameraReady || Boolean(error) || starting || decoderPreparing || photoPending || zoomPending} onValueChange={(value) => {void zoomActionRef.current?.(Number(value));}} /></div>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/bmp" className="hidden" aria-label="选择条码图片" onChange={(event) => {const file = event.target.files?.[0]; event.target.value = ""; if (file) void photoScanRef.current?.(file);}} />
     <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={photoPending || zoomPending} onClick={() => imageInputRef.current?.click()}><ImageUp className="h-4 w-4" />{photoPending ? "正在识别图片…" : "从图片识别"}</Button>{error ? <Button type="button" variant="secondary" disabled={starting || photoPending} onClick={() => setAttempt((current) => current + 1)}><RefreshCw className="h-4 w-4" />重试扫码</Button> : <Button type="button" variant="secondary" data-erp-region="barcode-camera-switch" className={cameras.length > 1 ? undefined : "invisible"} aria-hidden={cameras.length < 2 ? true : undefined} tabIndex={cameras.length > 1 ? undefined : -1} disabled={!cameraReady || starting || photoPending || zoomPending || cameras.length < 2} onClick={() => {

@@ -105,6 +105,7 @@ export function createInitialState(options: {includeCrmDemoData?: boolean; inclu
     gpuCores: [],
     products: structuredClone(initialProducts),
     inventory: structuredClone(initialInventory),
+    inventoryStocktakes: [],
     inspections: structuredClone(initialInspections),
     purchaseInvoices: structuredClone(initialPurchaseInvoices),
     salesInvoices: structuredClone(initialSalesInvoices),

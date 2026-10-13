@@ -33,6 +33,7 @@ const protectedPatterns = [
   /^\/api\/market-quotes(?:\/(?:import|[^/]+))?$/,
   /^\/api\/market-quote-categories(?:\/[^/]+)?$/,
   /^\/api\/inventory\/(?:batch|import|scan-flow)$/,
+  /^\/api\/inventory\/stocktakes$/,
   /^\/api\/gpu-sn\/estimate\/save$/,
   /^\/api\/customers(?:\/[^/]+)?$/,
   /^\/api\/customer-categories(?:\/[^/]+)?$/,

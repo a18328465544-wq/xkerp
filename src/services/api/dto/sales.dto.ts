@@ -132,6 +132,7 @@ export interface SalesCreateRequestDto {
   expressCompany?: string;
   expressNo?: string;
   aftersalesTerms: string;
+  storeWarrantyDays?: number;
   handleBy: string;
   remarks?: string;
   items: SalesCreateItemDto[];

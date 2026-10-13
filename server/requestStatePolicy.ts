@@ -149,6 +149,7 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   if (startsWithAny(path, ["/api/aftersales"])) return AFTERSALES_KEYS;
   if (startsWithAny(path, ["/api/order-pool"])) return ["customerOrders", "logs"];
   if (startsWithAny(path, ["/api/market-quotes"])) return ["marketQuotes", "logs"];
+  if (path === "/api/inventory/stocktakes") return ["inventoryStocktakes", "logs"];
   if (startsWithAny(path, ["/api/inventory"])) return ["inventory", "products", "purchaseInvoices", "salesInvoices", "purchaseCommissions", "logs"];
   if (path === "/api/gpu-sn/estimate/save") return ["inventory", "logs"];
   if (path === "/api/gpu-sn/parse") return null;
@@ -232,6 +233,10 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   // into the process cache before executing their indexed, server-side paginated query.
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/crm/quick-capture/leads") return [];
   if (method.toUpperCase() === "GET" && path === "/api/inventory/items") return [];
+  if (method.toUpperCase() === "GET" && path === "/api/inventory/market-risk") return ["inventory"];
+  if (method.toUpperCase() === "GET" && path === "/api/inventory/stocktakes/reference") return ["inventory"];
+  if (method.toUpperCase() === "GET" && path === "/api/inventory/stocktakes") return ["inventoryStocktakes"];
+  if (method.toUpperCase() === "POST" && path === "/api/inventory/stocktakes") return ["inventory", "inventoryStocktakes"];
   if (method.toUpperCase() === "GET" && /^\/api\/inventory\/items\/[^/]+\/journey$/.test(path)) {
     return ["inventory", "inspections", "purchaseInvoices", "salesInvoices", "paymentInRecords", "paymentOutRecords", "returnOrders", "aftersales", "assemblyOperations"];
   }

@@ -26,12 +26,17 @@ test("inventory routes share the inventory permission boundary", () => {
     getState: () => ({}) as never,
     actions: () => ({}) as never,
     sanitizeInventoryRows: (rows) => rows,
+    permissionsForRequest: () => ({showCost: true, showProfit: true}),
   });
 
   assert.deepEqual(registered, [
     {method: "PATCH", path: "/api/inventory/batch", middlewareCount: 2},
     {method: "GET", path: "/api/inventory/summary", middlewareCount: 2},
     {method: "GET", path: "/api/inventory/items", middlewareCount: 2},
+    {method: "GET", path: "/api/inventory/market-risk", middlewareCount: 2},
+    {method: "GET", path: "/api/inventory/stocktakes/reference", middlewareCount: 2},
+    {method: "GET", path: "/api/inventory/stocktakes", middlewareCount: 2},
+    {method: "POST", path: "/api/inventory/stocktakes", middlewareCount: 2},
     {method: "POST", path: "/api/inventory/import", middlewareCount: 2},
     {method: "POST", path: "/api/inventory/scan-flow", middlewareCount: 2},
   ]);

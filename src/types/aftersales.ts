@@ -40,6 +40,12 @@ export interface AftersalesCandidate {
   contact: string;
   model?: string;
   saleDate?: string;
+  soldDays?: number;
+  warrantyStatus?: "在保" | "过保" | "未记录保修期";
+  warrantyRemainingDays?: number;
+  warrantyEndDate?: string;
+  warrantySources?: string[];
+  warrantyPeriods?: Array<{source: string; endDate: string; remainingDays: number; active: boolean}>;
   activeClaimId?: string;
 }
 

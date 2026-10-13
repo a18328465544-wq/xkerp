@@ -60,6 +60,7 @@ export function stripLazyStateCollections(state: ReturnType<typeof sanitizeAppSt
     ...state,
     products: [],
     logs: [],
+    inventoryStocktakes: [],
     financeLedger: [],
     settlementLedger: [],
   };

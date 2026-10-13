@@ -24,6 +24,15 @@ test("sales defaults use the current operator for the salesperson and receipt ha
   const values = createSalesDefaults("当前操作人");
   assert.equal(values.handleBy, "当前操作人");
   assert.equal(values.paymentHandler, "当前操作人");
+  assert.equal(values.storeWarrantyDays, 0);
+});
+
+test("sales form validates explicit shop warranty days", () => {
+  const values = validValues();
+  values.storeWarrantyDays = 90;
+  assert.equal(salesOrderSchema.safeParse(values).success, true);
+  values.storeWarrantyDays = 3651;
+  assert.equal(salesOrderSchema.safeParse(values).success, false);
 });
 
 test("sales form rejects duplicate product candidates", () => {

@@ -10,6 +10,7 @@ import type {
   PurchaseInvoice,
   SalesInvoice,
 } from "../src/types.ts";
+import type {InventoryStocktakeRecord} from "../src/types/inventory.ts";
 import {createProductIdentityIndex, sameProductIdentity} from "../src/utils/productIdentity.ts";
 import {isInventorySellableStatus, matchesInventoryListFilters, normalizeInventoryListFilters, type InventoryListFilters} from "../src/utils/inventoryFilters.ts";
 import {inventoryInspectionPendingStatusValues, inventoryRepairStatusValues} from "../src/types/inventory.ts";
@@ -17,12 +18,14 @@ import {buildPendingSalesNeedByProduct, productIdentityKey} from "./storeInvento
 import {ValidationError} from "./errors.ts";
 import {advancePurchaseVersionsForInventory} from "./purchaseRecordVersion.ts";
 import {gpuSnBrandIdFromName, parseGpuSnDate} from "./gpuSnDate.ts";
+import {createInventoryStocktake as createStocktakeRecord} from "./storeInventoryStocktakes.ts";
 
 export type InventoryOperationsState = {
   inventory: CardInventory[];
   products: ProductTemplate[];
   salesInvoices: SalesInvoice[];
   purchaseInvoices: PurchaseInvoice[];
+  inventoryStocktakes?: InventoryStocktakeRecord[];
 };
 
 export type InventoryOperationsDependencies = {
@@ -32,6 +35,7 @@ export type InventoryOperationsDependencies = {
   dateKey: () => string;
   genId: (prefix: string) => string;
   getActiveRole: () => string;
+  getActiveActor: () => string;
   findCardBySn: (sn: string, excludeId?: string) => CardInventory | undefined;
   ensurePurchaseCommissionsForSale: (invoice: SalesInvoice, time?: string, handler?: string) => void;
   addLog: (user: string, module: string, type: string, target: string, beforeVal?: string, afterVal?: string) => unknown;
@@ -49,6 +53,7 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
     dateKey,
     genId,
     getActiveRole,
+    getActiveActor,
     findCardBySn,
     ensurePurchaseCommissionsForSale,
     addLog,
@@ -369,5 +374,16 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
     return {saved: true, inventory: updated, estimate: updated.gpuFactoryDateEstimate};
   };
 
-  return {batchUpdateInventory, getInventorySummary, importInventoryRows, scanInventoryFlow, saveGpuFactoryDateEstimate};
+  const createInventoryStocktake = (input: {warehouseLocation?: string; snapshotToken: string; scannedCodes: string[]}) => createStocktakeRecord({
+    state: state as InventoryOperationsState & {inventoryStocktakes?: InventoryStocktakeRecord[]},
+    warehouseLocation: input.warehouseLocation,
+    snapshotToken: input.snapshotToken,
+    scannedCodes: input.scannedCodes,
+    handler: getActiveActor(),
+    createdAt: nowStamp(),
+    id: genId("PD"),
+    addLog,
+  });
+
+  return {batchUpdateInventory, getInventorySummary, importInventoryRows, scanInventoryFlow, createInventoryStocktake, saveGpuFactoryDateEstimate};
 }
