@@ -462,7 +462,7 @@ try {
     await page.getByRole("heading", {name: "进货与回收"}).waitFor();
     const purchaseCards = page.locator('[data-erp-region="line-items-cards"] [data-erp-component="transaction-line-item-card"]');
     if (await purchaseCards.count() !== 4 || !(await purchaseCards.first().isVisible())) throw new Error("tablet purchase form must expose four visible line-item cards");
-    if (await page.locator('[data-erp-region="line-items-table"]').isVisible()) throw new Error("tablet purchase form must not expose the clipped desktop line table");
+    if (await page.locator('[data-erp-region="line-items-table"]:visible').count() > 0) throw new Error("tablet purchase form must not expose the clipped desktop line table");
     const purchaseOverflow = await page.evaluate(() => ({scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth}));
     if (purchaseOverflow.scrollWidth > purchaseOverflow.innerWidth + 1) throw new Error("tablet purchase form overflowed the viewport");
     await page.goto(${baseLiteral} + "/finance/income");
@@ -543,16 +543,16 @@ try {
     await page.getByRole("button", {name: "添加商品", exact: true}).waitFor();
     const salesCards = page.locator('[data-erp-region="line-items-cards"] [data-erp-component="transaction-line-item-card"]');
     if (await salesCards.count() !== 0) throw new Error("mobile sales form should not show unselected empty line cards");
-    if (await page.locator('[data-erp-region="line-items-table"]').isVisible()) throw new Error("mobile sales form must not expose the clipped desktop line table");
+    if (await page.locator('[data-erp-region="line-items-table"]:visible').count() > 0) throw new Error("mobile sales form must not expose the clipped desktop line table");
     await page.goto(${baseLiteral} + "/purchase/new");
     await page.getByRole("heading", {name: "采购开单", exact: true}).waitFor();
     await page.getByText("添加本次采购的商品", {exact: true}).waitFor();
     await page.getByRole("button", {name: "添加商品", exact: true}).waitFor();
-    if (await page.locator('[data-erp-region="line-items-table"]').isVisible()) throw new Error("mobile purchase form must not expose the clipped desktop line table");
+    if (await page.locator('[data-erp-region="line-items-table"]:visible').count() > 0) throw new Error("mobile purchase form must not expose the clipped desktop line table");
     await page.goto(${baseLiteral} + "/products");
     await page.getByRole("heading", {name: "商品库"}).waitFor();
-    // ErpListPage puts the page's primary action in the phone dock.
-    await page.locator('[data-erp-component="mobile-action-dock"]').getByRole("button", {name: "新建模板"}).click();
+    // Compact search docks keep only search; the primary action is the header + button.
+    await page.locator('[data-erp-component="page-header"] [data-erp-phone-action="primary"]').click();
     const mobileProductDialog = page.getByRole("dialog").filter({has: page.getByRole("heading", {name: "新建商品规格模板"})});
     await mobileProductDialog.getByRole("heading", {name: "新建商品规格模板"}).waitFor();
     const mobileDialogState = await mobileProductDialog.evaluate((element) => {
@@ -732,8 +732,17 @@ try {
           originalPlay: HTMLMediaElement.prototype.play,
           originalMedia: Object.getOwnPropertyDescriptor(navigator.mediaDevices, "getUserMedia"),
         };
-        Object.defineProperty(navigator.mediaDevices, "getUserMedia", {configurable: true, value: async () => new MediaStream()});
-        HTMLMediaElement.prototype.play = async function () {};
+        // A live canvas stream: the preview needs sustained real frames before scanning.
+        Object.defineProperty(navigator.mediaDevices, "getUserMedia", {configurable: true, value: async () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = 64;
+          const context = canvas.getContext("2d");
+          context.fillRect(0, 0, 64, 64);
+          const stream = canvas.captureStream(10);
+          const repaint = setInterval(() => context.drawImage(canvas, 0, 0), 100);
+          for (const track of stream.getTracks()) {const stop = track.stop.bind(track); track.stop = () => {clearInterval(repaint); stop();};}
+          return stream;
+        }});
         window.BarcodeDetector = class {
           detect() {return new Promise((resolve) => window.scannerSmoke.frames.push(resolve));}
         };
@@ -802,12 +811,16 @@ try {
               const camera = window.cameraTabSmoke = {media: [], plays: [], frames: [], stops: [], detectors: 0};
               const createStream = index => {
                 const canvas = document.createElement("canvas");
-                canvas.width = canvas.height = 2;
-                canvas.getContext("2d").fillRect(0, 0, 2, 2);
-                const stream = canvas.captureStream(1);
+                canvas.width = canvas.height = 64;
+                const context = canvas.getContext("2d");
+                context.fillRect(0, 0, 64, 64);
+                // The scanner waits for a sustained stream of real frames before
+                // revealing the preview, so keep repainting like a live camera.
+                const stream = canvas.captureStream(10);
+                const repaint = setInterval(() => context.drawImage(canvas, 0, 0), 100);
                 for (const track of stream.getTracks()) {
                   const stop = track.stop.bind(track);
-                  track.stop = () => {camera.stops.push(index); stop();};
+                  track.stop = () => {clearInterval(repaint); camera.stops.push(index); stop();};
                 }
                 return stream;
               };
@@ -817,10 +830,12 @@ try {
                 camera.media.push(null);
                 return Promise.resolve(createStream(index));
               }});
+              const nativePlay = HTMLMediaElement.prototype.play;
               HTMLMediaElement.prototype.play = function () {
-                if (mode === "late-play") return new Promise(resolve => camera.plays.push(resolve));
+                // Real playback is still needed for the preview's frame check.
+                if (mode === "late-play") return new Promise(resolve => camera.plays.push(() => {nativePlay.call(this).catch(() => undefined); resolve();}));
                 camera.plays.push(null);
-                return Promise.resolve();
+                return nativePlay.call(this);
               };
               window.BarcodeDetector = class {
                 constructor() {camera.detectors++;}

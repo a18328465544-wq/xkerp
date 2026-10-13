@@ -152,8 +152,16 @@ with sync_playwright() as p:
                     page.evaluate("""code => {
                       window.__cameraStops = 0;
                       window.BarcodeDetector = class { async detect() { return [{rawValue: code}]; } };
-                      navigator.mediaDevices.getUserMedia = async () => {const stream = new MediaStream(); stream.getTracks = () => [{stop: () => window.__cameraStops++}]; return stream;};
-                      HTMLMediaElement.prototype.play = async () => {};
+                      // The scanner reveals its preview only after a sustained stream of real
+                      // frames, so the fixture keeps repainting a canvas like a live camera.
+                      navigator.mediaDevices.getUserMedia = async () => {
+                        const canvas = document.createElement("canvas"); canvas.width = 64; canvas.height = 64;
+                        const context = canvas.getContext("2d"); context.fillRect(0, 0, 64, 64);
+                        const stream = canvas.captureStream(10);
+                        const repaint = setInterval(() => context.drawImage(canvas, 0, 0), 100);
+                        stream.getTracks().forEach((track) => {const stop = track.stop.bind(track); track.stop = () => {clearInterval(repaint); window.__cameraStops++; stop();};});
+                        return stream;
+                      };
                     }""", STOCK["sn"])
                     page.locator("[data-erp-component=\"mobile-action-dock\"]").get_by_role("button", name="扫码", exact=True).click()
                     expect(page.get_by_role("searchbox", name="搜索库存", exact=True)).to_have_value(STOCK["sn"])
