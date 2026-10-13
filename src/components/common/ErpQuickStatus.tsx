@@ -1,8 +1,9 @@
 import {ArrowRight, MoreHorizontal} from "lucide-react";
-import {useState, type ReactNode} from "react";
+import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from "react";
 import {cn} from "@/src/lib/cn";
 import {Popover} from "@/src/components/ui";
 import {isZeroMetricValue} from "./ErpMetricCard";
+import {fittedQuickStatusCount} from "./quickStatusLayout";
 
 export type QuickStatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 export type QuickStatusVariant = "compact" | "workflow";
@@ -66,16 +67,54 @@ export function QuickStatusItem({item, variant = "compact"}: {item: QuickStatusI
   return <button data-erp-component="quick-status-item" data-variant={variant} type="button" onClick={action} className={cn(className, "transition-colors hover:bg-[var(--erp-color-surface-muted)]")} title={tooltip}>{content}</button>;
 }
 
-function QuickStatusOverflow({items, variant, expanded, onOpenChange}: {items: ReadonlyArray<QuickStatusItemData>; variant: QuickStatusVariant; expanded: boolean; onOpenChange: (open: boolean) => void}) {
+const overflowClassName = "erp-quick-status-overflow erp-focus-ring inline-flex min-h-[var(--erp-quick-status-height)] items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 text-xs font-medium text-[var(--erp-color-primary)] hover:bg-[var(--erp-color-surface-muted)]";
+
+function QuickStatusOverflow({items, variant, expanded, onOpenChange, fitted = false}: {items: ReadonlyArray<QuickStatusItemData>; variant: QuickStatusVariant; expanded: boolean; onOpenChange: (open: boolean) => void; fitted?: boolean}) {
   if (!items.length) return null;
   return <Popover.Root open={expanded} onOpenChange={onOpenChange}>
-    <Popover.Trigger className="erp-focus-ring inline-flex min-h-[var(--erp-quick-status-height)] items-center gap-1 rounded-[var(--erp-radius-sm)] px-2 text-xs font-medium text-[var(--erp-color-primary)] hover:bg-[var(--erp-color-surface-muted)]">更多 {items.length}<MoreHorizontal className="h-3.5 w-3.5" /></Popover.Trigger>
+    <Popover.Trigger className={overflowClassName} aria-label={fitted ? `更多状态（${items.length} 项）` : undefined} title={fitted ? `更多状态（${items.length} 项）` : undefined}>{fitted ? <span data-erp-region="status-overflow-label">更多状态 {items.length}</span> : <>更多 {items.length}</>}<MoreHorizontal className="h-3.5 w-3.5" /></Popover.Trigger>
     <Popover.Portal>
       <Popover.Positioner className="outline-none" sideOffset={6} align="end">
-        <Popover.Popup className="w-72 max-w-[calc(100vw-1.5rem)] rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none">{items.map((item, index) => <QuickStatusItem key={index} item={item} variant={variant} />)}</Popover.Popup>
+        <Popover.Popup onClickCapture={fitted ? (event) => {if ((event.target as HTMLElement).closest("button")) onOpenChange(false);} : undefined} className="w-72 max-w-[calc(100vw-1.5rem)] rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-2 shadow-[var(--erp-shadow-popover)] outline-none">{items.map((item, index) => <QuickStatusItem key={index} item={item} variant={variant} />)}</Popover.Popup>
       </Popover.Positioner>
     </Popover.Portal>
   </Popover.Root>;
+}
+
+/** The measuring copy contains only non-interactive facts, is clipped and
+ * hidden from accessibility, and never creates duplicate focus targets. */
+function FittedQuickStatusGroup({items, maxVisible, className}: {items: ReadonlyArray<QuickStatusItemData>; maxVisible: number; className?: string}) {
+  const root = useRef<HTMLDivElement>(null);
+  const measure = useRef<HTMLDivElement>(null);
+  const [count, setCount] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  useLayoutEffect(() => {
+    const container = root.current;
+    const row = measure.current;
+    if (!container || !row) return;
+    const update = () => {
+      const widths = Array.from(row.querySelectorAll<HTMLElement>('[data-erp-component="quick-status-item"]')).map((node) => node.getBoundingClientRect().width);
+      const overflowWidth = row.querySelector<HTMLElement>(".erp-quick-status-overflow")?.getBoundingClientRect().width ?? 0;
+      const gap = parseFloat(getComputedStyle(container).columnGap) || 0;
+      setCount(fittedQuickStatusCount(widths, container.clientWidth, overflowWidth, gap, maxVisible));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [items, maxVisible]);
+  const visibleCount = Math.min(count ?? 0, maxVisible, items.length);
+  // A resize must not resurrect an old open menu when its trigger reappears.
+  useEffect(() => setExpanded(false), [visibleCount]);
+  return <div ref={root} data-erp-component="quick-status-group" data-variant="compact" data-fit-container="true" data-fit-ready={count === null ? "false" : "true"} className={cn("erp-fitted-quick-status relative flex min-w-0 items-center gap-x-[var(--erp-quick-status-gap)]", className)}>
+    <div data-erp-region="status-measure" aria-hidden="true" inert><div ref={measure} className="flex w-max items-center gap-x-[var(--erp-quick-status-gap)]">
+      {items.map((item, index) => <QuickStatusItem key={index} item={{...item, action: undefined}} />)}
+      <span className={overflowClassName}><span data-erp-region="status-overflow-label">更多状态 {items.length}</span><MoreHorizontal className="h-3.5 w-3.5" /></span>
+    </div></div>
+    {items.slice(0, visibleCount).map((item, index) => <QuickStatusItem key={index} item={item} />)}
+    <QuickStatusOverflow items={items.slice(visibleCount)} variant="compact" expanded={expanded} onOpenChange={setExpanded} fitted />
+  </div>;
 }
 
 export interface QuickStatusGroupProps {
@@ -83,12 +122,15 @@ export interface QuickStatusGroupProps {
   maxVisible?: 1 | 2 | 3 | 4;
   className?: string;
   variant?: QuickStatusVariant;
+  /** Desktop headers fit complete items to their actual remaining slot. */
+  fitContainer?: boolean;
 }
 
-export function QuickStatusGroup({items, maxVisible = 4, className, variant = "compact"}: QuickStatusGroupProps) {
+export function QuickStatusGroup({items, maxVisible = 4, className, variant = "compact", fitContainer = false}: QuickStatusGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   if (!items.length) return null;
+  if (fitContainer && variant === "compact") return <FittedQuickStatusGroup items={items} maxVisible={maxVisible} className={className} />;
 
   const visible = items.slice(0, maxVisible);
   const overflow = items.slice(visible.length);

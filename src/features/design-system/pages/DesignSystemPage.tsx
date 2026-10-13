@@ -38,6 +38,7 @@ export function DesignSystemPage() {
   const [demoChoice, setDemoChoice] = useState("inventory");
   const [stressFilter, setStressFilter] = useState("");
   const [stressDate, setStressDate] = useState({startDate: "2026-10-01", endDate: "2026-10-08"});
+  const [headerStress, setHeaderStress] = useState(false);
   const isDevelopment = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
   if (!isDevelopment) return <ErpPageError title="组件展示页不可用" description="该页面仅在本地开发环境开放，不进入生产菜单。" />;
@@ -57,6 +58,16 @@ export function DesignSystemPage() {
   return <ErpDashboardPageFrame>
     <ErpPageHeader title="组件展示与验收" subtitle="Frontend V2 Design System · 仅开发环境可见" quickStatus={quickStatus} />
     <ErpPageContent className="space-y-[var(--erp-page-gap)]">
+    <div className="hidden lg:block" data-testid="header-fit-sample">
+      <DashboardSection title="单行页头压力验收">
+        <ErpPageHeader
+          title={headerStress ? "成都超长门店名称硬件回收与算力设备经营管理看板" : "经营看板"}
+          dateContent={<span className="inline-flex h-9 items-center whitespace-nowrap px-3 text-xs">2026-10-01 至 2026-10-13</span>}
+          quickStatus={[...quickStatus.map((item) => ({...item, value: headerStress ? "123,456,789 项" : item.value, action: () => setKeyword("页头状态已触发")})), {icon: <Boxes className="h-4 w-4" />, label: "需要跟进的第五项", value: "5 项", action: () => setKeyword("页头状态已触发")}]}
+          actions={<><Button variant="primary" onClick={() => setHeaderStress((value) => !value)}>切换压力数据</Button><Button data-erp-action="export" disabled>导出</Button><Button onClick={() => setKeyword("页头刷新已触发")}>刷新</Button></>}
+        />
+      </DashboardSection>
+    </div>
     <DashboardSection title="移动控件尺寸验收" description="仅本地样例：44px 普通触控、48px 主操作，输入文字 16px；桌面尺寸保持原样。">
       <div data-testid="mobile-control-contract" className="grid min-w-0 gap-3 md:grid-cols-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2"><Button size="xs">小按钮</Button><Button>普通按钮</Button><Button disabled>禁用按钮</Button><Button size="icon" aria-label="样例图标操作"><Boxes className="h-4 w-4" /></Button></div>

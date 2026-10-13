@@ -1,7 +1,7 @@
 import {Children, Fragment, isValidElement, useState, type ReactNode} from "react";
 import {MoreHorizontal, RefreshCw} from "lucide-react";
 import {Button, Popover} from "@/src/components/ui";
-import {useErpPhone} from "@/src/hooks/useErpViewport";
+import {useErpDesktop, useErpPhone} from "@/src/hooks/useErpViewport";
 import {ErpDialogShell} from "./ErpDialogShell";
 import {cn} from "@/src/lib/cn";
 import {QuickStatusGroup, type QuickStatusItemData, type QuickStatusVariant} from "./ErpQuickStatus";
@@ -67,6 +67,8 @@ export function resolveDesktopPageActions(actions: ReactNode) {
 export function ErpPageHeader({title, subtitle, density = "compact", quickStatus, quickStatusVariant = "compact", dateContent, actions, leading, phoneActionsMode = "collapse", phone: phoneProp}: ErpPageHeaderProps) {
   const phoneFromHook = useErpPhone();
   const phone = phoneProp ?? phoneFromHook;
+  const desktopFromHook = useErpDesktop();
+  const desktop = desktopFromHook && !phone;
   const [moreOpen, setMoreOpen] = useState(false);
   const [desktopMoreOpen, setDesktopMoreOpen] = useState(false);
   const rawActions = resolvePhonePageActions(actions);
@@ -81,16 +83,17 @@ export function ErpPageHeader({title, subtitle, density = "compact", quickStatus
   return <><ErpPageTopbar
     data-erp-component="page-header"
     data-density={density}
-    // The persistent sidebar leaves a narrow canvas at tablet widths. Keep
-    // the identity, quick-status strip, and actions in a readable stack until
-    // the wide desktop canvas is available; otherwise short titles wrap into
-    // two lines beside a partially wrapped status strip. On wide screens the
-    // status chips sit beside the actions instead of floating mid-row.
+    data-desktop-layout={desktop ? "inline" : undefined}
+    // Desktop owns one row. Tablet and phone keep their existing projection.
     className={cn(density === "default" && "gap-4")}
   >
     {leading && <div className="shrink-0">{leading}</div>}
     <ErpPageIdentity title={title} subtitle={showSubtitle ? subtitle : undefined} reserveSubtitle={showSubtitle && Boolean(subtitle)} />
+    {desktop && (hasQuickStatus || dateContent) && <ErpPageContext className="erp-page-header-context">
+      {dateContent && <div data-erp-region="header-date">{dateContent}</div>}
+      {hasQuickStatus && <QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} fitContainer />}
+    </ErpPageContext>}
     {phone && hasQuickStatus ? <ErpPageContext><QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} className="min-w-0" /></ErpPageContext> : null}
     {rightArea}
-  </ErpPageTopbar>{!phone && (hasQuickStatus || dateContent) && <ErpPageContext className="flex flex-wrap items-center gap-3">{dateContent}{hasQuickStatus && <QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} />}</ErpPageContext>}{phone && phoneActionsMode === "collapse" && secondary.length > 0 && <ErpDialogShell open={moreOpen} onOpenChange={setMoreOpen} title="页面操作" mobilePresentation="sheet"><div className="erp-phone-action-menu">{secondary}</div></ErpDialogShell>}</>;
+  </ErpPageTopbar>{!phone && !desktop && (hasQuickStatus || dateContent) && <ErpPageContext className="flex flex-wrap items-center gap-3">{dateContent}{hasQuickStatus && <QuickStatusGroup items={quickStatus!} variant={quickStatusVariant} />}</ErpPageContext>}{phone && phoneActionsMode === "collapse" && secondary.length > 0 && <ErpDialogShell open={moreOpen} onOpenChange={setMoreOpen} title="页面操作" mobilePresentation="sheet"><div className="erp-phone-action-menu">{secondary}</div></ErpDialogShell>}</>;
 }

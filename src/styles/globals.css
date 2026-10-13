@@ -675,6 +675,47 @@ input[inputmode="numeric"] {
   [data-erp-component="data-table"] table { font-size: var(--erp-font-table-body); }
   [data-erp-component="data-table"] :is(thead, tbody .text-xs) { font-size: var(--erp-font-table-meta); }
   [data-erp-region="page-context"] { padding-top: var(--erp-space-2); }
+  /* One owner for the desktop row: no sibling context strip or stacked
+     spacing. State counts overflow as whole facts, never as clipped text. */
+  [data-erp-component="page-header"][data-desktop-layout="inline"] {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--erp-space-4);
+  }
+  [data-erp-component="page-header"][data-desktop-layout="inline"] > [data-erp-region="page-identity"] {
+    flex: 0 1 auto;
+    max-width: 35%;
+  }
+  [data-erp-component="page-header"][data-desktop-layout="inline"] [data-erp-region="page-identity"] h1 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-erp-component="page-header"][data-desktop-layout="inline"] > .erp-page-header-context {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    gap: var(--erp-space-3);
+    padding: 0;
+  }
+  .erp-page-header-context > [data-erp-region="header-date"] { flex: 0 0 auto; }
+  .erp-page-header-context > [data-erp-region="header-date"] > * {
+    height: var(--erp-control-height-filter);
+    white-space: nowrap;
+  }
+  .erp-fitted-quick-status { flex: 1 1 0; container: erp-header-status / inline-size; min-width: var(--erp-control-height-filter); }
+  .erp-fitted-quick-status :is([data-erp-component="quick-status-item"], .erp-quick-status-overflow) { min-height: var(--erp-control-height-filter); white-space: nowrap; flex-shrink: 0; }
+  .erp-fitted-quick-status [data-erp-region="status-measure"] { position: absolute; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; }
+  [data-erp-component="page-header"][data-desktop-layout="inline"] > [data-erp-region="page-actions"] {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    margin-left: auto;
+  }
+  [data-page-frame="finance"] > [data-erp-component="page-header"][data-desktop-layout="inline"] { padding-bottom: 0; }
+  @container erp-header-status (max-width: 120px) {
+    .erp-quick-status-overflow [data-erp-region="status-overflow-label"] { display: none; }
+  }
 }
 [data-erp-component="dashboard-section"] > [data-erp-region="section-header"] {
   align-items: center;

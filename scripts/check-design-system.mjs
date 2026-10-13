@@ -90,6 +90,9 @@ const pageHeaderSource = fs.readFileSync(pageHeaderFile, "utf8");
 for (const prop of ["quickStatus", "dateContent", "actions"]) {
   if (!pageHeaderSource.includes(prop)) failures.push(`ErpPageHeader 缺少统一能力：${prop}`);
 }
+for (const contract of ["useErpDesktop", "data-desktop-layout", "erp-page-header-context", "fitContainer"]) {
+  if (!pageHeaderSource.includes(contract)) failures.push(`ErpPageHeader 缺少桌面单行契约：${contract}；修改页头后必须运行 test:header-browser。`);
+}
 
 const quickStatusFile = path.join(root, "src/components/common/ErpQuickStatus.tsx");
 const quickStatusSource = fs.readFileSync(quickStatusFile, "utf8");

@@ -41,6 +41,7 @@
     "test:mobile-browser": "python3 scripts/browser-mobile-workbench.py",
     "test:mobile-entry-browser": "python3 scripts/browser-mobile-entry-scroll.py",
     "test:controls-browser": "python3 scripts/browser-control-contracts.py",
+    "test:header-browser": "python3 scripts/browser-inline-header.py",
     "test:barcode-browser": "python3 scripts/browser-barcode-scanner.py",
     "test:barcode-camera-controls": "python3 scripts/browser-barcode-camera-controls.py",
     "test:barcode-startup": "python3 scripts/browser-barcode-startup.py",

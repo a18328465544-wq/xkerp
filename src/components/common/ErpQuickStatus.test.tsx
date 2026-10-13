@@ -28,6 +28,17 @@ test("QuickStatusGroup never renders more than four desktop items", () => {
 
 test("QuickStatusGroup renders no markup for empty input", () => {
   assert.equal(renderToStaticMarkup(<QuickStatusGroup items={[]} />), "");
+  assert.equal(renderToStaticMarkup(<QuickStatusGroup items={[]} fitContainer />), "");
+});
+
+test("fitted status measurement creates no duplicate interactive or accessibility targets", () => {
+  const markup = renderToStaticMarkup(<QuickStatusGroup fitContainer items={[{icon: "i", label: "完整状态", value: "123,456,789 项", action: () => undefined}]} />);
+  assert.match(markup, /data-fit-container="true"/);
+  assert.match(markup, /data-erp-region="status-measure" aria-hidden="true" inert=""/);
+  assert.match(markup, /123,456,789 项/);
+  // Until a real slot is measured, only the original overflow trigger is interactive.
+  assert.equal((markup.match(/<button/g) || []).length, 1);
+  assert.match(markup, /更多状态（1 项）/);
 });
 
 test("QuickStatusItem defaults to a one-line compact summary", () => {

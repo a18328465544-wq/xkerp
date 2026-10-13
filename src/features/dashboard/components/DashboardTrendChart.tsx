@@ -22,6 +22,7 @@ export default function DashboardTrendChart({data, showProfit = true}: {data: Da
 
   return <AreaTrendChart
     data={data}
+    curve="monotone"
     xKey="label"
     ariaLabel="销售趋势图"
     series={[

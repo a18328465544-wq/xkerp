@@ -82,7 +82,7 @@ export interface ErpPageIdentityProps extends Omit<HTMLAttributes<HTMLDivElement
 export function ErpPageIdentity({title, subtitle, reserveSubtitle = false, className, children, ...props}: ErpPageIdentityProps) {
   return (
     <div {...props} data-erp-region="page-identity" className={cn("min-w-0", className)}>
-      {title ? <h1 className="min-w-0 max-w-full break-normal text-erp-xl font-semibold tracking-tight text-[var(--erp-color-text)] sm:text-erp-2xl">{title}</h1> : null}
+      {title ? <h1 title={typeof title === "string" ? title : undefined} className="min-w-0 max-w-full break-normal text-erp-xl font-semibold tracking-tight text-[var(--erp-color-text)] sm:text-erp-2xl">{title}</h1> : null}
       {(subtitle || reserveSubtitle) ? <p className="erp-annotation-slot mt-1 max-w-3xl text-sm text-[var(--erp-color-text-secondary)]" data-empty={!subtitle || undefined} aria-hidden={!subtitle || undefined}>{subtitle || "\u00a0"}</p> : null}
       {children}
     </div>
