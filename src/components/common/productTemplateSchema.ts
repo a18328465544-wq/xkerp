@@ -7,6 +7,8 @@ const requiredText = (label: string, max: number) => z.string().trim().min(1, `$
 
 /** Canonical validation contract used by the Product Library template form everywhere. */
 export const productTemplateSchema = z.object({
+  gpuCoreId: z.string().optional(),
+  gpuSpecId: z.string().optional(),
   category: z.enum(productCategoryValues as unknown as [typeof productCategoryValues[number], ...typeof productCategoryValues[number][]]),
   brand: requiredText("品牌", 80),
   model: requiredText("型号", 120),

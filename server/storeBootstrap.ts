@@ -102,6 +102,7 @@ export function createInitialState(options: {includeCrmDemoData?: boolean; inclu
   const includeDemoData = options.includeDemoData ?? process.env.NODE_ENV !== "production";
   const includeCrmDemoData = includeDemoData && options.includeCrmDemoData !== false;
   const state: AppState = {
+    gpuCores: [],
     products: structuredClone(initialProducts),
     inventory: structuredClone(initialInventory),
     inspections: structuredClone(initialInspections),

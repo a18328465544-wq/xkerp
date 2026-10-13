@@ -41,6 +41,7 @@ export function canAccessMenu(permissions: { allowedMenus: string[] }, menuId: s
  * separately below.
  */
 const collectionMenuRequirements: Partial<Record<StateCollectionKey, string[]>> = {
+  gpuCores: ["products", "quotes", "purchase_add", "sales_add", "inventory"],
   products: ["products", "inventory", "purchase_add", "sales_add", "assembly", "inspections", "quotes", "dashboard"],
   inventory: ["inventory", "inspections", "purchase_add", "sales_add", "sales_outbound", "assembly", "return_purchase", "return_sales", "return_orders", "dashboard"],
   inspections: ["inspections", "inventory", "purchase_add"],

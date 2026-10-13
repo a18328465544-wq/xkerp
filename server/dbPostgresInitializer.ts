@@ -1,5 +1,6 @@
 import type {Pool, PoolClient} from "pg";
 import {releaseTransactionClient} from "./dbTransactionCleanup.ts";
+import {GPU_CORE_SCHEMA_SQL, GPU_CORE_TABLE_SQL} from "./gpuCoreSchema.ts";
 
 type CollectionTable = {table: string};
 
@@ -116,6 +117,10 @@ export function createPostgresInitializer({
         )
       `);
       for (const {table} of collectionTables) {
+        if (table === "gpu_core_catalog") {
+          await client.query(GPU_CORE_TABLE_SQL);
+          continue;
+        }
         await client.query(`
           CREATE TABLE IF NOT EXISTS ${table} (
             id TEXT PRIMARY KEY,
@@ -132,6 +137,7 @@ export function createPostgresInitializer({
       // Commercial migration assigns legacy rows to the default tenant.
       await applyCommercialFoundationSchema(client);
       await applyCommercialHardeningSchema(client);
+      if (collectionTables.some(({table}) => table === "gpu_core_catalog")) await client.query(GPU_CORE_SCHEMA_SQL);
       await applyAccountingControlPlaneSchema(client);
       await applyMarketQuoteCategorySchema(client);
       // Scope columns must exist before password upgrades write account rows.

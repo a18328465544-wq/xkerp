@@ -20,7 +20,7 @@ export function toVendorCreateRequest(values: VendorQuickCreateInput): VendorCre
 
 export function toProductTemplateCreateRequest(values: ProductQuickCreateInput): ProductTemplateCreateRequestDto {
   const imageUrls = values.imageUrls?.filter(Boolean);
-  return {name: buildProductTemplateName(values.brand, values.model, values.version, values.vram), category: values.category, brand: values.brand.trim(), model: values.model.trim(), version: values.version.trim() || "-", vram: values.vram.trim() || "-", refBuyPrice: values.refBuyPrice, refSellPrice: values.refSellPrice, ...(values.remarks.trim() ? {remarks: values.remarks.trim()} : {}), ...(imageUrls?.length ? {imageUrls} : {})};
+  return {name: buildProductTemplateName(values.brand, values.model, values.version, values.vram), category: values.category, brand: values.brand.trim(), model: values.model.trim(), version: values.version.trim() || "-", vram: values.vram.trim() || "-", refBuyPrice: values.refBuyPrice, refSellPrice: values.refSellPrice, ...(values.category === "显卡" && values.gpuCoreId ? {gpuCoreId: values.gpuCoreId, gpuSpecId: values.gpuSpecId} : {}), ...(values.remarks.trim() ? {remarks: values.remarks.trim()} : {}), ...(imageUrls?.length ? {imageUrls} : {})};
 }
 
 function record(value: unknown): Record<string, unknown> {

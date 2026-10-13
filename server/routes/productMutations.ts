@@ -4,12 +4,15 @@ import {saveStateRecords} from "../db.ts";
 import {stateDeleteRecords, stateMergeRecords, statePatchResponse, type StateDeletePatch, type StateMergePatch} from "../statePatch.ts";
 import type {createStoreActions} from "../store.ts";
 import type {ProductTemplate, SystemUserAccount} from "../../src/types.ts";
+import {validateGpuProduct} from "../gpuCoreCatalog.ts";
+import type {AppState} from "../store.ts";
 
 type ProductRequest = Request & {
   authUser?: SystemUserAccount;
 };
 
 type ProductMutationDependencies = {
+  getState?: () => AppState;
   requireMenu: (menuId: string) => RequestHandler;
   requireDeletePermission: RequestHandler;
   asyncRoute: (handler: RequestHandler) => RequestHandler;
@@ -34,7 +37,8 @@ export function registerProductMutationRoutes(app: Express, dependencies: Produc
     dependencies.requireMenu("products"),
     dependencies.asyncRoute(async (req, res) => {
       const productRequest = req as ProductRequest;
-      const command = parseHttpDto(productTemplateCreateDto, req.body);
+      const input = parseHttpDto(productTemplateCreateDto, req.body);
+      const command = dependencies.getState ? validateGpuProduct(dependencies.getState(), input, true) : input;
       const created = await dependencies.persistProductImages(productRequest, dependencies.actions(req).addProductTemplate(command));
       const stateMerge = dependencies.productTemplateMerge(productRequest, created);
       await saveStateRecords(stateMergeRecords(stateMerge));

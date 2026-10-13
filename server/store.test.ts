@@ -1341,7 +1341,8 @@ test("product template updates active inventory and quotes without rewriting his
     ...state.inventory,
   ];
 
-  const renamed = { ...product, name: "RTX 4090 华硕 ROG 猛禽 24G 联动版", model: "RTX 4090 LINK" };
+  const renamed = { ...product, name: "RTX 4090 华硕 ROG 猛禽 24G 联动版", version: "ROG 猛禽 联动版" };
+  assert.throws(() => actions.updateProductTemplate({...product, model: "RTX5090"}), /不能改变核心/);
   actions.updateProductTemplate(renamed);
 
   assert.equal(state.inventory.find((item) => item.id === activeCard.id)?.productName, renamed.name);

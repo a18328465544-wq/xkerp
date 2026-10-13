@@ -24,6 +24,7 @@ function normalizeCondition(condition: string | undefined): CardInventory["condi
 
 /** Normalize legacy enum values and upgrade plaintext credentials at load time. */
 export function normalizeStateConditions(state: AppState) {
+  state.gpuCores ||= [];
   state.inventory = state.inventory.map((card) => ({
     ...card,
     condition: normalizeCondition(card.condition) || card.condition,

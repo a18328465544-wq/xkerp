@@ -20,9 +20,11 @@ test("commercial foundation creates tenant, store, membership, subscription and 
 
 test("operator commercial migration mirrors all legacy collection scopes", () => {
   const operatorSql = readFileSync(new URL("./migrations/004_commercial_foundation.sql", import.meta.url), "utf8");
+  const coreSql = readFileSync(new URL("./migrations/010_gpu_core_catalog.sql", import.meta.url), "utf8");
   for (const table of COMMERCIAL_COLLECTION_TABLES) {
-    assert.match(operatorSql, new RegExp(table), `operator SQL is missing ${table}`);
+    assert.match(table === "gpu_core_catalog" ? coreSql : operatorSql, new RegExp(table), `operator SQL is missing ${table}`);
   }
+  assert.match(coreSql, /PRIMARY KEY \(tenant_id, store_id, id\)/);
   assert.match(operatorSql, new RegExp(COMMERCIAL_FOUNDATION_SCHEMA_VERSION));
   assert.match(operatorSql, /gpu_tenant_memberships/);
   assert.match(operatorSql, /custom_permissions JSONB NOT NULL DEFAULT '\[\]'::jsonb/);

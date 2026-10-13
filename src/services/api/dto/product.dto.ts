@@ -9,6 +9,8 @@ export interface ProductLibraryResponseDto {
 }
 
 export interface ProductTemplateRequestDto {
+  gpuCoreId?: string;
+  gpuSpecId?: string;
   name: string;
   category: ProductCategory;
   brand: string;

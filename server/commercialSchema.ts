@@ -119,6 +119,7 @@ const ACCOUNTING_EVENT_PROJECTION_SQL = ACCOUNTING_EVENT_SOURCE_TABLES.map(({tab
 // indexes make the legacy JSONB collections safe for multiple stores without
 // changing the business document shape.
 export const COMMERCIAL_COLLECTION_TABLES = [
+  "gpu_core_catalog",
   "gpu_products",
   "gpu_inventory",
   "gpu_inspections",

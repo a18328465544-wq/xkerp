@@ -20,6 +20,7 @@ const requiredMigrations = [
   "commercial-hardening-v1",
   "accounting-guardrails-v1",
   "accounting-control-plane-v1",
+  "gpu-core-catalog-v1",
 ];
 const requiredTables = [
   "gpu_inventory",
@@ -45,6 +46,7 @@ const requiredTables = [
   "gpu_finance_daily_snapshots",
   "gpu_finance_integrity_alerts",
   "gpu_accounting_backfill_runs",
+  "gpu_core_catalog",
 ];
 const pm2ConfigPath = path.join(projectRoot, "ecosystem.config.cjs");
 const checks = [];

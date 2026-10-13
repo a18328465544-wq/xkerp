@@ -20,6 +20,92 @@ const integrationEnabled = Boolean(
   && process.env.RUN_BACKEND_HTTP_TESTS === "1",
 );
 
+test("GPU catalog binds memory, persists idempotently, isolates stores and never writes prices", {skip: !integrationEnabled}, async () => {
+  const {createApp} = await import("./app.ts");
+  const server = createServer(createApp());
+  const base = await listenEphemeral(server);
+  const prefix = `HTTP-CATALOG-${Date.now()}`;
+  const coreId = "GPU-NVIDIA-RTX1999";
+  const login = async (username: string, password: string) => {
+    const response = await fetch(`${base}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username, password})});
+    assert.equal(response.status, 200, await response.clone().text());
+    const session = await response.json() as {data: {csrfToken: string; user: {tenantId: string; storeId: string}}};
+    return {cookie: response.headers.get("set-cookie")!.split(";", 1)[0]!, ...session.data};
+  };
+  try {
+    const owner = await login(process.env.BACKEND_TEST_USERNAME!, process.env.BACKEND_TEST_PASSWORD!);
+    const headers = {cookie: owner.cookie, "content-type": "application/json", "x-csrf-token": owner.csrfToken};
+    const call = (path: string, body: unknown, key?: string) => fetch(`${base}${path}`, {method: "POST", headers: {...headers, ...(key ? {"idempotency-key": key} : {})}, body: JSON.stringify(body)});
+    const catalog = await fetch(`${base}/api/gpu-cores`, {headers: {cookie: owner.cookie}});
+    assert.equal(catalog.status, 200);
+    const initial = await catalog.json() as {data: {cores: Array<{id: string; specs: unknown[]}>; canManage: boolean}};
+    assert.equal(initial.data.cores.length, 28); assert.equal(initial.data.canManage, true);
+    const facts = () => withDatabaseTransaction(async client => {
+      const result: Record<string, unknown> = {};
+      for (const table of ["gpu_products", "gpu_inventory", "gpu_market_quotes", "gpu_finance_ledger"]) result[table] = (await client.query(`SELECT id, data FROM ${table} WHERE tenant_id=$1 AND store_id=$2 ORDER BY id`, [owner.user.tenantId, owner.user.storeId])).rows;
+      return result;
+    });
+    const before = await facts();
+    const command = {vendor: "NVIDIA", model: "rTx 1999", specs: []};
+    const created = await call("/api/gpu-cores", command, `${prefix}-core`);
+    assert.equal(created.status, 201, await created.clone().text());
+    assert.equal((await created.json() as {data: {id: string}}).data.id, coreId);
+    const revision = await getStateRevision();
+    assert.equal((await call("/api/gpu-cores", {...command, model: "RTX1999"}, `${prefix}-core`)).status, 201);
+    assert.equal(await getStateRevision(), revision);
+    assert.equal((await call("/api/gpu-cores", {...command, model: "RTX1998"}, `${prefix}-core`)).status, 409);
+    assert.equal((await call("/api/gpu-cores", command)).status, 409);
+    const spec = {capacityGb: 16, memoryType: "GDDR6", revision: "扩容"};
+    const added = await call(`/api/gpu-cores/${coreId}/specs`, spec, `${prefix}-spec`);
+    assert.equal(added.status, 201, await added.clone().text());
+    assert.equal((await added.json() as {data: {specs: Array<{isStandard: boolean}>}}).data.specs[0]!.isStandard, false);
+    const specRevision = await getStateRevision();
+    assert.equal((await call(`/api/gpu-cores/${coreId}/specs`, spec, `${prefix}-spec`)).status, 201);
+    assert.equal(await getStateRevision(), specRevision);
+    assert.equal((await call(`/api/gpu-cores/${coreId}/specs`, spec)).status, 409);
+    assert.deepEqual(await facts(), before);
+    const persisted = await withDatabaseTransaction(client => client.query("SELECT data FROM gpu_core_catalog WHERE tenant_id=$1 AND store_id=$2 AND id=$3", [owner.user.tenantId, owner.user.storeId, coreId]));
+    assert.equal(persisted.rows.length, 1);
+    const foreignUser: SystemUserAccount = {id: `${prefix}-foreign`, username: `${prefix}-foreign`, displayName: "隔离门店测试", role: "老板", enabled: true, password: hashPassword("catalog-test-password"), tenantId: owner.user.tenantId, storeId: `${prefix}-store`};
+    const viewer: SystemUserAccount = {...foreignUser, id: `${prefix}-viewer`, username: `${prefix}-viewer`, displayName: "目录只读测试", role: "店员", storeId: owner.user.storeId, permissionOverrides: {allowedMenus: ["quotes"], showCost: false, showProfit: false}};
+    await withDatabaseTransaction(async client => {
+      await client.query("INSERT INTO gpu_stores(id,tenant_id,code,name) VALUES($1,$2,$3,$4)", [foreignUser.storeId, foreignUser.tenantId, `${prefix}-store`, "本地隔离目录测试"]);
+      for (const user of [foreignUser, viewer]) {
+        await client.query("INSERT INTO gpu_system_users(id,tenant_id,store_id,data) VALUES($1,$2,$3,$4::jsonb)", [user.id, user.tenantId, user.storeId, JSON.stringify(user)]);
+        await client.query("INSERT INTO gpu_tenant_memberships(tenant_id,user_id,store_id,role,status,permissions) VALUES($1,$2,$3,$4,'active',$5::jsonb)", [user.tenantId, user.id, user.storeId, user.role, JSON.stringify(user.permissionOverrides || {})]);
+      }
+    });
+    const foreign = await login(foreignUser.username, "catalog-test-password");
+    const foreignRead = await fetch(`${base}/api/gpu-cores`, {headers: {cookie: foreign.cookie}});
+    assert.equal((await foreignRead.json() as {data: {cores: Array<{id: string}>}}).data.cores.some(core => core.id === coreId), false);
+    const foreignCreate = await fetch(`${base}/api/gpu-cores`, {method: "POST", headers: {cookie: foreign.cookie, "x-csrf-token": foreign.csrfToken, "content-type": "application/json"}, body: JSON.stringify({...command, specs: [{capacityGb: 8, memoryType: "GDDR6", revision: ""}]})});
+    assert.equal(foreignCreate.status, 201, await foreignCreate.clone().text());
+    const count = await withDatabaseTransaction(client => client.query("SELECT COUNT(*)::int AS count FROM gpu_core_catalog WHERE id=$1", [coreId]));
+    assert.equal(count.rows[0].count, 2, "stable logical core IDs may coexist in independently owned stores");
+    const readOnly = await login(viewer.username, "catalog-test-password");
+    const viewerRead = await fetch(`${base}/api/gpu-cores`, {headers: {cookie: readOnly.cookie}});
+    assert.equal((await viewerRead.json() as {data: {canManage: boolean}}).data.canManage, false);
+    assert.equal((await fetch(`${base}/api/gpu-cores`, {method: "POST", headers: {cookie: readOnly.cookie, "x-csrf-token": readOnly.csrfToken, "content-type": "application/json"}, body: JSON.stringify({...command, model: "RTX1997"})})).status, 403);
+    const product = {name: "目录测试商品", category: "显卡", brand: "测试品牌", model: "RTX4060TI", version: "测试版本", vram: "16GB GDDR6", gpuCoreId: "GPU-NVIDIA-RTX4060TI", gpuSpecId: "GPU-NVIDIA-RTX4060TI-16GB-GDDR6", refBuyPrice: 100, refSellPrice: 200};
+    assert.equal((await call("/api/products", {...product, gpuSpecId: "GPU-NVIDIA-RTX5090-32GB-GDDR7"})).status, 400);
+    assert.equal((await call("/api/products", {...product, vram: "8G"})).status, 400);
+    const productResponse = await call("/api/products", product);
+    assert.equal(productResponse.status, 201, await productResponse.clone().text());
+    const storedProduct = (await productResponse.json() as {data: {id: string; gpuSpecId: string}}).data;
+    assert.equal(storedProduct.gpuSpecId, product.gpuSpecId);
+    await withDatabaseTransaction(client => client.query("DELETE FROM gpu_products WHERE id=$1", [storedProduct.id]));
+  } finally {
+    await withDatabaseTransaction(async client => {
+      await client.query("DELETE FROM gpu_core_catalog WHERE id=$1", [coreId]);
+      await client.query("DELETE FROM gpu_tenant_memberships WHERE user_id LIKE $1", [`${prefix}%`]);
+      await client.query("DELETE FROM gpu_system_users WHERE id LIKE $1", [`${prefix}%`]);
+      await client.query("DELETE FROM gpu_stores WHERE id=$1", [`${prefix}-store`]);
+      await client.query("DELETE FROM gpu_idempotency_keys WHERE idempotency_key LIKE $1", [`${prefix}%`]);
+    });
+    await closeServer(server);
+  }
+});
+
 test("core quote HTTP persistence preserves inventory pricing and enforces identity, permissions and scope", {skip: !integrationEnabled}, async () => {
   const {createApp} = await import("./app.ts");
   const {createInitialState} = await import("./store.ts");

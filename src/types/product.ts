@@ -1,6 +1,8 @@
 import type {ProductCategory} from "./core";
 
 export interface ProductLibraryItem {
+  gpuCoreId?: string;
+  gpuSpecId?: string;
   id: string;
   name: string;
   category: ProductCategory;
@@ -34,6 +36,8 @@ export interface ProductLibrarySnapshot {
 }
 
 export interface ProductTemplateFormValues {
+  gpuCoreId?: string;
+  gpuSpecId?: string;
   category: ProductCategory;
   brand: string;
   model: string;

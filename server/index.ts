@@ -95,6 +95,7 @@ import { registerSalesMutationRoutes } from "./routes/salesMutations.ts";
 import { registerReturnMutationRoutes } from "./routes/returnMutations.ts";
 import { registerAftersalesMutationRoutes } from "./routes/aftersalesMutations.ts";
 import { registerMarketQuoteMutationRoutes } from "./routes/marketQuoteMutations.ts";
+import {registerGpuCoreCatalogRoutes} from "./routes/gpuCoreCatalog.ts";
 import { registerInspectionMutationRoutes } from "./routes/inspectionMutations.ts";
 import { registerAssemblyMutationRoutes } from "./routes/assemblyMutations.ts";
 import { registerInventoryMutationRoutes } from "./routes/inventoryMutations.ts";
@@ -1146,7 +1147,14 @@ registerCrmMutationRoutes(app, {
   actorForRequest: (req) => crmActor(req as AuthRequest),
 });
 
+registerGpuCoreCatalogRoutes(app, {
+  asyncRoute, getState: () => state, actions: (req) => actions(req as AuthRequest),
+  claimMutationIdempotency: (req) => claimMutationIdempotency(req as AuthRequest),
+  releaseMutationIdempotency, transactionHookWithIdempotency,
+});
+
 registerProductMutationRoutes(app, {
+  getState: () => state,
   requireMenu,
   requireDeletePermission,
   asyncRoute,

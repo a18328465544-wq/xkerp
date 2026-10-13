@@ -1,6 +1,6 @@
 import type { StateCollectionKey } from "./db.ts";
 
-const PRODUCT_LIBRARY_KEYS: StateCollectionKey[] = ["products", "inventory", "marketQuotes", "logs"];
+const PRODUCT_LIBRARY_KEYS: StateCollectionKey[] = ["products", "inventory", "marketQuotes", "gpuCores", "logs"];
 const PURCHASE_KEYS: StateCollectionKey[] = [
   "purchaseInvoices",
   "inventory",
@@ -138,6 +138,7 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   const normalizedMethod = method.toUpperCase();
   if (normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS") return null;
   if (getPostReadReloadKeys(method, path) !== null) return null;
+  if (startsWithAny(path, ["/api/gpu-cores"])) return ["gpuCores", "logs"];
 
   if (startsWithAny(path, ["/api/products"])) return PRODUCT_LIBRARY_KEYS;
   if (startsWithAny(path, ["/api/purchase-invoices"])) return PURCHASE_KEYS;
@@ -187,6 +188,7 @@ export function getStatePatchKeysForRequest(method: string, path: string): State
 }
 
 export function getReloadKeysForRequest(method: string, path: string): StateCollectionKey[] | null {
+  if (startsWithAny(path, ["/api/gpu-cores"])) return ["gpuCores"];
   const postReadKeys = getPostReadReloadKeys(method, path);
   if (postReadKeys !== null) return postReadKeys;
   if (method.toUpperCase() === "GET" && ["/api/global-search", "/api/state/revision", "/api/finance/profit-report"].includes(path)) return [];

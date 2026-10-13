@@ -5,6 +5,7 @@ import type {FinanceDashboardAccess} from "@/src/types/finance";
 import type {FinanceCommissionFilters} from "../endpoints/finance-remaining";
 
 export const queryKeys = {
+  gpuCores: {list: (userId: string) => ["gpu-cores", userId] as const},
   auth: {session: () => ["auth", "session"] as const},
   inventory: {
     all: () => ["inventory"] as const,
