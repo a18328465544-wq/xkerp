@@ -611,6 +611,7 @@ test("sales invoice records model first and outbound confirmation binds SN then 
     needInvoice: false,
     freeShipping: true,
     aftersalesTerms: "店保三个月",
+    storeWarrantyDays: 90,
     handleBy: "店长",
     items: [
       {
@@ -628,6 +629,7 @@ test("sales invoice records model first and outbound confirmation binds SN then 
   });
 
   const soldCard = state.inventory.find((item) => item.id === card.id);
+  assert.equal(invoice.storeWarrantyDays, 90);
   assert.equal(invoice.totalProfit, card.estSellPrice - card.costPrice);
   assert.equal(invoice.outboundStatus, "待出库");
   assert.equal(invoice.items[0].inventoryId, "");

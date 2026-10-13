@@ -5,9 +5,13 @@ import {runStateCommand} from "../stateCommand.ts";
 import {compactStateMerge, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
 import type {CardInventory, InventoryScanResult, SystemUserAccount} from "../../src/types.ts";
-import {inventoryBatchUpdateDto, inventoryImportDto, inventoryListQueryDto, inventoryScanFlowDto, parseHttpDto} from "../httpDto.ts";
+import {inventoryBatchUpdateDto, inventoryImportDto, inventoryListQueryDto, inventoryMarketRiskQueryDto, inventoryScanFlowDto, inventoryStocktakeCreateDto, inventoryStocktakeListQueryDto, inventoryStocktakeSnapshotQueryDto, parseHttpDto} from "../httpDto.ts";
 import {purchaseInvoicesForInventory} from "../purchaseRecordVersion.ts";
 import {publicStateMergeForUser} from "../publicState.ts";
+import {buildInventoryStocktakeSnapshot} from "../storeInventoryStocktakes.ts";
+import {buildInventoryMarketRiskSnapshot} from "../storeInventoryMarketRisk.ts";
+import {ForbiddenError} from "../errors.ts";
+import {storeDate} from "../../src/utils/storeTime.ts";
 
 type InventoryRequest = AuthenticatedRequest<SystemUserAccount>;
 
@@ -17,6 +21,7 @@ type InventoryMutationDependencies = {
   getState: () => AppState;
   actions: (req: Request) => ReturnType<typeof createStoreActions>;
   sanitizeInventoryRows: (inventory: CardInventory[], user?: SystemUserAccount) => CardInventory[];
+  permissionsForRequest: (req: Request) => {showCost: boolean; showProfit: boolean};
 };
 
 function okMerge(data: unknown, stateMerge: StateMergePatch) {
@@ -139,6 +144,65 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
         sortDirection: query.sortDirection,
       });
       res.json({data: dependencies.sanitizeInventoryRows(page.data, authRequest.authUser), meta: page.meta});
+    }),
+  );
+
+  app.get(
+    "/api/inventory/market-risk",
+    dependencies.requireMenu("inventory"),
+    (req, res) => {
+      const permissions = dependencies.permissionsForRequest(req);
+      if (!permissions.showCost || !permissions.showProfit) throw new ForbiddenError("库存行情浮亏视图需要成本与利润查看权限");
+      const query = parseHttpDto(inventoryMarketRiskQueryDto, req.query);
+      res.json({data: buildInventoryMarketRiskSnapshot(dependencies.getState().inventory, {
+        page: query.page,
+        pageSize: query.pageSize ?? 20,
+        keyword: query.keyword,
+        warehouseLocation: query.warehouseLocation,
+        category: query.category,
+        brand: query.brand,
+        model: query.model,
+        condition: query.condition,
+        status: query.status,
+        entryStart: query.entryStart,
+        entryEnd: query.entryEnd,
+        today: storeDate(),
+      })});
+    },
+  );
+
+  app.get(
+    "/api/inventory/stocktakes/reference",
+    dependencies.requireMenu("inventory"),
+    dependencies.asyncRoute(async (req, res) => {
+      const query = parseHttpDto(inventoryStocktakeSnapshotQueryDto, req.query);
+      res.json({data: buildInventoryStocktakeSnapshot(dependencies.getState().inventory, query.warehouseLocation)});
+    }),
+  );
+
+  app.get(
+    "/api/inventory/stocktakes",
+    dependencies.requireMenu("inventory"),
+    (req, res) => {
+      const query = parseHttpDto(inventoryStocktakeListQueryDto, req.query);
+      const rows = dependencies.getState().inventoryStocktakes || [];
+      const pageSize = query.pageSize || 20;
+      const start = (query.page - 1) * pageSize;
+      res.json({data: rows.slice(start, start + pageSize), meta: {page: query.page, pageSize, total: rows.length}});
+    },
+  );
+
+  app.post(
+    "/api/inventory/stocktakes",
+    dependencies.requireMenu("inventory"),
+    dependencies.asyncRoute(async (req, res) => {
+      const command = parseHttpDto(inventoryStocktakeCreateDto, req.body);
+      const {data: created, stateMerge} = await runStateCommand(
+        () => dependencies.actions(req).createInventoryStocktake(command),
+        (record) => ({inventoryStocktakes: [record], logs: dependencies.getState().logs.slice(0, 1)}),
+      );
+      const user = (req as InventoryRequest).authUser;
+      res.status(201).json(okMerge(created, publicStateMergeForUser(dependencies.getState(), stateMerge, user)));
     }),
   );
 

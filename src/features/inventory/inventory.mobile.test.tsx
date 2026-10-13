@@ -33,7 +33,7 @@ test("inventory phone preserves full identity, SN, warehouse and existing adapte
 
 test("inventory dock uses original filter controller, scanner and permission-checked task routes", () => {
   assert.match(source, /search=\{\{value: filters\.keyword/);
-  assert.match(source, /overlayOpen=\{Boolean\(statsOpen \|\| scanOpen \|\| actionsOpen \|\| detailId \|\| ledgerOpen\)\}/);
+  assert.match(source, /overlayOpen=\{Boolean\(statsOpen \|\| scanOpen \|\| actionsOpen \|\| stocktakeOpen \|\| detailId \|\| ledgerOpen\)\}/);
   assert.match(source, /isPathAllowed\(permissions.allowedMenus, item.path\)/);
   assert.match(source, /<ErpBarcodeScannerDialog[\s\S]+onDetected=\{\(keyword\) => updateFilter\(\{keyword\}\)\}/);
   assert.match(source, /manualSorting: true,[\s\S]+sorting,[\s\S]+onSortingChange,[\s\S]+onPageChange: pagination\.onPageChange,[\s\S]+onPageSizeChange: pagination\.onPageSizeChange/);

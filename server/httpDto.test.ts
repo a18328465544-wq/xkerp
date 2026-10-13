@@ -73,6 +73,10 @@ test("outbound DTO separates scanner requirements from authorized manual confirm
 
 test("sales edits require a real positive revision and cannot submit server-owned revisions", () => {
   assert.deepEqual(parseHttpDto(salesInvoiceUpdateDto, {expectedRecordVersion: 4, remarks: " 正常修改 "}), {expectedRecordVersion: 4, remarks: "正常修改"});
+  assert.equal(parseHttpDto(salesInvoiceUpdateDto, {expectedRecordVersion: 4, storeWarrantyDays: 90}).storeWarrantyDays, 90);
+  for (const storeWarrantyDays of [-1, 0.5, 3651, "30"]) {
+    assert.throws(() => parseHttpDto(salesInvoiceUpdateDto, {expectedRecordVersion: 4, storeWarrantyDays}), ValidationError);
+  }
   for (const expectedRecordVersion of [undefined, null, 0, -1, 1.5, "1", Number.MAX_SAFE_INTEGER, Number.POSITIVE_INFINITY]) {
     assert.throws(() => parseHttpDto(salesInvoiceUpdateDto, {expectedRecordVersion, remarks: "过期或无效页面"}), ValidationError);
   }

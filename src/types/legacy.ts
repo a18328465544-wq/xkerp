@@ -302,6 +302,8 @@ export interface SalesInvoice {
   expressCompany?: string;
   expressNo?: string;
   aftersalesTerms: string; // e.g. "店保半年", "店保三个月", "保到手好"
+  /** Explicit store-backed warranty duration, in calendar days. */
+  storeWarrantyDays?: number;
   handleBy: string;
   remarks?: string;
   items: SalesItem[];

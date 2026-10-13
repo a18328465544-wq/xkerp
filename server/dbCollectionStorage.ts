@@ -32,6 +32,12 @@ export const collectionTables: Array<{
     dataComment: "库存档案 JSON，结构对应 CardInventory，包含商品信息、SN/快递单号、来源、成本、状态、成色、保修、库位和销售信息。",
   },
   {
+    key: "inventoryStocktakes",
+    table: "gpu_inventory_stocktakes",
+    tableComment: "库存盘点记录表，保存按在库名单进行的实物扫码盘点结果，不直接调整库存状态。",
+    dataComment: "库存盘点记录 JSON，包含盘点范围、系统名单快照、扫描编码、缺失/多出清单、操作人和时间；盘点结果仅供核对，库存调整仍走现有库存业务流程。",
+  },
+  {
     key: "inspections",
     table: "gpu_inspections",
     tableComment: "检测录入记录表，保存显卡和其他配件入库检测结果。",

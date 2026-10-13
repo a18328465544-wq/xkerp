@@ -27,6 +27,7 @@ import type {
   Vendor,
   CustomerOrder,
 } from "../src/types.ts";
+import type {InventoryStocktakeRecord} from "../src/types/inventory.ts";
 import { defaultPermissions, initialSystemUsers } from "../src/data/systemDefaults.ts";
 import { normalizeAllowedMenus } from "../src/utils/menu.ts";
 import { storeDate, storeDateKey, storeDateTime } from "../src/utils/storeTime.ts";
@@ -76,6 +77,7 @@ export interface AppState {
   gpuCores?: import("../src/types/gpuCore").GpuCoreRecord[];
   productBrands?: import("../src/types/productBrand").ProductBrandRecord[];
   inventory: CardInventory[];
+  inventoryStocktakes?: InventoryStocktakeRecord[];
   inspections: InspectionRecord[];
   purchaseInvoices: PurchaseInvoice[];
   salesInvoices: SalesInvoice[];
@@ -153,6 +155,7 @@ function replaceState(target: AppState, next: AppState) {
   target.gpuCores = structuredClone(next.gpuCores || []);
   target.productBrands = structuredClone(next.productBrands || []);
   target.inventory = structuredClone(next.inventory);
+  target.inventoryStocktakes = structuredClone(next.inventoryStocktakes || []);
   target.inspections = structuredClone(next.inspections);
   target.purchaseInvoices = structuredClone(next.purchaseInvoices);
   target.salesInvoices = structuredClone(next.salesInvoices);
@@ -485,6 +488,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     getInventorySummary,
     importInventoryRows,
     scanInventoryFlow,
+    createInventoryStocktake,
     saveGpuFactoryDateEstimate,
   } = createInventoryOperationHelpers({
     state,
@@ -493,6 +497,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     dateKey,
     genId,
     getActiveRole,
+    getActiveActor,
     findCardBySn,
     ensurePurchaseCommissionsForSale: (invoice, time, handler) => {
       ensurePurchaseCommissionsForSale(invoice, time || nowStamp(), handler || getActiveRole());
@@ -667,6 +672,7 @@ export function createStoreActions(state: AppState, context: StoreActionContext 
     getInventorySummary,
     importInventoryRows,
     scanInventoryFlow,
+    createInventoryStocktake,
     saveGpuFactoryDateEstimate,
     createMarketQuote,
     importMarketQuotes,

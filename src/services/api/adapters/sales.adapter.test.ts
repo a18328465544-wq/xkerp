@@ -82,6 +82,7 @@ test("sales request adapter expands quantity and calculates receivable", () => {
   values.paymentHandler = "其他经办人";
   values.paidAmount = 150;
   values.settlementAccountId = "ACC-1";
+  values.storeWarrantyDays = 90;
   values.items = [{inventoryId: "KC-1", productId: "P-1", productName: "RTX 4090", brand: "", model: "", vram: "", condition: "99新", quantity: 2, sellPrice: 100, costPrice: 60, remarks: "", aftersalesTerms: "店保三个月"}];
   const request = toCreateSalesRequest(values, {id: "ACC-1", name: "微信", type: "微信", enabled: true});
   assert.equal(request.items.length, 2);
@@ -90,6 +91,7 @@ test("sales request adapter expands quantity and calculates receivable", () => {
   assert.equal(request.unpaidAmount, 50);
   assert.equal(request.isPaid, false);
   assert.equal(request.paymentHandler, "测试员");
+  assert.equal(request.storeWarrantyDays, 90);
 });
 
 test("sales request adapter ignores the untouched default placeholder rows", () => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {adaptAftersalesWorkspace, normalizeAftersalesStatus, toAftersalesCreateRequest, toAftersalesUpdateRequest} from "./aftersales.adapter";
+import {storeDate, storeDateAfterDays} from "@/src/utils/storeTime";
 
 test("aftersales adapter normalizes legacy statuses and exposes a minimal domain projection", () => {
   const result = adaptAftersalesWorkspace({data: {aftersales: [{id: "SH-1", salesInvoiceNo: "XS-1", customerName: "张三", inventoryNo: "KC-1", productName: "RTX 4090", sn: "SN-1", type: "维修", desc: "花屏", status: "处理中", repairCost: 200, createTime: "2026-08-10 10:00"}], settlementAccounts: [{id: "secret", balance: 9000}]}});
@@ -17,6 +18,22 @@ test("aftersales candidates are linked by sold inventory and sales invoice witho
   assert.equal(result.candidates[0]?.activeClaimId, "SH-2");
   assert.equal(result.candidates[0]?.customerId, "KH-1");
   assert.equal("costPrice" in (result.candidates[0] || {}), false);
+});
+
+test("aftersales candidates project sold duration and combined factory/shop warranty", () => {
+  const today = storeDate();
+  const saleDate = storeDateAfterDays(-10);
+  const candidate = adaptAftersalesWorkspace({data: {
+    aftersales: [],
+    inventory: [{id: "KC-W", productName: "RTX 5090", model: "5090", sn: "SN-W", status: "已售出", salesInvoiceId: "XS-W", warrantyDate: storeDateAfterDays(15)}],
+    salesInvoices: [{id: "S-W", invoiceNo: "XS-W", date: saleDate, outboundTime: `${saleDate} 10:00`, storeWarrantyDays: 30, customerName: "客户", contact: "138"}],
+  }}).candidates[0]!;
+  assert.equal(candidate.soldDays, 10);
+  assert.equal(candidate.warrantyStatus, "在保");
+  assert.equal(candidate.warrantyEndDate, storeDateAfterDays(20));
+  assert.deepEqual(candidate.warrantySources, ["出厂保", "店保"]);
+  assert.equal(candidate.warrantyRemainingDays, 20);
+  assert.ok(today >= saleDate);
 });
 
 test("stale claims on an older sale or another physical ID do not block the current owner's candidate", () => {

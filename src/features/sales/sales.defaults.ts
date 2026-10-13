@@ -26,6 +26,7 @@ export function createSalesDefaults(handleBy: string): SalesFormValues {
     expressCompany: "顺丰速运",
     expressNo: "",
     aftersalesTerms: "",
+    storeWarrantyDays: 0,
     handleBy,
     paymentHandler: handleBy,
     remarks: "",

@@ -17,6 +17,9 @@ export const queryKeys = {
     detail: (id: string) => ["inventory", "detail", id] as const,
     journey: (id: string, access: {showCost: boolean; showProfit: boolean; showFinance: boolean}) => ["inventory", "journey", id, access] as const,
     productLedger: (productSkuId: string, filters: unknown, access: {showCost: boolean; showProfit: boolean}) => ["inventory", "product-ledger", productSkuId, filters, access] as const,
+    marketRisk: (filters: InventoryFilters) => ["inventory", "market-risk", filters] as const,
+    stocktakeReference: (warehouseLocation: string) => ["inventory", "stocktakes", "reference", warehouseLocation] as const,
+    stocktakes: (page: number, pageSize: number) => ["inventory", "stocktakes", page, pageSize] as const,
   },
   sales: {
     all: () => ["sales"] as const,

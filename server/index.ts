@@ -1289,6 +1289,10 @@ registerInventoryMutationRoutes(app, {
   getState: () => state,
   actions: (req) => actions(req as AuthRequest),
   sanitizeInventoryRows: (rows, user) => buildSanitizedInventoryRows(state, rows, user),
+  permissionsForRequest: (req) => {
+    const permissions = getPermissionsForUser((req as AuthRequest).authUser);
+    return {showCost: permissions.showCost === true, showProfit: permissions.showProfit === true};
+  },
 });
 
 registerLogRoutes(app, {

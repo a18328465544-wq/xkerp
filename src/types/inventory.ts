@@ -31,7 +31,7 @@ export const inventoryJourneyFinancialMenuValues = [
   "return_reconcile",
 ] as const;
 export type InventoryRisk = "mined" | "upturned" | "high";
-export type InventoryView = "cards" | "models";
+export type InventoryView = "cards" | "models" | "market-risk";
 export type InventorySortKey = "id" | "product" | "cost" | "profit" | "days" | "status" | "warehouseLocation" | "entryTime";
 export type InventorySortDirection = "asc" | "desc";
 
@@ -115,6 +115,62 @@ export interface InventorySummary {
   soldCount: number;
   totalCost?: number;
   totalEstSell?: number;
+}
+
+export interface InventoryStocktakeItem {
+  inventoryId: string;
+  serialNumber: string;
+  productName: string;
+  warehouseLocation: string;
+  status: InventoryStatusValue;
+}
+
+export interface InventoryStocktakeSnapshot {
+  snapshotToken: string;
+  warehouseLocation: string;
+  items: InventoryStocktakeItem[];
+}
+
+export interface InventoryStocktakeRecord {
+  id: string;
+  createdAt: string;
+  handler: string;
+  warehouseLocation: string;
+  expectedCount: number;
+  scannedCount: number;
+  matchedCount: number;
+  missingItems: InventoryStocktakeItem[];
+  unexpectedCodes: string[];
+  duplicateCodes: string[];
+  ambiguousCodes: string[];
+  scannedCodes: string[];
+  snapshotToken: string;
+}
+
+export interface InventoryMarketRiskRow {
+  inventoryId: string;
+  productName: string;
+  serialNumber: string;
+  warehouseLocation: string;
+  inventoryDays: number;
+  entryTime: string;
+  costPrice: number;
+  marketPrice: number;
+  floatingLoss: number;
+  marketKnown: boolean;
+}
+
+export interface InventoryMarketRiskSnapshot {
+  data: InventoryMarketRiskRow[];
+  meta: {page: number; pageSize: number; total: number};
+  summary: {
+    onHandCount: number;
+    marketKnownCount: number;
+    missingMarketCount: number;
+    totalMarketValue: number;
+    floatingLoss: number;
+    invertedCount: number;
+  };
 }
 
 /**

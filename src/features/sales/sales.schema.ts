@@ -42,6 +42,7 @@ export const salesOrderSchema = z.object({
   expressCompany: z.string().max(50, "快递公司最多 50 字"),
   expressNo: z.string().max(100, "快递单号最多 100 字"),
   aftersalesTerms: z.string().trim().max(100, "售后条款最多 100 字"),
+  storeWarrantyDays: z.number().int().min(0, "店保天数不能小于 0").max(3650, "店保天数不能超过 3650 天").optional(),
   handleBy: z.string().trim().min(1, "缺少经办人"),
   paymentHandler: z.string().trim(),
   remarks: z.string().max(500, "备注最多 500 字"),

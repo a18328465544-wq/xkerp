@@ -590,6 +590,27 @@ export const inventoryListQueryDto = z.object({
   sortDirection: queryDefaultEnum(["asc", "desc"] as const, "desc"),
 }).strict();
 
+export const inventoryStocktakeSnapshotQueryDto = z.object({warehouseLocation: queryText(120)}).strict();
+export const inventoryStocktakeListQueryDto = z.object({page: queryNumber(1, 10_000), pageSize: queryOptionalNumber(100)}).strict();
+export const inventoryStocktakeCreateDto = z.object({
+  warehouseLocation: optionalText(120),
+  snapshotToken: z.string().trim().regex(/^[a-f0-9]{64}$/i, "盘点名单已失效，请重新加载"),
+  scannedCodes: z.array(z.string().trim().min(1, "扫描编码不能为空").max(160)).min(1).max(10_000),
+}).strict();
+export const inventoryMarketRiskQueryDto = z.object({
+  page: queryNumber(1, 10_000),
+  pageSize: queryOptionalNumber(200),
+  keyword: queryText(120),
+  warehouseLocation: queryText(120),
+  category: queryFilterEnum(productCategories),
+  brand: queryText(120),
+  model: queryText(160),
+  condition: queryFilterEnum(purchaseConditions),
+  status: queryFilterEnum(cardStatusValues),
+  entryStart: queryDate,
+  entryEnd: queryDate,
+}).strict();
+
 const inventoryImportRowDto = z.object({
   productName: requiredText("商品名称", 200),
   category: z.enum(productCategories).optional(),
@@ -1122,6 +1143,7 @@ const salesInvoiceMutationFields = {
   expressCompany: optionalText(120),
   expressNo: optionalText(160),
   aftersalesTerms: z.string().trim().max(100),
+  storeWarrantyDays: z.number().int().min(0).max(3650).optional(),
   handleBy: requiredText("开单人", 80),
   remarks: optionalText(500),
   items: z.array(salesItemMutationDto).min(1, "销售单至少需要一条商品明细").max(500, "单张销售单商品不能超过 500 件"),

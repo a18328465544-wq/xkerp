@@ -59,6 +59,7 @@ export function createSalesEditValues(item: SalesListItem): SalesFormValues {
     expressCompany: item.expressCompany || "",
     expressNo: item.expressNo || "",
     aftersalesTerms: item.aftersalesTerms || "",
+    storeWarrantyDays: item.storeWarrantyDays || 0,
     handleBy: item.handleBy,
     paymentHandler: item.paymentHandler || item.handleBy,
     remarks: item.remarks || "",
