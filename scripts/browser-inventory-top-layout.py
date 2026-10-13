@@ -56,8 +56,9 @@ def geometry(page):
     for node in switch.get_by_role("button").all():
         assert node.evaluate("e => e.scrollWidth <= e.clientWidth + 1")
     assert sort.locator("span").evaluate("e => e.scrollWidth <= e.clientWidth + 1")
-    for label in ("全部", "显卡", "CPU", "主板", "内存", "硬盘"):
-        box = categories.get_by_role("button", name=label, exact=True).bounding_box()
+    # Category chips scroll horizontally; the first four stay fully visible at 320px.
+    for label in ("全部", "显卡", "CPU", "主板"):
+        box = categories.get_by_role("radio", name=label, exact=True).bounding_box()
         assert box["x"] >= c["x"] - 1 and box["x"] + box["width"] <= c["x"] + c["width"] + 1, (label, box, c)
     assert not page.evaluate("document.documentElement.scrollWidth > innerWidth + 1")
     return {"viewHeight": v["height"], "viewWidth": v["width"], "toolbarHeight": t["height"], "listTop": t["y"] + t["height"]}
@@ -82,7 +83,7 @@ with sync_playwright() as playwright:
         geometry(page)
         page.screenshot(path=str(OUT / f"cards-{width}.png"))
         categories = page.get_by_role("navigation", name="库存分类")
-        categories.get_by_role("button", name="CPU", exact=True).click()
+        categories.get_by_role("radio", name="CPU", exact=True).click()
         expect(page.locator('[data-erp-component="inventory-phone-record"]')).to_have_count(1)
         expect(page.locator('.erp-phone-record-title')).to_have_text(MODELS[1]["productName"])
         assert parse_qs(urlparse(page.url).query).get("category") == ["CPU"]
@@ -90,7 +91,7 @@ with sync_playwright() as playwright:
         page.get_by_role("group", name="库存视图").get_by_role("button", name="型号汇总", exact=True).click()
         expect(page.locator('[data-erp-component="inventory-model-phone-row"]')).to_have_count(1)
         assert parse_qs(urlparse(page.url).query).get("category") == ["CPU"]
-        categories.get_by_role("button", name="全部", exact=True).click()
+        categories.get_by_role("radio", name="全部", exact=True).click()
         expect(page.locator('[data-erp-component="inventory-model-phone-row"]')).to_have_count(3)
         page.get_by_role("button", name="库存排序", exact=True).click()
         dialog = page.get_by_role("dialog", name="排序", exact=True)

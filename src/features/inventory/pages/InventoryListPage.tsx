@@ -6,7 +6,7 @@ import {ArrowDown, ArrowUp, Boxes, ChevronDown, ImageOff, LockKeyhole, MoreHoriz
 import {countActiveErpFilterFields, ErpColumnVisibilityMenu, ErpDataTable, ErpDetailDrawer, ErpDetailFact, ErpEmptyState, ErpEntityThumbnail, ErpListPage, ErpMetricCard, ErpProductLedgerDrawer, ErpSegmentedControl, ErpStatusBadge, ErpTableResultsBar, MetricsRegion, type ErpFilterField, type ErpListTableProps, type ProductLedgerSubject, type QuickStatusItemData} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {Button, Card, Select} from "@/src/components/ui";
-import {ErpBarcodeScannerDialog, ErpDialogShell, ErpLoadingState, ErpPageError} from "@/src/components/common";
+import {ErpBarcodeScannerDialog, ErpChoiceChips, ErpDialogShell, ErpLoadingState, ErpPageError} from "@/src/components/common";
 import {InventoryStatus, ProfitDisplay} from "@/src/components/domain";
 import {queryKeys, inventoryApi} from "@/src/services/api";
 import {createCapabilities, useAuth} from "@/src/app/auth";
@@ -350,7 +350,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     phoneHeaderActionsMode="inline"
     phoneHeaderActions={<Button type="button" variant="ghost" size="iconTouch" aria-label="更多页面操作" title="库存作业与快捷操作" onClick={() => setActionsOpen(true)}><MoreHorizontal className="h-5 w-5" /></Button>}
     phoneSearchAction={{label: "扫码", icon: <ScanLine className="h-4 w-4" />, onClick: () => setScanOpen(true)}}
-    tabs={<nav className="erp-phone-category-strip md:hidden" aria-label="库存分类"><Button type="button" variant="ghost" aria-pressed={!filters.category} onClick={() => updateFilter({category: ""})}>全部</Button>{inventoryCategories.map((category) => <Button key={category} type="button" variant="ghost" aria-pressed={filters.category === category} onClick={() => updateFilter({category})}>{category}</Button>)}</nav>}
+    tabs={<nav className="erp-phone-category-strip md:hidden" aria-label="库存分类"><ErpChoiceChips layout="scroll" label="按分类筛选库存" value={filters.category} options={[{value: "", label: "全部"}, ...inventoryCategories.map((category) => ({value: category, label: category}))]} onValueChange={(category) => updateFilter({category})} /></nav>}
     metrics={inventoryMetrics}
     search={{value: filters.keyword, onChange: (keyword) => updateFilter({keyword}), label: "搜索库存", placeholder: "搜索 SN、商品、品牌、型号", phonePlaceholder: "搜索型号 / SN / 库存编号"}}
     filters={filterFields}
