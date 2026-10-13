@@ -4,9 +4,10 @@ import test from "node:test";
 import {AreaTrendChart, hasEnoughTrendData, resolveTrendChartCurve, shouldShowTrendChartDots, TrendLineChart} from "./chart-primitives";
 import {renderToStaticMarkup} from "react-dom/server";
 
-test("finance trend charts default to straight segments and retain explicit smoothing", () => {
-  assert.equal(resolveTrendChartCurve(), "linear");
+test("all shared trend charts default to smooth curves and retain explicit overrides", () => {
+  assert.equal(resolveTrendChartCurve(), "monotone");
   assert.equal(resolveTrendChartCurve("monotone"), "monotone");
+  assert.equal(resolveTrendChartCurve("linear"), "linear");
 });
 
 test("finance trend charts expose markers for sparse ranges only", () => {
@@ -22,6 +23,8 @@ test("both trend primitives pass the selected curve and sparse marker policy to 
   assert.equal((trendCharts.match(/type=\{curveType\}/g) || []).length, 3);
   assert.equal((trendCharts.match(/dot=\{showDots \?/g) || []).length, 3);
   assert.doesNotMatch(trendCharts, /type="monotone"/);
+  const sparkline = source.slice(source.indexOf("/** Axis-free KPI trend."), source.indexOf("export interface HorizontalBarDatum"));
+  assert.match(sparkline, /type=\{resolveTrendChartCurve\(\)\}/);
 });
 
 test("trend charts need two distinct dates with finite visible data and preserve zero", () => {

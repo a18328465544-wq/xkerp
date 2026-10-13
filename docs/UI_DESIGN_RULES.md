@@ -73,6 +73,7 @@
 复杂表单、可编辑明细和扫码/日期网格可以组合底层 `Dialog`、原生 checkbox/radio/button，但必须保留统一的遮罩、焦点、类型、错误和移动端行为，并在代码中说明例外原因。图片预览统一使用 `ErpImagePreviewDialog`；底层 `Dialog` 仅允许出现在 `ErpDialogShell`、全局命令搜索和持续工作抽屉等已登记的复杂交互中。Sonner 只可在 `NotificationToaster` 和 `notification.ts` 适配层出现。
 
 - 图表统一复用 `src/components/ui/chart-primitives.tsx`；`src/components/ui/recharts.tsx` 是唯一允许运行时导入 `recharts` 的边界，图表库拆分为独立可缓存的 vendor chunk。底层 Recharts 组件必须同步导出，不得用 `React.lazy` 包裹 forwardRef 图表组件；按需加载发生在页面模块边界。`ChartContainer` 统一提供图表外壳，页面负责可读的加载、错误和空态。
+- 同类趋势图（首页经营趋势、资金收支、账户流水、销售利润和行情小趋势）统一默认使用 `monotone` 平滑圆弧线，由共享 `chartTokens.chartCurve` 管理，桌面与手机保持一致。只改变数据点之间的绘制方式，不补造业务数据、不改金额、日期、颜色、权限或统计范围；保留稀疏数据点标记及少于两个有效日期时的「数据不足」。旧财务布局计划中的默认直线要求已由 2026-10-13 用户本次统一圆弧线要求替代；有明确业务原因需要直线时可显式传 `curve="linear"`，需说明原因。
 
 ### 选项控件（2026-10-12）
 

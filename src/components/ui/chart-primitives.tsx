@@ -44,6 +44,7 @@ export const chartTokens = {
   chartBarGap: "28%",
   chartAreaOpacity: 0.07,
   chartAnimationDuration: 180,
+  chartCurve: "monotone",
 } as const;
 
 export const CHART_STROKE_WIDTH = chartTokens.chartStrokeWidth;
@@ -85,7 +86,7 @@ type SharedTrendChartProps = {
 export type TrendChartCurve = "linear" | "monotone";
 
 export function resolveTrendChartCurve(curve?: TrendChartCurve): TrendChartCurve {
-  return curve ?? "linear";
+  return curve ?? chartTokens.chartCurve;
 }
 
 export function shouldShowTrendChartDots(dataPointCount: number): boolean {
@@ -311,7 +312,7 @@ export function Sparkline({
       <XAxis dataKey="index" hide />
       <YAxis hide domain={["dataMin", "dataMax"]} />
       <Line
-        type="monotone"
+        type={resolveTrendChartCurve()}
         dataKey="value"
         stroke={color}
         strokeWidth={CHART_STROKE_WIDTH}
