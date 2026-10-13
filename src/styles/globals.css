@@ -1561,9 +1561,8 @@ input[inputmode="numeric"] {
   [data-phone-header="true"][data-has-header-actions="true"] > button { grid-column: 1; grid-row: 1; justify-self: start; }
   [data-phone-header="true"][data-has-header-actions="true"] > [data-erp-region="drawer-header-actions"] { grid-column: 3; grid-row: 1; justify-self: end; }
   [data-phone-header="true"] [data-erp-region="drawer-header-actions"] button { padding-inline: var(--erp-space-2); font-size: var(--erp-text-sm); font-weight: var(--erp-font-medium); }
-  .erp-phone-category-strip { display: flex; overflow-x: auto; gap: var(--erp-space-1); overscroll-behavior-x: contain; scrollbar-width: none; }
-  .erp-phone-category-strip > button { flex-shrink: 0; min-height: var(--erp-mobile-touch-size); border-radius: 0; color: var(--erp-color-text-secondary); font-size: var(--erp-text-sm); }
-  .erp-phone-category-strip > button[aria-pressed="true"] { color: var(--erp-color-primary); box-shadow: inset 0 -2px var(--erp-color-primary); }
+  /* Category quick filter: the ErpChoiceChips row inside owns scrolling. */
+  .erp-phone-category-strip { min-width: 0; }
   [data-phone-detail="inventory"] > section:first-child > div:first-child { height: 12rem; background: var(--erp-color-surface); }
   [data-phone-detail="inventory"] > section:first-child > div[data-phone-image-empty="true"]:first-child { height: var(--erp-space-16); }
   [data-phone-detail="inventory"] .truncate { white-space: normal; overflow-wrap: anywhere; }
@@ -1970,8 +1969,7 @@ input[inputmode="numeric"] {
   .erp-inventory-phone-views > [role="group"] { display: flex; width: 100%; height: calc(var(--erp-mobile-touch-size) - var(--erp-space-2)); padding: calc(var(--erp-space-1) / 2); }
   /* This inventory-only 36px compact switch is explicitly requested; other phone controls keep M4. */
   .erp-inventory-phone-views .erp-segmented-control > button[data-erp-control="button"] { flex: 1; min-width: 0; height: 100%; min-height: 0; padding-inline: var(--erp-space-1); font-size: var(--erp-text-sm); white-space: nowrap; }
-  .erp-inventory-directory .erp-phone-category-strip { margin: 0; padding-inline: 0; border-bottom: 1px solid var(--erp-color-border-soft); }
-  .erp-inventory-directory .erp-phone-category-strip > button { min-width: calc((100% - var(--erp-space-5)) / 6); padding-inline: var(--erp-space-2); }
+  .erp-inventory-directory .erp-phone-category-strip { margin: 0; padding-inline: 0; }
   .erp-inventory-directory [data-erp-component="data-table"] { border: 0; border-radius: 0; box-shadow: none; }
   .erp-customer-list-toolbar.erp-inventory-phone-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--erp-space-2); padding: 0 var(--erp-space-4) var(--erp-space-2); background: var(--erp-color-canvas); }
   .erp-inventory-phone-toolbar > .erp-customer-sort { flex: 1; min-width: 0; max-width: none; padding-inline: var(--erp-space-1); color: var(--erp-color-text-secondary); }

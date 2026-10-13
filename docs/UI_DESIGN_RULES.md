@@ -86,6 +86,7 @@
 6. 只显示状态 → `ErpStatusBadge`：无边框、没有悬停效果。
 
 - 筛选字段 `ErpFilterField` 的 `kind: "select"` 写 `phoneControl: "chips"` 表示「固定短枚举」：手机筛选面板显示为胶囊（除「全部」外不超过 6 个，超过自动改为选择行），「全部××」在胶囊里显示为「全部」。不写时手机显示为选择行「标签 … 值 ›」，超过 12 项带搜索。电脑筛选栏不受影响，仍是下拉框。
+- 有快捷筛选的列表（`ErpListPage.quickFilters`），电脑端在结果栏左侧显示同一组选择胶囊，和筛选栏下拉框共用同一个筛选状态。
 - 电脑端列表结果栏不再显示「N 项筛选」，改为 `ErpFilterTags`：每个生效条件一个「字段：值 ×」，超过 5 个显示「+n」，多于 1 个时末尾有「清空」。
 - 功能页面不得手写 `aria-pressed` 按钮组来做多选一，改用 `ErpChoiceChips` 或 `ErpSegmentedControl`。例外登记在 `scripts/check-ui-contracts.mjs` 的白名单里并写明原因。[lint]
 

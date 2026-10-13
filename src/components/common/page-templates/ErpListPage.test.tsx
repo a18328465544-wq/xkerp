@@ -67,7 +67,7 @@ test("a domain-owned phone More trigger can stay inline without another action s
   const inline = renderToStaticMarkup(<ErpListPage {...props} phone phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);
   assert.match(inline, /aria-label="库存更多"/);
   assert.doesNotMatch(inline, /aria-label="更多页面操作"/);
-  const unchanged = renderToStaticMarkup(<ErpListPage {...props} phone primaryAction={undefined} phoneHeaderActions={headerActions} />);
+  const unchanged = renderToStaticMarkup(<ErpListPage {...props} phone primaryAction={undefined} actions={[]} onRefresh={undefined} table={{...props.table!, onPageSizeChange: undefined}} phoneHeaderActions={headerActions} />);
   assert.match(unchanged, /aria-label="更多页面操作"/);
   const desktop = renderToStaticMarkup(<ErpListPage {...props} phone={false} phoneHeaderActions={headerActions} phoneHeaderActionsMode="inline" />);
   assert.doesNotMatch(desktop, /库存更多/);
@@ -125,7 +125,8 @@ test("specialized tables can use shared pagination without a fake table model", 
   const markup = renderToStaticMarkup(<ErpListPage<Row> {...props} phone table={undefined} pagination={{total: 41, page: 2, pageSize: 20, onPageSizeChange: noop}} phoneTableContent={<div>库存自定义行</div>} />);
   assert.match(markup, /41 位客户/);
   assert.match(markup, /库存自定义行/);
-  assert.match(markup, /aria-label="客户筛选与操作"/);
+  assert.match(markup, /aria-label="客户筛选"/);
+  assert.match(markup, /aria-label="客户更多操作"/, "page size stays reachable from More");
   assert.doesNotMatch(markup, /data-erp-component="data-table"/, "a custom table does not need a fake table model");
   assert.match(readFileSync(new URL("./ErpListPage.tsx", import.meta.url), "utf8"), /aria-label="每页条数" value=\{String\(pageSize\)\} onValueChange=\{\(value\) => onPageSizeChange\(Number\(value\)\)\}/);
 });
@@ -144,7 +145,9 @@ test("phone shows the count once, a filter button with its badge and column-buil
   assert.match(markup, /erp-list-phone-title">客户<small>37 位客户<\/small>/);
   assert.equal(markup.match(/37 位客户/g)?.length, 1);
   assert.doesNotMatch(markup, /条记录/, "the table's own count bar is replaced by the header count");
-  assert.match(markup, /aria-label="客户筛选与操作"[^>]*>[\s\S]*?筛选<span class="tabular-nums">1<\/span>/);
+  assert.match(markup, /aria-label="客户筛选"[^>]*>[\s\S]*?筛选<span class="tabular-nums">1<\/span>/);
+  assert.match(markup, /aria-label="客户更多操作"/, "export and refresh move out of the filter sheet");
+  assert.doesNotMatch(markup, /筛选与操作/);
   assert.match(markup, /aria-label="客户快捷筛选"/);
   assert.match(markup, /role="radiogroup" aria-label="客户快捷筛选"/);
   assert.match(markup, /aria-checked="true"[^>]*>[\s\S]*?<span>核心 \/ S级<\/span>/);
@@ -236,4 +239,18 @@ test("empty lists offer the already-authorized creation action once per screen",
     const restricted = renderToStaticMarkup(<ErpListPage {...props} phone={phone} primaryAction={undefined} table={{...props.table!, data: [], total: 0}} />);
     assert.doesNotMatch(restricted, /新建客户/);
   }
+});
+
+test("desktop shows quick filters as chips beside the results summary", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} phone={false} />);
+  assert.match(markup, /role="radiogroup" aria-label="客户档案快捷筛选"/);
+  assert.match(markup, /aria-checked="true"[^>]*>[\s\S]*?<span>核心 \/ S级<\/span>/);
+  const plain = renderToStaticMarkup(<ErpListPage {...props} quickFilters={[]} filters={[]} phone={false} />);
+  assert.doesNotMatch(plain, /快捷筛选|radiogroup/);
+});
+
+test("pages without page actions keep the plain filter button and no More", () => {
+  const markup = renderToStaticMarkup(<ErpListPage {...props} actions={[]} onRefresh={undefined} table={{...props.table!, onPageSizeChange: undefined}} phone />);
+  assert.match(markup, /aria-label="客户筛选"/);
+  assert.doesNotMatch(markup, /客户更多操作/);
 });

@@ -198,7 +198,6 @@ const pressedGroupAllowlist = new Map([
   ["src/features/assembly/components/AssemblyOperationForm.tsx", "带说明的选择卡片（组装 / 拆卸）"],
   ["src/features/settings/components/UserPermissionDialog.tsx", "菜单权限是多选开关，不是多选一"],
   ["src/components/common/ErpProductLedgerMobile.tsx", "排序面板里的整行选项"],
-  ["src/features/inventory/pages/InventoryListPage.tsx", "分类横条：Codex 库存分支合并后迁移到 ErpChoiceChips"],
   ["src/features/inspections/pages/InspectionWorkspacePage.tsx", "检测队列：Codex 质检分支合并后迁移到 ErpSegmentedControl"],
 ]);
 
