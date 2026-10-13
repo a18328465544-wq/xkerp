@@ -53,6 +53,7 @@
     "lint:mobile": "node scripts/check-mobile-rules.mjs",
     "lint:finance-layout": "node scripts/check-finance-layout.mjs",
     "test:mobile-rules": "python3 scripts/browser-mobile-rules.py",
+    "test:mobile-keyboard": "python3 scripts/browser-phone-keyboard.py",
     "snapshots": "python3 scripts/browser-page-snapshots.py",
     "lint:design-system": "node scripts/check-design-system.mjs",
     "lint:analytics": "node scripts/check-analytics-frame.mjs",

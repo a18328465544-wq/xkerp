@@ -2,6 +2,7 @@ import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import type {ReactNode} from "react";
 import {NotificationToaster} from "@/src/components/common";
 import {AuthProvider} from "./auth";
+import {PhoneViewportProvider} from "./shell/PhoneViewportProvider";
 
 // ERP pages already expose explicit refresh/retry actions. Keeping stale data in
 // the cache for a short window prevents tab switches and window focus events
@@ -20,5 +21,5 @@ const queryClient = new QueryClient({
 });
 
 export function AppProviders({children}: {children: ReactNode}) {
-  return <QueryClientProvider client={queryClient}><AuthProvider>{children}</AuthProvider><NotificationToaster /></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><PhoneViewportProvider><AuthProvider>{children}</AuthProvider><NotificationToaster /></PhoneViewportProvider></QueryClientProvider>;
 }

@@ -1254,7 +1254,7 @@ input[inputmode="numeric"] {
   body:has([role="dialog"][data-open]:not([data-mobile-presentation="tab"]), .erp-option-popup[data-open], .erp-popover-surface[data-open]) [data-erp-shell] {
     --erp-phone-dock-height: 0px;
   }
-  [data-erp-shell][data-phone-keyboard="open"] { --erp-mobile-bottom-offset: 0px; }
+  [data-erp-shell][data-phone-keyboard="open"], [data-phone-keyboard="open"] [data-erp-shell] { --erp-mobile-bottom-offset: 0px; }
   body:has([data-workspace-tab-panel][data-active="true"] :is([data-erp-component="mobile-workflow"]:not(.erp-document-workflow:not([open]) *), [data-phone-task="true"])) [data-erp-shell] {
     --erp-mobile-bottom-offset: env(safe-area-inset-bottom, 0px);
   }
@@ -1426,7 +1426,11 @@ input[inputmode="numeric"] {
      editing takes the full available height below the workspace header. */
   .erp-dialog-viewport:has([data-mobile-presentation="dialog"]) { align-items: center; padding: var(--erp-space-4); }
   .erp-dialog-viewport > .erp-dialog-popup[data-mobile-presentation="dialog"] { width: 100%; max-width: 28rem; border-radius: var(--erp-radius-xl); margin-bottom: 0; }
-  .erp-dialog-viewport:not(.erp-drawer-viewport) { bottom: var(--erp-phone-keyboard-inset); }
+  /* min-height:100dvh defeats top/bottom keyboard bounds and pushes a shorter
+     bottom-aligned popup BELOW the visual viewport. Every phone surface must
+     be allowed to shrink, including drawers without a footer. */
+  .erp-dialog-viewport:not(.erp-drawer-viewport) { bottom: var(--erp-phone-keyboard-inset); min-height: 0; }
+  .erp-drawer-viewport { top: var(--erp-phone-viewport-offset-top, 0px); bottom: var(--erp-phone-keyboard-inset); min-height: 0; }
   /* Drawers with a pinned footer need the same visible-viewport boundary as
      sheets; otherwise a footer search/action remains behind the iOS keyboard. */
   .erp-drawer-viewport:has(> [data-erp-component="detail-drawer"] > [data-erp-region="drawer-footer"]) { top: var(--erp-phone-viewport-offset-top, 0px); bottom: var(--erp-phone-keyboard-inset); min-height: 0; }
@@ -1531,8 +1535,9 @@ input[inputmode="numeric"] {
   .erp-phone-select-trigger > button:first-child { flex: 1; min-width: 0; justify-content: flex-start; padding-inline: var(--erp-space-3); font-size: var(--erp-text-base); font-weight: var(--erp-font-regular); }
   .erp-phone-select-trigger > button:first-child > span { min-width: 0; flex: 1; white-space: normal; text-align: left; overflow-wrap: anywhere; }
   .erp-phone-select-trigger > button > svg { flex-shrink: 0; color: var(--erp-color-text-muted); }
-  .erp-dialog-viewport:has(.erp-phone-selector) { align-items: stretch; padding: 0; top: 0; }
-  .erp-dialog-viewport:has(.erp-phone-selector) > .erp-phone-selector { max-height: var(--erp-phone-visible-height); }
+  .erp-dialog-viewport:has(.erp-phone-selector) { align-items: stretch; padding: 0; top: var(--erp-phone-viewport-offset-top, 0px); }
+  .erp-dialog-viewport:has(.erp-phone-selector) > .erp-phone-selector { max-height: 100%; }
+  .erp-dialog-viewport:has([data-mobile-presentation="fullscreen"]) { align-items: stretch; }
   /* Tab panels are portaled outside AppShell: shell-local bottom-offset does
      not inherit here. Reserve the real navigation area, so the scroll body
      cannot mistake rows covered by the navigation for visible content. */
@@ -2197,20 +2202,44 @@ input[inputmode="numeric"] {
   .erp-dialog-viewport:has([data-mobile-presentation="fullscreen"]),
   .erp-dialog-viewport:has([data-mobile-presentation="tab"]),
   .erp-drawer-viewport {
-    padding-top: var(--erp-safe-top);
+    padding-top: var(--erp-phone-overlay-safe-top);
     padding-inline: var(--erp-safe-left) var(--erp-safe-right);
     box-sizing: border-box;
   }
   .erp-phone-selector, .erp-dialog-popup[data-mobile-presentation="fullscreen"] {
-    height: calc(var(--erp-phone-visible-height) - var(--erp-safe-top));
-    max-height: calc(var(--erp-phone-visible-height) - var(--erp-safe-top));
+    height: 100%;
+    max-height: 100%;
   }
+  .erp-dialog-viewport:not(.erp-drawer-viewport) > .erp-dialog-popup { max-height: 100%; }
   .erp-dialog-popup > .erp-scrollbar:last-child,
   :is(.erp-main-content, .erp-dialog-popup, .erp-phone-selector, .erp-option-popup, .erp-popover-surface) :is(input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]) {
     font-size: var(--erp-mobile-input-text);
   }
+  html[data-phone-viewport="occluded"] body:not(:has([data-erp-shell])) { padding-bottom: var(--erp-phone-keyboard-inset); }
+  /* Authentication and custom/nested forms use the same focus/zoom contract. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([readonly]), textarea, [contenteditable] {
+    font-size: var(--erp-mobile-input-text);
+    scroll-margin-block: var(--erp-space-3);
+  }
   [data-workspace-tab-panel][data-active="true"] { animation: erp-phone-page-enter var(--erp-motion-fast) ease-out; }
   @keyframes erp-phone-page-enter { from { opacity: 0.8; } to { opacity: 1; } }
+}
+
+/* A landscape iPhone may cross the phone layout breakpoint. While its
+   visible area is reduced, keep touch-device dialogs inside that rectangle;
+   the tablet/desktop presentation itself is unchanged. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+  html[data-phone-viewport="occluded"] body:not(:has([data-erp-shell])) { padding-bottom: var(--erp-phone-keyboard-inset); }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([readonly]), textarea, [contenteditable] {
+    font-size: var(--erp-mobile-input-text);
+    scroll-margin-block: var(--erp-space-3);
+  }
+  html[data-phone-viewport="occluded"] .erp-dialog-viewport {
+    top: max(var(--erp-workspace-bar-height), var(--erp-phone-viewport-offset-top));
+    bottom: var(--erp-phone-keyboard-inset);
+    min-height: 0;
+  }
+  html[data-phone-viewport="occluded"] .erp-dialog-viewport > .erp-dialog-popup { max-height: 100%; }
 }
 
 @keyframes erp-shimmer {

@@ -198,6 +198,7 @@
   --erp-safe-right: env(safe-area-inset-right, 0px);
   --erp-safe-bottom: env(safe-area-inset-bottom, 0px);
   --erp-safe-left: env(safe-area-inset-left, 0px);
+  --erp-phone-overlay-safe-top: max(0px, calc(var(--erp-safe-top) - var(--erp-phone-viewport-offset-top)));
   --erp-mobile-bottom-offset: 0px;
   --erp-mobile-action-offset: 0px;
   --erp-phone-dock-height: 0px;

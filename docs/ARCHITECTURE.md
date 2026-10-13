@@ -115,10 +115,16 @@ src/
 `src/app/router.tsx` 负责。每个业务页面由 TanStack Router 懒加载，并统一经过：
 
 ```text
-AuthProvider → AuthBoundary → PermissionBoundary → AppShell → Feature Page
+PhoneViewportProvider → AuthProvider → AuthBoundary → PermissionBoundary → AppShell → Feature Page
 ```
 
 页面不得自行创建登录屏幕、替换 AppShell 或复制全局导航。离开未保存录入页时使用统一的 `useErpDirtyGuard`。
+
+`src/app/shell/PhoneViewportProvider.tsx` 在认证之前统一拥有移动键盘服务，
+通过 VisualViewport 的 resize/scroll 与输入焦点事件同步根节点几何令牌。
+`AppShell` 只消费键盘状态；登录、页面表单与 portaled 弹窗/选择器/抽屉共用
+实际可见边界。聚焦遮挡只滚动所属内容容器，固定搜索框不驱动背景列表滚动。
+键盘关闭时钳制残留顶部偏移，pinch zoom 不再额外缩小布局。
 
 ### 5.2 数据流和缓存边界
 

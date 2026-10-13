@@ -1,6 +1,6 @@
 import {ArrowUp} from "lucide-react";
 import {Button} from "@/src/components/ui";
-import {lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode} from "react";
+import {lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode} from "react";
 import {useQueryClient} from "@tanstack/react-query";
 import {useRouterState} from "@tanstack/react-router";
 import {AppHeader} from "./AppHeader";
@@ -11,7 +11,7 @@ import {WorkspaceTabWorkspaceProvider} from "./WorkspaceTabWorkspace";
 import {WorkspaceTabKeepAlive} from "./WorkspaceTabKeepAlive";
 import {AppMobileNavigation} from "./AppMobileNavigation";
 import {useErpPhone} from "@/src/hooks/useErpViewport";
-import {resolvePhoneKeyboard} from "./phoneViewport";
+import {usePhoneKeyboard} from "./PhoneViewportProvider";
 import {PhoneBackProvider} from "@/src/hooks/usePhoneBack";
 import {useAuth} from "@/src/app/auth";
 import {isPathAllowed, navigationItems} from "@/src/config/navigation";
@@ -35,7 +35,7 @@ function AppShellContent({children}: {children: ReactNode}) {
   const mainRef = useRef<HTMLElement>(null);
   const phone = useErpPhone();
   const [profileVisible, setProfileVisible] = useState(false);
-  const [keyboard, setKeyboard] = useState({open: false, inset: 0});
+  const keyboard = usePhoneKeyboard();
   const [showScrollTop, setShowScrollTop] = useState(false);
   const {clearNavigationIntent} = useWorkspaceTabRuntime();
 
@@ -67,37 +67,6 @@ function AppShellContent({children}: {children: ReactNode}) {
     return () => mainEl.removeEventListener("scroll", onScroll);
   }, [phone]);
 
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!phone || !viewport) {setKeyboard({open: false, inset: 0}); return;}
-    let restingHeight = window.innerHeight;
-    let width = window.innerWidth;
-    const root = document.documentElement;
-    const previousInset = root.style.getPropertyValue("--erp-phone-keyboard-inset");
-    const previousHeight = root.style.getPropertyValue("--erp-phone-visible-height");
-    const previousOffsetTop = root.style.getPropertyValue("--erp-phone-viewport-offset-top");
-    const update = () => {
-      const focused = document.activeElement;
-      const editing = focused instanceof HTMLElement && focused.matches("textarea, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='file']):not([readonly]):not([disabled])");
-      if (!editing || Math.abs(window.innerWidth - width) > 100) {restingHeight = window.innerHeight; width = window.innerWidth;}
-      const next = resolvePhoneKeyboard({editing, restingHeight, layoutHeight: window.innerHeight, visualHeight: viewport.height, offsetTop: viewport.offsetTop, scale: viewport.scale});
-      setKeyboard((previous) => previous.open === next.open && previous.inset === next.inset ? previous : next);
-      root.style.setProperty("--erp-phone-keyboard-inset", `${next.inset}px`);
-      root.style.setProperty("--erp-phone-visible-height", `${viewport.height}px`);
-      root.style.setProperty("--erp-phone-viewport-offset-top", `${Math.max(0, viewport.offsetTop)}px`);
-    };
-    viewport.addEventListener("resize", update);
-    viewport.addEventListener("scroll", update);
-    window.addEventListener("resize", update);
-    window.addEventListener("orientationchange", update);
-    window.addEventListener("pageshow", update);
-    document.addEventListener("visibilitychange", update);
-    window.addEventListener("focusin", update);
-    window.addEventListener("focusout", update);
-    update();
-    return () => {viewport.removeEventListener("resize", update); viewport.removeEventListener("scroll", update); window.removeEventListener("resize", update); window.removeEventListener("orientationchange", update); window.removeEventListener("pageshow", update); document.removeEventListener("visibilitychange", update); window.removeEventListener("focusin", update); window.removeEventListener("focusout", update); if (previousInset) root.style.setProperty("--erp-phone-keyboard-inset", previousInset); else root.style.removeProperty("--erp-phone-keyboard-inset"); if (previousHeight) root.style.setProperty("--erp-phone-visible-height", previousHeight); else root.style.removeProperty("--erp-phone-visible-height"); if (previousOffsetTop) root.style.setProperty("--erp-phone-viewport-offset-top", previousOffsetTop); else root.style.removeProperty("--erp-phone-viewport-offset-top");};
-  }, [phone]);
-
   // Give keyboard and screen-reader users a predictable reading position after
   // workspace navigation. Dialogs and form controls retain focus when they
   // change without changing the route.
@@ -121,7 +90,7 @@ function AppShellContent({children}: {children: ReactNode}) {
     };
   }, []);
 
-  return <div data-erp-shell="true" data-phone-keyboard={keyboard.open ? "open" : undefined} style={{"--erp-phone-keyboard-inset": `${keyboard.inset}px`} as CSSProperties} className="flex h-[100dvh] min-w-0 overflow-hidden bg-[var(--erp-color-canvas)]">
+  return <div data-erp-shell="true" data-phone-keyboard={keyboard.open ? "open" : undefined} className="flex h-[100dvh] min-w-0 overflow-hidden bg-[var(--erp-color-canvas)]">
     <a href="#main-content" hidden={phone && profileVisible} className="erp-skip-link">跳到主要内容</a>
     <AppSidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader /><main id="main-content" inert={phone && profileVisible || undefined} aria-hidden={phone && profileVisible || undefined} ref={mainRef} tabIndex={-1} aria-label="主要内容" className="erp-main-content erp-scrollbar min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 outline-none sm:p-4 lg:p-6">{phone && <ErpPullToRefreshIndicator state={pullState} />}<WorkspaceTabKeepAlive fallback={children} scrollContainerRef={mainRef} /></main>{phone && showScrollTop && <Button type="button" size="iconTouch" variant="secondary" aria-label="回到顶部" className="erp-phone-scroll-top" onClick={() => mainRef.current?.scrollTo({top: 0, behavior: "smooth"})}><ArrowUp className="h-5 w-5" /></Button>}{phone && <AppMobileNavigation onProfileVisibilityChange={setProfileVisible} />}</div>
