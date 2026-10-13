@@ -1,7 +1,7 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryResult} from "@tanstack/react-query";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {useNavigate} from "@tanstack/react-router";
-import {AlertTriangle, ArrowDownToLine, ArrowLeftRight, Banknote, Building2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, MoreHorizontal, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
+import {AlertTriangle, ArrowDownToLine, ArrowLeftRight, Banknote, Building2, CreditCard, Download, FileCheck2, FileText, Landmark, LockKeyhole, Plus, RefreshCw, Settings2, WalletCards} from "lucide-react";
 import {ErpChoiceChips, ErpSearchInput} from "@/src/components/common";
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {notify} from "@/src/utils/notification";
@@ -162,23 +162,7 @@ function FinanceAccountsHeader({accounts = [], loading = false, onRefresh, onCre
   const quickStatus: QuickStatusItemData[] = [
     {icon: <FileCheck2 className="h-4 w-4" />, label: "对账状态", value: reconciliation.label, tone: reconciliation.tone, description: reconciliation.description},
   ];
-  return <ErpPageHeader title="资金账户" quickStatus={desktop ? undefined : quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>{onLedger && <Button type="button" size="sm" variant="secondary" onClick={onLedger}><FileText className="h-4 w-4" />查看流水</Button>}{desktop ? <FinanceAccountsMoreMenu onTransfer={onTransfer} onReconcile={canViewReconciliation ? onReconcile : undefined} onExport={onExport} /> : <>{onTransfer && <Button type="button" size="sm" variant="secondary" onClick={onTransfer}><ArrowLeftRight className="h-4 w-4" />资金调拨</Button>}{canViewReconciliation && onReconcile && <Button type="button" size="sm" variant="secondary" onClick={onReconcile}><FileCheck2 className="h-4 w-4" />对账管理</Button>}{onExport && <Button type="button" size="sm" variant="secondary" onClick={onExport}><Download className="h-4 w-4" />导出账户</Button>}</>}<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
-}
-
-function FinanceAccountsMoreMenu({onTransfer, onReconcile, onExport}: {onTransfer?: () => void; onReconcile?: () => void; onExport?: () => void}) {
-  if (!onTransfer && !onReconcile && !onExport) return null;
-  const run = (event: React.MouseEvent<HTMLButtonElement>, action?: () => void) => {
-    event.currentTarget.closest("details")?.removeAttribute("open");
-    action?.();
-  };
-  return <details className="relative">
-    <summary className="erp-focus-ring inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] px-3 text-sm font-medium text-[var(--erp-color-text-secondary)] hover:bg-[var(--erp-color-surface-muted)]"><MoreHorizontal className="h-4 w-4" />更多</summary>
-    <div className="erp-popover-layer absolute right-0 top-full mt-2 min-w-44 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-1 shadow-[var(--erp-shadow-popover)]">
-      {onTransfer && <Button type="button" size="sm" variant="ghost" className="w-full justify-start" onClick={(event) => run(event, onTransfer)}><ArrowLeftRight className="h-4 w-4" />资金调拨</Button>}
-      {onReconcile && <Button type="button" size="sm" variant="ghost" className="w-full justify-start" onClick={(event) => run(event, onReconcile)}><FileCheck2 className="h-4 w-4" />对账管理</Button>}
-      {onExport && <Button type="button" size="sm" variant="ghost" className="w-full justify-start" onClick={(event) => run(event, onExport)}><Download className="h-4 w-4" />导出账户</Button>}
-    </div>
-  </details>;
+  return <ErpPageHeader title="资金账户" quickStatus={desktop ? undefined : quickStatus} actions={<><Button type="button" size="sm" variant="secondary" onClick={onRefresh} disabled={!onRefresh || loading}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />刷新</Button>{onLedger && <Button type="button" size="sm" variant="secondary" onClick={onLedger}><FileText className="h-4 w-4" />查看流水</Button>}{onTransfer && <Button type="button" size="sm" variant="secondary" onClick={onTransfer}><ArrowLeftRight className="h-4 w-4" />资金调拨</Button>}{canViewReconciliation && onReconcile && <Button type="button" size="sm" variant="secondary" onClick={onReconcile}><FileCheck2 className="h-4 w-4" />对账管理</Button>}{onExport && <Button type="button" size="sm" variant="secondary" onClick={onExport}><Download className="h-4 w-4" />导出账户</Button>}<Button type="button" size="sm" variant="primary" onClick={onCreate} disabled={!onCreate}><Plus className="h-4 w-4" />新增账户</Button></>} />;
 }
 
 function SummaryCards({summary, accountCount, desktop = false, distribution, negativeAccountCount = 0}: {summary: ReturnType<typeof summarizeFinanceAccounts>; accountCount: number; desktop?: boolean; distribution?: ReturnType<typeof buildDistribution>; negativeAccountCount?: number}) {
