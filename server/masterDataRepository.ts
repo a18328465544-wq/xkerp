@@ -3,6 +3,8 @@ import {inventoryStockStatusValues} from "../src/types/inventory.ts";
 import {isProductCategory} from "../src/types/core.ts";
 import {withDatabaseTransaction} from "./db.ts";
 import {productSearchSql} from "./productSearchSql.ts";
+import {productBrandFilterSql, readProductBrandCatalog} from "./productBrandRead.ts";
+import {resolveProductBrand} from "../src/utils/productBrandCatalog.ts";
 
 type PageScope = {tenantId?: string; storeId?: string; page?: number; pageSize?: number; keyword?: string; sortKey?: string; sortDirection?: string; explicitSort?: boolean};
 export type VendorPageFilters = PageScope & {type?: string; level?: string; balance?: string};
@@ -80,10 +82,11 @@ export async function listVendorPage(filters: VendorPageFilters = {}, options: {
 
 export async function listProductPage(filters: ProductPageFilters = {}, options: {showCost: boolean; showProfit: boolean}) {
   return withDatabaseTransaction(async (client) => {
+    const brandCatalog = await readProductBrandCatalog(client, filters);
     const scope = scopeBuilder(filters);
-    if (filters.keyword?.trim()) scope.clauses.push(...productSearchSql("p", filters.keyword, scope.bind));
+    if (filters.keyword?.trim()) scope.clauses.push(...productSearchSql("p", filters.keyword, scope.bind, brandCatalog));
     if (filters.category && filters.category !== "all") scope.clauses.push(`COALESCE(p.data->>'category', '') = ${scope.bind(filters.category)}`);
-    if (filters.brand && filters.brand !== "all") scope.clauses.push(`COALESCE(p.data->>'brand', '') = ${scope.bind(filters.brand)}`);
+    if (filters.brand && filters.brand !== "all") scope.clauses.push(productBrandFilterSql("p.data->>'brand'", filters.brand, scope.bind, brandCatalog, "p.data->>'brandId'"));
     const where = scope.clauses.length ? `WHERE ${scope.clauses.join(" AND ")}` : "";
     const page = pageQuery(filters, {name: `COALESCE(data->>'name', '')`, refBuyPrice: numericJson("refBuyPrice"), refSellPrice: numericJson("refSellPrice"), currentStock: `current_stock`, lastDealTime: `COALESCE(data->>'lastDealTime', '')`}, `COALESCE(data->>'category', ''), COALESCE(data->>'brand', ''), COALESCE(data->>'model', '')`);
     const rankPosition = filters.keyword?.trim() && !filters.explicitSort ? scope.values.push(filters.keyword.trim()) : 0;
@@ -94,14 +97,15 @@ export async function listProductPage(filters: ProductPageFilters = {}, options:
     const facetWhere = facetScope.clauses.length ? `WHERE ${facetScope.clauses.join(" AND ")}` : "";
     const rows = await client.query<{id: string; data: ProductTemplate; current_stock: number}>(`SELECT * FROM (${base}) product_page ORDER BY ${orderBy} LIMIT $${scope.values.length + 1} OFFSET $${scope.values.length + 2}`, [...scope.values, page.pageSize, page.offset]);
     const aggregate = await client.query<{total: string; stocked_templates: string; stock_units: string}>(`SELECT COUNT(*)::text total, COUNT(*) FILTER (WHERE current_stock > 0)::text stocked_templates, COALESCE(SUM(current_stock),0)::text stock_units FROM (${base}) product_summary`, rankPosition ? scope.values.slice(0, -1) : scope.values);
-    const facets = await client.query<{category: string; brand: string}>(`SELECT DISTINCT COALESCE(data->>'category','') category, COALESCE(data->>'brand','') brand FROM gpu_products ${facetWhere}`, facetScope.values);
+    const facets = await client.query<{category: string; brand: string; brand_id: string}>(`SELECT DISTINCT COALESCE(data->>'category','') category, COALESCE(data->>'brand','') brand, COALESCE(data->>'brandId','') brand_id FROM gpu_products ${facetWhere}`, facetScope.values);
     const products = rows.rows.map((row) => {
       const data = {...row.data, id: row.id, currentStock: row.current_stock} as ProductTemplate & Record<string, unknown>;
+      data.brandDisplayName = resolveProductBrand(row.data.brandId || row.data.brand, brandCatalog)?.name || row.data.brand;
       if (!options.showCost) {Reflect.deleteProperty(data, "refBuyPrice"); Reflect.deleteProperty(data, "lastBuyPrice");}
       if (!options.showProfit) {Reflect.deleteProperty(data, "refSellPrice"); Reflect.deleteProperty(data, "lastSellPrice");}
       return data;
     });
     const summary = aggregate.rows[0];
-    return {data: {products}, meta: {page: page.page, pageSize: page.pageSize, total: Number(summary?.total || 0), summary: {stockedTemplates: Number(summary?.stocked_templates || 0), stockUnits: Number(summary?.stock_units || 0)}, facets: {categories: Array.from(new Set(facets.rows.map((row) => row.category).filter(isProductCategory))), brands: Array.from(new Set(facets.rows.map((row) => row.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))}}};
+    return {data: {products}, meta: {page: page.page, pageSize: page.pageSize, total: Number(summary?.total || 0), summary: {stockedTemplates: Number(summary?.stocked_templates || 0), stockUnits: Number(summary?.stock_units || 0)}, facets: {categories: Array.from(new Set(facets.rows.map((row) => row.category).filter(isProductCategory))), brands: Array.from(new Set(facets.rows.map((row) => resolveProductBrand(row.brand_id || row.brand, brandCatalog)?.name || row.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"))}}};
   });
 }

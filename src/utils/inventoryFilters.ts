@@ -2,6 +2,7 @@ import type { CardInventory } from "../types";
 import {inventoryReturnBlockedStatusValues, inventorySellableStatusValues} from "../types/inventory";
 import {compactSearchText, matchesKeyword} from "./search";
 import {productModelCode, productSearchMatches} from "./productSearch";
+import {productBrandsEqual} from "./productBrandCatalog";
 import { storeDate, storeDateDiffDays } from "./storeTime";
 
 export type InventoryRiskFilter = "mined" | "upturned" | "high";
@@ -107,6 +108,7 @@ export function matchesInventoryListFilters(
   card: CardInventory,
   filters: InventoryListFilters | Record<string, unknown> = {},
   referenceDate = storeDate(),
+  brandCatalog?: readonly import("../types/productBrand").ProductBrandRecord[],
 ) {
   const normalizedFilters = normalizeInventoryListFilters(filters);
   const selectedStatus = normalizedFilters.status?.trim();
@@ -122,7 +124,7 @@ export function matchesInventoryListFilters(
   }
   if (normalizedFilters.status && normalizedFilters.status !== "all" && card.status !== normalizedFilters.status) return false;
   if (normalizedFilters.category && normalizedFilters.category !== "all" && (card.category || "显卡") !== normalizedFilters.category) return false;
-  if (normalizedFilters.brand && normalizedFilters.brand !== "all" && card.brand !== normalizedFilters.brand) return false;
+  if (normalizedFilters.brand && normalizedFilters.brand !== "all" && !productBrandsEqual(card.brand, normalizedFilters.brand, brandCatalog)) return false;
   if (normalizedFilters.supplierName && !matchesKeyword(card.supplierName, normalizedFilters.supplierName)) return false;
   if (normalizedFilters.model && normalizedFilters.model !== "all" && card.model !== normalizedFilters.model) return false;
   if (normalizedFilters.condition && normalizedFilters.condition !== "all" && card.condition !== normalizedFilters.condition) return false;
@@ -134,7 +136,7 @@ export function matchesInventoryListFilters(
     const keyword = normalizedFilters.keyword;
     const identifiers = [card.id, card.productId, card.sn, card.expressNo];
     const exactIdentifier = identifiers.some((value) => Boolean(value) && compactSearchText(value) === compactSearchText(keyword));
-    const identityMatch = productSearchMatches({id: card.productId, productName: card.productName, category: card.category, brand: card.brand, model: card.model, version: card.version, vram: card.vram}, keyword);
+    const identityMatch = productSearchMatches({id: card.productId, productName: card.productName, category: card.category, brand: card.brand, model: card.model, version: card.version, vram: card.vram}, keyword, brandCatalog);
     const partialIdentifier = !productModelCode(keyword) && matchesKeyword(identifiers, keyword);
     if (!exactIdentifier && !identityMatch && !partialIdentifier) return false;
   }

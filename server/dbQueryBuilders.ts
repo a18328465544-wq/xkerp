@@ -14,6 +14,9 @@ import {financeExpenseCategories, legacyFinanceExpenseCategories} from "../src/t
 import {financeIncomeCategories} from "../src/types/finance-income.ts";
 import {storeDateAfterDays} from "../src/utils/storeTime.ts";
 import {inventoryKeywordSearchSql} from "./productSearchSql.ts";
+import {productBrandFilterSql} from "./productBrandRead.ts";
+import {standardProductBrands} from "../src/data/productBrandCatalog.ts";
+import type {ProductBrandRecord} from "../src/types/productBrand.ts";
 
 export type FinanceRecordKind = "settlement" | "income" | "expense";
 export type FinanceProfitFlowKind = "income" | "expense";
@@ -31,7 +34,7 @@ function normalizedPage(value: number | undefined, fallback: number) {
 // 这样排序、筛选和返回给前端的数值保持同一口径。
 const inventoryStorageDaysExpression = `GREATEST(CASE WHEN LEFT(COALESCE(data->>'entryTime', ''), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date - LEFT(data->>'entryTime', 10)::date ELSE 0 END, 0)`;
 
-export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
+export function buildInventoryPageQuery(filters: InventoryPageFilters = {}, brandCatalog: readonly ProductBrandRecord[] = standardProductBrands) {
   const page = normalizedPage(filters.page, 1);
   const pageSize = Math.min(200, normalizedPage(filters.pageSize, 20));
   const values: unknown[] = [];
@@ -55,12 +58,13 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     clauses.push(`COALESCE(op_status, '') <> '已售出'`);
   }
   const status = filters.status?.trim();
+  const brandBindingExpression = "(SELECT p.data->>'brandId' FROM gpu_products p WHERE p.id = op_product_id AND p.tenant_id = gpu_inventory.tenant_id AND p.store_id = gpu_inventory.store_id)";
   if (status) {
     if (cardStatusValues.includes(status as (typeof cardStatusValues)[number])) clauses.push(`op_status = ${bind(status)}`);
     else clauses.push("FALSE");
   }
   if (filters.category && filters.category !== "all") clauses.push(`op_category = ${bind(filters.category)}`);
-  if (filters.brand && filters.brand !== "all") clauses.push(`op_brand = ${bind(filters.brand)}`);
+  if (filters.brand && filters.brand !== "all") clauses.push(productBrandFilterSql("op_brand", filters.brand, bind, brandCatalog, filters.tenantId && filters.storeId ? brandBindingExpression : undefined));
   if (filters.supplierName?.trim()) clauses.push(`data->>'supplierName' ILIKE ${bind(`%${filters.supplierName.trim()}%`)}`);
   if (filters.model && filters.model !== "all") clauses.push(`data->>'model' = ${bind(filters.model)}`);
   if (filters.condition && filters.condition !== "all") clauses.push(`data->>'condition' = ${bind(filters.condition)}`);
@@ -86,7 +90,7 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}) {
     clauses.push(`COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0) > 0 AND COALESCE(NULLIF(data->>'estSellPrice', '')::numeric, 0) >= COALESCE(NULLIF(data->>'costPrice', '')::numeric, 0) * ${bind(1 + filters.minProfitMargin)}`);
   }
   if (keyword) {
-    clauses.push(inventoryKeywordSearchSql(keyword, bind));
+    clauses.push(inventoryKeywordSearchSql(keyword, bind, brandCatalog, filters.tenantId && filters.storeId ? brandBindingExpression : undefined));
   }
   const sortExpressions: Record<string, string> = {
     id: "id",

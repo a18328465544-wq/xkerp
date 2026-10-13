@@ -1,0 +1,7 @@
+import {Button, Select, type SelectProps} from "@/src/components/ui";
+import type {ProductBrandRecord} from "@/src/types/productBrand";
+
+export function ProductBrandPicker({brands, value, legacyValue, disabled, loading, canCreate, onSelect, onCreate, ...fieldProps}: {brands: readonly ProductBrandRecord[]; value: string; legacyValue?: string; disabled?: boolean; loading?: boolean; canCreate?: boolean; onSelect: (brand: ProductBrandRecord | null) => void; onCreate?: (text: string) => void} & Pick<SelectProps, "id" | "aria-describedby" | "aria-invalid" | "aria-required">) {
+  const selected = brands.find(brand => brand.id === value);
+  return <div className="space-y-1"><Select {...fieldProps} searchable aria-label="商品品牌" phoneDialogTitle="选择商品品牌" value={value || (legacyValue ? `legacy:${legacyValue}` : "")} disabled={disabled} searchLoading={loading} placeholder="搜索品牌，如华硕、ASUS" searchResultLimit={200} options={brands.map(brand => ({value: brand.id, label: brand.name, description: brand.aliases.join(" / "), searchText: [brand.name, ...brand.aliases].join(" ")}))} selectedOption={selected ? {value: selected.id, label: selected.name} : legacyValue ? {value: `legacy:${legacyValue}`, label: legacyValue} : undefined} onValueChange={id => onSelect(brands.find(brand => brand.id === id) || null)} quickCreateAction={canCreate && onCreate ? {label: "新建品牌", onClick: onCreate, disabled} : undefined} />{canCreate && onCreate && (value || legacyValue) && <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onCreate("")}>新建其他品牌</Button>}</div>;
+}

@@ -20,6 +20,108 @@ const integrationEnabled = Boolean(
   && process.env.RUN_BACKEND_HTTP_TESTS === "1",
 );
 
+test("brand catalog persists scoped aliases and metadata-only bindings with permissions and idempotency", {skip: !integrationEnabled}, async () => {
+  const {createApp} = await import("./app.ts");
+  const {createInitialState} = await import("./store.ts");
+  const server = createServer(createApp()), base = await listenEphemeral(server);
+  const prefix = `HTTP-BRAND-${Date.now()}`, createdProductIds: string[] = [];
+  const login = async (username: string, password: string) => {
+    const response = await fetch(`${base}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username, password})});
+    assert.equal(response.status, 200, await response.clone().text());
+    const session = await response.json() as {data: {csrfToken: string; user: {tenantId: string; storeId: string}}};
+    return {cookie: response.headers.get("set-cookie")!.split(";", 1)[0]!, ...session.data};
+  };
+  try {
+    const owner = await login(process.env.BACKEND_TEST_USERNAME!, process.env.BACKEND_TEST_PASSWORD!);
+    const headers = {cookie: owner.cookie, "content-type": "application/json", "x-csrf-token": owner.csrfToken};
+    const call = (path: string, body: unknown, key?: string) => fetch(`${base}${path}`, {method: "POST", headers: {...headers, ...(key ? {"idempotency-key": key} : {})}, body: JSON.stringify(body)});
+    const initial = await fetch(`${base}/api/product-brands`, {headers});
+    assert.equal(initial.status, 200);
+    const catalog = await initial.json() as {data: {brands: Array<{id: string}>; canManage: boolean}};
+    assert.equal(catalog.data.canManage, true); assert.ok(catalog.data.brands.some(brand => brand.id === "brand:asus"));
+    const created = await call("/api/product-brands", {name: prefix, aliases: [`${prefix}-alias`]}, `${prefix}-create`);
+    assert.equal(created.status, 201, await created.clone().text());
+    const customBrand = (await created.json() as {data: {id: string}}).data;
+    const revision = await getStateRevision();
+    assert.equal((await call("/api/product-brands", {name: prefix, aliases: [`${prefix}-alias`]}, `${prefix}-create`)).status, 201);
+    assert.equal(await getStateRevision(), revision);
+    assert.equal((await call("/api/product-brands", {name: "asus", aliases: []})).status, 409);
+    assert.equal((await call(`/api/product-brands/${encodeURIComponent(customBrand.id)}/aliases`, {aliases: ["MSI"]})).status, 409);
+    const legacy = {...createInitialState({includeDemoData: true}).products[0]!, id: `${prefix}-legacy`, name: "原商品名称 ASuS 保留", brand: "ASuS", brandId: undefined};
+    const unknown = {...legacy, id: `${prefix}-unknown`, name: "旧品牌未确认 RTX4090", brand: "旧品牌未确认", model: "RTX4090"};
+    const stock = {...createInitialState({includeDemoData: true}).inventory[0]!, id: `${prefix}-stock`, sn: `${prefix}-SN`, productId: unknown.id, productName: unknown.name, brand: unknown.brand, model: "RTX4090", status: "已入库" as const};
+    await saveStateRecords([{key: "products", items: [legacy, unknown]}, {key: "inventory", items: [stock]}], undefined, owner.user.tenantId, owner.user.storeId);
+    const readFacts = () => withDatabaseTransaction(async client => {
+      const result: Record<string, unknown> = {};
+      for (const table of ["gpu_inventory", "gpu_purchase_invoices", "gpu_sales_invoices", "gpu_market_quotes", "gpu_finance_ledger"]) result[table] = (await client.query(`SELECT id,data FROM ${table} WHERE tenant_id=$1 AND store_id=$2 ORDER BY id`, [owner.user.tenantId, owner.user.storeId])).rows;
+      return result;
+    });
+    const before = await readFacts();
+    const binding = {bindings: [{productId: legacy.id, brandId: "brand:asus", expectedBrand: "ASuS"}]};
+    const bound = await call("/api/product-brands/bindings", binding, `${prefix}-binding`);
+    assert.equal(bound.status, 201, await bound.clone().text());
+    assert.doesNotMatch(await bound.text(), /refBuyPrice|refSellPrice|totalCost/);
+    const bindingRevision = await getStateRevision();
+    assert.equal((await call("/api/product-brands/bindings", binding, `${prefix}-binding`)).status, 201);
+    assert.equal(await getStateRevision(), bindingRevision);
+    const persisted = await withDatabaseTransaction(client => client.query("SELECT data FROM gpu_products WHERE id=$1", [legacy.id]));
+    assert.deepEqual(persisted.rows[0].data, {...legacy, brandId: "brand:asus"});
+    assert.deepEqual(await readFacts(), before);
+    const manual = await call("/api/product-brands/bindings", {bindings: [{productId: unknown.id, brandId: "brand:msi", expectedBrand: unknown.brand}]}, `${prefix}-manual`);
+    assert.equal(manual.status, 201, await manual.clone().text());
+    const stocks = await fetch(`${base}/api/inventory/items?brand=MSI&keyword=MSIRTX4090`, {headers});
+    assert.equal(stocks.status, 200, await stocks.clone().text());
+    const stockData = (await stocks.json() as {data: Array<{id: string; brand: string}>}).data;
+    assert.ok(stockData.some(card => card.id === stock.id && card.brand === "微星"));
+    const grouped = await fetch(`${base}/api/inventory/summary?brand=MSI&keyword=MSIRTX4090`, {headers});
+    assert.equal(grouped.status, 200, await grouped.clone().text());
+    assert.ok((await grouped.json() as {data: Array<{brand: string; totalCount: number}>}).data.some(row => row.brand === "微星" && row.totalCount === 1));
+    assert.deepEqual(await readFacts(), before, "manual metadata binding does not rewrite the stock card");
+    assert.equal((await call("/api/product-brands/bindings", {bindings: [{...binding.bindings[0], expectedBrand: "stale"}]})).status, 409);
+    const list = await fetch(`${base}/api/products?brand=ASUS&keyword=asus`, {headers});
+    assert.equal(list.status, 200, await list.clone().text());
+    assert.ok((await list.json() as {data: {products: Array<{id: string}>}}).data.products.some(product => product.id === legacy.id));
+    const productBody = {name: "ASUS 主板 测试", category: "主板", brand: "asus", model: "TEST", version: "-", vram: "-", refBuyPrice: 100, refSellPrice: 150};
+    const response = await call("/api/products", productBody);
+    assert.equal(response.status, 201, await response.clone().text());
+    const product = (await response.json() as {data: {id: string; brand: string; brandId: string}}).data;
+    createdProductIds.push(product.id); assert.equal(product.brand, "华硕"); assert.equal(product.brandId, "brand:asus");
+    assert.equal((await call("/api/products", {...productBody, brand: "未知品牌"})).status, 400);
+    const viewer: SystemUserAccount = {id: `${prefix}-viewer`, username: `${prefix}-viewer`, displayName: "品牌只读测试", role: "店员", enabled: true, password: hashPassword("brand-test-password"), tenantId: owner.user.tenantId, storeId: owner.user.storeId, permissionOverrides: {allowedMenus: ["inventory"], showCost: false, showProfit: false}};
+    const foreignUser: SystemUserAccount = {...viewer, id: `${prefix}-foreign`, username: `${prefix}-foreign`, role: "老板", storeId: `${prefix}-store`, permissionOverrides: undefined};
+    await withDatabaseTransaction(async client => {
+      await client.query("INSERT INTO gpu_stores(id,tenant_id,code,name) VALUES($1,$2,$3,$4)", [foreignUser.storeId, foreignUser.tenantId, `${prefix}-store`, "本地品牌隔离测试"]);
+      for (const user of [viewer, foreignUser]) {
+        await client.query("INSERT INTO gpu_system_users(id,tenant_id,store_id,data) VALUES($1,$2,$3,$4::jsonb)", [user.id, user.tenantId, user.storeId, JSON.stringify(user)]);
+        await client.query("INSERT INTO gpu_tenant_memberships(tenant_id,user_id,store_id,role,status,permissions) VALUES($1,$2,$3,$4,'active',$5::jsonb)", [user.tenantId, user.id, user.storeId, user.role, JSON.stringify(user.permissionOverrides || {})]);
+      }
+    });
+    const readOnly = await login(viewer.username, "brand-test-password");
+    const read = await fetch(`${base}/api/product-brands`, {headers: {cookie: readOnly.cookie}});
+    const data = await read.json() as {data: {canManage: boolean; legacyMatches: unknown[]}};
+    assert.equal(data.data.canManage, false); assert.deepEqual(data.data.legacyMatches, []);
+    assert.equal((await fetch(`${base}/api/product-brands`, {method: "POST", headers: {...headers, cookie: readOnly.cookie, "x-csrf-token": readOnly.csrfToken}, body: JSON.stringify({name: "权限测试品牌", aliases: []})})).status, 403);
+    const foreign = await login(foreignUser.username, "brand-test-password");
+    const foreignHeaders = {...headers, cookie: foreign.cookie, "x-csrf-token": foreign.csrfToken};
+    const foreignCatalog = await fetch(`${base}/api/product-brands`, {headers: foreignHeaders});
+    assert.equal((await foreignCatalog.json() as {data: {brands: Array<{id: string}>}}).data.brands.some(brand => brand.id === customBrand.id), false);
+    assert.equal((await fetch(`${base}/api/product-brands`, {method: "POST", headers: foreignHeaders, body: JSON.stringify({name: prefix, aliases: []})})).status, 201);
+    const scopedRows = await withDatabaseTransaction(client => client.query("SELECT COUNT(*)::int count FROM gpu_product_brands WHERE id=$1", [customBrand.id]));
+    assert.equal(scopedRows.rows[0].count, 2);
+  } finally {
+    await withDatabaseTransaction(async client => {
+      await client.query("DELETE FROM gpu_inventory WHERE id=$1", [`${prefix}-stock`]);
+      await client.query("DELETE FROM gpu_products WHERE id = ANY($1::text[])", [[`${prefix}-legacy`, `${prefix}-unknown`, ...createdProductIds]]);
+      await client.query("DELETE FROM gpu_product_brands WHERE data->>'name'=$1", [prefix]);
+      await client.query("DELETE FROM gpu_tenant_memberships WHERE user_id LIKE $1", [`${prefix}%`]);
+      await client.query("DELETE FROM gpu_system_users WHERE id LIKE $1", [`${prefix}%`]);
+      await client.query("DELETE FROM gpu_stores WHERE id=$1", [`${prefix}-store`]);
+      await client.query("DELETE FROM gpu_idempotency_keys WHERE idempotency_key LIKE $1", [`${prefix}%`]);
+    });
+    await closeServer(server);
+  }
+});
+
 test("GPU catalog binds memory, persists idempotently, isolates stores and never writes prices", {skip: !integrationEnabled}, async () => {
   const {createApp} = await import("./app.ts");
   const server = createServer(createApp());
@@ -86,7 +188,7 @@ test("GPU catalog binds memory, persists idempotently, isolates stores and never
     const viewerRead = await fetch(`${base}/api/gpu-cores`, {headers: {cookie: readOnly.cookie}});
     assert.equal((await viewerRead.json() as {data: {canManage: boolean}}).data.canManage, false);
     assert.equal((await fetch(`${base}/api/gpu-cores`, {method: "POST", headers: {cookie: readOnly.cookie, "x-csrf-token": readOnly.csrfToken, "content-type": "application/json"}, body: JSON.stringify({...command, model: "RTX1997"})})).status, 403);
-    const product = {name: "目录测试商品", category: "显卡", brand: "测试品牌", model: "RTX4060TI", version: "测试版本", vram: "16GB GDDR6", gpuCoreId: "GPU-NVIDIA-RTX4060TI", gpuSpecId: "GPU-NVIDIA-RTX4060TI-16GB-GDDR6", refBuyPrice: 100, refSellPrice: 200};
+    const product = {name: "目录测试商品", category: "显卡", brand: "华硕", model: "RTX4060TI", version: "测试版本", vram: "16GB GDDR6", gpuCoreId: "GPU-NVIDIA-RTX4060TI", gpuSpecId: "GPU-NVIDIA-RTX4060TI-16GB-GDDR6", refBuyPrice: 100, refSellPrice: 200};
     assert.equal((await call("/api/products", {...product, gpuSpecId: "GPU-NVIDIA-RTX5090-32GB-GDDR7"})).status, 400);
     assert.equal((await call("/api/products", {...product, vram: "8G"})).status, 400);
     const productResponse = await call("/api/products", product);

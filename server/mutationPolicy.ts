@@ -1,4 +1,5 @@
 const stateMutationRoutePatterns = [
+  /^\/api\/product-brands(?:\/bindings|\/[^/]+\/aliases)?$/,
   /^\/api\/gpu-cores(?:\/[^/]+\/specs)?$/,
   /^\/api\/finance\/(?:commission-rules|daily-closing|reconciliation\/(?:actions|run))$/,
   /^\/api\/finance\/accounting-periods\/[^/]+\/(?:close|reopen)$/,

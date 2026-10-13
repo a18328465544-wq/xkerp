@@ -27,6 +27,7 @@ export interface VendorCreateRequestDto {
 }
 
 export interface ProductTemplateCreateRequestDto {
+  brandId?: string;
   gpuCoreId?: string;
   gpuSpecId?: string;
   name: string;

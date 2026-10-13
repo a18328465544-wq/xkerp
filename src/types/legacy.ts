@@ -10,6 +10,7 @@ import type {GpuFactoryDateEstimate} from "./gpuSn";
 export type ProductCategory = CoreProductCategory;
 
 export interface ProductTemplate {
+  brandId?: string;
   gpuCoreId?: string;
   gpuSpecId?: string;
   id: string;

@@ -1,6 +1,6 @@
 import type { StateCollectionKey } from "./db.ts";
 
-const PRODUCT_LIBRARY_KEYS: StateCollectionKey[] = ["products", "inventory", "marketQuotes", "gpuCores", "logs"];
+const PRODUCT_LIBRARY_KEYS: StateCollectionKey[] = ["products", "inventory", "marketQuotes", "gpuCores", "productBrands", "logs"];
 const PURCHASE_KEYS: StateCollectionKey[] = [
   "purchaseInvoices",
   "inventory",
@@ -139,6 +139,7 @@ export function getPersistenceKeysForRequest(method: string, path: string): Stat
   if (normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS") return null;
   if (getPostReadReloadKeys(method, path) !== null) return null;
   if (startsWithAny(path, ["/api/gpu-cores"])) return ["gpuCores", "logs"];
+  if (startsWithAny(path, ["/api/product-brands"])) return ["productBrands", "products", "logs"];
 
   if (startsWithAny(path, ["/api/products"])) return PRODUCT_LIBRARY_KEYS;
   if (startsWithAny(path, ["/api/purchase-invoices"])) return PURCHASE_KEYS;
@@ -189,6 +190,7 @@ export function getStatePatchKeysForRequest(method: string, path: string): State
 
 export function getReloadKeysForRequest(method: string, path: string): StateCollectionKey[] | null {
   if (startsWithAny(path, ["/api/gpu-cores"])) return ["gpuCores"];
+  if (startsWithAny(path, ["/api/product-brands"])) return path.endsWith("/legacy-matches") || path.endsWith("/bindings") ? ["productBrands", "products"] : ["productBrands"];
   const postReadKeys = getPostReadReloadKeys(method, path);
   if (postReadKeys !== null) return postReadKeys;
   if (method.toUpperCase() === "GET" && ["/api/global-search", "/api/state/revision", "/api/finance/profit-report"].includes(path)) return [];
@@ -221,7 +223,7 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   }
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices") return [];
   if (method.toUpperCase() === "GET" && path === "/api/sales-invoices/outbound") return [];
-  if (method.toUpperCase() === "GET" && path === "/api/sales/product-candidates") return ["salesInvoices", "inventory", "products"];
+  if (method.toUpperCase() === "GET" && path === "/api/sales/product-candidates") return ["salesInvoices", "inventory", "products", "productBrands"];
   if (method.toUpperCase() === "GET" && path === "/api/voice/status") return [];
   if (method.toUpperCase() === "GET" && path === "/api/inspections/workspace") return [];
   if (method.toUpperCase() === "GET" && (path === "/api/assembly-operations" || path === "/api/assembly-operations/reference")) return [];

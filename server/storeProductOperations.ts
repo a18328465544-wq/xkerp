@@ -3,9 +3,12 @@ import {ConflictError, NotFoundError, ValidationError} from "./errors.ts";
 import type {GpuCoreRecord} from "../src/types/gpuCore.ts";
 import {currentGpuCoreCatalog, validateGpuProduct} from "./gpuCoreCatalog.ts";
 import {inferGpuProductBinding} from "../src/utils/gpuCoreCatalog.ts";
+import type {ProductBrandRecord} from "../src/types/productBrand.ts";
+import {currentProductBrandCatalog, validateProductBrand} from "./productBrandCatalog.ts";
 
 export type ProductOperationsState = {
   gpuCores?: GpuCoreRecord[];
+  productBrands?: ProductBrandRecord[];
   products: ProductTemplate[];
   inventory: CardInventory[];
   marketQuotes: MarketQuote[];
@@ -40,7 +43,9 @@ export function createProductOperationHelpers(dependencies: ProductOperationsDep
   const {state, nextProductTemplateId, isStockExcludedStatus, systemActor, addLog} = dependencies;
 
   const checkedUpdate = (existing: ProductTemplate, product: ProductTemplate) => {
-    const normalized = validateGpuProduct(state, {...product, gpuCoreId: product.gpuCoreId || existing.gpuCoreId, gpuSpecId: product.gpuSpecId || existing.gpuSpecId});
+    const preservedBrand = product.brand === existing.brand && existing.brandId ? currentProductBrandCatalog(state).find(brand => brand.id === existing.brandId) : undefined;
+    const branded = validateProductBrand(state, {...product, brand: preservedBrand?.name || product.brand, brandId: product.brandId || preservedBrand?.id});
+    const normalized = validateGpuProduct(state, {...branded, gpuCoreId: product.gpuCoreId || existing.gpuCoreId, gpuSpecId: product.gpuSpecId || existing.gpuSpecId});
     const inferred = inferGpuProductBinding(existing, currentGpuCoreCatalog(state));
     const confirmingSame = inferred.status === "matched" && normalized.gpuCoreId === inferred.core.id && normalized.gpuSpecId === inferred.spec.id;
     const changed = !confirmingSame && (product.category !== existing.category || product.model !== existing.model || product.vram !== existing.vram);
@@ -89,7 +94,7 @@ export function createProductOperationHelpers(dependencies: ProductOperationsDep
   };
 
   const addProductTemplate = (product: ProductTemplateInput) => {
-    product = validateGpuProduct(state, product);
+    product = validateProductBrand(state, validateGpuProduct(state, product));
     const requestedId = product.id?.trim();
     const existing = requestedId ? state.products.find((item) => item.id === requestedId) : undefined;
     const newProduct: ProductTemplate = {
@@ -130,7 +135,7 @@ export function createProductOperationHelpers(dependencies: ProductOperationsDep
     const upsertById = new Map<string, ProductTemplate>();
     const results: ProductTemplate[] = [];
     for (const rawProduct of products) {
-      const product = validateGpuProduct(state, rawProduct);
+      const product = validateProductBrand(state, validateGpuProduct(state, rawProduct));
       const requestedId = product.id?.trim();
       const id = requestedId || nextImportId();
       if (requestedId) usedIds.add(requestedId);

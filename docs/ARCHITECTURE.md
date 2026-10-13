@@ -220,6 +220,7 @@ ErpPageFrame → ErpPageHeader（QuickStatus 保持在 Header 内）→ ErpPageT
 | 登录会话 | `POST /api/auth/login`、`GET /api/auth/me`、`POST /api/auth/logout` |
 | 全局状态 | `GET /api/state` |
 | 商品库 | `/api/products`、`/api/products/import` |
+| 商品品牌字典 | `/api/product-brands`、`/api/product-brands/legacy-matches`、`/api/product-brands/:id/aliases`、`/api/product-brands/bindings` |
 | 采购 | `/api/purchase-invoices` |
 | 检测 | `/api/inspections` |
 | 库存 | `/api/inventory/items`、`/api/inventory/items/:id/journey`、`/api/inventory/summary`、`/api/inventory/scan-flow`、`/api/inventory/import` |
@@ -309,6 +310,7 @@ POSTGRES_IMPORT_LEGACY_JSON=false
 | 集合 | 表名 | 用途 |
 | --- | --- | --- |
 | `products` | `gpu_products` | 商品库模板 |
+| `productBrands` | `gpu_product_brands` | 门店品牌显示名与别名扩展，跨商品分类复用，独立于核心行情价格；历史确认只补商品品牌 ID，详见 `PRODUCT_BRAND_CATALOG_20261014.md` |
 | `inventory` | `gpu_inventory` | 单卡/SN库存 |
 | `inspections` | `gpu_inspections` | 检测记录 |
 | `purchaseInvoices` | `gpu_purchase_invoices` | 采购/回收单 |

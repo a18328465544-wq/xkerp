@@ -17,8 +17,11 @@ import {buildPendingSalesNeedByProduct, productIdentityKey} from "./storeInvento
 import {ValidationError} from "./errors.ts";
 import {advancePurchaseVersionsForInventory} from "./purchaseRecordVersion.ts";
 import {gpuSnBrandIdFromName, parseGpuSnDate} from "./gpuSnDate.ts";
+import {currentProductBrandCatalog} from "./productBrandCatalog.ts";
+import {resolveProductBrand} from "../src/utils/productBrandCatalog.ts";
 
 export type InventoryOperationsState = {
+  productBrands?: import("../src/types/productBrand").ProductBrandRecord[];
   inventory: CardInventory[];
   products: ProductTemplate[];
   salesInvoices: SalesInvoice[];
@@ -93,8 +96,11 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
     const productIdentityIndex = createProductIdentityIndex(state.products);
     const pendingNeedByProduct = buildPendingSalesNeedByProduct(state, productIdentityIndex);
     const rows = new Map<string, InventorySummaryRow>();
+    const brands = currentProductBrandCatalog(state);
+    const productsById = new Map(state.products.map(product => [product.id, product]));
     state.inventory
-      .filter((card) => matchesInventoryListFilters(card, summaryFilters))
+      .map(card => ({...card, brand: resolveProductBrand(productsById.get(card.productId)?.brandId || card.brand, brands)?.name || card.brand}))
+      .filter((card) => matchesInventoryListFilters(card, summaryFilters, getStoreDate(), brands))
       .forEach((card) => {
         const category = (card.category || "显卡") as ProductCategory;
         // Sales candidates must use the same canonical product identity as

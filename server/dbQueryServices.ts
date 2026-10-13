@@ -24,6 +24,8 @@ import {
   salesPaymentStatusExpression,
 } from "./dbQueryBuilders.ts";
 import type {FinanceProfitFlowKind, FinanceRecordKind} from "./dbQueryBuilders.ts";
+import {readProductBrandCatalog} from "./productBrandRead.ts";
+import {resolveProductBrand} from "../src/utils/productBrandCatalog.ts";
 
 type DatabaseQueryServicesDependencies = {
   initializePostgres: () => Promise<void>;
@@ -37,16 +39,20 @@ export function createDatabaseQueryServices({initializePostgres, getPool}: Datab
   // row just to return one page.
   async function queryInventoryPage<T = unknown>(filters: InventoryPageFilters = {}): Promise<CollectionPage<T>> {
     await initializePostgres();
-    const {page, pageSize, offset, where, orderBy, values, select} = buildInventoryPageQuery(filters);
+    const brandCatalog = await readProductBrandCatalog(getPool(), filters);
+    const {page, pageSize, offset, where, orderBy, values, select} = buildInventoryPageQuery(filters, brandCatalog);
     const [rows, count] = await Promise.all([
-      getPool().query<{data: T}>(
-        `SELECT ${select} FROM gpu_inventory ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      getPool().query<{data: T; brand_id: string}>(
+        `SELECT ${select}, (SELECT p.data->>'brandId' FROM gpu_products p WHERE p.id = op_product_id AND p.tenant_id = gpu_inventory.tenant_id AND p.store_id = gpu_inventory.store_id) AS brand_id FROM gpu_inventory ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, pageSize, offset],
       ),
       getPool().query<{total: string}>(`SELECT COUNT(*)::text AS total FROM gpu_inventory ${where}`, values),
     ]);
     return {
-      data: rows.rows.map((row) => row.data),
+      data: rows.rows.map((row) => {
+        if (!row.data || typeof row.data !== "object" || !("brand" in row.data) || typeof row.data.brand !== "string") return row.data;
+        return {...row.data, brand: resolveProductBrand(row.brand_id || row.data.brand, brandCatalog)?.name || row.data.brand};
+      }),
       meta: {page, pageSize, total: Number(count.rows[0]?.total || 0)},
     };
   }

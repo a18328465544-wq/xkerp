@@ -10,6 +10,11 @@ export const collectionTables: Array<{
   dataComment: string;
 }> = [
   {
+    key: "productBrands", table: "gpu_product_brands",
+    tableComment: "门店商品品牌字典，跨实物分类复用，不用于核心基础报价。",
+    dataComment: "品牌 JSON，包含稳定品牌 ID、统一显示名、精确匹配别名及维护人。",
+  },
+  {
     key: "gpuCores", table: "gpu_core_catalog",
     tableComment: "门店自定义 GPU 核心及显存规格扩展档案，不保存商品价格或库存。",
     dataComment: "核心档案 JSON，包含稳定核心 ID、厂商、完整桌面型号及带独立 ID 的显存子规格；官方基础目录由版本化参考配置提供。",
@@ -225,7 +230,7 @@ export async function bulkUpsertRows(client: PoolClient, table: string, rows: { 
     const chunk = list.slice(start, start + BULK_UPSERT_CHUNK_SIZE);
     // Unlike legacy globally-keyed business records, catalog IDs are logical
     // identities protected by the table's (tenant, store, id) primary key.
-    if (tenantId && chunk.length && table !== "gpu_core_catalog") {
+    if (tenantId && chunk.length && !["gpu_core_catalog", "gpu_product_brands"].includes(table)) {
       // Legacy ids are globally primary-keyed.  Never silently turn a
       // cross-tenant collision into a no-op: callers must rotate the id or
       // explicitly migrate the record under the owning tenant.
@@ -282,7 +287,7 @@ export async function bulkUpsertRows(client: PoolClient, table: string, rows: { 
       if (tenantId) params.push(tenantId, storeScope);
       await client.query(
         `INSERT INTO ${quotedTable} (id, data, updated_at${tenantId ? ", tenant_id, store_id" : ""}) VALUES ${placeholders.join(", ")}
-         ON CONFLICT (${table === "gpu_core_catalog" ? "tenant_id, store_id, id" : "id"}) DO NOTHING`,
+         ON CONFLICT (${["gpu_core_catalog", "gpu_product_brands"].includes(table) ? "tenant_id, store_id, id" : "id"}) DO NOTHING`,
         params,
       );
     }

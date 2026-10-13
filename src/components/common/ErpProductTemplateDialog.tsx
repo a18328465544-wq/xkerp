@@ -6,6 +6,10 @@ import {Button, Input, Select, Textarea} from "@/src/components/ui";
 import {GpuCorePicker} from "@/src/components/domain/GpuCorePicker";
 import {GpuCatalogEditor, GpuCatalogEditorFooter, type GpuCatalogEdit} from "@/src/components/domain/GpuCatalogEditor";
 import {useGpuCoreCatalog} from "@/src/hooks/useGpuCoreCatalog";
+import {useProductBrandCatalog} from "@/src/hooks/useProductBrandCatalog";
+import {ProductBrandPicker} from "@/src/components/domain/ProductBrandPicker";
+import {ProductBrandEditor} from "@/src/components/domain/ProductBrandEditor";
+import {resolveProductBrand} from "@/src/utils/productBrandCatalog";
 import type {GpuCoreRecord, GpuMemorySpec} from "@/src/types/gpuCore";
 import {gpuSpecLabel, inferGpuProductBinding} from "@/src/utils/gpuCoreCatalog";
 import {usePhoneBackLayer} from "@/src/hooks/usePhoneBack";
@@ -28,7 +32,7 @@ const textFieldKeys: readonly ProductTemplateFieldKey[] = ["brand", "model", "ve
 
 function valuesFromProduct(product: ProductLibraryItem | null, initialValues?: Partial<ProductTemplateFormValues>): ProductTemplateFormValues {
   const base = product ? {category: product.category, brand: product.brand, model: product.model, version: product.version === "-" ? "" : product.version, vram: product.vram === "-" ? "" : product.vram, refBuyPrice: product.refBuyPrice || 0, refSellPrice: product.refSellPrice || 0, remarks: product.remarks || "", imageUrls: product.imageUrls} : {...emptyValues, imageUrls: []};
-  return {...base, gpuCoreId: product?.gpuCoreId, gpuSpecId: product?.gpuSpecId, ...initialValues, imageUrls: initialValues?.imageUrls ?? base.imageUrls};
+  return {...base, brandId: product?.brandId, gpuCoreId: product?.gpuCoreId, gpuSpecId: product?.gpuSpecId, ...initialValues, imageUrls: initialValues?.imageUrls ?? base.imageUrls};
 }
 
 export interface ErpProductTemplateDialogProps {
@@ -55,15 +59,25 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
   const setImageUrls = (urls: string[]) => setValue("imageUrls", urls, {shouldDirty: true, shouldValidate: true});
   const media = useProductMediaUpload(setImageUrls, 6, open, pending);
   const submission = useValidatedFormSubmit({form, enabled: open, scope: media.draftId, getScope: media.getDraftId, canSubmit: () => !pending && !media.isBlocking(), onSubmit: async (submitted) => {
+    const chosenBrand = submitted.brandId ? brands.find(brand => brand.id === submitted.brandId) : resolveProductBrand(submitted.brand, brands);
+    if (!product && !chosenBrand) {form.setError("brand", {message: "请选择品牌，找不到时请先新建"}); return;}
     if (!product && submitted.category === "显卡" && (!submitted.gpuCoreId || !submitted.gpuSpecId)) {
       if (!submitted.gpuCoreId) form.setError("model", {message: "请选择核心型号"});
       if (!submitted.gpuSpecId) form.setError("vram", {message: "请选择该核心的显存规格"});
       return;
     }
-    await onSubmit(submitted);
+    await onSubmit(chosenBrand ? {...submitted, brandId: chosenBrand.id, brand: chosenBrand.name} : submitted);
   }});
   const [previewUrl, setPreviewUrl] = useState<string>();
   const values = watch();
+  const brandCatalog = useProductBrandCatalog(open);
+  const brands = brandCatalog.data?.brands || [];
+  const selectedBrand = brands.find(brand => brand.id === values.brandId) || resolveProductBrand(values.brand, brands);
+  const [brandEdit, setBrandEdit] = useState<string | null>(null);
+  const selectBrand = (brand: import("@/src/types/productBrand").ProductBrandRecord | null) => {
+    setValue("brandId", brand?.id, {shouldDirty: true});
+    setValue("brand", brand?.name || "", {shouldDirty: true, shouldValidate: true});
+  };
   const catalog = useGpuCoreCatalog(open && values.category === "显卡");
   const [catalogEdit, setCatalogEdit] = useState<GpuCatalogEdit | null>(null);
   const [catalogBusy, setCatalogBusy] = useState(false);
@@ -80,7 +94,7 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
     if (core) selectSpec(core, core.specs.length === 1 ? core.specs[0] : undefined);
     else {setValue("gpuCoreId", "", {shouldDirty: true}); setValue("gpuSpecId", "", {shouldDirty: true}); setValue("model", "", {shouldDirty: true}); setValue("vram", "", {shouldDirty: true});}
   };
-  usePhoneBackLayer(Boolean(open && catalogEdit), () => {if (!catalogBusy) setCatalogEdit(null);}, 600);
+  usePhoneBackLayer(Boolean(open && (catalogEdit || brandEdit !== null)), () => {if (!catalogBusy) {setCatalogEdit(null); setBrandEdit(null);}}, 600);
   const catalogSaved = async (saved: GpuCoreRecord) => {
     const specId = saved.specs.at(-1)?.id;
     selectSpec(saved, saved.specs.find(spec => spec.id === specId));
@@ -95,7 +109,7 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
   }, [values.brand, values.model, values.version, values.vram]);
 
   useEffect(() => {
-    if (!open) {media.reset([]); setPreviewUrl(undefined); setCatalogEdit(null); return;}
+    if (!open) {media.reset([]); setPreviewUrl(undefined); setCatalogEdit(null); setBrandEdit(null); return;}
     const next = valuesFromProduct(product, initialValues);
     reset(next);
     media.reset(next.imageUrls);
@@ -116,14 +130,14 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
   return <>
     <ErpDialogShell
       open={open}
-      onOpenChange={(next) => {if (!next && catalogEdit) {if (!catalogBusy) setCatalogEdit(null);} else onOpenChange(next);}}
+      onOpenChange={(next) => {if (!next && (catalogEdit || brandEdit !== null)) {if (!catalogBusy) {setCatalogEdit(null); setBrandEdit(null);}} else onOpenChange(next);}}
       pending={pending || catalogBusy}
       size="xl"
-      title={<span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />{catalogEdit ? catalogEdit.kind === "core" ? "新建 GPU 核心" : "新增显存规格" : product ? "编辑商品规格模板" : "新建商品规格模板"}</span>}
-      description={catalogEdit ? "保存后返回商品表单，原有填写内容保留。" : "用于采购、销售、检测和库存共用；标准名称由核心字段自动生成。"}
-      footer={catalogEdit ? <GpuCatalogEditorFooter formId="product-gpu-catalog-form" busy={catalogBusy} onCancel={() => setCatalogEdit(null)} /> : <><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button form={formId} type="submit" variant="primary" disabled={pending || media.blocking || submission.validating}>{pending ? "保存中…" : submission.validating ? "校验中…" : media.blocking ? "等待图片处理" : product ? "保存修改" : "保存模板"}</Button></>}
+      title={<span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[var(--erp-color-primary)]" />{brandEdit !== null ? "新建商品品牌" : catalogEdit ? catalogEdit.kind === "core" ? "新建 GPU 核心" : "新增显存规格" : product ? "编辑商品规格模板" : "新建商品规格模板"}</span>}
+      description={catalogEdit || brandEdit !== null ? "保存后返回商品表单，原有填写内容保留。" : "用于采购、销售、检测和库存共用；标准名称由核心字段自动生成。"}
+      footer={brandEdit !== null ? <GpuCatalogEditorFooter formId="product-brand-form" busy={catalogBusy} onCancel={() => setBrandEdit(null)} /> : catalogEdit ? <GpuCatalogEditorFooter formId="product-gpu-catalog-form" busy={catalogBusy} onCancel={() => setCatalogEdit(null)} /> : <><Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button><Button form={formId} type="submit" variant="primary" disabled={pending || media.blocking || submission.validating}>{pending ? "保存中…" : submission.validating ? "校验中…" : media.blocking ? "等待图片处理" : product ? "保存修改" : "保存模板"}</Button></>}
     >
-      {catalogEdit ? <GpuCatalogEditor edit={catalogEdit} formId="product-gpu-catalog-form" onSaved={catalogSaved} onBusy={setCatalogBusy} createCore={catalog.createCore} addSpec={catalog.addSpec} /> : <form id={formId} onSubmit={submission.onSubmit} className="space-y-4">
+      {brandEdit !== null ? <ProductBrandEditor initialName={brandEdit} formId="product-brand-form" onBusy={setCatalogBusy} createBrand={brandCatalog.createBrand} onSaved={saved => {selectBrand(saved); setBrandEdit(null);}} /> : catalogEdit ? <GpuCatalogEditor edit={catalogEdit} formId="product-gpu-catalog-form" onSaved={catalogSaved} onBusy={setCatalogBusy} createCore={catalog.createCore} addSpec={catalog.addSpec} /> : <form id={formId} onSubmit={submission.onSubmit} className="space-y-4">
         <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)]/45 p-3 sm:p-4" aria-labelledby="product-category-title">
           <div className="mb-2 flex items-center justify-between gap-3"><h2 id="product-category-title" className="text-sm font-semibold text-[var(--erp-color-text)]">商品分类</h2><span className="text-xs text-[var(--erp-color-text-muted)]">当前：{values.category}</span></div>
           <Controller control={control} name="category" render={({field}) => <ErpChoiceChips label="商品品类" value={field.value} options={productCategoryValues.map((category) => ({value: category, label: category}))} disabled={pending} onValueChange={(category) => handleCategoryChange(category, field.onChange)} />} />
@@ -133,8 +147,10 @@ export function ErpProductTemplateDialog({open, product, initialValues, showCost
           <section className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-4" aria-labelledby="product-basic-title">
             <div className="mb-4"><h2 id="product-basic-title" className="text-sm font-semibold text-[var(--erp-color-text)]">基本信息</h2><p className="mt-1 text-xs text-[var(--erp-color-text-secondary)]">填写可识别商品身份的核心字段。</p></div>
             <div className="grid gap-3 sm:grid-cols-2">{fieldDefinitions.map((definition, index) => <Field key={definition.key} label={values.category === "显卡" && definition.key === "vram" ? "显存规格" : definition.label} required={definition.required || values.category === "显卡" && definition.key === "vram"} error={message(definition.key)}>
-              {values.category === "显卡" && definition.key === "model" ? <GpuCorePicker cores={cores} value={selectedCore?.id || ""} loading={catalog.isLoading} disabled={pending} canCreate={catalog.data?.canManage === true} onSelect={selectCore} onCreate={initialModel => setCatalogEdit({kind: "core", initialModel, requireSpec: true})} /> : values.category === "显卡" && definition.key === "vram" ? <div className="space-y-1"><Select aria-label="显存规格" value={values.gpuSpecId || ""} disabled={pending || !selectedCore} placeholder={selectedCore ? "选择该核心的显存规格" : "先选择 GPU 核心"} options={(selectedCore?.specs || []).map(spec => ({value: spec.id, label: gpuSpecLabel(spec)}))} onValueChange={id => {if (selectedCore) selectSpec(selectedCore, selectedCore.specs.find(spec => spec.id === id));}} />{selectedCore && catalog.data?.canManage && <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => setCatalogEdit({kind: "spec", core: selectedCore})}>为此核心新增非标准规格</Button>}</div> : <Input {...register(definition.key)} placeholder={definition.placeholder} disabled={pending} autoFocus={index === 0} />}
+              {definition.key === "brand" ? <ProductBrandPicker brands={brands} value={selectedBrand?.id || ""} legacyValue={values.brand} loading={brandCatalog.isLoading} disabled={pending} canCreate={brandCatalog.data?.canManage} onSelect={selectBrand} onCreate={setBrandEdit} /> : values.category === "显卡" && definition.key === "model" ? <GpuCorePicker cores={cores} value={selectedCore?.id || ""} loading={catalog.isLoading} disabled={pending} canCreate={catalog.data?.canManage === true} onSelect={selectCore} onCreate={initialModel => setCatalogEdit({kind: "core", initialModel, requireSpec: true})} /> : values.category === "显卡" && definition.key === "vram" ? <div className="space-y-1"><Select aria-label="显存规格" value={values.gpuSpecId || ""} disabled={pending || !selectedCore} placeholder={selectedCore ? "选择该核心的显存规格" : "先选择 GPU 核心"} options={(selectedCore?.specs || []).map(spec => ({value: spec.id, label: gpuSpecLabel(spec)}))} onValueChange={id => {if (selectedCore) selectSpec(selectedCore, selectedCore.specs.find(spec => spec.id === id));}} />{selectedCore && catalog.data?.canManage && <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => setCatalogEdit({kind: "spec", core: selectedCore})}>为此核心新增非标准规格</Button>}</div> : <Input {...register(definition.key)} placeholder={definition.placeholder} disabled={pending} autoFocus={index === 0} />}
             </Field>)}</div>
+            {brandCatalog.isError && <p role="alert" className="text-sm text-[var(--erp-color-danger)]">暂时无法读取品牌，请稍后重试。<Button type="button" variant="ghost" size="sm" onClick={() => {void brandCatalog.refetch();}}>重试</Button></p>}
+            {product && !product.brandId && <p className="mt-2 text-xs text-[var(--erp-color-text-secondary)]">原品牌：{product.brand}。{selectedBrand ? `保存时使用统一品牌“${selectedBrand.name}”。` : "尚未确认品牌，可保留原值或重新选择。"}</p>}
             {values.category === "显卡" && catalog.isError && <p role="alert" className="text-sm text-[var(--erp-color-danger)]">暂时无法读取核心目录，请稍后重试。<Button type="button" variant="ghost" size="sm" onClick={() => {void catalog.refetch();}}>重试</Button></p>}
             {product && values.category === "显卡" && !values.gpuSpecId && <div className="mt-3 space-y-1 text-xs text-[var(--erp-color-text-secondary)]"><p>原型号：{product.model}；原显存：{product.vram}。尚未确认标准规格，不会自动改写。</p>{inferred.status === "matched" && <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => selectSpec(inferred.core, inferred.spec)}>确认绑定识别建议</Button>}</div>}
             <div className="mt-4 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3 py-3" aria-live="polite"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--erp-color-text-secondary)]">标准商品名称</p><span className="text-xs text-[var(--erp-color-text-muted)]">系统生成预览</span></div><p className={`mt-1 truncate text-sm font-semibold ${previewName.startsWith("填写") ? "text-[var(--erp-color-text-muted)]" : "text-[var(--erp-color-text)]"}`} title={previewName}>{previewName}</p></div>

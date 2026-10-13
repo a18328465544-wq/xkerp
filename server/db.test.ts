@@ -152,18 +152,22 @@ test("inventory keyword search matches a compact brand and model without losing 
 test("inventory page query keeps active, brand, risk, and aging filters inside PostgreSQL", () => {
   const query = buildInventoryPageQuery({
     activeOnly: true,
+    tenantId: "tenant-brand",
+    storeId: "store-brand",
     brand: "华硕",
     risk: "upturned",
     minStorageDays: 30,
   });
 
   assert.match(query.where, /NOT IN \('已售出', '已退货', '已报废', '已拆卸', '已组装'\)/);
-  assert.match(query.where, /op_brand = \$1/);
+  assert.match(query.where, /NORMALIZE\(COALESCE\(op_brand/);
+  assert.match(query.where, /= ANY\(\$3::text\[\]\)/);
   assert.match(query.where, /marketPrice/);
   assert.match(query.where, /marketPrice[^\n]+> 0/);
   assert.match(query.where, /op_entry_time/);
-  assert.equal(query.values[0], "华硕");
-  assert.equal(query.values.length, 2);
+  assert.deepEqual(query.values[2], ["华硕", "ASUS"]);
+  assert.equal(query.values[3], "brand:asus");
+  assert.equal(query.values.length, 5);
 });
 
 test("inventory page query lets explicit sold filters override active-only defaults", () => {

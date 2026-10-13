@@ -6,6 +6,7 @@ import type {createStoreActions} from "../store.ts";
 import type {ProductTemplate, SystemUserAccount} from "../../src/types.ts";
 import {validateGpuProduct} from "../gpuCoreCatalog.ts";
 import type {AppState} from "../store.ts";
+import {validateProductBrand} from "../productBrandCatalog.ts";
 
 type ProductRequest = Request & {
   authUser?: SystemUserAccount;
@@ -38,7 +39,7 @@ export function registerProductMutationRoutes(app: Express, dependencies: Produc
     dependencies.asyncRoute(async (req, res) => {
       const productRequest = req as ProductRequest;
       const input = parseHttpDto(productTemplateCreateDto, req.body);
-      const command = dependencies.getState ? validateGpuProduct(dependencies.getState(), input, true) : input;
+      const command = dependencies.getState ? validateProductBrand(dependencies.getState(), validateGpuProduct(dependencies.getState(), input, true), true) : input;
       const created = await dependencies.persistProductImages(productRequest, dependencies.actions(req).addProductTemplate(command));
       const stateMerge = dependencies.productTemplateMerge(productRequest, created);
       await saveStateRecords(stateMergeRecords(stateMerge));

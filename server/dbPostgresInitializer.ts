@@ -1,6 +1,7 @@
 import type {Pool, PoolClient} from "pg";
 import {releaseTransactionClient} from "./dbTransactionCleanup.ts";
 import {GPU_CORE_SCHEMA_SQL, GPU_CORE_TABLE_SQL} from "./gpuCoreSchema.ts";
+import {PRODUCT_BRAND_SCHEMA_SQL, PRODUCT_BRAND_TABLE_SQL} from "./productBrandSchema.ts";
 
 type CollectionTable = {table: string};
 
@@ -117,6 +118,10 @@ export function createPostgresInitializer({
         )
       `);
       for (const {table} of collectionTables) {
+        if (table === "gpu_product_brands") {
+          await client.query(PRODUCT_BRAND_TABLE_SQL);
+          continue;
+        }
         if (table === "gpu_core_catalog") {
           await client.query(GPU_CORE_TABLE_SQL);
           continue;
@@ -138,6 +143,7 @@ export function createPostgresInitializer({
       await applyCommercialFoundationSchema(client);
       await applyCommercialHardeningSchema(client);
       if (collectionTables.some(({table}) => table === "gpu_core_catalog")) await client.query(GPU_CORE_SCHEMA_SQL);
+      if (collectionTables.some(({table}) => table === "gpu_product_brands")) await client.query(PRODUCT_BRAND_SCHEMA_SQL);
       await applyAccountingControlPlaneSchema(client);
       await applyMarketQuoteCategorySchema(client);
       // Scope columns must exist before password upgrades write account rows.

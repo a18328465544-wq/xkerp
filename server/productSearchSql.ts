@@ -1,5 +1,9 @@
 import {productModelCode, productSearchTerms} from "../src/utils/productSearch.ts";
 import {compactSearchText, tokenizeSearchText} from "../src/utils/search.ts";
+import {standardProductBrands} from "../src/data/productBrandCatalog.ts";
+import type {ProductBrandRecord} from "../src/types/productBrand.ts";
+import {normalizedBrandSql} from "./productBrandRead.ts";
+import {normalizeProductBrand} from "../src/utils/productBrandCatalog.ts";
 
 type Binder = (value: string) => string;
 
@@ -8,16 +12,21 @@ export type ProductSearchSqlFields = {
   name: string;
   category: string;
   brand: string;
+  brandId?: string;
   model: string;
   version: string;
   vram: string;
 };
 
 /** Parameterized counterpart of productSearchMatches, shared by products and stock cards. */
-export function productIdentitySearchSql(fields: ProductSearchSqlFields, keyword: string, bind: Binder) {
+export function productIdentitySearchSql(fields: ProductSearchSqlFields, keyword: string, bind: Binder, catalog: readonly ProductBrandRecord[] = standardProductBrands) {
   const terms = productSearchTerms(keyword);
   if (!terms.length) return keyword.trim() ? ["FALSE"] : [];
-  const identity = `LOWER(NORMALIZE(CONCAT_WS(' ', ${fields.id}, ${fields.name}, ${fields.category}, ${fields.brand}, ${fields.model}, ${fields.version}, ${fields.vram}), NFKC))`;
+  const compactQuery = normalizeProductBrand(keyword);
+  const relevantBrands = catalog.filter(brand => [brand.name, ...brand.aliases].some(alias => {const aliasTerms = productSearchTerms(alias), token = normalizeProductBrand(alias); return aliasTerms.length && aliasTerms.every(term => terms.includes(term)) || compactQuery.startsWith(token) && /^(RTX|GTX|RX|ARC|[0-9])/.test(compactQuery.slice(token.length));}));
+  // Expand only brands mentioned in the query, keeping model terms and exact GPU suffix checks intact.
+  const brandText = relevantBrands.reduce((expression, brand) => `CASE WHEN ${[brand.name, ...brand.aliases].map(alias => `${normalizedBrandSql(fields.brand)} = ${bind(normalizeProductBrand(alias))}`).join(" OR ")}${fields.brandId ? ` OR ${fields.brandId} = ${bind(brand.id)}` : ""} THEN ${bind([brand.name, ...brand.aliases].join(" "))} ELSE ${expression} END`, fields.brand);
+  const identity = `LOWER(NORMALIZE(CONCAT_WS(' ', ${fields.id}, ${fields.name}, ${fields.category}, ${brandText}, ${fields.model}, ${fields.version}, ${fields.vram}), NFKC))`;
   const compact = `REGEXP_REPLACE(${identity}, '[[:space:][:punct:]，。、·・：；（）【】《》“”‘’—]+', '', 'g')`;
   const clauses = terms.map((term) => {
     const raw = bind(term);
@@ -37,24 +46,25 @@ export function productIdentitySearchSql(fields: ProductSearchSqlFields, keyword
   return clauses;
 }
 
-export function productSearchSql(alias: string, keyword: string, bind: Binder) {
+export function productSearchSql(alias: string, keyword: string, bind: Binder, catalog?: readonly ProductBrandRecord[]) {
   return productIdentitySearchSql({
     id: `${alias}.id`,
     name: `${alias}.data->>'name'`,
     category: `${alias}.data->>'category'`,
     brand: `${alias}.data->>'brand'`,
+    brandId: `${alias}.data->>'brandId'`,
     model: `${alias}.data->>'model'`,
     version: `${alias}.data->>'version'`,
     vram: `${alias}.data->>'vram'`,
-  }, keyword, bind);
+  }, keyword, bind, catalog);
 }
 
 /** Stock-card search uses product identity plus identifiers, never supplier/location/remarks. */
-export function inventoryKeywordSearchSql(keyword: string, bind: Binder) {
+export function inventoryKeywordSearchSql(keyword: string, bind: Binder, catalog?: readonly ProductBrandRecord[], brandIdExpression?: string) {
   const identity = productIdentitySearchSql({
     id: "op_product_id", name: "data->>'productName'", category: "op_category",
-    brand: "op_brand", model: "data->>'model'", version: "data->>'version'", vram: "data->>'vram'",
-  }, keyword, bind).join(" AND ") || "FALSE";
+    brand: "op_brand", brandId: brandIdExpression, model: "data->>'model'", version: "data->>'version'", vram: "data->>'vram'",
+  }, keyword, bind, catalog).join(" AND ") || "FALSE";
   const normalize = (field: string) => `REGEXP_REPLACE(LOWER(NORMALIZE(COALESCE(${field}, ''), NFKC)), '[[:space:][:punct:]，。、·・：；（）【】《》“”‘’—]+', '', 'g')`;
   const exact = `(${["id", "op_product_id", "op_sn", "data->>'expressNo'"].map((field) => `${normalize(field)} = ${bind(compactSearchText(keyword))}`).join(" OR ")})`;
   const identifier = productModelCode(keyword)

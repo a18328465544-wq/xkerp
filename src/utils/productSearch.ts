@@ -1,9 +1,13 @@
+import {productBrandSearchText} from "./productBrandCatalog";
+import type {ProductBrandRecord} from "../types/productBrand";
+
 export type ProductSearchIdentity = {
   id?: string;
   name?: string;
   productName?: string;
   category?: string;
   brand?: string;
+  brandId?: string;
   model?: string;
   version?: string;
   vram?: string;
@@ -30,14 +34,14 @@ export function productModelCode(value: string) {
   return match ? `${match[1]}${match[2] || ""}${match[3] || ""}` : null;
 }
 
-function identityValues(product: ProductSearchIdentity) {
-  return [product.id, product.name || product.productName, product.category, product.brand, product.model, product.version, product.vram].filter(Boolean).join(" ");
+function identityValues(product: ProductSearchIdentity, catalog?: readonly ProductBrandRecord[]) {
+  return [product.id, product.name || product.productName, product.category, productBrandSearchText(product.brandId || product.brand || "", catalog), product.model, product.version, product.vram].filter(Boolean).join(" ");
 }
 
-export function productSearchMatches(product: ProductSearchIdentity, keyword: string) {
+export function productSearchMatches(product: ProductSearchIdentity, keyword: string, catalog?: readonly ProductBrandRecord[]) {
   const terms = productSearchTerms(keyword);
   if (!terms.length) return !keyword.trim();
-  const text = normalizeProductText(identityValues(product));
+  const text = normalizeProductText(identityValues(product, catalog));
   const compact = compactProductText(text);
   if (!terms.every((term) => text.includes(term) || compact.includes(compactProductText(term)))) return false;
 

@@ -30,6 +30,7 @@ import {isPathAllowed, navigationItems} from "@/src/config/navigation";
 import type {ProductLedgerRow} from "@/src/types/product-ledger";
 import {defaultInventoryUrlState, parseInventoryUrlState, type InventoryUrlState, serializeInventoryUrlState} from "@/src/features/inventory/inventory.url-state";
 import {GpuSnDateLookupButton} from "@/src/components/common/GpuSnDateLookupButton";
+import {useProductBrandCatalog} from "@/src/hooks/useProductBrandCatalog";
 
 const emptyInventoryVisibility: VisibilityState = {brand: false, model: false, inspectionStatus: false, warehouseLocation: false, entryTime: false};
 const defaultModelVisibility: VisibilityState = {lockedCount: false, soldCount: false, repairCount: false, warehouseLocation: false, lastEntryTime: false, estimatedProfit: false};
@@ -188,6 +189,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
 }) {
   const phone = useErpPhone();
   const {active} = useWorkspaceTabActivity();
+  const brandCatalog = useProductBrandCatalog(active);
   const [scanOpen, setScanOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -260,7 +262,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   const warehouseTasks = navigationItems.filter((item) => ["inspections", "sales_outbound"].includes(item.id) && isPathAllowed(permissions.allowedMenus, item.path));
   const filterFields: ErpFilterField[] = [
     {kind: "select", key: "category", label: "商品分类", width: "w-36", value: filters.category, defaultValue: "", options: [{value: "", label: "全部分类"}, ...inventoryCategories.map((value) => ({value, label: value}))], onChange: (category) => updateFilter({category: category as InventoryFilters["category"]})},
-    {kind: "text", key: "brand", label: "品牌", width: "w-28", value: filters.brand, placeholder: "品牌", onChange: (brand) => updateFilter({brand})},
+    {kind: "select", key: "brand", label: "品牌", width: "w-28", value: filters.brand, defaultValue: "", options: [{value: "", label: "全部品牌"}, ...(brandCatalog.data?.brands || []).map(brand => ({value: brand.name, label: brand.name, searchText: [brand.name, ...brand.aliases].join(" ")})), ...filters.brand && !brandCatalog.data?.brands.some(brand => brand.name === filters.brand) ? [{value: filters.brand, label: filters.brand}] : []], onChange: (brand) => updateFilter({brand})},
     {kind: "text", key: "supplierName", label: "供应商", width: "w-32", value: filters.supplierName, placeholder: "供应商", onChange: (supplierName) => updateFilter({supplierName})},
     {kind: "text", key: "warehouseLocation", label: "仓库 / 库位", width: "w-32", value: filters.warehouseLocation, placeholder: "仓位", onChange: (warehouseLocation) => updateFilter({warehouseLocation})},
     {kind: "select", key: "status", label: "库存 / 历史状态", width: "w-36", value: filters.status, defaultValue: "", options: [{value: "", label: "当前库存"}, ...inventoryStatuses.map((value) => ({value, label: value}))], onChange: (status) => updateFilter({status, inspectionStatus: ""})},

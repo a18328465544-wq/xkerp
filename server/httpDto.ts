@@ -86,6 +86,7 @@ export const paymentOutCreateDto = z.object(paymentOutFields).strict().superRefi
 export const paymentOutUpdateDto = z.object(paymentOutFields).partial().strict();
 
 const productTemplateFields = {
+  brandId: z.string().trim().min(1).max(160).optional(),
   gpuCoreId: z.string().trim().min(1).max(160).optional(),
   gpuSpecId: z.string().trim().min(1).max(300).optional(),
   name: requiredText("商品名称", 240),

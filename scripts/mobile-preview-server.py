@@ -313,6 +313,13 @@ class Handler(BaseHTTPRequestHandler):
                 data = {"data": {"filters": query, "sourceItems": [], "rows": [row], "pageRows": [row], "insightRows": [row], "trend": [{"date": "2026-10-07", "label": "10-07", "revenue": 450, "profit": 150, "netProfit": 150}], "summary": {**row, "profitableGroups": 1, "lossGroups": 0, "otherIncome": 0, "otherExpense": 0, "netProfit": 150}, "meta": meta}}
             elif path == "/api/products":
                 data = {"data": state, "meta": meta}
+            elif path == "/api/product-brands":
+                # Read-only UI fixtures follow the versioned reference dictionary.
+                definitions = (root.parent / "src/data/productBrandCatalog.ts").read_text().split("const brandDefinitions:", 1)[1].split("\n];", 1)[0]
+                brands = [{"id": f"brand:{row[0]}", "name": row[1], "aliases": row[2:], "origin": "standard"} for row in (json.loads(value) for value in re.findall(r'\["[^\[\]]+\]', definitions))]
+                data = {"data": {"brands": brands, "canManage": qa_mode == "owner", "legacyMatches": []}}
+            elif path == "/api/product-brands/legacy-matches":
+                data = {"data": []}
             elif path == "/api/vendors":
                 data = {"data": state, "meta": meta}
             elif path == "/api/users":

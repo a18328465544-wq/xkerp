@@ -74,6 +74,7 @@ export {createInitialState, initialFinanceLedger} from "./storeBootstrap.ts";
 export interface AppState {
   products: ProductTemplate[];
   gpuCores?: import("../src/types/gpuCore").GpuCoreRecord[];
+  productBrands?: import("../src/types/productBrand").ProductBrandRecord[];
   inventory: CardInventory[];
   inspections: InspectionRecord[];
   purchaseInvoices: PurchaseInvoice[];
@@ -150,6 +151,7 @@ function replaceState(target: AppState, next: AppState) {
   normalizeStateConditions(next);
   target.products = structuredClone(next.products);
   target.gpuCores = structuredClone(next.gpuCores || []);
+  target.productBrands = structuredClone(next.productBrands || []);
   target.inventory = structuredClone(next.inventory);
   target.inspections = structuredClone(next.inspections);
   target.purchaseInvoices = structuredClone(next.purchaseInvoices);

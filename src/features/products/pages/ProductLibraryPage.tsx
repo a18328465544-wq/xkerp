@@ -21,6 +21,7 @@ import {defaultProductFilters, parseProductFilters, productFiltersToSearch} from
 import {parseProductImportCsv, productCsv, productImportHeaders, type ProductImportRow} from "../product.import";
 import {productDisplayName} from "@/src/lib/productName";
 import {formatCurrency} from "@/src/lib/format";
+import {ProductBrandManager} from "@/src/components/domain/ProductBrandManager";
 
 function useProductUrlState() {
   return useUrlSearchState({defaultValue: defaultProductFilters, parse: parseProductFilters, serialize: productFiltersToSearch});
@@ -50,6 +51,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   const queryClient = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [brandManagerOpen, setBrandManagerOpen] = useState(false);
   const [editing, setEditing] = useState<ProductLibraryItem | null>(null);
   const [ledgerSubject, setLedgerSubject] = useState<ProductLedgerSubject | null>(null);
   const [confirmState, setConfirmState] = useState<{kind: "delete"; product: ProductLibraryItem} | {kind: "import"; rows: ProductImportRow[]; overwrite: number} | null>(null);
@@ -119,7 +121,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
   ];
   const table: React.ComponentProps<typeof ErpDataTable<ProductLibraryItem>> = {
     mobileRow: (item) => {
-      const subtitle = [item.category, item.brand, item.model].filter(Boolean).join(" · ");
+      const subtitle = [item.category, item.brandDisplayName || item.brand, item.model].filter(Boolean).join(" · ");
       const price = session.permissions.showCost && item.refBuyPrice ? formatCurrency(item.refBuyPrice) : undefined;
       return <ErpMobileRecordRow title={productDisplayName(item)} subtitle={subtitle} meta={`当前库存 ${item.currentStock} 件${item.version && item.version !== item.model ? ` · ${item.version}` : ""}`} amount={price} amountLabel={price ? "参考回收价" : undefined} thumbnail={<ErpEntityThumbnail name={productDisplayName(item)} imageUrl={item.imageUrls?.[0]} category={item.category} />} onOpen={fullPriceAccess ? () => openEdit(item) : undefined} />;
     },
@@ -168,6 +170,7 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
     quickFilters={[{label: "全部", active: filters.category === "all", onSelect: () => onFiltersChange({...filters, category: "all", page: 1})}, ...categories.slice(0, 3).map((category) => ({label: category, active: filters.category === category, onSelect: () => onFiltersChange({...filters, category, page: 1})}))]}
     defaultSortLabel="默认排序"
     primaryAction={{label: "新建模板", icon: <Plus className="h-4 w-4" />, onClick: openCreate}}
+    pageActions={[{label: "品牌管理", icon: <Layers3 className="h-4 w-4" />, onClick: () => setBrandManagerOpen(true)}]}
     actions={[
       {label: "导入模板", icon: <Download className="h-4 w-4" />, onClick: downloadTemplate},
       {label: "CSV 导入", icon: <Upload className="h-4 w-4" />, onClick: () => importRef.current?.click(), disabled: importMutation.isPending},
@@ -181,8 +184,9 @@ function ProductLibraryContent({session, query, filters, sorting, onSortingChang
     tableDensity="compact"
     phonePageSizeOptions={[10, 20, 50]}
     tableNotice={!fullPriceAccess ? <div className="rounded-[var(--erp-radius-md)] bg-[var(--erp-color-warning-soft)] px-4 py-3 text-xs text-[var(--erp-color-warning)]">当前账号缺少完整成本或利润权限：列表已脱敏，已有模板编辑入口被禁用，避免用不可见的 0 覆盖真实价格；新建模板仍按当前字段权限提交。</div> : undefined}
-    overlayOpen={Boolean(dialogOpen || confirmState || ledgerSubject)}
+    overlayOpen={Boolean(dialogOpen || brandManagerOpen || confirmState || ledgerSubject)}
     overlays={<>
+      <ProductBrandManager open={brandManagerOpen} onOpenChange={setBrandManagerOpen} />
       <input ref={importRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => {const file = event.target.files?.[0]; if (file) void onImportFile(file); event.target.value = "";}} />
       <ErpProductTemplateDialog open={dialogOpen} product={editing} showCost={session.permissions.showCost} showProfit={session.permissions.showProfit} pending={saveMutation.isPending} error={saveMutation.error instanceof Error ? saveMutation.error.message : undefined} onOpenChange={(open) => {setDialogOpen(open); if (!open) setEditing(null);}} onSubmit={async (values) => {await saveMutation.mutateAsync({values, product: editing});}} />
       <ConfirmationDialog state={confirmState} pending={deleteMutation.isPending || importMutation.isPending} onClose={() => setConfirmState(null)} onConfirm={() => {if (confirmState?.kind === "delete") deleteMutation.mutate(confirmState.product.id); if (confirmState?.kind === "import") importMutation.mutate(confirmState.rows);}} />
