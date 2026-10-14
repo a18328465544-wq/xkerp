@@ -28,9 +28,6 @@ export function InventoryModelMobileRecord({row, onOpenLedger, onOpenCards}: {
           {specifications.map((value) => <span className="erp-inventory-model-phone-spec" key={value}>{value}</span>)}
         </span>
       </Button>
-      <Button type="button" variant="ghost" size="xs" className="erp-inventory-model-phone-cards-action" aria-label={`查看 ${row.productName} 单卡库存`} onClick={() => onOpenCards(row)}>
-        查看单卡<ArrowRight className="h-4 w-4" aria-hidden="true" />
-      </Button>
       <div className="erp-inventory-model-phone-meta">
         <span className="erp-inventory-model-phone-counts">
           <span className="erp-inventory-model-phone-quantity" aria-label={`库存数量 ${row.totalCount} 件`}>总 <span className="erp-inventory-model-phone-quantity-value">{row.totalCount}</span></span>
@@ -40,7 +37,12 @@ export function InventoryModelMobileRecord({row, onOpenLedger, onOpenCards}: {
           {row.soldCount > 0 && <span>已售 <span className="erp-inventory-model-phone-quantity-value">{row.soldCount}</span></span>}
           {row.repairCount > 0 && <span>售后 / 维修 <span className="erp-inventory-model-phone-quantity-value">{row.repairCount}</span></span>}
         </span>
-        <span className="erp-inventory-model-phone-location"><MapPin className="h-4 w-4" aria-hidden="true" /><span>{row.warehouseLocations.join("、") || "未设置库位"}</span></span>
+        <div className="erp-inventory-model-phone-location-row">
+          <span className="erp-inventory-model-phone-location"><MapPin className="h-4 w-4" aria-hidden="true" /><span>{row.warehouseLocations.join("、") || "未设置库位"}</span></span>
+          <Button type="button" variant="ghost" size="xs" className="erp-inventory-model-phone-cards-action" aria-label={`查看 ${row.productName} 单卡库存`} onClick={() => onOpenCards(row)}>
+            查看单卡<ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
       </div>
     </div>
   </div>;

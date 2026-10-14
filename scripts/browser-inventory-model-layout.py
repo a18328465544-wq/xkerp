@@ -1,4 +1,4 @@
-"""Local-only model row: concise identity and single-card action before quantities."""
+"""Local-only model row: concise identity and single-card action beside location."""
 import json
 import os
 from pathlib import Path
@@ -42,16 +42,21 @@ with sync_playwright() as playwright:
                 category = row.locator('.erp-inventory-model-phone-subtitle')
                 action = row.locator('.erp-inventory-model-phone-cards-action')
                 counts = row.locator('.erp-inventory-model-phone-counts')
-                assert category.bounding_box()["y"] + category.bounding_box()["height"] <= action.bounding_box()["y"]
-                assert action.bounding_box()["y"] + action.bounding_box()["height"] <= counts.bounding_box()["y"]
+                location = row.locator('.erp-inventory-model-phone-location')
+                location_row = row.locator('.erp-inventory-model-phone-location-row')
+                assert category.bounding_box()["y"] + category.bounding_box()["height"] <= counts.bounding_box()["y"]
+                assert counts.bounding_box()["y"] + counts.bounding_box()["height"] <= location_row.bounding_box()["y"]
+                assert location.bounding_box()["x"] + location.bounding_box()["width"] <= action.bounding_box()["x"]
+                assert abs(location_row.bounding_box()["y"] + location_row.bounding_box()["height"] / 2 - action.bounding_box()["y"] - action.bounding_box()["height"] / 2) <= 1
+                assert action.evaluate("e => e.parentElement.classList.contains('erp-inventory-model-phone-location-row')")
                 assert action.evaluate("""e => {
                   const r = e.getBoundingClientRect(), s = getComputedStyle(e, '::after');
                   return r.height + Math.max(0, -parseFloat(s.top) || 0) + Math.max(0, -parseFloat(s.bottom) || 0) >= 44;
                 }""")
-                # One content axis for identity, quantity, location and actions.
+                # Identity, quantity and location share an axis; action stays at right.
                 title_box = row.locator('.erp-inventory-model-phone-title').bounding_box()
                 image_box = row.locator('.erp-inventory-model-phone-thumbnail').bounding_box()
-                assert abs(action.bounding_box()["x"] - title_box["x"]) <= 1
+                assert abs(location.bounding_box()["x"] - title_box["x"]) <= 1
                 assert abs(category.bounding_box()["x"] - title_box["x"]) <= 1
                 assert abs(counts.bounding_box()["x"] - title_box["x"]) <= 1
                 assert abs(image_box["y"] - title_box["y"]) <= 1
@@ -76,6 +81,17 @@ with sync_playwright() as playwright:
             page.goto(BASE + "/inventory?view=models", wait_until="networkidle")
             rows.first.locator('.erp-inventory-model-phone-title').click()
             expect(page.get_by_role("dialog").first).to_be_visible()
+            # Long locations wrap fully within the existing row, never over the action.
+            long_location = "成都仓库A区超长货架名称第01层、待检测区域第02层"
+            page.route(BASE + "/api/inventory/summary?*", lambda route: route.fulfill(content_type="application/json", body=json.dumps({"data": [{**MODELS[0], "warehouseLocations": [long_location]}]})))
+            page.goto(BASE + "/inventory?view=models", wait_until="networkidle")
+            location = rows.first.locator('.erp-inventory-model-phone-location')
+            action = rows.first.locator('.erp-inventory-model-phone-cards-action')
+            expect(location).to_have_text(long_location)
+            assert location.evaluate("e => e.scrollWidth <= e.clientWidth")
+            assert location.bounding_box()["x"] + location.bounding_box()["width"] <= action.bounding_box()["x"]
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            rows.first.screenshot(path=str(OUT / f"model-location-long-{width}.png"))
         elif width < 1024:
             # Tablets retain the shared column projection, not the phone row.
             expect(rows.first).not_to_be_visible()

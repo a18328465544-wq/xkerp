@@ -156,7 +156,7 @@ test("inventory model mobile row keeps ledger and single-card actions separate a
   assert.doesNotMatch(source, /\.erp-inventory-phone-model > button:last-child/);
 });
 
-test("model single-card action precedes quantities, without repeating named specifications", () => {
+test("model single-card action shares the location row after quantities without repeating named specifications", () => {
   const html = renderModel();
   const quantity = html.indexOf("erp-inventory-model-phone-quantity");
   const categoryEnd = html.indexOf("</button>", html.indexOf('class="erp-inventory-model-phone-subtitle"'));
@@ -164,7 +164,11 @@ test("model single-card action precedes quantities, without repeating named spec
   const stock = html.indexOf("erp-inventory-model-phone-meta");
   const counts = html.indexOf("erp-inventory-model-phone-counts");
   const location = html.indexOf("erp-inventory-model-phone-location");
-  assert.ok(categoryEnd < action && action < stock && stock < counts && counts < quantity && quantity < location);
+  assert.ok(categoryEnd < stock && stock < counts && counts < quantity && quantity < location && location < action);
+  assert.match(html, /<div class="erp-inventory-model-phone-location-row"><span class="erp-inventory-model-phone-location"[^]*<button[^]*erp-inventory-model-phone-cards-action/);
+  const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.erp-inventory-model-phone-location-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto[^}]*align-items: center/);
+  assert.match(css, /\.erp-inventory-model-phone-location \{[^}]*min-width: 0[^}]*overflow-wrap: anywhere/);
   assert.equal((modelText(html).match(/总 10/g) || []).length, 1);
   assert.match(html, /<div class="erp-inventory-model-phone-meta"/);
   assert.doesNotMatch(html, /erp-inventory-model-phone-actions|erp-inventory-model-phone-spec/);

@@ -2017,11 +2017,12 @@ input[inputmode="numeric"] {
   .erp-inventory-model-phone-counts { display: flex; flex-wrap: wrap; column-gap: var(--erp-space-2); row-gap: var(--erp-space-1); padding-block: var(--erp-space-1); }
   .erp-inventory-model-phone-counts > span { display: inline-flex; align-items: baseline; gap: var(--erp-space-1); white-space: nowrap; }
   .erp-inventory-model-phone-counts > span:not(:last-child) { padding-right: var(--erp-space-2); border-right: 1px solid var(--erp-color-border); }
-  .erp-inventory-model-phone-location { display: flex; align-items: flex-start; gap: var(--erp-space-1); max-width: 100%; overflow-wrap: anywhere; }
+  .erp-inventory-model-phone-location-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--erp-space-2); width: 100%; min-width: 0; }
+  .erp-inventory-model-phone-location { display: flex; align-items: flex-start; gap: var(--erp-space-1); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
   .erp-inventory-model-phone-location > svg { flex-shrink: 0; margin-top: var(--erp-space-1); }
   .erp-inventory-model-phone-quantity { display: inline-flex; align-items: baseline; gap: var(--erp-space-1); white-space: nowrap; }
   .erp-inventory-model-phone-quantity-value { color: var(--erp-color-text); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); font-weight: var(--erp-font-medium); font-variant-numeric: tabular-nums; }
-  .erp-inventory-model-phone-cards-action { align-self: flex-start; min-width: 0; min-height: var(--erp-mobile-button-height); height: auto; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-primary); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); white-space: nowrap; }
+  .erp-inventory-model-phone-cards-action { min-width: 0; min-height: var(--erp-mobile-button-height); height: auto; gap: var(--erp-space-1); padding: 0; color: var(--erp-color-primary); font-size: var(--erp-text-sm); line-height: var(--erp-line-sm); white-space: nowrap; }
   .erp-inventory-phone-search { display: flex; gap: var(--erp-space-2); width: 100%; }
   .erp-inventory-phone-search > [data-erp-component="search-input"] { flex: 1; min-width: 0; }
   .erp-inventory-phone-search input { min-height: var(--erp-mobile-touch-size); }
