@@ -32,6 +32,12 @@ test("operator commercial migration mirrors all legacy collection scopes", () =>
   assert.match(operatorSql, /jsonb_typeof\(custom_permissions\) <> 'array'/);
 });
 
+test("production preflight requires the inventory stocktake scope migration", () => {
+  const preflight = readFileSync(new URL("../scripts/preflight-production.mjs", import.meta.url), "utf8");
+  assert.match(preflight, /"product-brand-catalog-v1"/);
+  assert.match(preflight, /"inventory-stocktakes-scope-v1"/);
+});
+
 test("commercial hardening provides tenant-scoped replay and inventory occupancy", () => {
   assert.match(COMMERCIAL_HARDENING_SQL, /gpu_idempotency_keys/);
   assert.match(COMMERCIAL_HARDENING_SQL, /PRIMARY KEY \(tenant_id, idempotency_key, route\)/);
