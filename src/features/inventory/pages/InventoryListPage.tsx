@@ -17,9 +17,10 @@ import {Link, useNavigate} from "@tanstack/react-router";
 import {inventoryCategories, inventoryJourneyFinancialMenuValues, inventoryStatuses, type InventoryFilters, type InventoryJourney, type InventoryJourneyEvent, type InventoryListItem, type InventoryModelSummary, type InventorySummary, type InventoryView} from "@/src/types/inventory";
 import {createInventoryColumns} from "@/src/features/inventory/inventory.columns";
 import {createInventoryModelColumns} from "@/src/features/inventory/inventory.model-columns";
+import {inventoryModelSorting, sortInventoryModels} from "@/src/features/inventory/inventory.model-sorting";
 import {InventoryJourneyPanel} from "@/src/features/inventory/components/InventoryJourneyPanel";
 import {defaultInventoryFilters, inventorySelectionScope, inventorySummaryFilters} from "@/src/features/inventory/inventory.filters";
-import type {VisibilityState, RowSelectionState, SortingState} from "@tanstack/react-table";
+import type {VisibilityState, RowSelectionState, SortingState, OnChangeFn} from "@tanstack/react-table";
 import type {PermissionModel} from "@/src/services/api/endpoints/auth";
 import {useProductLedger} from "@/src/hooks/useProductLedger";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
@@ -109,13 +110,13 @@ export function InventoryListPage() {
   const detailQuery = useQuery({
     queryKey: queryKeys.inventory.detail(detailId || ""),
     queryFn: ({signal}) => inventoryApi.detail(detailId || "", permissions, signal),
-    enabled: active && accessGranted && view === "cards" && Boolean(detailId),
+    enabled: active && accessGranted && view !== "models" && Boolean(detailId),
     retry: false,
   });
   const journeyQuery = useQuery({
     queryKey: queryKeys.inventory.journey(detailId || "", {showCost: permissions.showCost, showProfit: permissions.showProfit, showFinance: canViewJourneyFinance}),
     queryFn: ({signal}) => inventoryApi.journey(detailId || "", permissions, signal),
-    enabled: active && accessGranted && view === "cards" && Boolean(detailId),
+    enabled: active && accessGranted && view !== "models" && Boolean(detailId),
     retry: false,
   });
 
@@ -146,6 +147,7 @@ export function InventoryListPage() {
       journeyQuery={journeyQuery}
       detailId={detailId}
       onDetail={openDetail}
+      onOpenInventory={commitDetail}
       onCloseDetail={() => commitDetail(null)}
       rows={rows}
       permissions={permissions}
@@ -180,7 +182,7 @@ export function InventoryListPage() {
   </>;
 }
 
-function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQuery, searchPending, detailQuery, journeyQuery, detailId, onDetail, onCloseDetail, rows, permissions, onRefresh, view, onChangeView, onApplyInventoryView, onOpenCards, onOpenLedger, userId, ledgerOpen, marketRiskQuery}: {
+function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQuery, searchPending, detailQuery, journeyQuery, detailId, onDetail, onOpenInventory, onCloseDetail, rows, permissions, onRefresh, view, onChangeView, onApplyInventoryView, onOpenCards, onOpenLedger, userId, ledgerOpen, marketRiskQuery}: {
   filters: InventoryFilters;
   commitFilters: (filters: InventoryFilters) => void;
   listQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inventoryApi.list>>>>;
@@ -190,6 +192,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   journeyQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inventoryApi.journey>>>>;
   detailId: string | null;
   onDetail: (item: InventoryListItem) => void;
+  onOpenInventory: (id: string) => void;
   onCloseDetail: () => void;
   rows: InventoryListItem[];
   permissions: PermissionModel;
@@ -212,6 +215,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   const [stocktakeOpen, setStocktakeOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [modelSorting, setModelSorting] = useState<SortingState>([{id: "totalCount", desc: true}]);
   usePhoneBackLayer(active && phone && selectionMode, () => {
     setSelectionMode(false);
     setRowSelection({});
@@ -224,7 +228,6 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   const summaryReady = Boolean(modelSummaryQuery.data) && !searchPending && !modelSummaryQuery.isPlaceholderData && !modelSummaryQuery.isFetching && !modelSummaryQuery.isError;
   const summaryDetail = summaryReady ? undefined : modelSummaryQuery.isError ? "加载失败" : "更新中";
   const modelPageStart = (filters.page - 1) * filters.pageSize;
-  const modelPageRows = modelRows.slice(modelPageStart, modelPageStart + filters.pageSize);
   const selectedCount = Object.values(rowSelection).filter(Boolean).length;
   // Header chips are work to do, each linking to where it is done; stock state
   // lives in the metric row so no number is shown twice.
@@ -235,6 +238,13 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   ];
   const columns = useMemo(() => createInventoryColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onDetail}), [onDetail, permissions.showCost, permissions.showProfit]);
   const modelColumns = useMemo(() => createInventoryModelColumns({showCost: permissions.showCost, showProfit: permissions.showProfit, onOpenCards, onOpenLedger}), [onOpenCards, onOpenLedger, permissions.showCost, permissions.showProfit]);
+  const effectiveModelSorting = useMemo(() => inventoryModelSorting(modelColumns, modelSorting), [modelColumns, modelSorting]);
+  const sortedModelRows = useMemo(() => sortInventoryModels(modelRows, modelColumns, effectiveModelSorting), [modelRows, modelColumns, effectiveModelSorting]);
+  const modelPageRows = sortedModelRows.slice(modelPageStart, modelPageStart + filters.pageSize);
+  const changeModelSorting: OnChangeFn<SortingState> = (updater) => {
+    setModelSorting(typeof updater === "function" ? updater(effectiveModelSorting) : updater);
+    commitFilters({...filters, page: 1});
+  };
   const updateFilter = (patch: Partial<InventoryFilters>) => commitFilters({...filters, ...patch, page: 1});
   const serverToColumnSort: Record<InventoryFilters["sortKey"], string> = {id: "id", product: "product", cost: "costPrice", profit: "estimatedProfit", days: "inventoryDays", status: "status", warehouseLocation: "warehouseLocation", entryTime: "entryTime"};
   const columnToServerSort: Record<string, InventoryFilters["sortKey"]> = {id: "id", product: "product", costPrice: "cost", estimatedProfit: "profit", inventoryDays: "days", status: "status", warehouseLocation: "warehouseLocation", entryTime: "entryTime"};
@@ -332,8 +342,8 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     virtualized: rows.length >= 50,
   };
   const canViewMarketRisk = permissions.showCost && permissions.showProfit;
-  const modelTable = <InventoryModelTableRegion filters={filters} commitFilters={commitFilters} modelSummaryQuery={modelSummaryQuery} refreshing={!summaryReady} rows={summaryReady ? modelRows : []} pageRows={summaryReady ? modelPageRows : []} columns={modelColumns} columnVisibility={modelColumnVisibility} setColumnVisibility={setModelColumnVisibility} density={modelDensity} setDensity={setModelDensity} onOpenLedger={onOpenLedger} onOpenCards={onOpenCards} view={view} onChangeView={onChangeView} />;
-  const riskRegion = <InventoryMarketRiskRegion data={searchPending || marketRiskQuery.isPlaceholderData ? undefined : marketRiskQuery.data} loading={marketRiskQuery.isFetching || searchPending} error={marketRiskQuery.error as Error | null} onRetry={() => void marketRiskQuery.refetch()} phone={phone} onExit={() => onChangeView("cards")} page={filters.page} pageSize={filters.pageSize} onPageChange={(page) => commitFilters({...filters, page})} />;
+  const modelTable = <InventoryModelTableRegion filters={filters} commitFilters={commitFilters} modelSummaryQuery={modelSummaryQuery} refreshing={!summaryReady} rows={summaryReady ? modelRows : []} pageRows={summaryReady ? modelPageRows : []} columns={modelColumns} sorting={effectiveModelSorting} onSortingChange={changeModelSorting} columnVisibility={modelColumnVisibility} setColumnVisibility={setModelColumnVisibility} density={modelDensity} setDensity={setModelDensity} onOpenLedger={onOpenLedger} onOpenCards={onOpenCards} view={view} onChangeView={onChangeView} />;
+  const riskRegion = <InventoryMarketRiskRegion data={searchPending || marketRiskQuery.isPlaceholderData ? undefined : marketRiskQuery.data} loading={marketRiskQuery.isFetching || searchPending} error={marketRiskQuery.error as Error | null} onRetry={() => void marketRiskQuery.refetch()} phone={phone} onExit={() => onChangeView("cards")} onOpenInventory={onOpenInventory} page={filters.page} pageSize={filters.pageSize} onPageChange={(page) => commitFilters({...filters, page})} />;
   const desktopTableContent = view === "models" ? modelTable : view === "market-risk" ? riskRegion : <>
     {selectedCount > 0 && <Card data-erp-region="inventory-selection-summary" className="flex flex-wrap items-center justify-between gap-3 border-[var(--erp-color-border-strong)] bg-[var(--erp-color-info-soft)] px-4 py-3"><span role="status" aria-live="polite" aria-atomic="true" className="text-sm font-semibold text-[var(--erp-color-primary)]">已选择 {selectedCount} 条库存</span><Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>清除选择</Button></Card>}
     <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Boxes className="h-4 w-4 text-[var(--erp-color-primary)]" />筛选结果 · {searchPending || listQuery.isPlaceholderData ? "更新中" : cardTotal + " 条"}</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={emptyInventoryVisibility} onVisibilityChange={setColumnVisibility} exclude={["select", "actions"]} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
@@ -357,7 +367,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     <ErpDialogShell open={phone && statsOpen} onOpenChange={setStatsOpen} title="库存视图与统计" mobilePresentation="sheet">{view === "market-risk" ? <div className="mb-4 flex flex-col gap-2"><p className="text-sm text-[var(--erp-color-text-secondary)]">当前显示行情风险降价清单。</p><Button type="button" variant="secondary" onClick={() => {onChangeView("cards"); setStatsOpen(false);}}>返回单卡 / SN</Button></div> : <InventoryViewSwitcher view={view} showMarketRisk={false} onChange={(next) => {onChangeView(next); setStatsOpen(false);}} />}<div className="mt-4"><MetricsRegion>{inventoryMetrics}</MetricsRegion></div></ErpDialogShell>
     <ErpBarcodeScannerDialog open={phone && scanOpen} onOpenChange={setScanOpen} onDetected={(keyword) => updateFilter({keyword})} title="扫码搜索库存" description="扫描 SN 或库存编号，在当前筛选范围内查找商品；不会自动修改库存。" />
     <InventoryStocktakeDialog open={stocktakeOpen} onOpenChange={setStocktakeOpen} />
-    <ErpDetailDrawer open={view === "cards" && Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} modal={false} resizable drawerKey="inventory-detail" defaultWidth={820} minWidth={640} maxWidth={1100} title={journeyQuery.data?.card.productName || detailQuery.data?.item?.productName || detailId || "库存详情"}>
+    <ErpDetailDrawer open={view !== "models" && Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} modal={false} resizable drawerKey="inventory-detail" defaultWidth={820} minWidth={640} maxWidth={1100} title={journeyQuery.data?.card.productName || detailQuery.data?.item?.productName || detailId || "库存详情"}>
       {detailQuery.isPending && detailQuery.fetchStatus !== "idle" && !detailItem ? <ErpLoadingState title="正在加载库存详情" /> : detailQuery.error && !detailItem ? <ErpEmptyState title="详情加载失败" description={(detailQuery.error as Error).message} action={<Button size="sm" onClick={() => void detailQuery.refetch()}>重试</Button>} /> : detailItem ? <InventoryDetail item={detailItem} journey={journeyQuery.data} journeyLoading={journeyQuery.isPending && journeyQuery.fetchStatus !== "idle"} journeyError={journeyQuery.error as Error | null} onRetryJourney={() => void journeyQuery.refetch()} onOpenJourneyDocument={openJourneyDocument} showCost={permissions.showCost} showProfit={permissions.showProfit} /> : <ErpEmptyState title="库存记录不存在" description="该记录可能已被删除或当前账号无权访问。" />}
     </ErpDetailDrawer>
   </>;
@@ -398,7 +408,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   />;
 }
 
-function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, refreshing, rows, pageRows, columns, columnVisibility, setColumnVisibility, density, setDensity, onOpenLedger, onOpenCards, view, onChangeView}: {
+function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, refreshing, rows, pageRows, columns, sorting, onSortingChange, columnVisibility, setColumnVisibility, density, setDensity, onOpenLedger, onOpenCards, view, onChangeView}: {
   filters: InventoryFilters;
   commitFilters: (filters: InventoryFilters) => void;
   modelSummaryQuery: UseQueryResult<InventoryModelSummary[], Error>;
@@ -406,6 +416,8 @@ function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, r
   rows: InventoryModelSummary[];
   pageRows: InventoryModelSummary[];
   columns: ReturnType<typeof createInventoryModelColumns>;
+  sorting: SortingState;
+  onSortingChange: OnChangeFn<SortingState>;
   columnVisibility: VisibilityState;
   setColumnVisibility: (updater: VisibilityState | ((old: VisibilityState) => VisibilityState)) => void;
   density: "comfortable" | "compact";
@@ -418,7 +430,7 @@ function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, r
   const phone = useErpPhone();
   return <>
     {!phone && <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Boxes className="h-4 w-4 text-[var(--erp-color-primary)]" />型号汇总 · {rows.length} 个型号</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={defaultModelVisibility} onVisibilityChange={setColumnVisibility} exclude={["select", "actions"]} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
-    <ErpDataTable surface={phone ? "plain" : "card"} mobilePagination="compact" mobileToolbar={({openSorting, sortLabel, descending}) => <InventoryPhoneToolbar view={view} onChangeView={onChangeView} openSorting={openSorting} sortLabel={sortLabel} descending={descending} />}
+    <ErpDataTable surface={phone ? "plain" : "card"} sorting={sorting} onSortingChange={onSortingChange} manualSorting mobilePagination="compact" mobileToolbar={({openSorting, sortLabel, descending}) => <InventoryPhoneToolbar view={view} onChangeView={onChangeView} openSorting={openSorting} sortLabel={sortLabel} descending={descending} />}
       mobileRow={(row) => <InventoryModelMobileRecord row={row} onOpenLedger={onOpenLedger} onOpenCards={onOpenCards} />}
       ariaLabel="型号库存汇总" columns={columns} data={pageRows} getRowId={(row) => row.key} loading={refreshing && !modelSummaryQuery.isError} fetching={modelSummaryQuery.isFetching} error={modelSummaryQuery.error as Error | null} errorTitle="型号库存加载失败" emptyTitle="暂无型号库存" emptyDescription="当前筛选条件下没有可聚合的库存。" onRetry={() => void modelSummaryQuery.refetch()} onRowClick={onOpenLedger} mobileShowDetailAction={false} page={filters.page} pageSize={filters.pageSize} total={rows.length} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader virtualized={pageRows.length >= 50} />
   </>;

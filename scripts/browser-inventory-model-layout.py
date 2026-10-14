@@ -1,4 +1,4 @@
-"""Local-only model row: identity chips, one quantity strip and footer actions."""
+"""Local-only model row: concise identity and single-card action before quantities."""
 import json
 import os
 from pathlib import Path
@@ -23,6 +23,7 @@ MODELS = [{"key": str(index), "productName": name, "category": category, "brand"
               ("AMD Ryzen 5 7600X3D 盒装 CPU", "CPU", 6, "AMD", "Ryzen 5 7600X3D", ""),
               ("超长商品名称完整换行显卡规格与型号 24G", "显卡", 126, "品牌", "超长型号测试字符串完整展示", "24G"),
               ("大数量库存型号", "显卡", 10000, "", "", "")])]
+SORTED_MODELS = sorted(MODELS, key=lambda row: row["totalCount"], reverse=True)
 
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch()
@@ -41,12 +42,12 @@ with sync_playwright() as playwright:
                 category = row.locator('.erp-inventory-model-phone-subtitle')
                 action = row.locator('.erp-inventory-model-phone-cards-action')
                 counts = row.locator('.erp-inventory-model-phone-counts')
-                ledger = row.locator('.erp-inventory-model-phone-ledger-action')
-                assert category.bounding_box()["y"] + category.bounding_box()["height"] <= counts.bounding_box()["y"]
-                assert counts.bounding_box()["y"] + counts.bounding_box()["height"] <= action.bounding_box()["y"]
-                assert action.bounding_box()["height"] >= 44
-                assert ledger.bounding_box()["height"] >= 44
-                assert abs(action.bounding_box()["y"] - ledger.bounding_box()["y"]) <= 1
+                assert category.bounding_box()["y"] + category.bounding_box()["height"] <= action.bounding_box()["y"]
+                assert action.bounding_box()["y"] + action.bounding_box()["height"] <= counts.bounding_box()["y"]
+                assert action.evaluate("""e => {
+                  const r = e.getBoundingClientRect(), s = getComputedStyle(e, '::after');
+                  return r.height + Math.max(0, -parseFloat(s.top) || 0) + Math.max(0, -parseFloat(s.bottom) || 0) >= 44;
+                }""")
                 # One content axis for identity, quantity, location and actions.
                 title_box = row.locator('.erp-inventory-model-phone-title').bounding_box()
                 image_box = row.locator('.erp-inventory-model-phone-thumbnail').bounding_box()
@@ -54,11 +55,11 @@ with sync_playwright() as playwright:
                 assert abs(category.bounding_box()["x"] - title_box["x"]) <= 1
                 assert abs(counts.bounding_box()["x"] - title_box["x"]) <= 1
                 assert abs(image_box["y"] - title_box["y"]) <= 1
-                assert row.locator('.erp-inventory-model-phone-actions').evaluate("e => { const s = getComputedStyle(e); return s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.borderRadius === '0px' && s.boxShadow === 'none' && s.borderTopWidth === '1px'; }")
+                expect(row.locator('.erp-inventory-model-phone-actions')).to_have_count(0)
                 value = counts.locator('.erp-inventory-model-phone-quantity-value').first
                 assert value.evaluate("e => getComputedStyle(e).fontSize") == "13px"
                 assert value.evaluate("e => getComputedStyle(e).fontWeight") == "500"
-                expect(value).to_have_text(str(MODELS[index]["totalCount"]))
+                expect(value).to_have_text(str(SORTED_MODELS[index]["totalCount"]))
                 expect(row.get_by_text("待检 0", exact=True)).to_have_count(1)
                 expect(row.get_by_text("锁定 0", exact=True)).to_have_count(1)
                 expect(row.locator('.erp-inventory-model-phone-end')).to_have_count(0)
@@ -69,11 +70,11 @@ with sync_playwright() as playwright:
             page.wait_for_timeout(400)
             params = parse_qs(urlparse(page.url).query)
             assert params.get("view") != ["models"]
-            assert params.get("keyword") == [MODELS[0]["productName"]]
+            assert params.get("keyword") == [SORTED_MODELS[0]["productName"]]
             expect(page.get_by_role("dialog")).to_have_count(0)
-            # The other footer action still opens the existing ledger drawer.
+            # The identity action still opens the existing ledger drawer.
             page.goto(BASE + "/inventory?view=models", wait_until="networkidle")
-            rows.first.locator('.erp-inventory-model-phone-ledger-action').click()
+            rows.first.locator('.erp-inventory-model-phone-title').click()
             expect(page.get_by_role("dialog").first).to_be_visible()
         elif width < 1024:
             # Tablets retain the shared column projection, not the phone row.

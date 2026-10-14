@@ -142,7 +142,8 @@ test("inventory stocktake uses an isolated serialized write and scoped read coll
   assert.deepEqual(getReloadKeysForRequest("GET", path), ["inventoryStocktakes"]);
   assert.deepEqual(getReloadKeysForRequest("GET", `${path}/reference`), ["inventory"]);
   assert.deepEqual(getReloadKeysForRequest("POST", path), ["inventory", "inventoryStocktakes"]);
-  assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/market-risk"), ["inventory"]);
+  assert.deepEqual(getReloadKeysForRequest("GET", "/api/inventory/market-risk"), ["inventory", "products"]);
+  assert.ok(getReloadKeysForRequest("GET", "/api/inventory/items/KC-1/journey")?.includes("products"));
 });
 
 test("aftersales writes reload related identities and source payments while SQL workspace reads stay lightweight", () => {

@@ -1,6 +1,7 @@
 import type {Express, Request, RequestHandler} from "express";
 import type {AuthenticatedRequest} from "../httpAuth.ts";
 import {queryInventoryPage, saveStateRecords} from "../db.ts";
+import {projectInventoryCategories} from "../inventoryCategoryRead.ts";
 import {runStateCommand} from "../stateCommand.ts";
 import {compactStateMerge, stateMergeRecords, statePatchResponse, type StateMergePatch} from "../statePatch.ts";
 import type {AppState, createStoreActions} from "../store.ts";
@@ -154,7 +155,8 @@ export function registerInventoryMutationRoutes(app: Express, dependencies: Inve
       const permissions = dependencies.permissionsForRequest(req);
       if (!permissions.showCost || !permissions.showProfit) throw new ForbiddenError("库存行情浮亏视图需要成本与利润查看权限");
       const query = parseHttpDto(inventoryMarketRiskQueryDto, req.query);
-      res.json({data: buildInventoryMarketRiskSnapshot(dependencies.getState().inventory, {
+      const state = dependencies.getState();
+      res.json({data: buildInventoryMarketRiskSnapshot(projectInventoryCategories(state.inventory, state.products), {
         page: query.page,
         pageSize: query.pageSize ?? 20,
         keyword: query.keyword,

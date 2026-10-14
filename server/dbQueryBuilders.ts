@@ -17,6 +17,7 @@ import {inventoryKeywordSearchSql} from "./productSearchSql.ts";
 import {productBrandFilterSql} from "./productBrandRead.ts";
 import {standardProductBrands} from "../src/data/productBrandCatalog.ts";
 import type {ProductBrandRecord} from "../src/types/productBrand.ts";
+import {inventoryReadCategorySql} from "./inventoryCategoryRead.ts";
 
 export type FinanceRecordKind = "settlement" | "income" | "expense";
 export type FinanceProfitFlowKind = "income" | "expense";
@@ -63,7 +64,7 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}, bran
     if (cardStatusValues.includes(status as (typeof cardStatusValues)[number])) clauses.push(`op_status = ${bind(status)}`);
     else clauses.push("FALSE");
   }
-  if (filters.category && filters.category !== "all") clauses.push(`op_category = ${bind(filters.category)}`);
+  if (filters.category && filters.category !== "all") clauses.push(`${inventoryReadCategorySql} = ${bind(filters.category)}`);
   if (filters.brand && filters.brand !== "all") clauses.push(productBrandFilterSql("op_brand", filters.brand, bind, brandCatalog, filters.tenantId && filters.storeId ? brandBindingExpression : undefined));
   if (filters.supplierName?.trim()) clauses.push(`data->>'supplierName' ILIKE ${bind(`%${filters.supplierName.trim()}%`)}`);
   if (filters.model && filters.model !== "all") clauses.push(`data->>'model' = ${bind(filters.model)}`);
@@ -117,7 +118,7 @@ export function buildInventoryPageQuery(filters: InventoryPageFilters = {}, bran
     values,
     where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
     orderBy,
-    select: `data || jsonb_build_object('storageDays', ${inventoryStorageDaysExpression}) AS data`,
+    select: `data || jsonb_build_object('storageDays', ${inventoryStorageDaysExpression}, 'category', ${inventoryReadCategorySql}) AS data`,
   };
 }
 

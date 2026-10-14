@@ -115,9 +115,9 @@ test("single-card facts have separate SN and location rows outside the detail bu
   }
 });
 
-test("inventory phone facts and model actions stay flat instead of nesting another card", () => {
+test("inventory phone facts stay flat and models have no redundant action footer", () => {
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
-  for (const selector of ["erp-inventory-phone-facts", "erp-inventory-model-phone-actions"]) {
+  for (const selector of ["erp-inventory-phone-facts"]) {
     const rules = css.match(new RegExp(`\\.${selector} \\{([^}]+)\\}`, "g"));
     assert.ok(rules?.length, selector);
     for (const rule of rules) {
@@ -125,6 +125,7 @@ test("inventory phone facts and model actions stay flat instead of nesting anoth
       assert.match(rule, /border-top: 1px solid var\(--erp-color-border-soft\)/, selector);
     }
   }
+  assert.doesNotMatch(renderModel(), /erp-inventory-model-phone-actions|erp-inventory-model-phone-ledger-action/);
 });
 
 test("wide prices get their own line without changing amounts, warehouse or serial facts", () => {
@@ -142,7 +143,8 @@ const modelText = (html: string) => html.replace(/<[^>]*>/g, "");
 
 test("inventory model mobile row keeps ledger and single-card actions separate and compact", () => {
   const html = renderModel();
-  for (const text of [model.productName, "显卡", "华硕", "RTX5090", "32G", "查看单卡", "出入明细", "总 10", "在库 9", "待检 1", "锁定 0", "A区货架-01、待检测区"]) assert.ok(modelText(html).includes(text), text);
+  for (const text of [model.productName, "显卡", "华硕", "RTX5090", "32G", "查看单卡", "总 10", "在库 9", "待检 1", "锁定 0", "A区货架-01、待检测区"]) assert.ok(modelText(html).includes(text), text);
+  assert.match(html, /aria-label="查看 华硕 RTX5090 夜神OC 32G 出入明细，库存数量 10 件"/);
   assert.match(html, /aria-label="查看 华硕 RTX5090 夜神OC 32G 单卡库存"/);
   assert.match(html, /aria-label="库存数量 10 件"/);
   assert.doesNotMatch(html, /待出|erp-inventory-model-phone-end|erp-inventory-model-phone-quantity-label/);
@@ -154,22 +156,19 @@ test("inventory model mobile row keeps ledger and single-card actions separate a
   assert.doesNotMatch(source, /\.erp-inventory-phone-model > button:last-child/);
 });
 
-test("model identity chips precede one quantity strip, location and full-width footer actions", () => {
+test("model single-card action precedes quantities, without repeating named specifications", () => {
   const html = renderModel();
   const quantity = html.indexOf("erp-inventory-model-phone-quantity");
   const categoryEnd = html.indexOf("</button>", html.indexOf('class="erp-inventory-model-phone-subtitle"'));
   const action = html.indexOf("erp-inventory-model-phone-cards-action");
   const stock = html.indexOf("erp-inventory-model-phone-meta");
-  const ledger = html.indexOf("erp-inventory-model-phone-ledger-action");
   const counts = html.indexOf("erp-inventory-model-phone-counts");
   const location = html.indexOf("erp-inventory-model-phone-location");
-  assert.ok(categoryEnd < stock && stock < counts && counts < quantity && quantity < location && location < action && action < ledger);
+  assert.ok(categoryEnd < action && action < stock && stock < counts && counts < quantity && quantity < location);
   assert.equal((modelText(html).match(/总 10/g) || []).length, 1);
   assert.match(html, /<div class="erp-inventory-model-phone-meta"/);
-  assert.match(html, /erp-inventory-model-phone-actions[^]*查看单卡[^]*出入明细/);
-  const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
-  assert.match(css, /\.erp-inventory-model-phone-actions \{[^}]*grid-column: 1 \/ -1[^}]*justify-content: space-between/);
-  assert.match(css, /\.erp-inventory-model-phone-cards-action, \.erp-inventory-model-phone-ledger-action \{[^}]*min-height: var\(--erp-mobile-touch-size\)/);
+  assert.doesNotMatch(html, /erp-inventory-model-phone-actions|erp-inventory-model-phone-spec/);
+  assert.match(renderModel({vram: "未显示容量"}), /erp-inventory-model-phone-spec[^]*未显示容量/);
 });
 
 test("model row preserves full long names, zero total, large totals and included sold stock", () => {
@@ -195,4 +194,14 @@ test("model identity renders supplied facts only, without duplicate or invented 
   assert.match(html, /暂无商品图片 · 显卡/);
   const duplicate = renderModel({brand: "AMD", model: "AMD", vram: ""});
   assert.equal((duplicate.match(/class="erp-inventory-model-phone-spec"/g) || []).length, 1);
+});
+
+test("risk identity remains complete and its inventory action uses the existing detail flow", () => {
+  const productName = "超长完整商品型号 RTX4090 官方盒装 24G 核对测试";
+  const serialNumber = "000000-SERIAL-THIS-MUST-STAY-COMPLETE-20261014";
+  const data = {data: [{inventoryId: "KC-LONG", productName, serialNumber, warehouseLocation: "A", inventoryDays: 1, entryTime: "2026-10-13", costPrice: 100, marketPrice: 90, floatingLoss: 10, marketKnown: true}], meta: {page: 1, pageSize: 20, total: 1}, summary: {onHandCount: 1, marketKnownCount: 1, missingMarketCount: 0, totalMarketValue: 90, floatingLoss: 10, invertedCount: 1}};
+  const html = renderToStaticMarkup(<InventoryMarketRiskRegion data={data} loading={false} error={null} phone onExit={() => undefined} onRetry={() => undefined} onOpenInventory={() => undefined} page={1} pageSize={20} onPageChange={() => undefined} />);
+  assert.ok(html.includes(productName) && html.includes(serialNumber));
+  assert.match(html, /aria-label="查看 超长完整商品型号 RTX4090 官方盒装 24G 核对测试 库存详情"/);
+  assert.doesNotMatch(html, /truncate/);
 });

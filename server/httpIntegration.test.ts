@@ -12,6 +12,7 @@ import type {ReturnOrder} from "../src/types/returns.ts";
 import type {AftersalesRecord, CardInventory, PurchaseInvoice, InspectionRecord, SettlementAccount, SettlementLedger} from "../src/types.ts";
 import {hashPassword} from "./security.ts";
 import {coreQuoteProfile} from "../src/utils/quoteReference.ts";
+import {execFileSync} from "node:child_process";
 import type {MarketQuote} from "../src/types/quote.ts";
 
 const integrationEnabled = Boolean(
@@ -19,6 +20,66 @@ const integrationEnabled = Boolean(
   && process.env.TEST_DATABASE_URL
   && process.env.RUN_BACKEND_HTTP_TESTS === "1",
 );
+
+test("inventory category reads and audit agree across exact product links without mutating stored facts", {skip: !integrationEnabled}, async () => {
+  const {createApp} = await import("./app.ts");
+  const {createInitialState} = await import("./store.ts");
+  const server = createServer(createApp());
+  const base = await listenEphemeral(server);
+  const prefix = `HTTP-CATEGORY-${Date.now()}`;
+  const seed = createInitialState({includeDemoData: true});
+  const cpu = {...seed.products[0]!, id: `${prefix}-cpu`, name: `${prefix} CPU`, category: "CPU" as const};
+  const cards = [
+    {...seed.inventory[0]!, id: `${prefix}-wrong`, productId: cpu.id, productName: cpu.name, category: "显卡" as const},
+    {...seed.inventory[0]!, id: `${prefix}-missing`, productId: `${prefix}-missing-product`, productName: `${prefix} 缺少档案`, category: undefined},
+    {...seed.inventory[0]!, id: `${prefix}-foreign-link`, productId: `${prefix}-foreign-product`, productName: `${prefix} 主板`, category: "主板" as const},
+  ].map(card => ({...card, status: "已入库" as const, sn: `${card.id}-SN`}));
+  try {
+    const login = await fetch(`${base}/api/auth/login`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({username: process.env.BACKEND_TEST_USERNAME, password: process.env.BACKEND_TEST_PASSWORD})});
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie")!.split(";", 1)[0]!;
+    const session = await login.json() as {data: {user: {tenantId: string; storeId: string}}};
+    const {tenantId, storeId} = session.data.user;
+    await saveStateRecords([{key: "products", items: [cpu]}, {key: "inventory", items: cards}], undefined, tenantId, storeId);
+    await saveStateRecords([{key: "products", items: [{...cpu, id: `${prefix}-foreign-product`}]}], undefined, `${tenantId}-other`, storeId);
+    const raw = () => withDatabaseTransaction(client => client.query<{id: string; data: unknown}>("SELECT id,data FROM gpu_inventory WHERE tenant_id=$1 AND store_id=$2 AND id=ANY($3::text[]) ORDER BY id", [tenantId, storeId, cards.map(card => card.id)]));
+    const before = (await raw()).rows;
+    for (const [category, id] of [["CPU", cards[0]!.id], ["其他配件", cards[1]!.id], ["主板", cards[2]!.id]]) {
+      const query = new URLSearchParams({keyword: prefix, category: category!, activeOnly: "true"});
+      const response = await fetch(`${base}/api/inventory/items?${query}`, {headers: {cookie}});
+      assert.equal(response.status, 200, await response.clone().text());
+      const page = await response.json() as {data: Array<{id: string; category: string}>; meta: {total: number}};
+      assert.equal(page.meta.total, 1);
+      assert.equal(page.data[0]?.id, id);
+      assert.equal(page.data[0]?.category, category);
+      const summary = await fetch(`${base}/api/inventory/summary?${query}`, {headers: {cookie}});
+      assert.equal(summary.status, 200);
+      assert.equal((await summary.json() as {data: Array<{category: string; totalCount: number}>}).data[0]?.category, category);
+      const riskQuery = new URLSearchParams({keyword: prefix, category: category!});
+      const risk = await fetch(`${base}/api/inventory/market-risk?${riskQuery}`, {headers: {cookie}});
+      assert.equal(risk.status, 200);
+      const riskPage = await risk.json() as {data: {data: Array<{inventoryId: string}>; meta: {total: number}}};
+      assert.equal(riskPage.data.meta.total, 1);
+      assert.equal(riskPage.data.data[0]?.inventoryId, id);
+    }
+    const journey = await fetch(`${base}/api/inventory/items/${encodeURIComponent(cards[0]!.id)}/journey`, {headers: {cookie}});
+    assert.equal(journey.status, 200);
+    assert.equal((await journey.json() as {data: {card: {category: string}}}).data.card.category, "CPU");
+    const json = execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "server/inventoryCategoryAuditCli.ts", "--read-only"], {encoding: "utf8", env: process.env});
+    const audit = JSON.parse(json) as {readOnly: boolean; reports: Array<{scope: [string, string]; differences: Array<{inventoryId: string; displayedCategory: string; needsManualReview: boolean}>}>};
+    assert.equal(audit.readOnly, true);
+    const scopedReport = audit.reports.find(report => report.scope[0] === tenantId && report.scope[1] === storeId)!;
+    assert.equal(scopedReport.differences.find(row => row.inventoryId === cards[0]!.id)?.displayedCategory, "CPU");
+    assert.equal(scopedReport.differences.find(row => row.inventoryId === cards[2]!.id)?.needsManualReview, true);
+    assert.deepEqual((await raw()).rows, before);
+  } finally {
+    await withDatabaseTransaction(async client => {
+      await client.query("DELETE FROM gpu_inventory WHERE id=ANY($1::text[])", [cards.map(card => card.id)]);
+      await client.query("DELETE FROM gpu_products WHERE id=ANY($1::text[])", [[cpu.id, `${prefix}-foreign-product`]]);
+    });
+    await closeServer(server);
+  }
+});
 
 test("brand catalog persists scoped aliases and metadata-only bindings with permissions and idempotency", {skip: !integrationEnabled}, async () => {
   const {createApp} = await import("./app.ts");

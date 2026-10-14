@@ -3,6 +3,7 @@ import {isInventoryLinkedToAssembly, isInventoryLinkedToPurchase, isInventoryLin
 import {storeDateDiffDays, storeDateTime} from "../src/utils/storeTime.ts";
 import {isPersonalPurchaseSource} from "../src/utils/purchaseSources.ts";
 import type {AppState} from "./store.ts";
+import {resolveInventoryCategory} from "./inventoryCategoryRead.ts";
 
 export interface InventoryJourneyPermissions {
   showCost: boolean;
@@ -292,6 +293,7 @@ export function buildInventoryJourney(
 
   const responseCard = omitUndefined({
     ...card,
+    category: resolveInventoryCategory(card, state.products.find(product => product.id === card.productId)),
     storageDays: storeDateDiffDays(card.entryTime),
     costPrice: permissions.showCost ? card.costPrice : undefined,
     salesPrice: card.salesPrice,

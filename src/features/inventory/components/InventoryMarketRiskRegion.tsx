@@ -4,13 +4,14 @@ import {Button} from "@/src/components/ui";
 import {formatCurrency} from "@/src/lib/format";
 import type {InventoryMarketRiskSnapshot} from "@/src/types/inventory";
 
-export function InventoryMarketRiskRegion({data, loading, error, onRetry, phone, onExit, page, pageSize, onPageChange}: {
+export function InventoryMarketRiskRegion({data, loading, error, onRetry, phone, onExit, onOpenInventory, page, pageSize, onPageChange}: {
   data?: InventoryMarketRiskSnapshot;
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
   phone: boolean;
   onExit: () => void;
+  onOpenInventory?: (id: string) => void;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
@@ -29,7 +30,7 @@ export function InventoryMarketRiskRegion({data, loading, error, onRetry, phone,
     </div>
     {rows.length === 0 ? <ErpEmptyState title="当前筛选下没有在库卡" description="调整筛选条件，或回到单卡 / SN 视图查看完整库存。" /> : phone ? <div className="divide-y divide-[var(--erp-color-border)] overflow-hidden rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)]">
       {rows.map((row) => <article key={row.inventoryId} className="space-y-3 p-4">
-        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-[var(--erp-color-text)]">{row.productName}</p><p className="mt-1 truncate font-mono text-xs text-[var(--erp-color-text-muted)]">{row.serialNumber}</p></div>{row.floatingLoss > 0 ? <ErpStatusBadge label="行情低于成本" tone="danger" /> : <ErpStatusBadge label={row.marketKnown ? "行情正常" : "缺少行情"} tone={row.marketKnown ? "neutral" : "warning"} />}</div>
+        <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1">{onOpenInventory ? <Button type="button" variant="ghost" className="h-auto min-h-9 w-full justify-start whitespace-normal break-words p-0 text-left text-sm font-semibold text-[var(--erp-color-text)]" aria-label={`查看 ${row.productName} 库存详情`} onClick={() => onOpenInventory(row.inventoryId)}>{row.productName}</Button> : <p className="break-words text-sm font-semibold text-[var(--erp-color-text)]">{row.productName}</p>}<p className="mt-1 select-text break-all font-mono text-xs text-[var(--erp-color-text-muted)]">{row.serialNumber || "待录入 SN"}</p></div>{row.floatingLoss > 0 ? <ErpStatusBadge label="行情低于成本" tone="danger" /> : <ErpStatusBadge label={row.marketKnown ? "行情正常" : "缺少行情"} tone={row.marketKnown ? "neutral" : "warning"} />}</div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs"><RiskFact label="库位" value={row.warehouseLocation} /><RiskFact label="库龄" value={`${row.inventoryDays} 天`} icon={<CalendarClock className="h-3 w-3" />} /><RiskFact label="成本" value={formatCurrency(row.costPrice)} /><RiskFact label="行情" value={row.marketKnown ? formatCurrency(row.marketPrice) : "未录入"} /><RiskFact label="浮亏" value={row.floatingLoss > 0 ? formatCurrency(row.floatingLoss) : "—"} loss={row.floatingLoss > 0} /></div>
       </article>)}
     </div> : <div className="overflow-x-auto rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)]">

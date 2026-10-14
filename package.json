@@ -22,6 +22,7 @@
     "crm:migrate:apply": "tsx server/crmMigrationCli.ts --apply",
     "return-finance:audit": "tsx server/returnFinanceMigrationCli.ts",
     "finance:audit:read-only": "tsx server/financeAuditCli.ts --read-only",
+    "inventory:categories:audit": "tsx server/inventoryCategoryAuditCli.ts --read-only",
     "accounting:backfill": "node scripts/backfill-accounting-control-plane.mjs",
     "preview": "vite preview --host=0.0.0.0 --port=3010",
     "typecheck": "tsc --noEmit -p tsconfig.frontend.json",

@@ -137,7 +137,9 @@ test("inventory keyword search matches a compact brand and model without losing 
   assert.ok(query.values.includes("4090"));
   assert.match(query.where, /tenant_id = \$1/);
   assert.match(query.where, /store_id = \$2/);
-  assert.match(query.where, /op_category = \$3/);
+  assert.match(query.where, /p\.tenant_id = gpu_inventory\.tenant_id/);
+  assert.match(query.where, /p\.store_id = gpu_inventory\.store_id/);
+  assert.match(query.where, /'其他配件'\) = \$3/);
   assert.match(query.where, /CASE WHEN.*model/);
   assert.equal(query.offset, 10);
 

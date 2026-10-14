@@ -235,12 +235,12 @@ export function getReloadKeysForRequest(method: string, path: string): StateColl
   // into the process cache before executing their indexed, server-side paginated query.
   if (method.toUpperCase() === "GET" && path === "/api/gpu_erp/crm/quick-capture/leads") return [];
   if (method.toUpperCase() === "GET" && path === "/api/inventory/items") return [];
-  if (method.toUpperCase() === "GET" && path === "/api/inventory/market-risk") return ["inventory"];
+  if (method.toUpperCase() === "GET" && path === "/api/inventory/market-risk") return ["inventory", "products"];
   if (method.toUpperCase() === "GET" && path === "/api/inventory/stocktakes/reference") return ["inventory"];
   if (method.toUpperCase() === "GET" && path === "/api/inventory/stocktakes") return ["inventoryStocktakes"];
   if (method.toUpperCase() === "POST" && path === "/api/inventory/stocktakes") return ["inventory", "inventoryStocktakes"];
   if (method.toUpperCase() === "GET" && /^\/api\/inventory\/items\/[^/]+\/journey$/.test(path)) {
-    return ["inventory", "inspections", "purchaseInvoices", "salesInvoices", "paymentInRecords", "paymentOutRecords", "returnOrders", "aftersales", "assemblyOperations"];
+    return ["inventory", "products", "inspections", "purchaseInvoices", "salesInvoices", "paymentInRecords", "paymentOutRecords", "returnOrders", "aftersales", "assemblyOperations"];
   }
   if (method.toUpperCase() === "GET" && path === "/api/open/inventory/items") return [];
   if (method.toUpperCase() === "GET" && path === "/api/logs") return [];

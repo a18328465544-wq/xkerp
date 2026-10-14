@@ -21,6 +21,7 @@ import {gpuSnBrandIdFromName, parseGpuSnDate} from "./gpuSnDate.ts";
 import {currentProductBrandCatalog} from "./productBrandCatalog.ts";
 import {resolveProductBrand} from "../src/utils/productBrandCatalog.ts";
 import {createInventoryStocktake as createStocktakeRecord} from "./storeInventoryStocktakes.ts";
+import {projectInventoryCategories} from "./inventoryCategoryRead.ts";
 
 export type InventoryOperationsState = {
   productBrands?: import("../src/types/productBrand").ProductBrandRecord[];
@@ -103,11 +104,11 @@ export function createInventoryOperationHelpers(dependencies: InventoryOperation
     const rows = new Map<string, InventorySummaryRow>();
     const brands = currentProductBrandCatalog(state);
     const productsById = new Map(state.products.map(product => [product.id, product]));
-    state.inventory
+    projectInventoryCategories(state.inventory, state.products)
       .map(card => ({...card, brand: resolveProductBrand(productsById.get(card.productId)?.brandId || card.brand, brands)?.name || card.brand}))
       .filter((card) => matchesInventoryListFilters(card, summaryFilters, getStoreDate(), brands))
       .forEach((card) => {
-        const category = (card.category || "显卡") as ProductCategory;
+        const category = card.category;
         // Sales candidates must use the same canonical product identity as
         // reservation/creation. The normal inventory screen keeps its legacy
         // display-field grouping, but the sellable-only read model cannot merge

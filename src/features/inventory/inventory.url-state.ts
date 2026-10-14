@@ -18,7 +18,7 @@ export function parseInventoryUrlState(search: string): InventoryUrlState {
   const view: InventoryView = rawView === "models" ? "models" : rawView === "market-risk" ? "market-risk" : "cards";
   return {
     filters: parseInventoryFilters(search),
-    detailId: view === "cards" ? params.get("detail") : null,
+    detailId: view !== "models" ? params.get("detail") : null,
     view,
   };
 }
@@ -27,7 +27,7 @@ export function serializeInventoryUrlState(state: InventoryUrlState) {
   const params = inventoryFiltersToSearch(state.filters);
   // Keep the invariant on writes as well as reads, so a stale in-memory state
   // can never recreate `view=models&detail=...` after a filter update.
-  if (state.view === "cards" && state.detailId) params.set("detail", state.detailId);
+  if (state.view !== "models" && state.detailId) params.set("detail", state.detailId);
   if (state.view !== "cards") params.set("view", state.view);
   return params;
 }
