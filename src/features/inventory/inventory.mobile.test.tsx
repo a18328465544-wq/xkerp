@@ -96,7 +96,7 @@ test("inventory grid resets the shared flex amount cap to prevent overlap with m
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
   assert.match(css, /\.erp-inventory-directory \.erp-phone-record-end \{[^}]+grid-template-columns: max-content[^}]+width: max-content; max-width: none;/);
   assert.match(css, /\.erp-inventory-phone-sn-value \{[^}]*overflow-wrap: anywhere/);
-  assert.match(css, /\.erp-inventory-phone-sn, \.erp-inventory-phone-location \{[^}]*grid-template-columns: var\(--erp-space-10\) minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.erp-inventory-phone-sn, \.erp-inventory-phone-location \{[^}]*grid-template-columns: var\(--erp-mobile-touch-size\) minmax\(0, 1fr\) auto/);
   assert.match(css, /\.erp-inventory-phone-filters label > \.sr-only \{[^}]+clip-path: none;/);
   assert.match(css, /inventory"\] \[data-erp-component="detail-fact"\] \{ display: grid; grid-template-columns: minmax\(0, 2fr\) minmax\(0, 3fr\)/);
 });

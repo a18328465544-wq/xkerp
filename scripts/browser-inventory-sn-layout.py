@@ -62,6 +62,20 @@ with sync_playwright() as playwright:
                 sn = record.locator('.erp-inventory-phone-sn')
                 location = record.locator('.erp-inventory-phone-location')
                 expect(record.locator('.erp-phone-record-title')).to_have_text(row["productName"])
+                image_box = record.locator('.erp-phone-record-image').bounding_box()
+                heading_box = record.locator('.erp-phone-record-heading').bounding_box()
+                sn_box = record.locator('.erp-inventory-phone-sn-value').bounding_box()
+                location_box = record.locator('.erp-inventory-phone-location-value').bounding_box()
+                assert abs(image_box["y"] - heading_box["y"]) <= 1
+                assert abs(sn_box["x"] - heading_box["x"]) <= 1
+                assert abs(location_box["x"] - heading_box["x"]) <= 1
+                end_box = record.locator('.erp-phone-record-end').bounding_box()
+                if record.get_attribute("data-price-layout") == "inline":
+                    assert abs(end_box["y"] - heading_box["y"]) <= 1
+                if row["sn"]:
+                    arrow_box = record.locator('.erp-phone-record-end > svg').bounding_box()
+                    copy_box = record.get_by_role("button", name=f"复制 SN {row['sn']}", exact=True).locator('svg').bounding_box()
+                    assert abs(arrow_box["x"] + arrow_box["width"] - copy_box["x"] - copy_box["width"]) <= 1
                 assert header.bounding_box()["y"] + header.bounding_box()["height"] <= facts.bounding_box()["y"] + 1
                 assert sn.bounding_box()["y"] + sn.bounding_box()["height"] <= location.bounding_box()["y"] + 1
                 assert sn.bounding_box()["height"] >= 44

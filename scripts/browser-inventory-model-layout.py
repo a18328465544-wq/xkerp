@@ -47,7 +47,13 @@ with sync_playwright() as playwright:
                 assert action.bounding_box()["height"] >= 44
                 assert ledger.bounding_box()["height"] >= 44
                 assert abs(action.bounding_box()["y"] - ledger.bounding_box()["y"]) <= 1
-                assert action.bounding_box()["x"] < category.bounding_box()["x"]
+                # One content axis for identity, quantity, location and actions.
+                title_box = row.locator('.erp-inventory-model-phone-title').bounding_box()
+                image_box = row.locator('.erp-inventory-model-phone-thumbnail').bounding_box()
+                assert abs(action.bounding_box()["x"] - title_box["x"]) <= 1
+                assert abs(category.bounding_box()["x"] - title_box["x"]) <= 1
+                assert abs(counts.bounding_box()["x"] - title_box["x"]) <= 1
+                assert abs(image_box["y"] - title_box["y"]) <= 1
                 assert row.locator('.erp-inventory-model-phone-actions').evaluate("e => { const s = getComputedStyle(e); return s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.borderRadius === '0px' && s.boxShadow === 'none' && s.borderTopWidth === '1px'; }")
                 value = counts.locator('.erp-inventory-model-phone-quantity-value').first
                 assert value.evaluate("e => getComputedStyle(e).fontSize") == "13px"
