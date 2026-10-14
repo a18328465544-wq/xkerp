@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {defaultInventoryFilters} from "./inventory.filters";
-import {applyInventorySheetFilters, inventoryFilterSourceOptions, inventoryFilterSourceQuery, inventorySheetSelectOptions, resetInventorySheetFilters} from "./inventory.filter-sheet";
+import {applyInventorySheetFilters, applyInventorySheetView, inventoryFilterSourceOptions, inventoryFilterSourceQuery, inventorySheetSelectOptions, resetInventorySheetFilters} from "./inventory.filter-sheet";
 import type {InventoryListItem} from "@/src/types/inventory";
 
 test("reset clears visible and deep-linked filters without losing search, sort or page size", () => {
@@ -24,6 +24,26 @@ test("applying a draft preserves the latest search and preferences, canonicalize
   assert.equal(result.inspectionStatus, "");
   assert.equal(result.includeSold, true);
   assert.equal(draft.inspectionStatus, "已售出");
+});
+
+test("choosing the mobile market-risk view commits draft filters and view together", () => {
+  const draft = {...defaultInventoryFilters, category: "显卡" as const, brand: "技嘉", risk: "upturned" as const, page: 3};
+  const current = {...defaultInventoryFilters, keyword: "5090", pageSize: 50, sortKey: "cost" as const, sortDirection: "asc" as const};
+  const selected = applyInventorySheetView(draft, current, "market-risk");
+  assert.equal(selected.view, "market-risk");
+  assert.equal(selected.filters.keyword, "5090");
+  assert.equal(selected.filters.category, "显卡");
+  assert.equal(selected.filters.brand, "技嘉");
+  assert.equal(selected.filters.risk, "upturned");
+  assert.equal(selected.filters.page, 1);
+  assert.equal(selected.filters.pageSize, 50);
+  assert.equal(selected.filters.sortKey, "cost");
+  assert.equal(selected.filters.sortDirection, "asc");
+
+  const returned = applyInventorySheetView(selected.filters, selected.filters, "cards");
+  assert.equal(returned.view, "cards");
+  assert.equal(returned.filters.brand, "技嘉");
+  assert.equal(returned.filters.risk, "upturned");
 });
 
 test("mobile option copy reuses canonical choices and values", () => {

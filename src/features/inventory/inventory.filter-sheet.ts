@@ -1,5 +1,5 @@
 import {defaultInventoryFilters} from "./inventory.filters";
-import type {InventoryFilters, InventoryListItem} from "@/src/types/inventory";
+import type {InventoryFilters, InventoryListItem, InventoryView} from "@/src/types/inventory";
 import type {ErpFilterField} from "@/src/components/common/filters/ErpFilterFields";
 
 export type InventoryFilterSource = "brand" | "supplierName" | "warehouseLocation";
@@ -11,6 +11,11 @@ export function resetInventorySheetFilters(current: InventoryFilters): Inventory
 export function applyInventorySheetFilters(draft: InventoryFilters, current: InventoryFilters): InventoryFilters {
   const status = draft.status || draft.inspectionStatus;
   return {...draft, keyword: current.keyword, sortKey: current.sortKey, sortDirection: current.sortDirection, pageSize: current.pageSize, status, inspectionStatus: "", includeSold: draft.includeSold || status === "已售出", page: 1};
+}
+
+/** Apply pending filter edits and a mobile view choice as one URL-state update. */
+export function applyInventorySheetView(draft: InventoryFilters, current: InventoryFilters, view: InventoryView) {
+  return {filters: applyInventorySheetFilters(draft, current), view};
 }
 
 /** Reuse the current page's canonical options; only the phone's empty-value copy differs. */

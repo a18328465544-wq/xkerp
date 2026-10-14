@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {useQuery} from "@tanstack/react-query";
-import {CircleCheck, RotateCcw} from "lucide-react";
+import {ChevronRight, CircleCheck, RotateCcw} from "lucide-react";
 import {Button, Select, type SelectOption} from "@/src/components/ui";
 import {ErpDialogShell, ErpSegmentedControl, type ErpFilterField} from "@/src/components/common";
 import {ErpFilterChoiceRow} from "@/src/components/common/filters/ErpFilterChoiceRow";
@@ -8,18 +8,21 @@ import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 import {useWorkspaceTabActivity} from "@/src/hooks/useWorkspaceTabRuntime";
 import {inventoryApi, queryKeys} from "@/src/services/api";
 import {useProductBrandCatalog} from "@/src/hooks/useProductBrandCatalog";
-import type {InventoryFilters} from "@/src/types/inventory";
-import {applyInventorySheetFilters, inventoryFilterSourceOptions, inventoryFilterSourceQuery, inventorySheetSelectOptions, resetInventorySheetFilters, type InventoryFilterSource} from "../inventory.filter-sheet";
+import type {InventoryFilters, InventoryView} from "@/src/types/inventory";
+import {applyInventorySheetFilters, applyInventorySheetView, inventoryFilterSourceOptions, inventoryFilterSourceQuery, inventorySheetSelectOptions, resetInventorySheetFilters, type InventoryFilterSource} from "../inventory.filter-sheet";
 
 const sourceLabels: Record<InventoryFilterSource, string> = {brand: "品牌", supplierName: "供应商", warehouseLocation: "仓库 / 库位"};
 const sourceAllLabels: Record<InventoryFilterSource, string> = {brand: "全部品牌", supplierName: "全部供应商", warehouseLocation: "全部库位"};
 
-export function InventoryFilterSheet({open, onOpenChange, filters, fields, onApply}: {
+export function InventoryFilterSheet({open, onOpenChange, filters, fields, view, showMarketRisk, onApply, onApplyView}: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   filters: InventoryFilters;
   fields: readonly ErpFilterField[];
+  view: InventoryView;
+  showMarketRisk: boolean;
   onApply: (filters: InventoryFilters) => void;
+  onApplyView: (filters: InventoryFilters, view: InventoryView) => void;
 }) {
   const [draft, setDraft] = useState<InventoryFilters>(() => ({...filters}));
   const [source, setSource] = useState<InventoryFilterSource | null>(null);
@@ -36,6 +39,12 @@ export function InventoryFilterSheet({open, onOpenChange, filters, fields, onApp
   const sourceFilters = useMemo(() => inventoryFilterSourceQuery(source ?? "brand", debouncedSearch), [source, debouncedSearch]);
   const suggestions = useQuery({queryKey: queryKeys.inventory.filterOptions(sourceFilters), queryFn: ({signal}) => inventoryApi.list(sourceFilters, {showCost: false, showProfit: false}, signal), enabled: open && active && Boolean(source) && source !== "brand", staleTime: 60_000, retry: false});
   const change = (patch: Partial<InventoryFilters>) => setDraft((previous) => ({...previous, ...patch}));
+  const toggleMarketRiskView = () => {
+    const nextView: InventoryView = view === "market-risk" ? "cards" : "market-risk";
+    const nextState = applyInventorySheetView(draft, filters, nextView);
+    onApplyView(nextState.filters, nextState.view);
+    onOpenChange(false);
+  };
   const sourceOptions: SelectOption[] = source === "brand" ? [{value: "", label: "全部品牌", description: brandCatalog.isError ? "暂时无法读取品牌，请稍后重试。" : undefined}, ...(brandCatalog.data?.brands || []).map(brand => ({value: brand.name, label: brand.name, searchText: [brand.name, ...brand.aliases].join(" ")}))] : source ? [{value: "", label: sourceAllLabels[source], description: suggestions.isError ? `暂时无法读取${sourceLabels[source]}选项，可按关键词筛选或返回后重试。` : undefined}, ...inventoryFilterSourceOptions(suggestions.data?.data ?? [], source, draft[source], search).map((value) => ({value, label: value}))] : [];
   if (source !== "brand" && search.trim() && !sourceOptions.some((option) => option.value === search.trim())) sourceOptions.push({value: search.trim(), label: `匹配“${search.trim()}”`, description: "按输入的关键词筛选"});
   const categoryOptions = inventorySheetSelectOptions(fields, "category", "全部分类");
@@ -48,6 +57,7 @@ export function InventoryFilterSheet({open, onOpenChange, filters, fields, onApp
         <div className="erp-inventory-filter-rows"><InventorySelectRow label="商品分类" value={draft.category} options={categoryOptions} onValueChange={(category) => change({category: category as InventoryFilters["category"]})} /><InventorySelectRow label="库存状态" value={draft.status} options={statusOptions} onValueChange={(status) => change({status, inspectionStatus: "", includeSold: status === "已售出" || draft.includeSold})} /></div>
       </FilterSection>
       <FilterSection title="细化范围"><div className="erp-inventory-filter-rows">{(["brand", "supplierName", "warehouseLocation"] as const).map((key) => <ErpFilterChoiceRow key={key} label={sourceLabels[key]} value={draft[key] || sourceAllLabels[key]} onClick={() => {setSearch(""); setSource(key);}} />)}</div></FilterSection>
+      {showMarketRisk && <FilterSection title="风险视图"><div className="erp-inventory-filter-rows"><Button type="button" variant="ghost" className="erp-filter-choice-row" aria-label={view === "market-risk" ? "退出行情风险清单，返回库存" : "打开行情风险清单，查看浮亏与降价排行"} onClick={toggleMarketRiskView}><span className="erp-filter-choice-label">行情风险</span><span className="erp-filter-choice-value">{view === "market-risk" ? "已开启 · 点按返回库存" : "浮亏与降价清单"}</span><ChevronRight className="h-4 w-4" aria-hidden="true" /></Button></div></FilterSection>}
       <FilterSection title="更多条件"><InventorySelectRow label="风险" value={draft.risk} options={riskOptions} downArrow onValueChange={(risk) => change({risk: risk as InventoryFilters["risk"]})} /></FilterSection>
     </div>
     {source && <Select key={source} searchable hidePhoneTrigger phoneOpenRequest={1} phoneDialogTitle={`选择${sourceLabels[source]}`} aria-label={`选择${sourceLabels[source]}`} searchPlaceholder={`搜索${sourceLabels[source]}`} value={draft[source]} selectedOption={{value: draft[source], label: draft[source] || sourceAllLabels[source]}} options={sourceOptions} shouldFilter={source === "brand"} searchLoading={source === "brand" ? brandCatalog.isLoading : debouncedSearch !== search || suggestions.isPending} onSearchValueChange={setSearch} onValueChange={(value) => change({[source]: value})} onPhoneOpenChange={(next) => {if (!next) {setSource(null); setSearch("");}}} />}

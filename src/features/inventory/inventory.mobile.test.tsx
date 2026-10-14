@@ -3,6 +3,7 @@ import {readFileSync} from "node:fs";
 import test from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {InventoryMobileRecord} from "./components/InventoryMobileRecord";
+import {InventoryMarketRiskRegion} from "./components/InventoryMarketRiskRegion";
 import {InventoryModelMobileRecord} from "./components/InventoryModelMobileRecord";
 import type {InventoryListItem, InventoryModelSummary} from "@/src/types/inventory";
 
@@ -47,12 +48,40 @@ test("inventory phone header leaves categories above the view-and-sort row and s
   assert.match(source, /aria-label="更多页面操作"[^\n]+setActionsOpen\(true\)/);
   assert.match(source, /setActionsOpen\(false\); setStatsOpen\(true\);[^\n]+库存统计/);
   const toolbar = source.slice(source.indexOf("function InventoryPhoneToolbar"), source.indexOf("function InventoryViewSwitcher"));
-  assert.match(toolbar, /InventoryViewSwitcher view=\{view\} onChange=\{onChangeView\}/);
+  assert.match(toolbar, /InventoryViewSwitcher view=\{view\} onChange=\{onChangeView\} showMarketRisk=\{false\}/);
   assert.match(toolbar, /aria-label="库存排序" onClick=\{openSorting\}/);
   assert.doesNotMatch(toolbar, /库存统计|onStats/);
+  assert.match(source, /phoneFilterSheet=\{\(\{open, onOpenChange\}\) => <InventoryFilterSheet[^\n]+view=\{view\} showMarketRisk=\{canViewMarketRisk\}[^\n]+onApplyView=\{onApplyInventoryView\}/);
+  assert.match(source, /desktopHeaderActions=\{<div[^\n]+InventoryViewSwitcher view=\{view\} showMarketRisk=\{permissions\.showCost && permissions\.showProfit\}/);
+  assert.match(source, /view === "market-risk" \? <div className="mb-4 flex flex-col gap-2">[^\n]+返回单卡 \/ SN/);
   const css = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
   assert.match(css, /\.erp-inventory-phone-views \{[^}]*flex: 0 0 55%/);
   assert.match(css, /\.erp-inventory-phone-views > \[role="group"\] \{[^}]*height: calc\(var\(--erp-mobile-touch-size\) - var\(--erp-space-2\)\)/);
+});
+
+test("mobile market-risk view keeps its active state visible and offers an exit action", () => {
+  const source = readFileSync(new URL("./components/InventoryMarketRiskRegion.tsx", import.meta.url), "utf8");
+  assert.match(source, /phoneViewHeader = phone &&/);
+  assert.match(source, /role="status" aria-live="polite"[^\n]+行情风险降价清单/);
+  assert.match(source, /onClick=\{onExit\}[^\n]+返回库存/);
+  assert.match(source, /if \(error && !data\) return phone \?/);
+  assert.match(source, /if \(loading && !data\) return phone \?/);
+});
+
+test("market-risk context and return action are mobile-only while risk totals remain shared", () => {
+  const snapshot = {
+    data: [{inventoryId: "KC-RISK", productName: "华硕 RTX5090", serialNumber: "SN-RISK", warehouseLocation: "A区货架01", inventoryDays: 12, entryTime: "2026-10-02", costPrice: 50000, marketPrice: 48000, floatingLoss: 2000, marketKnown: true}],
+    meta: {page: 1, pageSize: 20, total: 1},
+    summary: {onHandCount: 1, marketKnownCount: 1, missingMarketCount: 0, totalMarketValue: 48000, floatingLoss: 2000, invertedCount: 1},
+  };
+  const phone = renderToStaticMarkup(<InventoryMarketRiskRegion data={snapshot} loading={false} error={null} onRetry={() => undefined} phone onExit={() => undefined} page={1} pageSize={20} onPageChange={() => undefined} />);
+  assert.match(phone, /行情风险降价清单/);
+  assert.match(phone, /返回库存/);
+  assert.match(phone, /按行情估算浮亏/);
+  assert.match(phone, /¥2,000/);
+  const desktop = renderToStaticMarkup(<InventoryMarketRiskRegion data={snapshot} loading={false} error={null} onRetry={() => undefined} phone={false} onExit={() => undefined} page={1} pageSize={20} onPageChange={() => undefined} />);
+  assert.doesNotMatch(desktop, /行情风险降价清单|返回库存/);
+  assert.match(desktop, /按行情估算浮亏/);
 });
 
 test("mobile-only selection and compact presentation do not rewrite saved desktop visibility", () => {

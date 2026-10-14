@@ -4,21 +4,23 @@ import {Button} from "@/src/components/ui";
 import {formatCurrency} from "@/src/lib/format";
 import type {InventoryMarketRiskSnapshot} from "@/src/types/inventory";
 
-export function InventoryMarketRiskRegion({data, loading, error, onRetry, phone, page, pageSize, onPageChange}: {
+export function InventoryMarketRiskRegion({data, loading, error, onRetry, phone, onExit, page, pageSize, onPageChange}: {
   data?: InventoryMarketRiskSnapshot;
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
   phone: boolean;
+  onExit: () => void;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
 }) {
-  if (error && !data) return <ErpPageError title="库存行情风险加载失败" description={error.message} onRetry={onRetry} />;
-  if (loading && !data) return <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-6 text-sm text-[var(--erp-color-text-muted)]">正在汇总库存行情与成本…</div>;
+  const phoneViewHeader = phone && <div className="flex items-center justify-between gap-3 border-b border-[var(--erp-color-border-soft)] pb-2"><p role="status" aria-live="polite" className="flex min-w-0 items-center gap-2 text-sm font-semibold text-[var(--erp-color-text)]"><TrendingDown className="h-4 w-4 shrink-0 text-[var(--erp-color-risk)]" /><span>行情风险降价清单</span></p><Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={onExit}><ChevronLeft className="h-4 w-4" />返回库存</Button></div>;
+  if (error && !data) return phone ? <div className="space-y-4">{phoneViewHeader}<ErpPageError title="库存行情风险加载失败" description={error.message} onRetry={onRetry} /></div> : <ErpPageError title="库存行情风险加载失败" description={error.message} onRetry={onRetry} />;
+  if (loading && !data) return phone ? <div className="space-y-4">{phoneViewHeader}<div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-6 text-sm text-[var(--erp-color-text-muted)]">正在汇总库存行情与成本…</div></div> : <div className="rounded-[var(--erp-radius-lg)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-6 text-sm text-[var(--erp-color-text-muted)]">正在汇总库存行情与成本…</div>;
   if (!data) return null;
   const {summary, data: rows} = data;
-  return <div className="space-y-4" data-erp-region="inventory-market-risk">
+  return <div className="space-y-4" data-erp-region="inventory-market-risk">{phoneViewHeader}
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <ErpMetricCard label="按行情估算浮亏" value={formatCurrency(summary.floatingLoss)} detail={`${summary.invertedCount} 张行情低于成本`} icon={<TrendingDown className="h-4 w-4" />} tone={summary.floatingLoss > 0 ? "warning" : "neutral"} valueTone={summary.floatingLoss > 0 ? "warning" : "neutral"} />
       <ErpMetricCard label="已知行情估值" value={formatCurrency(summary.totalMarketValue)} detail={`${summary.marketKnownCount} / ${summary.onHandCount} 张有行情`} icon={<CircleDollarSign className="h-4 w-4" />} />

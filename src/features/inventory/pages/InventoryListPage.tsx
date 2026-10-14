@@ -152,6 +152,7 @@ export function InventoryListPage() {
       onRefresh={() => { void Promise.all([listQuery.refetch(), modelSummaryQuery.refetch(), ...(view === "market-risk" ? [marketRiskQuery.refetch()] : [])]); }}
       view={view}
       onChangeView={commitView}
+      onApplyInventoryView={(nextFilters, nextView) => commitState({filters: nextFilters, detailId: null, view: nextView})}
       onOpenCards={openCardsForModel}
       onOpenLedger={openLedgerForModel}
       userId={session.user.id}
@@ -179,7 +180,7 @@ export function InventoryListPage() {
   </>;
 }
 
-function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQuery, searchPending, detailQuery, journeyQuery, detailId, onDetail, onCloseDetail, rows, permissions, onRefresh, view, onChangeView, onOpenCards, onOpenLedger, userId, ledgerOpen, marketRiskQuery}: {
+function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQuery, searchPending, detailQuery, journeyQuery, detailId, onDetail, onCloseDetail, rows, permissions, onRefresh, view, onChangeView, onApplyInventoryView, onOpenCards, onOpenLedger, userId, ledgerOpen, marketRiskQuery}: {
   filters: InventoryFilters;
   commitFilters: (filters: InventoryFilters) => void;
   listQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof inventoryApi.list>>>>;
@@ -195,6 +196,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   onRefresh: () => void;
   view: InventoryView;
   onChangeView: (view: InventoryView) => void;
+  onApplyInventoryView: (filters: InventoryFilters, view: InventoryView) => void;
   onOpenCards: (row: InventoryModelSummary) => void;
   onOpenLedger: (row: InventoryModelSummary) => void;
   userId: string;
@@ -330,8 +332,8 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     virtualized: rows.length >= 50,
   };
   const canViewMarketRisk = permissions.showCost && permissions.showProfit;
-  const modelTable = <InventoryModelTableRegion filters={filters} commitFilters={commitFilters} modelSummaryQuery={modelSummaryQuery} refreshing={!summaryReady} rows={summaryReady ? modelRows : []} pageRows={summaryReady ? modelPageRows : []} columns={modelColumns} columnVisibility={modelColumnVisibility} setColumnVisibility={setModelColumnVisibility} density={modelDensity} setDensity={setModelDensity} onOpenLedger={onOpenLedger} onOpenCards={onOpenCards} view={view} onChangeView={onChangeView} showMarketRisk={canViewMarketRisk} />;
-  const riskRegion = <InventoryMarketRiskRegion data={searchPending || marketRiskQuery.isPlaceholderData ? undefined : marketRiskQuery.data} loading={marketRiskQuery.isFetching || searchPending} error={marketRiskQuery.error as Error | null} onRetry={() => void marketRiskQuery.refetch()} phone={phone} page={filters.page} pageSize={filters.pageSize} onPageChange={(page) => commitFilters({...filters, page})} />;
+  const modelTable = <InventoryModelTableRegion filters={filters} commitFilters={commitFilters} modelSummaryQuery={modelSummaryQuery} refreshing={!summaryReady} rows={summaryReady ? modelRows : []} pageRows={summaryReady ? modelPageRows : []} columns={modelColumns} columnVisibility={modelColumnVisibility} setColumnVisibility={setModelColumnVisibility} density={modelDensity} setDensity={setModelDensity} onOpenLedger={onOpenLedger} onOpenCards={onOpenCards} view={view} onChangeView={onChangeView} />;
+  const riskRegion = <InventoryMarketRiskRegion data={searchPending || marketRiskQuery.isPlaceholderData ? undefined : marketRiskQuery.data} loading={marketRiskQuery.isFetching || searchPending} error={marketRiskQuery.error as Error | null} onRetry={() => void marketRiskQuery.refetch()} phone={phone} onExit={() => onChangeView("cards")} page={filters.page} pageSize={filters.pageSize} onPageChange={(page) => commitFilters({...filters, page})} />;
   const desktopTableContent = view === "models" ? modelTable : view === "market-risk" ? riskRegion : <>
     {selectedCount > 0 && <Card data-erp-region="inventory-selection-summary" className="flex flex-wrap items-center justify-between gap-3 border-[var(--erp-color-border-strong)] bg-[var(--erp-color-info-soft)] px-4 py-3"><span role="status" aria-live="polite" aria-atomic="true" className="text-sm font-semibold text-[var(--erp-color-primary)]">已选择 {selectedCount} 条库存</span><Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>清除选择</Button></Card>}
     <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Boxes className="h-4 w-4 text-[var(--erp-color-primary)]" />筛选结果 · {searchPending || listQuery.isPlaceholderData ? "更新中" : cardTotal + " 条"}</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={emptyInventoryVisibility} onVisibilityChange={setColumnVisibility} exclude={["select", "actions"]} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />
@@ -339,7 +341,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   </>;
   const phoneTableContent = view === "models" ? modelTable : view === "market-risk" ? riskRegion : <>
     {selectedCount > 0 && <div data-erp-region="inventory-phone-selection-bar" className="erp-phone-selection-bar md:hidden"><span role="status" className="text-sm font-semibold text-[var(--erp-color-primary)]">已选择 <strong>{selectedCount}</strong> 件</span><div className="flex items-center gap-1.5"><Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>清除</Button><Button size="sm" variant="primary" onClick={() => {setSelectionMode(false); setRowSelection({});}}>完成选择</Button></div></div>}
-    <ErpDataTable {...inventoryTable} mobileRow={inventoryTable.mobileRow} surface="plain" density={density} columnVisibility={{...columnVisibility, select: selectionMode}} onColumnVisibilityChange={setColumnVisibility} mobileToolbar={({openSorting, sortLabel, descending}) => <InventoryPhoneToolbar view={view} onChangeView={onChangeView} openSorting={openSorting} sortLabel={sortLabel} descending={descending} showMarketRisk={canViewMarketRisk} onFinishSelection={selectionMode ? () => {setSelectionMode(false); setRowSelection({});} : undefined} />} />
+    <ErpDataTable {...inventoryTable} mobileRow={inventoryTable.mobileRow} surface="plain" density={density} columnVisibility={{...columnVisibility, select: selectionMode}} onColumnVisibilityChange={setColumnVisibility} mobileToolbar={({openSorting, sortLabel, descending}) => <InventoryPhoneToolbar view={view} onChangeView={onChangeView} openSorting={openSorting} sortLabel={sortLabel} descending={descending} onFinishSelection={selectionMode ? () => {setSelectionMode(false); setRowSelection({});} : undefined} />} />
   </>;
   const overlays = <>
     <ErpDialogShell open={phone && actionsOpen} onOpenChange={setActionsOpen} title="库存作业" mobilePresentation="sheet">
@@ -352,7 +354,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
         <Button variant="secondary" className="w-full" disabled={listQuery.isFetching || modelSummaryQuery.isFetching} onClick={onRefresh}>刷新库存</Button>
       </div>
     </ErpDialogShell>
-    <ErpDialogShell open={phone && statsOpen} onOpenChange={setStatsOpen} title="库存视图与统计" mobilePresentation="sheet"><InventoryViewSwitcher view={view} showMarketRisk={permissions.showCost && permissions.showProfit} onChange={(next) => {onChangeView(next); setStatsOpen(false);}} /><div className="mt-4"><MetricsRegion>{inventoryMetrics}</MetricsRegion></div></ErpDialogShell>
+    <ErpDialogShell open={phone && statsOpen} onOpenChange={setStatsOpen} title="库存视图与统计" mobilePresentation="sheet">{view === "market-risk" ? <div className="mb-4 flex flex-col gap-2"><p className="text-sm text-[var(--erp-color-text-secondary)]">当前显示行情风险降价清单。</p><Button type="button" variant="secondary" onClick={() => {onChangeView("cards"); setStatsOpen(false);}}>返回单卡 / SN</Button></div> : <InventoryViewSwitcher view={view} showMarketRisk={false} onChange={(next) => {onChangeView(next); setStatsOpen(false);}} />}<div className="mt-4"><MetricsRegion>{inventoryMetrics}</MetricsRegion></div></ErpDialogShell>
     <ErpBarcodeScannerDialog open={phone && scanOpen} onOpenChange={setScanOpen} onDetected={(keyword) => updateFilter({keyword})} title="扫码搜索库存" description="扫描 SN 或库存编号，在当前筛选范围内查找商品；不会自动修改库存。" />
     <InventoryStocktakeDialog open={stocktakeOpen} onOpenChange={setStocktakeOpen} />
     <ErpDetailDrawer open={view === "cards" && Boolean(detailId)} onOpenChange={(open) => {if (!open) onCloseDetail();}} modal={false} resizable drawerKey="inventory-detail" defaultWidth={820} minWidth={640} maxWidth={1100} title={journeyQuery.data?.card.productName || detailQuery.data?.item?.productName || detailId || "库存详情"}>
@@ -376,7 +378,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
     metrics={inventoryMetrics}
     search={{value: filters.keyword, onChange: (keyword) => updateFilter({keyword}), label: "搜索库存", placeholder: "搜索 SN、商品、品牌、型号", phonePlaceholder: "搜索型号 / SN / 库存编号"}}
     filters={filterFields}
-    phoneFilterSheet={({open, onOpenChange}) => <InventoryFilterSheet open={open} onOpenChange={onOpenChange} filters={filters} fields={filterFields} onApply={commitFilters} />}
+    phoneFilterSheet={({open, onOpenChange}) => <InventoryFilterSheet open={open} onOpenChange={onOpenChange} filters={filters} fields={filterFields} view={view} showMarketRisk={canViewMarketRisk} onApply={commitFilters} onApplyView={onApplyInventoryView} />}
     onResetFilters={() => commitFilters(defaultInventoryFilters)}
     additionalActiveFilterCount={additionalActiveFilterCount}
     defaultSortLabel="入库时间"
@@ -396,7 +398,7 @@ function InventoryPageContent({filters, commitFilters, listQuery, modelSummaryQu
   />;
 }
 
-function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, refreshing, rows, pageRows, columns, columnVisibility, setColumnVisibility, density, setDensity, onOpenLedger, onOpenCards, view, onChangeView, showMarketRisk}: {
+function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, refreshing, rows, pageRows, columns, columnVisibility, setColumnVisibility, density, setDensity, onOpenLedger, onOpenCards, view, onChangeView}: {
   filters: InventoryFilters;
   commitFilters: (filters: InventoryFilters) => void;
   modelSummaryQuery: UseQueryResult<InventoryModelSummary[], Error>;
@@ -412,24 +414,23 @@ function InventoryModelTableRegion({filters, commitFilters, modelSummaryQuery, r
   onOpenCards: (row: InventoryModelSummary) => void;
   view: InventoryView;
   onChangeView: (view: InventoryView) => void;
-  showMarketRisk: boolean;
 }) {
   const phone = useErpPhone();
   return <>
     {!phone && <ErpTableResultsBar summary={<span className="flex items-center gap-2"><Boxes className="h-4 w-4 text-[var(--erp-color-primary)]" />型号汇总 · {rows.length} 个型号</span>} actions={<><ErpColumnVisibilityMenu columns={columns} visibility={columnVisibility} defaultVisibility={defaultModelVisibility} onVisibilityChange={setColumnVisibility} exclude={["select", "actions"]} /><div className="inline-flex rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface)] p-0.5"><Button type="button" size="sm" variant={density === "comfortable" ? "secondary" : "ghost"} onClick={() => setDensity("comfortable")}>舒适</Button><Button type="button" size="sm" variant={density === "compact" ? "secondary" : "ghost"} onClick={() => setDensity("compact")}>紧凑</Button></div></>} />}
-    <ErpDataTable surface={phone ? "plain" : "card"} mobilePagination="compact" mobileToolbar={({openSorting, sortLabel, descending}) => <InventoryPhoneToolbar view={view} onChangeView={onChangeView} openSorting={openSorting} sortLabel={sortLabel} descending={descending} showMarketRisk={showMarketRisk} />}
+    <ErpDataTable surface={phone ? "plain" : "card"} mobilePagination="compact" mobileToolbar={({openSorting, sortLabel, descending}) => <InventoryPhoneToolbar view={view} onChangeView={onChangeView} openSorting={openSorting} sortLabel={sortLabel} descending={descending} />}
       mobileRow={(row) => <InventoryModelMobileRecord row={row} onOpenLedger={onOpenLedger} onOpenCards={onOpenCards} />}
       ariaLabel="型号库存汇总" columns={columns} data={pageRows} getRowId={(row) => row.key} loading={refreshing && !modelSummaryQuery.isError} fetching={modelSummaryQuery.isFetching} error={modelSummaryQuery.error as Error | null} errorTitle="型号库存加载失败" emptyTitle="暂无型号库存" emptyDescription="当前筛选条件下没有可聚合的库存。" onRetry={() => void modelSummaryQuery.refetch()} onRowClick={onOpenLedger} mobileShowDetailAction={false} page={filters.page} pageSize={filters.pageSize} total={rows.length} onPageChange={(page) => commitFilters({...filters, page})} onPageSizeChange={(pageSize) => commitFilters({...filters, page: 1, pageSize})} columnVisibility={columnVisibility} onColumnVisibilityChange={setColumnVisibility} enableColumnResizing density={density} stickyHeader virtualized={pageRows.length >= 50} />
   </>;
 }
 
-function InventoryPhoneToolbar({view, onChangeView, openSorting, sortLabel, descending, onFinishSelection, showMarketRisk}: {view: InventoryView; onChangeView: (view: InventoryView) => void; openSorting: () => void; sortLabel: string; descending: boolean | undefined; onFinishSelection?: () => void; showMarketRisk: boolean}) {
+function InventoryPhoneToolbar({view, onChangeView, openSorting, sortLabel, descending, onFinishSelection}: {view: InventoryView; onChangeView: (view: InventoryView) => void; openSorting: () => void; sortLabel: string; descending: boolean | undefined; onFinishSelection?: () => void}) {
   return (
     <div className="erp-customer-list-toolbar erp-inventory-phone-toolbar">
       {onFinishSelection ? (
         <Button variant="ghost" size="sm" onClick={onFinishSelection}>完成选择</Button>
       ) : (
-        <div className="erp-inventory-phone-views"><InventoryViewSwitcher view={view} onChange={onChangeView} showMarketRisk={showMarketRisk} /></div>
+        <div className="erp-inventory-phone-views"><InventoryViewSwitcher view={view} onChange={onChangeView} showMarketRisk={false} /></div>
       )}
       <Button type="button" variant="ghost" className="erp-customer-sort" aria-label="库存排序" onClick={openSorting}>
         <span>{sortLabel || "入库时间"}</span>
