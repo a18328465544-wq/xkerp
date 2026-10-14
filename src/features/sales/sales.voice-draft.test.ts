@@ -38,6 +38,15 @@ test("sales voice confirmation appends a model-level draft, applies customer/pay
   assert.equal(result.subtotal, 19_000);
 });
 
+test("sales voice confirmation accepts a supplier and preserves the vendor identity and channel", () => {
+  const supplier: SalesCustomerOption = {id: "GY-1", name: "显卡同行", partnerType: "vendor", type: "上游供应商", contact: "李师傅", selectable: true};
+  const {calls} = runApply({customer: supplier, sales: {...sales, channel: undefined}});
+  assert.ok(calls.some(([field, value]) => field === "customerId" && value === "GY-1"));
+  assert.ok(calls.some(([field, value]) => field === "customerPartnerType" && value === "vendor"));
+  assert.ok(calls.some(([field, value]) => field === "customerName" && value === "显卡同行"));
+  assert.ok(calls.some(([field, value]) => field === "channel" && value === "同行网店"));
+});
+
 test("same product voice lines merge only when their price and terms agree", () => {
   const secondCard = {...inventory, id: "KC-2", serialNumber: "SN-RTX-3822"};
   const {result} = runApply({sales: {...sales, isPaid: false}, selections: [selection, {...selection, draft: {...selection.draft, quantity: 1}, inventory: secondCard}]});

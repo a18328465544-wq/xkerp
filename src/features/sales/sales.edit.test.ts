@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {createSalesCandidateFromLine, createSalesEditValues} from "./sales.edit";
+import {createSalesCandidateFromLine, createSalesEditValues, includeSelectedSalesPartner} from "./sales.edit";
 import type {SalesListItem} from "@/src/types/sales";
 
 const base: SalesListItem = {
@@ -22,6 +22,13 @@ test("seeded sales candidate keeps model identity without a physical inventory b
   assert.equal(candidate.availableQuantity, 2);
   assert.equal(candidate.availabilityKnown, false);
   assert.equal(candidate.saleable, true);
+});
+
+test("sales edit picker keeps same-id customer and supplier records distinct", () => {
+  const customer = {id: "PARTNER-1", name: "同名主体", contact: "138", partnerType: "customer" as const, selectable: true};
+  const vendor = {id: "PARTNER-1", name: "同名主体", contact: "138", partnerType: "vendor" as const, selectable: true};
+  const options = includeSelectedSalesPartner(customer, [vendor, customer]);
+  assert.deepEqual(options.map((option) => option.partnerType), ["customer", "vendor"]);
 });
 
 test("sales edit recombines persisted unbound physical rows into one model quantity", () => {

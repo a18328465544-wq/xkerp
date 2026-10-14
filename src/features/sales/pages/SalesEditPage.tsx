@@ -16,7 +16,7 @@ import {formatCurrency} from "@/src/lib/format";
 import type {PaymentEntryFeedback} from "@/src/lib/paymentEntry";
 import {useDebouncedValue} from "@/src/hooks/useDebouncedValue";
 import {useWorkspaceTabActivity, useWorkspaceTabBlocker, useWorkspaceTabDirty} from "@/src/hooks/useWorkspaceTabRuntime";
-import {createSalesCandidateFromLine, createSalesCustomerOption, createSalesEditValues} from "../sales.edit";
+import {createSalesCandidateFromLine, createSalesCustomerOption, createSalesEditValues, includeSelectedSalesPartner} from "../sales.edit";
 import {deriveSalesEditPolicy, type SalesEditPolicy} from "../sales.edit-policy";
 import {calculateSalesAmounts} from "../sales.calculations";
 import {salesFieldErrors, salesFormValidationMessage, salesSubmitErrorMessage} from "../sales.errors";
@@ -114,8 +114,7 @@ function SalesEditForm({item, policy, session, onAuthExpired}: {item: SalesListI
   const customerError = customerQuery.error ? errorText(customerQuery.error) : undefined;
   const inventoryError = inventoryQuery.error ? errorText(inventoryQuery.error) : undefined;
   const customerOptions = useMemo(() => {
-    const selected = selectedCustomer ? [selectedCustomer] : [];
-    return [...selected, ...(customerQuery.data || []).filter((option) => option.id !== selectedCustomer?.id)];
+    return includeSelectedSalesPartner(selectedCustomer, customerQuery.data || []);
   }, [customerQuery.data, selectedCustomer]);
   const selectCustomer = (option: NonNullable<typeof selectedCustomer>) => {
     if (!option.selectable) return;
@@ -124,12 +123,15 @@ function SalesEditForm({item, policy, session, onAuthExpired}: {item: SalesListI
     setValue("customerPartnerType", option.partnerType, {shouldDirty: true, shouldValidate: true});
     setValue("customerName", option.name, {shouldDirty: true, shouldValidate: true});
     setValue("contact", option.contact, {shouldDirty: true, shouldValidate: true});
+    const inferredChannel = option.partnerType === "vendor" ? "同行网店" : salesChannelValues.find((channel) => channel === option.source);
+    if (inferredChannel) setValue("channel", inferredChannel, {shouldDirty: true, shouldValidate: true});
     clearErrors(["customerId", "customerName"]);
   };
   const clearCustomer = () => {
     setSelectedCustomer(null);
     setCustomerKeyword("");
     setValue("customerId", "", {shouldDirty: true, shouldValidate: true});
+    setValue("customerPartnerType", "customer", {shouldDirty: true, shouldValidate: true});
     setValue("customerName", "", {shouldDirty: true, shouldValidate: true});
     setValue("contact", "", {shouldDirty: true, shouldValidate: true});
   };
@@ -218,7 +220,7 @@ function SalesEditForm({item, policy, session, onAuthExpired}: {item: SalesListI
             <Card><CardContent><div className="grid items-start gap-4 md:grid-cols-12">
               <div className="md:col-span-3"><p className="text-sm font-semibold">单据编号</p><div className="mt-2 flex min-h-10 items-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 py-2 break-all erp-data-number text-xs font-semibold">{item.invoiceNo}</div></div>
               <div className="md:col-span-3"><p className="text-sm font-semibold">销售日期</p>{fullMode ? <Controller control={control} name="date" render={({field}) => <ErpDatePicker className="mt-2" value={field.value} onChange={field.onChange} disabled={mutation.isPending} aria-label="销售日期" />} /> : <div className="mt-2 flex h-10 items-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 text-sm">{item.date}</div>}</div>
-              <div className="min-w-0 md:col-span-6">{fullMode ? <label className="block text-sm font-semibold">客户档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isFetching} error={customerError} disabled={mutation.isPending} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户" candidateLabel="客户候选" entityLabel="客户" onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={selectCustomer} onClear={clearCustomer} /></div></label> : <><p className="text-sm font-semibold">客户档案</p><div className="mt-2 flex h-10 items-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 text-sm font-semibold">{item.customerName || "未关联"}</div></>}</div>
+              <div className="min-w-0 md:col-span-6">{fullMode ? <label className="block text-sm font-semibold">客户 / 供应商档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isFetching} error={customerError} disabled={mutation.isPending} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户或供应商" candidateLabel="销售客户或供应商候选" entityLabel="客户或供应商" onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={selectCustomer} onClear={clearCustomer} /></div></label> : <><p className="text-sm font-semibold">客户 / 供应商档案</p><div className="mt-2 flex h-10 items-center rounded-[var(--erp-radius-md)] bg-[var(--erp-color-surface-muted)] px-3 text-sm font-semibold">{item.customerName || "未关联"}</div></>}</div>
               <label className="block text-sm font-semibold md:col-span-12">物流快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" maxLength={160} disabled={mutation.isPending} placeholder="可补充或清空快递单号" /></label>
               {fullMode && <div className="md:col-span-12"><p className="text-sm font-semibold">销售渠道</p><Controller control={control} name="channel" render={({field}) => <Select className="mt-2 w-full md:max-w-xs" value={field.value} options={channelOptions} onValueChange={field.onChange} aria-label="销售渠道" disabled={mutation.isPending} />} /></div>}
               {fullMode && <label className="block text-sm font-semibold md:col-span-9">整单售后条款<Input {...register("aftersalesTerms")} className="mt-2" maxLength={100} disabled={mutation.isPending} placeholder="例如：店保三个月、保到手好" /></label>}

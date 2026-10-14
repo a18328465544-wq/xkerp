@@ -10,6 +10,20 @@ test("sales customer search reads the canonical customer archive with tenant sco
   assert.deepEqual(query.values, ["tenant-a", "%张三%"]);
   assert.match(query.where, /tenant_id = \$1/);
   assert.match(query.where, /data->>'name'/);
+  assert.match(query.vendorWhere, /tenant_id = \$1/);
+  assert.match(query.vendorWhere, /data->>'contactPerson'/);
+});
+
+test("sales partner search scopes suppliers to the active store and searches supplier identity fields", () => {
+  const query = buildSalesCustomerPageQuery({tenantId: "tenant-a", storeId: "store-a", keyword: "李师傅", page: 2, pageSize: 20});
+  assert.deepEqual(query.values, ["tenant-a", "store-a", "%李师傅%"]);
+  assert.match(query.customerWhere, /tenant_id = \$1/);
+  assert.doesNotMatch(query.customerWhere, /store_id/);
+  assert.match(query.vendorWhere, /tenant_id = \$1/);
+  assert.match(query.vendorWhere, /store_id = \$2/);
+  assert.match(query.vendorWhere, /data->>'contactPerson'/);
+  assert.match(query.vendorWhere, /data->>'type'/);
+  assert.match(query.vendorWhere, /ILIKE \$3/);
 });
 
 test("sales customer search caps a picker request to 200 records", () => {

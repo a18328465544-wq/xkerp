@@ -116,7 +116,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const issues = validation.success ? [] : validation.error.issues;
   const amounts = useMemo(() => calculateSalesAmounts({items: values.items || [], paidAmount: values.paidAmount || 0}, showCost && permissions.showProfit), [permissions.showProfit, showCost, values.items, values.paidAmount]);
   const [selectedCustomer, setSelectedCustomer] = useState<SalesCustomerOption | null>(() => restoredDraft?.selectedCustomer || null);
-  const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
+  const [recentSalesPartnerKeys, setRecentSalesPartnerKeys] = useState<string[]>([]);
   const [customerCreate, setCustomerCreate] = useState<{initialName: string; initialContact: string; origin: "form" | "voice"} | null>(null);
   const [voiceReview, setVoiceReview] = useState<VoiceSalesReview | null>(null);
   const [voiceCustomerKeyword, setVoiceCustomerKeyword] = useState("");
@@ -165,7 +165,8 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
 
   const handleSelectCustomer = (option: SalesCustomerOption) => {
     if (!option.selectable) return;
-    setRecentCustomerIds((current) => [option.id, ...current.filter((id) => id !== option.id)].slice(0, 5));
+    const partnerKey = `${option.partnerType}:${option.id}`;
+    setRecentSalesPartnerKeys((current) => [partnerKey, ...current.filter((key) => key !== partnerKey)].slice(0, 5));
     setSelectedCustomer(option);
     setValue("customerId", option.id, {shouldDirty: true, shouldValidate: true});
     setValue("customerPartnerType", option.partnerType, {shouldDirty: true, shouldValidate: true});
@@ -199,6 +200,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     setSelectedCustomer(null);
     setCustomerKeyword("");
     setValue("customerId", "", {shouldDirty: true, shouldValidate: true});
+    setValue("customerPartnerType", "customer", {shouldDirty: true, shouldValidate: true});
     setValue("customerName", "", {shouldDirty: true, shouldValidate: true});
     setValue("contact", "", {shouldDirty: true});
   };
@@ -296,10 +298,10 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
   const submitError = submission.feedback || serverError;
   const customerError = !canReadCustomers ? "当前账号没有客户搜索权限" : customerQuery.error ? (customerQuery.error instanceof ApiError && customerQuery.error.isForbidden ? "当前账号没有客户搜索权限" : errorText(customerQuery.error)) : undefined;
   const customerOptions = useMemo(() => {
-    const recentRank = new Map(recentCustomerIds.map((id, index) => [id, index]));
-    return [...(customerQuery.data || [])].sort((left, right) => (recentRank.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (recentRank.get(right.id) ?? Number.MAX_SAFE_INTEGER));
-  }, [customerQuery.data, recentCustomerIds]);
-  const voiceCustomerOptions = useMemo(() => (voiceCustomerQuery.data || []).filter((option) => option.partnerType === "customer"), [voiceCustomerQuery.data]);
+    const recentRank = new Map(recentSalesPartnerKeys.map((key, index) => [key, index]));
+    return [...(customerQuery.data || [])].sort((left, right) => (recentRank.get(`${left.partnerType}:${left.id}`) ?? Number.MAX_SAFE_INTEGER) - (recentRank.get(`${right.partnerType}:${right.id}`) ?? Number.MAX_SAFE_INTEGER));
+  }, [customerQuery.data, recentSalesPartnerKeys]);
+  const voiceCustomerOptions = useMemo(() => voiceCustomerQuery.data || [], [voiceCustomerQuery.data]);
   useEffect(() => {
     if (!pendingVoiceCandidateAssignments.length) return;
     const ready = pendingVoiceCandidateAssignments.filter(({index}) => Boolean(fields[index]));
@@ -339,7 +341,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     setVoiceReview({parseId: result.parseId, customerQuery: customerQueryText, customerContact, lines: salesDraft.lines.map((draft) => ({draft, products: [], cards: [], loading: true}))});
     setVoiceCustomerKeyword(customerQueryText);
     setVoiceSelectedCustomer(null);
-    setVoiceCustomerLookupError(customerQueryText ? null : "未识别到客户，请使用客户选择器手动选择。");
+    setVoiceCustomerLookupError(customerQueryText ? null : "未识别到客户或供应商，请手动选择。");
     autoCreateVoiceParseId.current = "";
 
     const customerRequest = customerQueryText && canReadCustomers
@@ -429,7 +431,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
     const salesDraft = result.sales;
     const review = voiceReview?.parseId === result.parseId ? voiceReview : null;
     if (!salesDraft || !review) throw new Error("销售候选信息尚未准备完成，请稍后重试");
-    if (!voiceSelectedCustomer) throw new Error("请先在客户选择器中确认客户");
+    if (!voiceSelectedCustomer) throw new Error("请先确认销售客户或供应商");
     const selections: SalesVoiceLineSelection[] = review.lines.map((line) => {
       const inventory = line.cards.find((card) => card.id === line.selectedInventoryId);
       const product = inventory && line.products.find((candidate) => candidate.productId === inventory.productId);
@@ -454,7 +456,8 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       resetPaymentSection: () => setPaymentResetVersion((version) => version + 1),
     });
     setSelectedCustomer(voiceSelectedCustomer);
-    setRecentCustomerIds((current) => [voiceSelectedCustomer.id, ...current.filter((id) => id !== voiceSelectedCustomer.id)].slice(0, 5));
+    const partnerKey = `${voiceSelectedCustomer.partnerType}:${voiceSelectedCustomer.id}`;
+    setRecentSalesPartnerKeys((current) => [partnerKey, ...current.filter((key) => key !== partnerKey)].slice(0, 5));
     setCustomerKeyword("");
     setVoiceCustomerKeyword("");
     setPendingVoiceCandidateAssignments(applied.candidates.map((candidate, index) => ({index: startIndex + index, candidate})));
@@ -491,7 +494,7 @@ function SalesOrderForm({session, onAuthExpired}: {session: AuthSession; onAuthE
       <ErpTransactionColumns>
         <ErpTransactionPrimary>
             <ErpMobileWorkflowSection step={0}>
-            <Card className="erp-order-partner"><CardContent className="p-4"><div className="grid items-start gap-3 md:grid-cols-12"><div className="hidden min-w-0 md:block md:col-span-3"><p className="flex items-center justify-between gap-1 text-sm font-semibold">单据编号<span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--erp-color-primary)]">待出库</span></p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 erp-data-number text-xs text-[var(--erp-color-text-secondary)]">提交后生成</span></div></div><label className="block text-sm font-semibold md:col-span-6">客户档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isPending || customerQuery.isFetching} error={customerError} disabled={createMutation.isPending || !canReadCustomers} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户" candidateLabel="客户候选" entityLabel="客户" quickCreateActions={canReadCustomers && canCreateCustomer ? [{label: "新建客户", onClick: openCustomerCreate}] : []} onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={handleSelectCustomer} onClear={clearCustomer} /></div></label><ErpMobileWorkflowDesktop><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label></ErpMobileWorkflowDesktop><ErpMobileWorkflowDesktop><label className="block text-sm font-semibold md:col-span-9">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label><label className="block text-sm font-semibold md:col-span-3">店保天数<Input {...register("storeWarrantyDays", {setValueAs: (value) => value === "" ? 0 : Number(value)})} type="number" min={0} max={3650} step={1} className="mt-2 erp-data-number" placeholder="0 表示无店保" /></label></ErpMobileWorkflowDesktop></div></CardContent></Card>
+            <Card className="erp-order-partner"><CardContent className="p-4"><div className="grid items-start gap-3 md:grid-cols-12"><div className="hidden min-w-0 md:block md:col-span-3"><p className="flex items-center justify-between gap-1 text-sm font-semibold">单据编号<span className="shrink-0 rounded-full bg-[var(--erp-color-info-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--erp-color-primary)]">待出库</span></p><div className="mt-2 flex h-[var(--erp-control-height)] items-center gap-2 rounded-[var(--erp-radius-md)] border border-[var(--erp-color-border)] bg-[var(--erp-color-surface-muted)] px-3"><span className="min-w-0 erp-data-number text-xs text-[var(--erp-color-text-secondary)]">提交后生成</span></div></div><label className="block text-sm font-semibold md:col-span-6">客户 / 供应商档案<div className="mt-2"><CustomerPicker value={selectedCustomer} keyword={customerKeyword} options={customerOptions} loading={customerQuery.isPending || customerQuery.isFetching} error={customerError} disabled={createMutation.isPending || !canReadCustomers} placeholder="搜索客户、供应商或联系方式" searchLabel="搜索销售客户或供应商" candidateLabel="销售客户或供应商候选" entityLabel="客户或供应商" quickCreateActions={canReadCustomers && canCreateCustomer ? [{label: "新建客户", onClick: openCustomerCreate}] : []} onKeywordChange={setCustomerKeyword} onRetry={() => void customerQuery.refetch()} onSelect={handleSelectCustomer} onClear={clearCustomer} /></div></label><ErpMobileWorkflowDesktop><label className="block text-sm font-semibold md:col-span-3">物流快递单号<Input {...register("expressNo")} className="mt-2 erp-data-number" disabled={values.freeShipping} placeholder={values.freeShipping ? "无需物流" : "如：SF148..."} /></label></ErpMobileWorkflowDesktop><ErpMobileWorkflowDesktop><label className="block text-sm font-semibold md:col-span-9">整单质保协议<Input {...register("aftersalesTerms")} className="mt-2" placeholder="例如：店保三个月、保到手好" /></label><label className="block text-sm font-semibold md:col-span-3">店保天数<Input {...register("storeWarrantyDays", {setValueAs: (value) => value === "" ? 0 : Number(value)})} type="number" min={0} max={3650} step={1} className="mt-2 erp-data-number" placeholder="0 表示无店保" /></label></ErpMobileWorkflowDesktop></div></CardContent></Card>
           </ErpMobileWorkflowSection>
           <ErpMobileWorkflowSection step={0}>
           <SalesLineItemsTable control={control} setValue={setValue} fields={fields} selectedCandidates={selectedCandidates} pickerKeyword={(fieldId) => inventoryKeywords[fieldId] || ""} pickerOptions={(fieldId) => activeInventoryFieldId === fieldId ? inventoryQuery.data || [] : []} pickerLoading={(fieldId) => activeInventoryFieldId === fieldId && (activeInventoryKeyword.trim() !== debouncedInventoryKeyword.trim() || inventoryQuery.isPending || inventoryQuery.isFetching)} pickerError={(fieldId) => activeInventoryFieldId === fieldId ? inventoryError : undefined} pickerDisabled={createMutation.isPending || !canReadInventory} onPickerFocus={focusInventoryPicker} onPickerKeywordChange={updateInventoryKeyword} onPickerRetry={() => void inventoryQuery.refetch()} onCandidateSelect={selectCandidate} onCandidateClear={clearCandidate} onAdd={addLine} onRemove={removeLine} />
@@ -537,8 +540,8 @@ function SalesVoiceDraftPreview({sales, review, customer, customerKeyword, custo
     <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">销售草稿预览</h3><span className="text-xs text-[var(--erp-color-text-muted)]">客户与库存待确认</span></div>
     <div className="space-y-2">
       <label className="block text-xs font-semibold text-[var(--erp-color-text-secondary)]">客户档案</label>
-      <CustomerPicker value={customer} keyword={customerKeyword} options={customerOptions} loading={customerLoading} error={customerError} disabled={!canSelectCustomer} placeholder="搜索客户姓名、电话或微信" searchLabel="搜索销售客户" candidateLabel="销售语音客户候选" entityLabel="客户" quickCreateActions={canCreateCustomer ? [{label: "新建客户", onClick: onCreateCustomer}] : []} onKeywordChange={onCustomerKeywordChange} onRetry={onCustomerRetry} onSelect={onCustomerSelect} onClear={onCustomerClear} />
-      {!customer && sales.customer.query && !customerLoading && !customerError && <p className="text-xs text-[var(--erp-color-text-muted)]">识别对象：{sales.customer.query}；请选择匹配客户后再应用。</p>}
+      <CustomerPicker value={customer} keyword={customerKeyword} options={customerOptions} loading={customerLoading} error={customerError} disabled={!canSelectCustomer} placeholder="搜索客户或供应商姓名、电话或微信" searchLabel="搜索销售客户或供应商" candidateLabel="销售语音客户或供应商候选" entityLabel="客户或供应商" quickCreateActions={canCreateCustomer ? [{label: "新建客户", onClick: onCreateCustomer}] : []} onKeywordChange={onCustomerKeywordChange} onRetry={onCustomerRetry} onSelect={onCustomerSelect} onClear={onCustomerClear} />
+      {!customer && sales.customer.query && !customerLoading && !customerError && <p className="text-xs text-[var(--erp-color-text-muted)]">识别对象：{sales.customer.query}；请选择匹配客户或供应商后再应用。</p>}
     </div>
     {review?.lines.length ? <div className="space-y-3">
       {review.lines.map((line, index) => {

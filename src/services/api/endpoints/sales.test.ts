@@ -17,16 +17,22 @@ test("sales customer picker requests the bounded full first page", () => {
   assert.equal(params.get("pageSize"), "200");
 });
 
-test("sales customer picker reads the canonical customer archive endpoint", async () => {
+test("sales customer picker reads customer and supplier archives from one endpoint", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     assert.equal(input, "/api/sales/customers?page=1&pageSize=200&keyword=%E5%BC%A0%E4%B8%89");
-    return new Response(JSON.stringify({data: {items: [{id: "CUSTOMER-KH-1", displayName: "张三", roles: ["customer"], legacyCustomer: {id: "KH-1", name: "张三"}}], meta: {page: 1, pageSize: 200, total: 1}}}), {status: 200, headers: {"Content-Type": "application/json"}});
+    return new Response(JSON.stringify({data: {items: [
+      {id: "CUSTOMER-KH-1", displayName: "张三", roles: ["customer"], legacyCustomer: {id: "KH-1", name: "张三"}},
+      {id: "VENDOR-GY-1", displayName: "张三供应", roles: ["vendor", "supplier"], legacyVendor: {id: "GY-1", name: "张三供应", type: "上游供应商"}},
+    ], meta: {page: 1, pageSize: 200, total: 2}}}), {status: 200, headers: {"Content-Type": "application/json"}});
   };
   try {
     const result = await salesApi.searchCustomers(" 张三 ");
     assert.equal(result[0]?.id, "KH-1");
     assert.equal(result[0]?.selectable, true);
+    assert.equal(result[1]?.id, "GY-1");
+    assert.equal(result[1]?.partnerType, "vendor");
+    assert.equal(result[1]?.type, "上游供应商");
   } finally {
     globalThis.fetch = previousFetch;
   }

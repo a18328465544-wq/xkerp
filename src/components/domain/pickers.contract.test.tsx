@@ -13,9 +13,11 @@ const callbacks = {onKeywordChange: () => undefined, onSelect: () => undefined, 
 
 test("selected customer and stock use their existing field without an extra replacement button", () => {
   const customerMarkup = renderToStaticMarkup(<CustomerPicker {...callbacks} value={customer} keyword="另一个候选" options={[]} />);
+  const supplierMarkup = renderToStaticMarkup(<CustomerPicker {...callbacks} value={{id: "GY-LOCAL", name: "本地供应商", contact: "13800000000", partnerType: "vendor", type: "上游供应商", selectable: true}} keyword="" options={[]} />);
   const stockMarkup = renderToStaticMarkup(<InventoryItemPicker {...callbacks} value={stock} keyword="另一个候选" options={[]} />);
   assert.match(customerMarkup, /value="本地客户 · LOCAL"/);
   assert.match(customerMarkup, /aria-label="清除客户"/);
+  assert.match(supplierMarkup, /value="本地供应商 · 上游供应商 · 13800000000"/);
   assert.match(stockMarkup, /value="本地 RTX4090"/);
   assert.match(stockMarkup, /aria-label="清除商品候选"/);
   for (const markup of [customerMarkup, stockMarkup]) {

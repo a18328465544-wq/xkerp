@@ -79,6 +79,13 @@ export function createSalesCustomerOption(item: SalesListItem): SalesCustomerOpt
   };
 }
 
+/** Keep customer and supplier records distinct even when legacy IDs collide. */
+export function includeSelectedSalesPartner(selected: SalesCustomerOption | null, options: readonly SalesCustomerOption[]) {
+  if (!selected) return [...options];
+  const selectedKey = `${selected.partnerType}:${selected.id}`;
+  return [selected, ...options.filter((option) => `${option.partnerType}:${option.id}` !== selectedKey)];
+}
+
 /** Seeds the picker with the persisted model identity without binding a SN. */
 type SalesCandidateSeed = {
   id?: string;

@@ -24,6 +24,21 @@ test("sales customer adapter uses legacy archive id and blocks unmapped主体", 
   assert.equal(unmapped.selectable, false);
 });
 
+test("sales customer picker adapter accepts a supplier archive without confusing its id with CRM identity", () => {
+  const supplier = adaptSalesCustomer({
+    id: "VENDOR-GY-1",
+    displayName: "显卡同行",
+    roles: ["vendor", "supplier"],
+    primaryPhone: "13800000000",
+    legacyVendor: {id: "GY-1", name: "显卡同行", contactPerson: "李师傅", type: "上游供应商", partnerCategory: "显卡渠道"},
+  });
+  assert.equal(supplier.id, "GY-1");
+  assert.equal(supplier.partnerType, "vendor");
+  assert.equal(supplier.type, "上游供应商");
+  assert.equal(supplier.contact, "13800000000");
+  assert.equal(supplier.selectable, true);
+});
+
 test("sales customer adapter accepts normalized CRM page envelope", () => {
   const customers = adaptSalesCustomers({data: {items: [{id: "CRM-1", displayName: "张三", legacyCustomer: {id: "KH-1", name: "张三"}}]}});
   assert.equal(customers.length, 1);
@@ -92,6 +107,20 @@ test("sales request adapter expands quantity and calculates receivable", () => {
   assert.equal(request.isPaid, false);
   assert.equal(request.paymentHandler, "测试员");
   assert.equal(request.storeWarrantyDays, 90);
+});
+
+test("sales request adapter preserves supplier identity and the peer-trade channel", () => {
+  const values = createSalesDefaults("测试员");
+  values.customerId = "GY-1";
+  values.customerPartnerType = "vendor";
+  values.customerName = "显卡同行";
+  values.channel = "同行网店";
+  values.items = [{inventoryId: "KC-1", productId: "P-1", productName: "RTX 4090", brand: "", model: "", vram: "", condition: "出库核验", quantity: 1, sellPrice: 19_000, costPrice: 17_000, remarks: "", aftersalesTerms: "店保三个月"}];
+  const request = toCreateSalesRequest(values);
+  assert.equal(request.customerId, "GY-1");
+  assert.equal(request.customerPartnerType, "vendor");
+  assert.equal(request.customerName, "显卡同行");
+  assert.equal(request.channel, "同行网店");
 });
 
 test("sales request adapter ignores the untouched default placeholder rows", () => {

@@ -43,7 +43,7 @@ function cardTail(serialNumber: string) {
  */
 export function applySalesVoiceDraftToForm({sales, transcript, customer, selections, existingItems, existingRemarks, append, setValue, resetPaymentSection}: ApplySalesVoiceDraftInput): ApplySalesVoiceDraftResult {
   if (!selections.length) throw new Error("至少确认一条可售商品后才能应用草稿");
-  if (!customer.selectable || customer.partnerType !== "customer") throw new Error("请选择有效的客户档案");
+  if (!customer.selectable) throw new Error("请选择有效的销售客户或供应商档案");
 
   const existingProductIds = new Set(existingItems.filter((item) => item.productId).map((item) => item.productId));
   const grouped = new Map<string, {row: SalesLineFormValue; candidate: SalesProductCandidate; tails: string[]}>();
@@ -95,10 +95,11 @@ export function applySalesVoiceDraftToForm({sales, transcript, customer, selecti
 
   append(rows);
   setValue("customerId", customer.id, dirty);
-  setValue("customerPartnerType", "customer", dirty);
+  setValue("customerPartnerType", customer.partnerType, dirty);
   setValue("customerName", customer.name, dirty);
   setValue("contact", customer.contact || "", dirty);
-  if (sales.channel) setValue("channel", sales.channel, dirty);
+  const channel = customer.partnerType === "vendor" ? "同行网店" : sales.channel;
+  if (channel) setValue("channel", channel, dirty);
   if (sales.paymentMethod) setValue("paymentMethod", sales.paymentMethod, dirty);
   if (sales.aftersalesTerms) setValue("aftersalesTerms", sales.aftersalesTerms, dirty);
 
